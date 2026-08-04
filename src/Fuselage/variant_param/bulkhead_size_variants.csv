@@ -1,0 +1,9 @@
+VID_bulkhead_size,U,bulkhead_thickness,bulkhead_bolt_diameter
+1,0.5,4,3
+2,0.75,5,3
+3,1,6,4
+4,1.5,6,4
+5,2,8,5
+6,2.5,10,6
+7,3,12,6
+8,4,16,8

@@ -1,0 +1,4 @@
+VID_boom_bulkhead_type,bulkhead_type_name,is_end,is_interconnect,is_cowling,is_boom,is_anchor,boom_diameter,y_position,z_position,make_vert_web,make_lower_web
+1,offset_single,FALSE,FALSE,FALSE,TRUE,FALSE,0.08,0,0.25,TRUE,FALSE
+2,center_single,FALSE,FALSE,FALSE,TRUE,FALSE,0.08,0,0,FALSE,TRUE
+3,dual,FALSE,FALSE,FALSE,TRUE,FALSE,0.08,0.2,0.2,TRUE,FALSE

@@ -1,0 +1,76 @@
+{
+    "cowl_type": "tail",
+    "buttress": {
+        "bottom": {
+            "active": true,
+            "angle": 0,
+            "depth": 0,
+            "r_end": 0.288,
+            "r_start": 0,
+            "y_offset": 0,
+            "z_end": 0.2,
+            "z_start": 0
+        },
+        "r_inset": 0.05,
+        "side": {
+            "active": true,
+            "angle": 0,
+            "depth": 0,
+            "r_end": 0.233,
+            "r_start": 0,
+            "y_offset": 0,
+            "z_end": 0.25,
+            "z_start": 0
+        },
+        "thickness": 0.05,
+        "top": {
+            "active": true,
+            "angle": 0,
+            "depth": 0,
+            "r_end": 0,
+            "r_start": 0,
+            "y_offset": 0,
+            "z_end": 0.03,
+            "z_start": 0
+        },
+        "top_diag1": {
+            "active": true,
+            "angle": 0,
+            "depth": 0.02,
+            "r_end": 0,
+            "r_start": 0,
+            "y_offset": 0,
+            "z_end": 0,
+            "z_start": 0.2
+        },
+        "top_diag2": {
+            "active": true,
+            "angle": 0,
+            "depth": 0,
+            "r_end": 0,
+            "r_start": 0,
+            "y_offset": 0,
+            "z_end": 0,
+            "z_start": 0.2
+        },
+        "z_offset": 0.02
+    },
+    "cone_angle": 35,
+    "cut_len": 0,
+    "nose": {
+        "active": false,
+        "flange_inset": 0.5
+    },
+    "oml": {
+        "filename": "vsp_tail.stl",
+        "length": 0.1,
+        "offset_x": -0.25,
+        "reversed": true,
+        "scale": 0.001
+    },
+    "plate": {
+        "active": false,
+        "diameter": 0,
+        "tolerance": 0
+    }
+}
