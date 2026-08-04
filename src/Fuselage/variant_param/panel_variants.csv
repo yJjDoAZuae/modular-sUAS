@@ -1,0 +1,10 @@
+VID_panel,panel_name,panel_thickness_mm,panel_thickness_32,panel_is_metric
+1,0mm,0,0,TRUE
+2,1mm,1,1.25984251968504,TRUE
+3,3mm,3,3.77952755905512,TRUE
+4,6mm,6,7.55905511811024,TRUE
+8,1/32in,0.79375,1,FALSE
+9,1/16in,1.5875,2,FALSE
+10,1/8in,3.175,4,FALSE
+11,3/16in,4.7625,6,FALSE
+12,1/4in,6.35,8,FALSE

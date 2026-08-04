@@ -1,0 +1,98 @@
+use <fuselage_bulkhead_geometry.scad>
+
+// draft settings
+$fa=15;
+$fs=0.5;
+// publish settings
+//$fa=1;
+//$fs=0.1;
+
+FX = 1;
+U = 1.0;
+
+DTF_thickness = 4.77;
+
+// printer settings
+nozzle_diameter = 0.4;
+layer_height=0.2;
+
+// User parameters
+is_interconnect = false;
+is_cowling = false;
+bulkhead_thickness = 6;
+panel_thickness = DTF_thickness;
+panel_offset = 0;
+panel_overlap = 4;
+panel_tolerance = 0.1;
+longeron_tolerance = 0.05;
+//bolt_hole_radius=4.3/2;
+bolt_hole_radius=5.33/2;
+bolt_thickness=3;
+greeble_opening_angle = 35;
+greeble_thickness = 0.8;
+greeble_nub_thickness = 0.8;
+greeble_tolerance = 0.0;
+plate_thickness=4*layer_height;
+web_fillet_radius=2;
+web_width=3;
+flange_fillet_radius=2;
+flange_thickness=2*nozzle_diameter;
+flange_chamfer=1;
+cowl_flange_height=0;
+cowl_flange_tolerance=0;
+
+// These are based on the standard, don't change these
+unit_width=100*U;
+unit_length=100*U*FX;
+corner_radius = 10*U;
+longeron_radius = 2*U;
+bolt_offset=8*U;
+
+bulkhead_section_full(is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+
+//if (U==2) {
+//    
+//    // 2U parameters
+//    panel_overlap = 6;
+//    bulkhead_thickness = 8;
+//    panel_offset = 0;
+//    web_width=6;
+//    web_fillet_radius=6;
+//    flange_chamfer=2;
+//    flange_fillet_radius=4;
+//    flange_thickness=4*nozzle_diameter;
+//    plate_thickness=8*layer_height;
+//
+//    bulkhead_section_full();
+//
+//} else if (U==1.5) {
+//
+//    // 1.5U parameters
+//
+//    panel_overlap = 4;
+//    bulkhead_thickness = 6;
+//    panel_offset = 0;
+//    web_width=4;
+//    web_fillet_radius=4;
+//    flange_chamfer=1.5;
+//    flange_fillet_radius=3;
+//    flange_thickness=3*nozzle_diameter;
+//    plate_thickness=5*layer_height;
+//
+//    bulkhead_section_full();
+//
+//} else if (U==1.0) {
+//    
+//    panel_overlap = 4;
+//    bulkhead_thickness = 6;
+//    panel_offset = 0;
+//    web_width=3;
+//    web_fillet_radius=2;
+//    flange_chamfer=1.0;
+//    flange_fillet_radius=2;
+//    flange_thickness=2*nozzle_diameter;
+//    plate_thickness=4*layer_height;
+//
+//    bulkhead_section_full();
+//}
+

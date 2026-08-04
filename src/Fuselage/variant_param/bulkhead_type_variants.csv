@@ -1,0 +1,6 @@
+VID_bulkhead_type,bulkhead_type_name,is_end,is_interconnect,is_cowling,is_boom,is_anchor
+1,end_bolt,TRUE,FALSE,FALSE,FALSE,FALSE
+2,end_anchor,TRUE,FALSE,FALSE,FALSE,TRUE
+3,cowling_bolt,FALSE,FALSE,TRUE,FALSE,FALSE
+4,cowling_anchor,FALSE,FALSE,TRUE,FALSE,TRUE
+5,interconnect,FALSE,TRUE,FALSE,FALSE,FALSE
