@@ -120,7 +120,7 @@ The unit multiplier `U` is dimensionless — name what it scales, not `U` itself
 
 ## Units — SI Is the Project Standard
 
-**Every internally stored value uses SI base units: metres (m), seconds (s), kilograms
+**Every internally stored value uses SI base units: meters (m), seconds (s), kilograms
 (kg), and radians (rad).**
 
 This applies to every variable, field, parameter, function argument, and return value in
@@ -129,15 +129,15 @@ that reads a parameter file or writes a geometry file — and never propagate in
 
 | Quantity | Unit | Symbol |
 | --- | --- | --- |
-| Length / distance | metre | m |
+| Length / distance | meter | m |
 | Angle | radian | rad |
 | Time | second | s |
 | Mass | kilogram | kg |
-| Area | square metre | m² |
-| Volume | cubic metre | m³ |
+| Area | square meter | m² |
+| Volume | cubic meter | m³ |
 | Force | newton | N |
 | Pressure / stress | pascal | Pa |
-| Density | kilogram per cubic metre | kg/m³ |
+| Density | kilogram per cubic meter | kg/m³ |
 
 ### The file interface — where conversion is allowed
 
@@ -151,14 +151,14 @@ Conversion happens at exactly these boundaries, and nowhere else:
 | FreeCAD scripting (Phase 3) | both | m ↔ mm; FEM additionally N/mm² ↔ Pa |
 | Display, reports, drawings | out | m → whatever the reader needs |
 
-**Exported meshes must be in millimetres.** STL and 3MF carry no unit metadata — a slicer
-interprets the numbers as millimetres, full stop. An STL exported in metres loads as a part
+**Exported meshes must be in millimeters.** STL and 3MF carry no unit metadata — a slicer
+interprets the numbers as millimeters, full stop. An STL exported in meters loads as a part
 1/1000 of its intended size and is silently unprintable. This is a hard output requirement,
 not a convention that can be revisited.
 
 So the emission layer scales SI → mm on the way out, and that conversion belongs in **one
 named function** in the render path, not scattered through geometry code. Round-trip any
-mesh the project re-imports (the OML meshes in `oml/` are millimetres on disk) back to SI on
+mesh the project re-imports (the OML meshes in `oml/` are millimeters on disk) back to SI on
 the way in.
 
 FreeCAD's FEM stack works in mm/N/MPa, which is internally self-consistent
@@ -170,11 +170,11 @@ of it, and never let mm/MPa values into project code.
 - Variable names **should** encode units when not obvious: `corner_radius_m`,
   `overhang_angle_rad`.
 - Imperial parameter axes exist (`imperial` panel variants, fractional-inch panel
-  thicknesses). Convert to metres **at the point the CSV is read**, and carry only SI
+  thicknesses). Convert to meters **at the point the CSV is read**, and carry only SI
   thereafter. Never propagate a mixed-unit value inward.
 - Conversion helpers live in one module. Never call a conversion function inside geometry
   or analysis code — if you need one there, the boundary is in the wrong place.
-- The unit multiplier `U` is dimensionless; what it scales is in metres.
+- The unit multiplier `U` is dimensionless; what it scales is in meters.
 
 ### Scope — what this standard governs, and what it does not
 
@@ -188,9 +188,9 @@ The SI standard above applies to:
 
 It does **not** apply to the existing OpenSCAD generator path.
 
-### ⚠ The OpenSCAD path stays in millimetres. Do not convert it.
+### ⚠ The OpenSCAD path stays in millimeters. Do not convert it.
 
-The generators copied in from the source repository work in **millimetres throughout** —
+The generators copied in from the source repository work in **millimeters throughout** —
 `standard_values()` returns `unit_width = 100`, `corner_radius = 10`, `nozzle_diameter =
 0.4`, and every parameter axis CSV is populated to match.
 
@@ -205,7 +205,7 @@ dimension, renders cleanly, and exports without error.
 
 - **Never convert existing sweep code to SI**, as a task or as a side effect of one.
 - **Do not "fix" a `_mm` name to `_m`** in that code. The name is accurate; the value really
-  is millimetres.
+  is millimeters.
 - New code that *consumes* the sweep's output converts mm → m at its own boundary and says
   so, rather than reaching in and changing the source.
 - When touching an inherited file, state its unit regime in a comment at the top rather
@@ -287,14 +287,14 @@ The generator toolchain is structured in layers, each with one responsibility:
 ├──────────────────────────────────────────────┤
 │  Sweep layer (Python: iterate, name, write)   │
 ├──────────────────────────────────────────────┤
-│  Geometry layer (OpenSCAD modules)            │  ← millimetres — see note
+│  Geometry layer (OpenSCAD modules)            │  ← millimeters — see note
 ├──────────────────────────────────────────────┤
 │  Render layer (OpenSCAD binary, STL/PNG out)  │
 └──────────────────────────────────────────────┘
 ```
 
-The geometry layer is OpenSCAD source, which is conventionally millimetres. That makes the
-**sweep layer's emission step the file interface**: it converts SI to millimetres on the way
+The geometry layer is OpenSCAD source, which is conventionally millimeters. That makes the
+**sweep layer's emission step the file interface**: it converts SI to millimeters on the way
 into generated `.scad`, in one named function. Everything above that line is SI.
 
 - Geometry modules take parameters and produce shapes. They do no file I/O and know nothing
@@ -346,8 +346,8 @@ Review checklist:
 
 - [ ] Tests present and meaningful, asserting on measured properties rather than exact output
 - [ ] Naming follows standards
-- [ ] SI (m, s, kg, rad) used throughout internal code; imperial and millimetre values converted at the file interface only
-- [ ] Exported STL/3MF is in millimetres — verify by measuring, not by inspection
+- [ ] SI (m, s, kg, rad) used throughout internal code; imperial and millimeter values converted at the file interface only
+- [ ] Exported STL/3MF is in millimeters — verify by measuring, not by inspection
 - [ ] Every path anchored to `__file__`; no working-directory dependence
 - [ ] Generated geometry contains relative references only — no absolute paths
 - [ ] No bare `except:` and no `except Exception` that swallows a geometry failure

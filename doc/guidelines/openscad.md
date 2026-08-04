@@ -89,7 +89,7 @@ multiplier `U` are permitted; `bulk`, `geom`, and `tmp` are not.
 
 ```scad
 // Corner post for one MAUS fuselage unit.
-// Units: millimetres and degrees (this is the file interface; callers work in SI).
+// Units: millimeters and degrees (this is the file interface; callers work in SI).
 //   unit_width_mm    : outer width of the unit cube
 //   corner_radius_mm : outer fillet radius
 //   is_anchor        : true to add threaded-insert bosses
@@ -108,10 +108,10 @@ signature, not as a sweep of its own.
 
 ## Geometry Practice
 
-- **Millimetres and degrees throughout — the whole OpenSCAD path, not just the `.scad`.**
+- **Millimeters and degrees throughout — the whole OpenSCAD path, not just the `.scad`.**
   OpenSCAD is nominally unitless, but `rotate()` takes degrees and every slicer reads an
-  exported mesh as millimetres, so `.scad` is fixed to mm/deg. The Python sweep code that
-  drives it is millimetres too.
+  exported mesh as millimeters, so `.scad` is fixed to mm/deg. The Python sweep code that
+  drives it is millimeters too.
 
   The project standard elsewhere is SI — see
   [general.md](general.md#units--si-is-the-project-standard) — but **this path is explicitly
@@ -122,8 +122,8 @@ signature, not as a sweep of its own.
   New code that consumes this path's output converts mm → m at its own boundary rather than
   reaching in and changing the source.
 
-  Exported STL and 3MF **must** be millimetres regardless of what the rest of the project
-  does. Those formats carry no unit metadata; a mesh exported in metres loads at 1/1000
+  Exported STL and 3MF **must** be millimeters regardless of what the rest of the project
+  does. Those formats carry no unit metadata; a mesh exported in meters loads at 1/1000
   scale and is silently unprintable.
 - Build parts from named intermediate modules rather than one deeply nested
   `difference()`/`union()` expression. A reader must be able to render any intermediate
@@ -173,7 +173,7 @@ Each of these has caused a real failure in this project or is a documented OpenS
 
 - An SI value reaching a `.scad` module without conversion — the part renders at 1/1000
   scale, and an STL exported that way is silently unprintable rather than obviously broken.
-  Most likely when new SI code calls into this millimetre path.
+  Most likely when new SI code calls into this millimeter path.
 - An absolute path in a generated `use <...>` — unrenderable once the drive mapping changes.
 - A stale duplicate mesh shadowing the intended one.
 - A mesh filename changed in the `.scad` driver but not in the matching
