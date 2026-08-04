@@ -1,0 +1,37 @@
+multmatrix([[4, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 1]]) {
+	multmatrix([[0, 0, 1, 0], [0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1]]) {
+		difference() {
+			minkowski(convexity = 0) {
+				cube(size = [80, 80, 80], center = true);
+				cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 20, r1 = 10, r2 = 10, center = true);
+			}
+			union() {
+				multmatrix([[1, 0, 0, 40], [0, 1, 0, 40], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, 40], [0, 1, 0, -40], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, -40], [0, 1, 0, 40], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, -40], [0, 1, 0, -40], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, 32], [0, 1, 0, 32], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, 32], [0, 1, 0, -32], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, -32], [0, 1, 0, 32], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+				multmatrix([[1, 0, 0, -32], [0, 1, 0, -32], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+					cylinder($fn = 0, $fa = 1, $fs = 0.5, h = 200, r1 = 2, r2 = 2, center = true);
+				}
+			}
+		}
+	}
+}
+
