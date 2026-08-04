@@ -58,7 +58,7 @@ development machine and hits a Microsoft Store shim.
 
 ### Units and unit encoding in names
 
-**New Python code is SI** — metres, seconds, kilograms, radians. Encode units when not
+**New Python code is SI** — meters, seconds, kilograms, radians. Encode units when not
 obvious from context:
 
 ```python
@@ -67,16 +67,16 @@ overhang_angle_rad: float
 nozzle_diameter_m: float
 ```
 
-**The existing OpenSCAD sweep code is millimetres and stays that way.** It is transitional —
+**The existing OpenSCAD sweep code is millimeters and stays that way.** It is transitional —
 roadmap Phase 3 replaces it with FreeCAD — so it is explicitly exempt from the SI standard.
 Do not convert it, and do not rename its `_mm` identifiers. See
-[general.md](general.md#-the-openscad-path-stays-in-millimetres-do-not-convert-it).
+[general.md](general.md#-the-openscad-path-stays-in-millimeters-do-not-convert-it).
 
 Which regime applies:
 
 | Code | Units |
 | --- | --- |
-| `src/Fuselage/tools/` sweep path and everything it calls | millimetres, degrees |
+| `src/Fuselage/tools/` sweep path and everything it calls | millimeters, degrees |
 | The FreeCAD port (Phase 3) | SI, converting at the FreeCAD boundary |
 | Analysis, optimization, solvers, new standalone tooling | SI |
 
@@ -172,7 +172,7 @@ round-trips, and there is no serialization framework in this project.
 
 ### Rules
 
-- Convert imperial values to millimetres at the point the CSV is read. Never carry a
+- Convert imperial values to millimeters at the point the CSV is read. Never carry a
   mixed-unit value into geometry code.
 - Validate at the read boundary, where the failing row is still identifiable — not deep in
   geometry code where the error message loses the row that caused it.
@@ -216,7 +216,7 @@ class TestCornerGeometry:
 - Test names: `test_<subject>_<condition>_<expected>`.
 - Assert on **measured model properties** — bounding box, dimensions, volume, feature
   presence — never on byte-identical `.scad` or `.stl` output.
-- Use `pytest.approx` with a tolerance meaningful at millimetre scale for all
+- Use `pytest.approx` with a tolerance meaningful at millimeter scale for all
   floating-point comparisons.
 - Tests operate on a **single parameter combination**. Never run the full factorial sweep
   from a test: it is expensive and it overwrites `variant_output/`.
