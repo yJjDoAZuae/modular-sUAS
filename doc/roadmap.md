@@ -23,7 +23,7 @@ today there is no rollback for any of it.
       `tools/test_fuse_output/`, and `Thumbs.db`. Note the stock Python `.gitignore`
       already ignores `parts/` and `lib/` — `src/Fuselage/parts/` holds **hand-modeled,
       irreplaceable** geometry and must be un-ignored deliberately.
-- [ ] Commit the adopted source in one clearly-labelled commit, so the "as copied in"
+- [ ] Commit the adopted source in one clearly-labeled commit, so the "as copied in"
       state is a recoverable baseline before any refactoring starts.
 - [ ] Record where it was copied from and at what revision, so the two can be diffed later.
 
@@ -56,11 +56,13 @@ is reproducible. Do not refactor geometry in this phase — only make it run.
       files contain only **relative** references.
 - [ ] **Confirm the sweep is CWD-independent.** Run it from `tools/`, from the repo root,
       and from an unrelated directory, and verify the three outputs are identical.
-- [ ] **Repair the nose/tail sweeps.** These are reported broken by a change made in the
-      source repo — undefined symbols introduced when nose output was added to the sweep.
-      The surviving nose/tail artifacts in `variant_output/` predate the break, so they are
-      *not* evidence the current code works. Treat this as the phase's main known defect
-      and reproduce it before fixing it.
+- [ ] **Confirm all five sweeps run**, including nose and tail. There is no known defect
+      here — an earlier draft of this roadmap claimed the nose/tail sweeps were broken, but
+      that claim was lifted from `src/Fuselage/docs/reorganization_plan.md`, which describes
+      a **different repository at an earlier point in time** and says nothing about the code
+      here. Checked against this code on 2026-08-04: every symbol it named as missing is
+      present and consistent, and `ruff --select F821` (undefined names — the exact failure
+      class alleged) passes clean. Verify by running, not by assuming either way.
 - [ ] **Pin down `OPENSCADPATH`.** On this machine it holds the OpenSCAD *binary* directory
       rather than a library search path, and `solid_render` depends on that. It works;
       leave it working, but document it so it does not get "corrected" later.
@@ -98,7 +100,7 @@ from a regression.
       the contract between Python and OpenSCAD is, and validate it at the boundary where
       CSV/JSON is read — not deep in geometry code where the error loses the row that
       caused it.
-- [ ] **Leave the OpenSCAD path in millimetres.** The project standard is SI internally
+- [ ] **Leave the OpenSCAD path in millimeters.** The project standard is SI internally
       (see [general.md](guidelines/general.md#units--si-is-the-project-standard)), but the
       OpenSCAD implementation is transitional — Phase 3 replaces it. Converting code that is
       scheduled for replacement buys nothing and risks geometry that is wrong by 1000× in
@@ -125,27 +127,27 @@ contract is explicit and validated, and Phase 1's tests still pass.
 ## Phase 3 — Port the generators to FreeCAD Python scripting
 
 The end state: parts are generated through FreeCAD's Python API rather than by emitting
-OpenSCAD source. This buys real solid modelling, assemblies, technical drawings, and FEM —
+OpenSCAD source. This buys real solid modeling, assemblies, technical drawings, and FEM —
 none of which OpenSCAD offers. FreeCAD 1.1.1 is installed and driveable from the MCP.
 
 - [ ] **Prototype one part first.** Port a single well-understood component — a corner or a
       bulkhead — before committing to the approach. Confirm it can express the same
       parametric intent.
-- [ ] **Choose the modelling paradigm.** `Part::` primitives with booleans map most
+- [ ] **Choose the modeling paradigm.** `Part::` primitives with booleans map most
       directly onto the existing CSG-style OpenSCAD code; `PartDesign::` bodies with
       sketches are more idiomatic FreeCAD and support proper fillets and drafts, but are a
       bigger rewrite. This decision shapes the whole phase.
 - [ ] **Adopt SI internally in the ported code.** This is where the project's unit standard
-      actually lands: the port is new code, so it is written in metres, seconds, kilograms,
+      actually lands: the port is new code, so it is written in meters, seconds, kilograms,
       and radians from the start, with conversion confined to the file interface. FreeCAD's
-      own API is millimetres and its FEM stack is N/mm², so the boundary is real and needs a
+      own API is millimeters and its FEM stack is N/mm², so the boundary is real and needs a
       single named conversion layer rather than scattered factors.
 
-      Hard constraint that does not change: **exported STL and 3MF stay in millimetres.**
+      Hard constraint that does not change: **exported STL and 3MF stay in millimeters.**
       Those formats carry no unit metadata and a slicer reads them as mm regardless.
 
-      Verify the conversion by measurement — a ported part's bounding box in metres must
-      equal the OpenSCAD part's bounding box in millimetres divided by 1000. This is the
+      Verify the conversion by measurement — a ported part's bounding box in meters must
+      equal the OpenSCAD part's bounding box in millimeters divided by 1000. This is the
       single easiest place in the project to be silently wrong by 1000×.
 - [ ] **Validate equivalence, not appearance.** Compare ported parts against OpenSCAD
       output by measured properties — bounding box, volume, hole positions — not by eye.
@@ -166,17 +168,28 @@ geometry that is verifiably equivalent to the OpenSCAD output it replaces.
 
 ---
 
-## Reference documents
+## Reference documents — from another repository, not this one
 
-Three planning documents from the source repo now live in `src/Fuselage/docs/`:
+Three planning documents from the source repo sit in `src/Fuselage/docs/`. **They are not
+this repository's documents.** They were written about a different repo at an earlier point
+in time, against code that has since changed, and their commit references point at a history
+that did not come across with the files.
 
 | Document | What it is |
 | --- | --- |
-| `reorganization_plan.md` | Proposal to separate generated output from hand-authored files. Section 1 is the valuable part: a table of **tested** conclusions about how `include`/`use`/`import()` and `solid2.import_scad()` resolve paths, and how they shadow each other. Phases 1 and 2 depend on these. |
-| `migration_tools_plan.md` | Implementation plan for the tooling that would perform that move. |
-| `fuselage_folder_summary.md` | Inventory of the folder as copied in. |
+| `reorganization_plan.md` | Proposal to separate generated output from hand-authored files. |
+| `migration_tools_plan.md` | Implementation plan for tooling that would perform that move. |
+| `fuselage_folder_summary.md` | Inventory of that repo's folder at that time. |
 
-Both plans are **proposals — nothing in them has been executed**, and the `migrate`
-commands they describe are a specified interface, not a working tool. Read the filesystem
-for the actual layout. Their references to past commits point at the *source* repo's
-history, which did not come across with the files.
+**How to use them:**
+
+- **Never cite them as evidence about this code.** Statements about what is broken, what a
+  function does, or what a directory contains describe the *source* repo. This has already
+  produced one wrong roadmap item — see the nose/tail entry in Phase 1.
+- The **mechanism** findings in `reorganization_plan.md` §1 are still worth reading: how
+  `include`/`use`/`import()` and `solid2.import_scad()` resolve paths and shadow each other.
+  Those are facts about OpenSCAD and `solid2`, not about any repository, so they carry over —
+  but re-verify before relying on one.
+- Both plans are **proposals — nothing in them has been executed**, and the `migrate`
+  commands they describe are a specified interface, not a working tool.
+- Read the filesystem for the actual layout. Always.
