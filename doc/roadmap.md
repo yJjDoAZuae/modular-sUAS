@@ -98,6 +98,13 @@ from a regression.
       the contract between Python and OpenSCAD is, and validate it at the boundary where
       CSV/JSON is read — not deep in geometry code where the error loses the row that
       caused it.
+- [ ] **Leave the OpenSCAD path in millimetres.** The project standard is SI internally
+      (see [general.md](guidelines/general.md#units--si-is-the-project-standard)), but the
+      OpenSCAD implementation is transitional — Phase 3 replaces it. Converting code that is
+      scheduled for replacement buys nothing and risks geometry that is wrong by 1000× in
+      one dimension while still rendering and exporting cleanly. SI arrives with the FreeCAD
+      port, which is new code. Recorded here so the divergence is a decision, not an
+      oversight.
 - [ ] **Resolve the OML mesh coupling.** `import()` inside `cowl_geometry.scad` resolves
       relative to that file, *and* the same mesh filenames appear as data in
       `variant_param/*.json`. Code and data must move in lockstep. A stale duplicate mesh
@@ -128,6 +135,18 @@ none of which OpenSCAD offers. FreeCAD 1.1.1 is installed and driveable from the
       directly onto the existing CSG-style OpenSCAD code; `PartDesign::` bodies with
       sketches are more idiomatic FreeCAD and support proper fillets and drafts, but are a
       bigger rewrite. This decision shapes the whole phase.
+- [ ] **Adopt SI internally in the ported code.** This is where the project's unit standard
+      actually lands: the port is new code, so it is written in metres, seconds, kilograms,
+      and radians from the start, with conversion confined to the file interface. FreeCAD's
+      own API is millimetres and its FEM stack is N/mm², so the boundary is real and needs a
+      single named conversion layer rather than scattered factors.
+
+      Hard constraint that does not change: **exported STL and 3MF stay in millimetres.**
+      Those formats carry no unit metadata and a slicer reads them as mm regardless.
+
+      Verify the conversion by measurement — a ported part's bounding box in metres must
+      equal the OpenSCAD part's bounding box in millimetres divided by 1000. This is the
+      single easiest place in the project to be silently wrong by 1000×.
 - [ ] **Validate equivalence, not appearance.** Compare ported parts against OpenSCAD
       output by measured properties — bounding box, volume, hole positions — not by eye.
       Phase 1's property-based tests should be reusable here almost unchanged.
