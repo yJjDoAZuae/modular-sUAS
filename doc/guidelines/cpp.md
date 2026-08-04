@@ -82,7 +82,7 @@ mathematical notation inside a derivation the surrounding comment defines.
 Encode units in the name whenever they are not obvious:
 
 ```cpp
-double chord_mm_;                  // member: chord in millimetres
+double chord_mm_;                  // member: chord in millimeters
 double freestream_speed_mps_;      // member: freestream speed in m/s
 double pressure_pa_;               // member: static pressure in pascals
 constexpr double DEFAULT_TOLERANCE_MM = 1.0e-3;
@@ -92,13 +92,13 @@ constexpr double DEFAULT_TOLERANCE_MM = 1.0e-3;
 
 ## Units
 
-C++ code is **SI throughout** — metres, seconds, kilograms, radians, newtons, pascals. This
+C++ code is **SI throughout** — meters, seconds, kilograms, radians, newtons, pascals. This
 is the project standard; see
 [general.md](general.md#units--si-is-the-project-standard). Solvers are new code, so they
 follow it from the start with no legacy to reconcile.
 
 That is also what the physics wants: Reynolds number, dynamic pressure, and every published
-aerodynamic and structural correlation assume SI. A flow solver running in millimetres is
+aerodynamic and structural correlation assume SI. A flow solver running in millimeters is
 wrong by factors of 1000.
 
 The conversions to watch, all of which live at the solver's **input and output boundary**
@@ -106,10 +106,10 @@ and nowhere inside it:
 
 | Source | Arrives as | Convert |
 | --- | --- | --- |
-| Mesh from OpenSCAD / STL / 3MF | millimetres | mm → m on load |
-| Geometry from FreeCAD | millimetres | mm → m on load |
+| Mesh from OpenSCAD / STL / 3MF | millimeters | mm → m on load |
+| Geometry from FreeCAD | millimeters | mm → m on load |
 | FreeCAD FEM results | N/mm² (MPa) | MPa → Pa on load |
-| Mesh written for a slicer | must be millimetres | m → mm on export |
+| Mesh written for a slicer | must be millimeters | m → mm on export |
 
 Rules:
 
@@ -119,7 +119,7 @@ Rules:
   `computeDrag(double chord_mm, double speed_mps)` is a bug waiting to happen — convert at
   the boundary so the interior is uniformly SI.
 - State the unit system in a one-sentence comment at the top of every solver header.
-- Be aware that the inherited Python generator toolchain is currently millimetres
+- Be aware that the inherited Python generator toolchain is currently millimeters
   throughout and is scheduled for conversion as a single deliberate roadmap item. Until
   that lands, a C++ boundary consuming its output converts mm → m explicitly and says so.
   Do not convert the Python side as a side effect of adding a solver.
