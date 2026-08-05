@@ -61,6 +61,40 @@ Geometry code cannot be tested the way ordinary functions can. The rules that ma
   part dimension is order 0.1 m and a print tolerance is order 1e-4 m, so a default relative
   tolerance is usually wrong — state the absolute tolerance.
 
+### Capability belongs in the durable code, not the throwaway tool
+
+**A one-off script may orchestrate durable code. It must not be where the durable code
+lives.** When a temporary tool needs a capability the main codebase lacks, add it to the
+main codebase and have the tool call it. Do not implement it in the tool.
+
+This is not a style preference; it has already cost this project real work. A migration tool
+written for a transient refactor — correctly treated as disposable, and discarded once the
+refactor finished — had accumulated six capabilities the parametric sweep still needs:
+
+| Capability | Why it mattered |
+| --- | --- |
+| Parallel rendering | The sweep used 1 of 6 cores without it |
+| Memory-aware worker count | Without it, concurrent renders exhaust RAM and abort mid-run |
+| Resume / skip-if-done | An interrupted sweep restarts from zero |
+| Mesh measurement with truncation detection | A half-written STL otherwise looks complete |
+| Property-based geometry comparison | The only sound way to diff generated meshes |
+| Family completeness checking | Totals look right while one variant family is short |
+
+None of it lived in `fuselage_variants.py`. All of it went with the tool, and the loss stayed
+invisible until the sweep was run again and observed to be single-threaded.
+
+**How to tell the difference.** Ask whether the capability is about *this task* or about *the
+thing being operated on*. Moving files, journalling a plan, resuming an interrupted move —
+those belong to the migration. Rendering geometry faster, verifying a mesh is complete,
+comparing output against a reference — those belong to the geometry pipeline, whatever
+happens to be calling it today.
+
+**The wrapping test.** If a tool has to monkeypatch, shim, or shadow the main code to get its
+behavior, the behavior is in the wrong place. That migration tool replaced
+`fuselage_variants.subprocess.check_call` and `fuselage_variants.solid_render` at runtime.
+Both should have been documented parameters on `fuselage_variants` that the tool passed
+arguments to — at which point discarding the tool would have cost nothing.
+
 ### SOLID Principles
 
 | Principle | Summary |
