@@ -16,6 +16,9 @@ import json  # example for saving results
 
 import solid2
 import subprocess
+import concurrent.futures
+import sys
+import time
 from enum import Enum
 
 # Every path below is anchored to this file, not to the working directory, so
@@ -1026,6 +1029,222 @@ def relativize_scad_references(scad_path):
             f.write(rewritten)
 
 
+class RenderFailed(RuntimeError):
+    """One or more queued OpenSCAD runs failed."""
+
+
+class RenderQueue:
+    """Runs the sweep's OpenSCAD invocations, optionally across a thread pool.
+
+    The sweep is a serial loop whose per-part cost is almost entirely a blocking
+    `openscad` subprocess, so it uses one core out of however many the machine has.
+    Splitting the loop is unnecessary: only the subprocess calls need to overlap,
+    and the Python either side of them -- building the solid2 tree, writing the
+    .scad, rewriting its references -- stays on the main thread where it belongs.
+
+    Threads rather than processes, because each job blocks in a child process and
+    releases the GIL while waiting. That also sidesteps solid2's module-level facet
+    state (`set_global_fn`/`fa`/`fs`), which is set during generation and would be
+    a race if generation itself were parallel.
+
+    Work is drained in chunks rather than all at the end. A failing render would
+    otherwise stay invisible until thousands more had been queued behind it, and
+    the run would look like it was skipping everything.
+    """
+
+    def __init__(self, workers=1, chunk=None, progress_every=20):
+        self.workers = max(1, int(workers))
+        self.chunk = chunk or max(self.workers * 4, 8)
+        self.progress_every = progress_every
+        self._pending = []
+        self._done = 0
+        self._failed = 0
+        self._recovered = 0
+        self._start = None
+
+    def submit(self, cmd):
+        """Queue an OpenSCAD command, or run it now when not parallel."""
+        if self.workers == 1:
+            self._run(cmd)
+            self._done += 1
+            return
+        self._pending.append(cmd)
+        if len(self._pending) >= self.chunk:
+            self.drain()
+
+    @staticmethod
+    def _run(cmd):
+        subprocess.check_call(cmd,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL)
+
+    def drain(self):
+        """Run everything queued. Raises RenderFailed if any job failed."""
+        if not self._pending:
+            return
+        jobs, self._pending = self._pending, []
+        if self._start is None:
+            self._start = time.time()
+
+        failures = []
+        with concurrent.futures.ThreadPoolExecutor(self.workers) as pool:
+            futures = {pool.submit(self._run, c): c for c in jobs}
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:                     # noqa: BLE001
+                    failures.append((futures[future], exc))
+                self._done += 1
+                if self._done % self.progress_every == 0:
+                    rate = (time.time() - self._start) / self._done
+                    sys.stderr.write(
+                        '      rendered %d  (%.1f s/part, %d worker(s))\n'
+                        % (self._done, rate, self.workers))
+                    sys.stderr.flush()
+
+        if failures:
+            failures = self._retry_serially(failures)
+
+        if failures:
+            detail = '\n'.join('  %s\n    %s' % (c, e) for c, e in failures[:10])
+            raise RenderFailed(
+                '%d of %d render(s) failed after a serial retry '
+                '(%d succeeded, %d recovered on retry):\n%s'
+                % (len(failures), self._done, self._done - self._failed,
+                   self._recovered, detail))
+
+    def _retry_serially(self, failures):
+        """Re-run failed commands one at a time; return those that failed again.
+
+        The dominant failure mode here is memory, not geometry. A large tail holds
+        well over a gigabyte during its CGAL solve, and several at once on a loaded
+        machine abort with STATUS_FATAL_APP_EXIT -- which is transient and depends
+        entirely on what else was resident at that moment. Retrying serially, with
+        the rest of the batch finished and its memory returned, recovers them:
+        measured on the U=0.75 and U=2.0 tails, both of which aborted at five
+        workers and then completed cleanly on their own in about 255 s each.
+
+        A genuine geometry error fails again here and is reported, so this cannot
+        turn a real defect into a silent pass.
+        """
+        self._failed += len(failures)
+        still_failing = []
+        sys.stderr.write('      %d render(s) failed; retrying serially\n'
+                         % len(failures))
+        sys.stderr.flush()
+        for cmd, original in failures:
+            try:
+                self._run(cmd)
+                self._recovered += 1
+            except Exception:                                # noqa: BLE001
+                still_failing.append((cmd, original))
+        sys.stderr.write('      recovered %d of %d on retry\n'
+                         % (len(failures) - len(still_failing), len(failures)))
+        sys.stderr.flush()
+        return still_failing
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        # Only flush the tail on a clean exit; on an error the queue is abandoned
+        # rather than run, so a failure does not drag thousands of renders with it.
+        if exc_type is None:
+            self.drain()
+        return False
+
+
+# Module-level so the five sweep functions and their render helpers need no
+# plumbing. Serial by default, which is exactly the previous behaviour; main()
+# installs a parallel queue for the duration of a run.
+_RENDER_QUEUE = RenderQueue(workers=1)
+
+
+def set_render_queue(queue):
+    """Install the queue solid_render submits to. Returns the previous one."""
+    global _RENDER_QUEUE
+    previous, _RENDER_QUEUE = _RENDER_QUEUE, queue
+    return previous
+
+
+# Peak resident set observed for the heaviest part in the sweep -- a U=4.0 tail,
+# roughly 367k triangles -- was about 1.27 GB. The headroom above that covers the
+# larger boom bulkheads and leaves room for the CGAL peak to overshoot the steady
+# state without pushing the machine into swap.
+RENDER_MEMORY_PER_WORKER_MB = 1600
+
+
+def _available_memory_bytes():
+    """Physical memory currently available, or None if it cannot be determined."""
+    try:
+        if sys.platform == 'win32':
+            import ctypes
+
+            class _MemoryStatusEx(ctypes.Structure):
+                _fields_ = [('dwLength', ctypes.c_ulong),
+                            ('dwMemoryLoad', ctypes.c_ulong),
+                            ('ullTotalPhys', ctypes.c_ulonglong),
+                            ('ullAvailPhys', ctypes.c_ulonglong),
+                            ('ullTotalPageFile', ctypes.c_ulonglong),
+                            ('ullAvailPageFile', ctypes.c_ulonglong),
+                            ('ullTotalVirtual', ctypes.c_ulonglong),
+                            ('ullAvailVirtual', ctypes.c_ulonglong),
+                            ('ullAvailExtendedVirtual', ctypes.c_ulonglong)]
+
+            status = _MemoryStatusEx()
+            status.dwLength = ctypes.sizeof(status)
+            if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return None
+            return int(status.ullAvailPhys)
+        return os.sysconf('SC_AVPHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def render_worker_budget():
+    """Return (workers, reason) for the default worker count.
+
+    Bounded by cores *and* by free memory. The memory bound is not optional: a
+    CGAL render of a large tail holds well over a gigabyte, and five of them at
+    once on a loaded machine exhausts physical memory and aborts OpenSCAD with
+    STATUS_FATAL_APP_EXIT -- which looks like a geometry failure but is not one.
+
+    Measured live rather than from total RAM, because this machine routinely runs
+    an IDE, MCP servers, and a FreeCAD GUI alongside the sweep; the memory that
+    matters is what is free at the moment the sweep starts.
+    """
+    override = os.environ.get('FUSELAGE_RENDER_WORKERS')
+    if override:
+        return max(1, int(override)), 'FUSELAGE_RENDER_WORKERS'
+
+    # An OpenSCAD render is compute-bound and gains little from hyperthreading, so
+    # the physical count is the useful number; logical // 2 is the closest estimate
+    # available without adding a dependency. One core is left for the machine.
+    logical = os.cpu_count() or 2
+    physical = max(1, logical // 2)
+    by_cores = max(1, physical - 1)
+
+    available = _available_memory_bytes()
+    if available is None:
+        return by_cores, '%d physical core(s) of %d logical, 1 reserved; memory unknown' % (
+            physical, logical)
+
+    per_worker = int(os.environ.get('FUSELAGE_RENDER_WORKER_MB',
+                                    RENDER_MEMORY_PER_WORKER_MB))
+    by_memory = max(1, int(available // (per_worker * 1024 * 1024)))
+    workers = min(by_cores, by_memory)
+    reason = ('%d physical core(s) of %d logical, 1 reserved -> %d; '
+              '%.1f GB free / %d MB per worker -> %d; taking the lower'
+              % (physical, logical, by_cores,
+                 available / (1024 ** 3), per_worker, by_memory))
+    return workers, reason
+
+
+def default_render_workers():
+    """Workers to use when the caller does not say."""
+    return render_worker_budget()[0]
+
+
 def solid_render(scad_obj, output_dir, filename):
 
     user_path = os.environ.get('OPENSCADPATH')
@@ -1056,24 +1275,22 @@ def solid_render(scad_obj, output_dir, filename):
 
     cmd = solid2.config.config.openscad_stl_command.format(scadfile=scad_filepath, stlfile=stl_filepath)
 
-    subprocess.check_call(os.path.join(user_path, cmd),
-                      stdout=subprocess.PIPE,
-                      stderr=subprocess.DEVNULL)
+    # Submitted rather than run directly. With a serial queue -- the default --
+    # this executes immediately and behaves exactly as the direct call did; with a
+    # parallel queue installed by main() it is deferred and overlapped. The .scad
+    # on disk is complete either way, so nothing downstream is affected by the
+    # STL arriving later; none of the five call sites use the returned STL path.
+    _RENDER_QUEUE.submit(os.path.join(user_path, cmd))
 
-    viewport_translation = [ 283.58, 62.37, -54.27 ]
-    viewport_rotation = [ 64.10, 0.00, 305.20 ]
-    viewport_fov = 22.50
-    viewport_distance = 839.47
-
-    # 2048,1080
-    render_opts = "--autocenter --viewall --render --imgsize 4096,2160 --projection p --colorscheme BeforeDawn --camera 283.58,62.37,-54.27,64.10,0.00,305.20,750"
-
-    cmd = os.path.join(user_path, 'openscad -o ' + png_filepath + ' ' + render_opts + ' ' + scad_filepath)
-    # print(cmd)
-    subprocess.check_call(cmd,
-                      stdout=subprocess.PIPE,
-                      stderr=subprocess.DEVNULL)
-
+    # The preview PNG is no longer rendered here. OpenSCAD produced it with a
+    # second invocation carrying --render, which re-solved the whole CSG tree a
+    # second time purely to take a picture -- the dominant cost of the sweep, for
+    # an image the STL above already contains all the information for.
+    #
+    # Previews are now a separate pass over the STLs:
+    #     uv run python src/Fuselage/tools/render_previews.py <output_dir>
+    # See render_previews.py and stl_preview.py. The path is still returned so
+    # callers know where the preview belongs, but nothing writes it here.
     return (scad_filepath, stl_filepath, png_filepath)
 
 def lookup_anchor_diameter(bolt_diameter):
@@ -1388,7 +1605,25 @@ def axes(*names):
     return [os.path.join(PARAM_DIR, n) for n in names]
 
 
-def main():
+def main(workers=None):
+    """Run all five sweeps.
+
+    `workers` is the number of concurrent OpenSCAD renders; None picks a default
+    from the core count, and 1 restores the original strictly serial behaviour.
+    Override without editing code via FUSELAGE_RENDER_WORKERS.
+    """
+    workers = default_render_workers() if workers is None else max(1, int(workers))
+    print('render workers: %d' % workers, flush=True)
+
+    with RenderQueue(workers) as queue:
+        previous = set_render_queue(queue)
+        try:
+            _run_all_sweeps()
+        finally:
+            set_render_queue(previous)
+
+
+def _run_all_sweeps():
 
     run_corner_parametric_sweep(axes('panel_variants.csv', 'bulkhead_size_variants.csv', 'corner_size_variants.csv'), OUTPUT_DIR)
 
@@ -1409,5 +1644,5 @@ def main():
                                    'tail_type_variants.csv'), OUTPUT_DIR)
 
 if __name__ == "__main__":
-    main()
+    main(workers=int(sys.argv[1]) if len(sys.argv) > 1 else None)
 
