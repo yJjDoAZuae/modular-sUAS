@@ -173,10 +173,15 @@ the commented `$fa = 1; $fs = 0.1` for final output.
    nub stack-up) or thinner than the parametric minimum of `U`·1 mm. A `0` thickness always
    passes. Invalid combos are skipped rather than rendered.
 4. `solid_render` uses **SolidPython2** (`solid2`) to emit a `.scad` file, calls
-   `relativize_scad_references()` on it, then shells out to the `openscad` CLI twice —
-   once for the STL, once for a 4096×2160 PNG preview at a fixed camera.
+   `relativize_scad_references()` on it, then submits one `openscad` CLI invocation for
+   the STL to the module's `RenderQueue`.
 5. Output lands in `variant_output/U_<U>/<metric|imperial>/panel_<name>/<part>/` for
    corners and bulkheads, and `variant_output/U_<U>/<nose|tail>/<type_name>/` for cowls.
+
+**Preview PNGs are no longer produced by the sweep.** OpenSCAD used to render them with a
+second invocation carrying `--render`, which re-solved the entire CSG tree purely to take a
+picture — the dominant cost of a run, for an image the STL already contains the information
+for. Previews are now a separate pass; see *Preview rendering* below.
 
 **Path anchoring.** Every input path is anchored to `__file__` via `_HERE`/`_ROOT`, not to
 the working directory, and `relativize_scad_references()` rewrites absolute `use <...>`
@@ -184,13 +189,30 @@ lines in generated output to relative ones. This is load-bearing: an earlier swe
 a mapped drive baked a since-dead `R:\` path into all 1774 files it produced, none of which
 can be re-rendered. Do not undo it.
 
+One limit worth knowing: a relative path only exists when the output directory and `scad/`
+are on the **same volume**. Across volumes the function deliberately leaves the path
+absolute, so writing sweep output to a local disk while the geometry sits on the NAS bakes
+absolute paths into every generated `.scad`. Keep output on the same share as the source.
+
 **Entry point** — `main()` runs five sweeps: corner, bulkhead, boom bulkhead, nose, tail.
 There is no way to run a subset; `main()` is all-or-nothing and writes into
 `variant_output/`.
 
 ```text
-uv run python src/Fuselage/tools/fuselage_variants.py
+uv run python src/Fuselage/tools/fuselage_variants.py        # default worker count
+uv run python src/Fuselage/tools/fuselage_variants.py 8      # explicit
+FUSELAGE_RENDER_WORKERS=1 uv run python src/Fuselage/tools/fuselage_variants.py
 ```
+
+**Parallel rendering.** `RenderQueue` overlaps the OpenSCAD subprocess calls across a
+thread pool, draining in chunks so a failing render surfaces early rather than after
+thousands more have been queued behind it. Threads rather than processes, because each job
+blocks in a child process and releases the GIL — and because generation stays on the main
+thread, solid2's module-level facet state (`set_global_fn`/`fa`/`fs`) is never raced.
+
+The default is `physical_cores - 1`, estimated as `logical // 2 - 1` (5 on a 12-logical
+machine). `workers=1` restores the original strictly serial behavior exactly: the queue
+runs each command inline instead of deferring it.
 
 Requires the environment defined by `pyproject.toml` / `uv.lock` (`pandas` pinned `<2.x`
 compatible, `solidpython2`) and the **`OPENSCADPATH`** environment variable pointing at the
@@ -234,6 +256,26 @@ which no static analysis can see and which breaks silently if either end moves:
 nose_type_variants.csv  --parameter_filename-->  tools/nose_round_plate.json
 nose_round_plate.json   --oml.filename-------->  oml/vsp_nose.stl   (via ../oml/)
 ```
+
+**Preview rendering**
+
+- [stl_preview.py](../tools/stl_preview.py) — renders a PNG directly from an STL. Software
+  rasterizer, numpy and stdlib only (zlib writes the PNG; no Pillow, no OpenGL context to
+  lose). Orthographic, because these are verification images and perspective makes a
+  feature's apparent size depend on where it sits in the part. Edge detection covers all
+  three edge classes — silhouette, step (depth Laplacian, which unlike a gradient does not
+  fire on merely-slanted faces), and crease (normal-buffer dot product) — with
+  normal-oriented ambient occlusion darkening concavities. Back faces render blue as a
+  **defect indicator**: a closed, consistently wound solid never shows one, so any blue
+  means an open, inverted, or self-intersecting mesh.
+- [render_previews.py](../tools/render_previews.py) — walks a tree and renders every STL,
+  in parallel. Processes here, not threads: the work is numpy-bound rather than blocked in a
+  subprocess, so threads would serialize on the GIL. Skips PNGs newer than their STL unless
+  `--force`, and each failure names its own file rather than aborting the batch.
+
+  ```text
+  uv run python src/Fuselage/tools/render_previews.py src/Fuselage/variant_output
+  ```
 
 **Other Python**
 
