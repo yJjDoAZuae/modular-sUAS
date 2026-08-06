@@ -1,3 +1,9 @@
+// mirror_xy() lives here. This file had no includes and open-coded that union three
+// times; fuselage_bulkhead_geometry.scad already includes both files, so the module
+// was always available there and only missing when corner geometry is used on its own
+// -- which is exactly how the sweep uses it.
+include <shape_modifier_utils.scad>
+
 module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
 
 
@@ -29,11 +35,8 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
     
     difference() {
         linear_extrude(height=bulkhead_thickness+eps,center=false,convexity=3,twist=0,slices=1) {
-            union() {
+            mirror_xy() {
                 corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                mirror([1,-1,0]) {
-                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                }
             }
         }
     
@@ -90,11 +93,8 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
         
             linear_extrude(height=bulkhead_thickness,center=false,convexity=3,twist=0,slices=1) {
 
-                union() {
+                mirror_xy() {
                     corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                    mirror([1,-1,0]) {
-                        corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                    }
                 }
             }
             
@@ -133,11 +133,8 @@ module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thick
     translate([0,0,2*bulkhead_thickness-eps]) {
         linear_extrude(height=unit_length/2-2*bulkhead_thickness+2*eps,center=false,convexity=3,twist=0,slices=1) {
 
-            union() {
+            mirror_xy() {
                 corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                mirror([1,-1,0]) {
-                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
-                }
             }
         }
     }
