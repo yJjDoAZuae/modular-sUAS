@@ -12,6 +12,8 @@ DTF_thickness = 4.77;
 panel_thickness = DTF_thickness;
 panel_tolerance = 0.1;
 longeron_tolerance = 0.05;
+// The corner carries all of the greeble fit clearance; the bulkhead's pocket is
+// cut at nominal size. See bulkhead_section() in fuselage_bulkhead_geometry.scad.
 greeble_thickness = 0.8;
 greeble_nub_thickness = 0.8;
 greeble_tolerance = 0.05;
