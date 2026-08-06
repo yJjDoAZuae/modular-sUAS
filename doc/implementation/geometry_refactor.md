@@ -30,7 +30,7 @@ IP-GEO-11.
 | IP-GEO-7 | done | Extract greeble dimensions as SCAD functions | IP-GEO-13 |
 | IP-GEO-8 | done | Single shared `geometry_eps()`, replacing 12 per-module redeclarations | IP-GEO-13 |
 | IP-GEO-13 | done | Geometric verification harness for `.scad` changes — [`verify_scad_change.py`](../../src/Fuselage/tools/verify_scad_change.py) | — |
-| IP-GEO-9 | todo | Named helper for oversized cutting solids, replacing ad-hoc `3*bulkhead_thickness` / `2*corner_radius` multipliers | IP-GEO-1 |
+| IP-GEO-9 | done | `through_cut()` and `mask_reach()` replacing 11 raw multipliers | IP-GEO-13 |
 | IP-GEO-10 | blocked (IP-GEO-2) | Group parameters so `bulkhead_section_full` takes ~8 arguments instead of 28 | IP-GEO-2 |
 | IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
 | IP-GEO-12 | todo | Repair `test_fuse.ipynb`: its preview cells broke when `solid_render` stopped writing PNGs | — |
@@ -213,7 +213,40 @@ untouched, so this change is one line per module rather than a rewrite of every
 
 Both verified with `verify_scad_change.py`: 10 parts, identical geometry.
 
-### IP-GEO-9 — cutting solids sized by guesswork
+### IP-GEO-9 — done 2026-08-06: the extents were already safe
+
+Two helpers in `shape_modifier_utils.scad`, replacing 11 raw multipliers:
+
+- `through_cut(extent) = 3 * extent` — length for a *centred* cutting solid that must
+  pass entirely through material of depth `extent`. 7 call sites.
+- `mask_reach(extent) = 2 * extent` — distance to place a mask vertex so it lies off
+  the part. 4 call sites.
+
+**The margins were measured, not assumed.** Walking all 412 valid combinations of the
+swept parameter space:
+
+| Check | Worst case | Verdict |
+| --- | --- | --- |
+| `mask_reach` vs the shape's reach (`panel_offset + panel_overlap`) | +3.25 mm at U=0.5, 1 mm panel: mask at 10.0 mm, shape reaches 6.75 mm | safe, and the gap widens with U |
+| `through_cut` vs the material it spans | +0.5 × `bulkhead_thickness` everywhere | safe, scales with the part |
+
+So this item is **naming, not repair** — no current parameter combination is marginal.
+That was worth establishing rather than assuming, because the change looks identical
+either way: if a multiplier had been too small, `verify_scad_change.py` would report
+DIFF, and that would have been a *bug found* rather than a refactor failed.
+
+An intermediate version of the margin analysis reported the depth check as
+UNDER-COVERING by 8 mm at U=4.0. That was a fault in the analysis, not the geometry: it
+compared the half-cut against the 2 × `bulkhead_thickness` interconnect stack, but those
+cuts live inside `bulkhead_section`, which is one `bulkhead_thickness` tall, and the two
+sections are stacked *after* their cuts are applied. The stack is not what a cut has to
+span.
+
+Two of the 11 sites were found only on a second pass: they wrote `bulkhead_thickness*3`
+rather than `3*bulkhead_thickness`, and the search pattern had assumed one ordering.
+Same class of miss as the whitespace-dependent replace in IP-GEO-5.
+
+### IP-GEO-9 — the original finding
 
 Cuts are oversized by ad-hoc multipliers: `3*bulkhead_thickness`, `2*corner_radius`,
 `unit_width`. Each is a guess at "big enough," and each is a silent failure waiting for
