@@ -1586,21 +1586,25 @@ def corner_render(dp, output_dir, filename):
 
     fgeom = scad_module('fuselage_corner_geometry.scad')
 
+    # Keyword arguments, not positional. solid2 resolves these against the .scad
+    # module's own signature and emits the same named parameters it always did, so
+    # the generated geometry is unchanged -- but a transposition here is now a
+    # TypeError rather than a part that renders cleanly and is silently wrong.
     scadobj = fgeom.fuselage_corner(
-        dp["bulkhead"]["U"],
-        dp["corner"]["length"],
-        dp["bulkhead"]["thickness"],
-        dp["corner"]["radius"],
-        dp["panel"]["thickness"],
-        dp["panel"]["offset"],
-        dp["panel"]["overlap"],
-        dp["panel"]["tolerance"],
-        dp["longeron"]["radius"],
-        dp["longeron"]["tolerance"],
-        dp["greeble"]["thickness"],
-        dp["greeble"]["nub_thickness"],
-        dp["greeble"]["tolerance"],
-        dp["printer"]["nozzle_diameter"])
+        U=dp["bulkhead"]["U"],
+        unit_length=dp["corner"]["length"],
+        bulkhead_thickness=dp["bulkhead"]["thickness"],
+        corner_radius=dp["corner"]["radius"],
+        panel_thickness=dp["panel"]["thickness"],
+        panel_offset=dp["panel"]["offset"],
+        panel_overlap=dp["panel"]["overlap"],
+        panel_tolerance=dp["panel"]["tolerance"],
+        longeron_radius=dp["longeron"]["radius"],
+        longeron_tolerance=dp["longeron"]["tolerance"],
+        greeble_thickness=dp["greeble"]["thickness"],
+        greeble_nub_thickness=dp["greeble"]["nub_thickness"],
+        greeble_tolerance=dp["greeble"]["tolerance"],
+        nozzle_diameter=dp["printer"]["nozzle_diameter"])
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
     
@@ -1613,34 +1617,35 @@ def bulkhead_render(dp, output_dir, filename):
 
     (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp["bulkhead"]["type"])
     
-    scadobj = fgeom.bulkhead_section_full(is_interconnect,
-                                       is_cowling,
-                                       dp["bulkhead"]["width"],
-                                       dp["corner"]["length"],
-                                       dp["bulkhead"]["thickness"],
-                                       dp["corner"]["radius"],
-                                       dp["panel"]["thickness"],
-                                       dp["panel"]["offset"],
-                                       dp["panel"]["overlap"],
-                                       dp["panel"]["tolerance"],
-                                       dp["longeron"]["radius"],
-                                       dp["longeron"]["tolerance"],
-                                       dp["bolt"]["radius"],
-                                       dp["bolt"]["thickness"],
-                                       dp["bolt"]["offset"],
-                                       dp["greeble"]["opening_angle"],
-                                       dp["greeble"]["thickness"],
-                                       dp["greeble"]["nub_thickness"],
-                                       dp["greeble"]["tolerance"],
-                                       dp["plate"]["thickness"],
-                                       dp["web"]["fillet_radius"],
-                                       dp["web"]["width"],
-                                       dp["bulkhead_flange"]["fillet_radius"],
-                                       dp["bulkhead_flange"]["thickness"],
-                                       dp["bulkhead_flange"]["chamfer"],
-                                       dp["cowl_flange"]["height"],
-                                       dp["cowl_flange"]["tolerance"],
-                                       dp["printer"]["nozzle_diameter"])
+    scadobj = fgeom.bulkhead_section_full(
+        is_interconnect=is_interconnect,
+        is_cowling=is_cowling,
+        unit_width=dp["bulkhead"]["width"],
+        unit_length=dp["corner"]["length"],
+        bulkhead_thickness=dp["bulkhead"]["thickness"],
+        corner_radius=dp["corner"]["radius"],
+        panel_thickness=dp["panel"]["thickness"],
+        panel_offset=dp["panel"]["offset"],
+        panel_overlap=dp["panel"]["overlap"],
+        panel_tolerance=dp["panel"]["tolerance"],
+        longeron_radius=dp["longeron"]["radius"],
+        longeron_tolerance=dp["longeron"]["tolerance"],
+        bolt_hole_radius=dp["bolt"]["radius"],
+        bolt_thickness=dp["bolt"]["thickness"],
+        bolt_offset=dp["bolt"]["offset"],
+        greeble_opening_angle=dp["greeble"]["opening_angle"],
+        greeble_thickness=dp["greeble"]["thickness"],
+        greeble_nub_thickness=dp["greeble"]["nub_thickness"],
+        greeble_tolerance=dp["greeble"]["tolerance"],
+        plate_thickness=dp["plate"]["thickness"],
+        web_fillet_radius=dp["web"]["fillet_radius"],
+        web_width=dp["web"]["width"],
+        flange_fillet_radius=dp["bulkhead_flange"]["fillet_radius"],
+        flange_thickness=dp["bulkhead_flange"]["thickness"],
+        flange_chamfer=dp["bulkhead_flange"]["chamfer"],
+        cowl_flange_height=dp["cowl_flange"]["height"],
+        cowl_flange_tolerance=dp["cowl_flange"]["tolerance"],
+        nozzle_diameter=dp["printer"]["nozzle_diameter"])
     
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
@@ -1651,31 +1656,32 @@ def boom_bulkhead_render(dp, output_dir, filename):
     
     fbbgeom = scad_module('fuselage_boom_bulkhead_geometry.scad')
     
-    scadobj = fbbgeom.boom_bulkhead(   dp["bulkhead"]["width"],
-                                       dp["corner"]["radius"],
-                                       dp["panel"]["thickness"],
-                                       dp["panel"]["offset"],
-                                       dp["panel"]["overlap"],
-                                       dp["panel"]["tolerance"],
-                                       dp["longeron"]["radius"],
-                                       dp["longeron"]["tolerance"],
-                                       dp["bolt"]["radius"],
-                                       dp["bolt"]["offset"],
-                                       dp["web"]["fillet_radius"],
-                                       dp["web"]["width"],
-                                       dp["boom_bulkhead"]["diameter"],
-                                       dp["boom_bulkhead"]["thickness"],
-                                       dp["boom_bulkhead"]["y_position"],
-                                       dp["boom_bulkhead"]["z_position"],
-                                       dp["boom_bulkhead"]["collet_thickness"],
-                                       dp["boom_bulkhead"]["key_width"],
-                                       dp["boom_bulkhead"]["key_height"],
-                                       dp["boom_bulkhead"]["key_radius"],
-                                       dp["boom_bulkhead"]["key_angle"],
-                                       dp["boom_bulkhead"]["key_web_width"],
-                                       dp["boom_bulkhead"]["tolerance"],
-                                       dp["boom_bulkhead"]["make_vert_web"],
-                                       dp["boom_bulkhead"]["make_lower_web"])
+    scadobj = fbbgeom.boom_bulkhead(
+        unit_width=dp["bulkhead"]["width"],
+        corner_radius=dp["corner"]["radius"],
+        panel_thickness=dp["panel"]["thickness"],
+        panel_offset=dp["panel"]["offset"],
+        panel_overlap=dp["panel"]["overlap"],
+        panel_tolerance=dp["panel"]["tolerance"],
+        longeron_radius=dp["longeron"]["radius"],
+        longeron_tolerance=dp["longeron"]["tolerance"],
+        bolt_hole_radius=dp["bolt"]["radius"],
+        bolt_offset=dp["bolt"]["offset"],
+        web_fillet_radius=dp["web"]["fillet_radius"],
+        web_width=dp["web"]["width"],
+        boom_diameter=dp["boom_bulkhead"]["diameter"],
+        boom_bulkhead_thickness=dp["boom_bulkhead"]["thickness"],
+        boom_y_position=dp["boom_bulkhead"]["y_position"],
+        boom_z_position=dp["boom_bulkhead"]["z_position"],
+        boom_collet_thickness=dp["boom_bulkhead"]["collet_thickness"],
+        boom_key_width=dp["boom_bulkhead"]["key_width"],
+        boom_key_height=dp["boom_bulkhead"]["key_height"],
+        boom_key_radius=dp["boom_bulkhead"]["key_radius"],
+        boom_key_angle=dp["boom_bulkhead"]["key_angle"],
+        boom_key_web_width=dp["boom_bulkhead"]["key_web_width"],
+        boom_tolerance=dp["boom_bulkhead"]["tolerance"],
+        boom_make_vert_web=dp["boom_bulkhead"]["make_vert_web"],
+        boom_make_lower_web=dp["boom_bulkhead"]["make_lower_web"])
     
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
@@ -1713,40 +1719,47 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     oml_reversed = dp["oml"]["reversed"]
 
     if is_nose_cowl:
-        scadobj = cgeom.nose_cowl(U,
-                                  unit_width,
-                                  oml_filename,
-                                  oml_scale,
-                                  oml_length,
-                                  oml_offset_x,
-                                  oml_reversed,
-                                  cut_len,
-                                  buttress_thickness, 
-                                  buttress_z_offset, 
-                                  buttress_r_start, 
-                                  buttress_r_end, 
-                                  buttress_r_inset, 
-                                  cone_angle)
+        scadobj = cgeom.nose_cowl(
+            U=U,
+            unit_width=unit_width,
+            oml_filename=oml_filename,
+            oml_scale=oml_scale,
+            oml_length=oml_length,
+            oml_offset_x=oml_offset_x,
+            oml_reversed=oml_reversed,
+            cut_len=cut_len,
+            buttress_thickness=buttress_thickness,
+            buttress_z_offset=buttress_z_offset,
+            buttress_r_start=buttress_r_start,
+            buttress_r_end=buttress_r_end,
+            buttress_r_inset=buttress_r_inset,
+            cone_angle=cone_angle)
     elif is_nose_nose:
-        scadobj = cgeom.nose(U, 
-                             unit_width,
-                             oml_filename,
-                             oml_scale,
-                             oml_offset_x,
-                             oml_reversed,
-                             cut_len,
-                             nose_flange_height,
-                             nose_flange_inset,
-                             plate_diam,
-                             plate_thickness,
-                             plate_tol,
-                             cone_angle)
+        # Note this one takes no oml_length -- the nose is cut to the plate rather
+        # than to a length. Easy to miss positionally, since every neighbouring
+        # argument is the same type.
+        scadobj = cgeom.nose(
+            U=U,
+            unit_width=unit_width,
+            oml_filename=oml_filename,
+            oml_scale=oml_scale,
+            oml_offset_x=oml_offset_x,
+            oml_reversed=oml_reversed,
+            cut_len=cut_len,
+            nose_flange_height=nose_flange_height,
+            nose_flange_inset=nose_flange_inset,
+            plate_diam=plate_diam,
+            plate_thickness=plate_thickness,
+            plate_tol=plate_tol,
+            cone_angle=cone_angle)
     elif is_nose_plate:
-        scadobj = solid2.mirror(v=(0,0,-1))( cgeom.nose_plate(plate_diam,
-                                   plate_thickness,
-                                   plate_flange_width,
-                                   plate_flange_height,
-                                   cone_angle) )
+        scadobj = solid2.mirror(v=(0, 0, -1))(
+            cgeom.nose_plate(
+                plate_diam=plate_diam,
+                plate_thickness=plate_thickness,
+                plate_flange_width=plate_flange_width,
+                plate_flange_height=plate_flange_height,
+                cone_angle=cone_angle))
 
     else:
         return
@@ -1797,29 +1810,33 @@ def tail_render(U, dp, output_dir, filename):
     oml_offset_x = dp["oml"]["offset_x"]
     oml_reversed = dp["oml"]["reversed"]
 
-    scadobj = cgeom.tail_cowl(U,
-                              unit_width,
-                              oml_filename,
-                              oml_scale,
-                              oml_length,
-                              oml_offset_x,
-                              oml_reversed,
-                              cut_len,
-                              buttress_thickness,
-                              buttress_z_offset,
-                              buttress_r_inset,
-                              side_buttress_z_end,
-                              side_buttress_r_start,
-                              side_buttress_r_end,
-                              top_buttress_z_end,
-                              top_buttress_r_start,
-                              top_buttress_r_end,
-                              bottom_buttress_z_end,
-                              bottom_buttress_r_start,
-                              bottom_buttress_r_end,
-                              top_diag_buttress_depth,
-                              top_diag_buttress_z_start,
-                              cone_angle)
+    # Twenty-three arguments, of which eighteen are floats describing buttresses in
+    # four groups that differ only by prefix. Positionally this was the single most
+    # transposable call in the sweep.
+    scadobj = cgeom.tail_cowl(
+        U=U,
+        unit_width=unit_width,
+        oml_filename=oml_filename,
+        oml_scale=oml_scale,
+        oml_length=oml_length,
+        oml_offset_x=oml_offset_x,
+        oml_reversed=oml_reversed,
+        cut_len=cut_len,
+        buttress_thickness=buttress_thickness,
+        buttress_z_offset=buttress_z_offset,
+        buttress_r_inset=buttress_r_inset,
+        side_buttress_z_end=side_buttress_z_end,
+        side_buttress_r_start=side_buttress_r_start,
+        side_buttress_r_end=side_buttress_r_end,
+        top_buttress_z_end=top_buttress_z_end,
+        top_buttress_r_start=top_buttress_r_start,
+        top_buttress_r_end=top_buttress_r_end,
+        bottom_buttress_z_end=bottom_buttress_z_end,
+        bottom_buttress_r_start=bottom_buttress_r_start,
+        bottom_buttress_r_end=bottom_buttress_r_end,
+        top_diag_buttress_depth=top_diag_buttress_depth,
+        top_diag_buttress_z_start=top_diag_buttress_z_start,
+        cone_angle=cone_angle)
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
