@@ -7,6 +7,27 @@
 // across four files each declared their own `eps = 0.01` before this existed.
 function geometry_eps() = 0.01;
 
+// Length for a *centred* cutting solid that must pass entirely through material of
+// depth `extent`. A centred cut reaches half this each way, so the factor leaves 50%
+// clearance beyond `extent` on both sides -- a cut that lands flush on a face produces
+// a zero-thickness shell rather than a clean hole.
+//
+// Measured against the swept parameter space: the deepest thing any of these cuts must
+// clear is one bulkhead_section, one bulkhead_thickness tall, so the margin is 0.5 *
+// bulkhead_thickness everywhere and scales with the part. Interconnect bulkheads stack
+// two sections, but each section's cuts are applied before stacking, so the stack is
+// not what a cut has to span.
+function through_cut(extent) = 3 * extent;
+
+// Distance at which to place a mask vertex so it lies outside anything within `extent`
+// of the origin. Used by the half-plane polygons that trim an octant down to its
+// wedge, where the vertex position only has to be "far enough" to be off the part.
+//
+// Worst case across 412 valid combinations is 3.25 mm of clearance, at U=0.5 with 1 mm
+// panel: the shape reaches panel_offset + panel_overlap = 6.75 mm while the mask sits
+// at 10 mm. Positive everywhere, and the gap widens with U.
+function mask_reach(extent) = 2 * extent;
+
 
 module octant_to_full() {
     mirror_x() {
