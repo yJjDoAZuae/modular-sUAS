@@ -16,10 +16,17 @@ import json  # example for saving results
 
 import solid2
 import subprocess
+import argparse
 import concurrent.futures
+import contextlib
+import filecmp
 import sys
 import time
 from enum import Enum
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mesh_stats
+import stl_preview
 
 # Every path below is anchored to this file, not to the working directory, so
 # the sweeps produce the same result whether they are run from the Fuselage
@@ -1062,21 +1069,31 @@ class RenderQueue:
         self._recovered = 0
         self._start = None
 
-    def submit(self, cmd):
-        """Queue an OpenSCAD command, or run it now when not parallel."""
+    def submit(self, cmd, on_success=None):
+        """Queue an OpenSCAD command, or run it now when not parallel.
+
+        `on_success` runs only if the command exits zero. That is what makes the
+        write atomic: OpenSCAD renders to a temporary path and the callback moves
+        it into place, so a crashed or killed render leaves no file at the real
+        path rather than a convincing partial one.
+        """
+        job = (cmd, on_success)
         if self.workers == 1:
-            self._run(cmd)
+            self._run(job)
             self._done += 1
             return
-        self._pending.append(cmd)
+        self._pending.append(job)
         if len(self._pending) >= self.chunk:
             self.drain()
 
     @staticmethod
-    def _run(cmd):
+    def _run(job):
+        cmd, on_success = job
         subprocess.check_call(cmd,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.DEVNULL)
+        if on_success is not None:
+            on_success()
 
     def drain(self):
         """Run everything queued. Raises RenderFailed if any job failed."""
@@ -1106,7 +1123,8 @@ class RenderQueue:
             failures = self._retry_serially(failures)
 
         if failures:
-            detail = '\n'.join('  %s\n    %s' % (c, e) for c, e in failures[:10])
+            detail = '\n'.join('  %s\n    %s' % (job[0], e)
+                               for job, e in failures[:10])
             raise RenderFailed(
                 '%d of %d render(s) failed after a serial retry '
                 '(%d succeeded, %d recovered on retry):\n%s'
@@ -1132,12 +1150,12 @@ class RenderQueue:
         sys.stderr.write('      %d render(s) failed; retrying serially\n'
                          % len(failures))
         sys.stderr.flush()
-        for cmd, original in failures:
+        for job, original in failures:
             try:
-                self._run(cmd)
+                self._run(job)
                 self._recovered += 1
             except Exception:                                # noqa: BLE001
-                still_failing.append((cmd, original))
+                still_failing.append((job, original))
         sys.stderr.write('      recovered %d of %d on retry\n'
                          % (len(failures) - len(still_failing), len(failures)))
         sys.stderr.flush()
@@ -1165,6 +1183,157 @@ def set_render_queue(queue):
     global _RENDER_QUEUE
     previous, _RENDER_QUEUE = _RENDER_QUEUE, queue
     return previous
+
+
+# Resume state. Off by default so a plain run reproduces every part, which is what
+# you want when geometry or parameters have changed; a resume trusts what is on disk.
+_RESUME = False
+_RESUME_COUNTS = {'skipped': 0, 'changed': 0}
+
+
+def set_resume(enabled):
+    """Skip parts that are already rendered and unchanged. Returns the previous value.
+
+    Safe to leave on: a part is skipped only when the .scad it would generate now
+    is byte-identical to the one on disk *and* the STL beside it is a whole mesh.
+    Edit a geometry module or a parameter CSV and the affected parts re-render on
+    their own, because their generated .scad no longer matches.
+
+    Use --force to re-render regardless, e.g. after changing something the .scad
+    text cannot see -- an OpenSCAD version bump, or an OML mesh replaced in place.
+    """
+    global _RESUME
+    previous, _RESUME = _RESUME, bool(enabled)
+    _RESUME_COUNTS['skipped'] = 0
+    _RESUME_COUNTS['changed'] = 0
+    return previous
+
+
+# Preview PNGs are produced by the sweep, alongside each STL. On by default: a run
+# should yield the parts and the images to check them by, in one command.
+#
+# They are rendered from the finished STL by stl_preview, not by a second OpenSCAD
+# invocation. The old `--render` pass re-solved the whole CSG tree just to take a
+# picture, which was the dominant cost of a run; rasterizing the mesh that the
+# first invocation already produced costs a couple of seconds.
+_PREVIEWS = True
+
+# Parts a resumed run found already rendered but without a preview. Rendered in
+# one parallel batch at the end rather than inline, because the resume path runs on
+# the main thread and rasterizing is numpy-bound.
+_PREVIEW_BACKLOG = []
+
+
+def set_previews(enabled):
+    """Enable or disable preview generation. Returns the previous value."""
+    global _PREVIEWS
+    previous, _PREVIEWS = _PREVIEWS, bool(enabled)
+    del _PREVIEW_BACKLOG[:]
+    return previous
+
+
+def find_rendered_stls(output_dir):
+    """Every finished STL under output_dir, in a stable order.
+
+    '*.partial.stl' is excluded: those are in-flight or abandoned renders, named
+    that way because OpenSCAD picks its export format from the extension and so
+    cannot write to a name that does not end in .stl.
+    """
+    return [str(p) for p in sorted(Path(output_dir).rglob('*.stl'))
+            if not p.name.endswith('.partial.stl')]
+
+
+def render_preview_batch(stl_paths, workers=None, size=None, supersample=None,
+                         progress_every=25):
+    """Render previews for many STLs across a process pool. Returns failures.
+
+    Processes rather than threads: rasterizing is numpy-bound, so a thread pool
+    would serialize on the GIL and gain nothing. That is the opposite of the
+    OpenSCAD render queue, where threads are right precisely because each job
+    blocks in a child process.
+    """
+    size = size or stl_preview.DEFAULT_SIZE
+    supersample = (stl_preview.DEFAULT_SUPERSAMPLE if supersample is None
+                   else supersample)
+    jobs = [(str(p), size, True, True, supersample) for p in stl_paths]
+    if not jobs:
+        return []
+    workers = workers or default_render_workers()
+
+    failures = []
+    start = time.time()
+    try:
+        with concurrent.futures.ProcessPoolExecutor(workers) as pool:
+            futures = [pool.submit(stl_preview.render_one, j) for j in jobs]
+            for done, future in enumerate(
+                    concurrent.futures.as_completed(futures), start=1):
+                path, error = future.result()
+                if error:
+                    failures.append((path, error))
+                    print('  preview FAILED  %s: %s'
+                          % (os.path.basename(path), error), flush=True)
+                if progress_every and (done % progress_every == 0
+                                       or done == len(jobs)):
+                    rate = (time.time() - start) / done
+                    print('  previews %d/%d  %.2f s each  ~%.1f min left'
+                          % (done, len(jobs), rate,
+                             (len(jobs) - done) * rate / 60), flush=True)
+    except concurrent.futures.process.BrokenProcessPool:
+        # Windows spawns workers by re-importing the caller's __main__, so a driver
+        # script without an `if __name__ == "__main__":` guard makes every worker
+        # re-run that script and the pool collapses. Serial is slow but produces
+        # the images; losing them to a harness detail would be the worse outcome.
+        print('  preview pool broke -- falling back to serial. If the caller is a '
+              'script, it needs an `if __name__ == "__main__":` guard.', flush=True)
+        failures = [(p, e) for p, e in
+                    (stl_preview.render_one(j) for j in jobs) if e]
+    return failures
+
+
+def rebuild_previews(output_dir=None, workers=None, force=False):
+    """Regenerate previews across an existing output tree, without touching geometry.
+
+    For look changes -- a camera fix, different edge or occlusion settings -- where
+    the meshes are already correct and only the images are stale. Re-rendering the
+    geometry to get new pictures would cost hours for no benefit.
+    """
+    output_dir = OUTPUT_DIR if output_dir is None else output_dir
+    stls = find_rendered_stls(output_dir)
+    if force:
+        todo = stls
+    else:
+        todo = [p for p in stls
+                if not os.path.isfile(str(Path(p).with_suffix('.png')))]
+
+    print('previews: %d STL(s) under %s, %d to render%s'
+          % (len(stls), output_dir, len(todo),
+             '' if force else ' (missing only; --force redoes all)'), flush=True)
+    if not todo:
+        return []
+    workers = workers or default_render_workers()
+    failures = render_preview_batch(todo, workers=workers)
+    if failures:
+        print('previews: %d failed' % len(failures), flush=True)
+    return failures
+
+
+def _write_preview(stl_path, png_path):
+    """Render a preview beside a finished STL.
+
+    Runs on the worker thread, immediately after the STL is moved into place, so
+    previews keep pace with the sweep rather than needing a second pass.
+
+    A preview failure is reported but does not fail the part: the STL is the
+    deliverable and is already written and verified by this point, so discarding a
+    good part because its picture did not render would be the wrong trade. This is
+    the one place a broad except is warranted, and it is not silent.
+    """
+    try:
+        stl_preview.render_stl_to_png(stl_path, png_path)
+    except Exception as exc:                                 # noqa: BLE001
+        sys.stderr.write('      preview failed for %s: %s: %s\n'
+                         % (os.path.basename(stl_path), type(exc).__name__, exc))
+        sys.stderr.flush()
 
 
 # Peak resident set observed for the heaviest part in the sweep -- a U=4.0 tail,
@@ -1269,28 +1438,83 @@ def solid_render(scad_obj, output_dir, filename):
     scad_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".stl.scad").name)
     stl_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".stl").name)
     png_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".png").name)
-    
-    tmp = solid2.scad_render_to_file(scad_obj,scad_filepath)
-    relativize_scad_references(scad_filepath)
 
-    cmd = solid2.config.config.openscad_stl_command.format(scadfile=scad_filepath, stlfile=stl_filepath)
+    # Generate the .scad to a temporary path first, so a resume can compare it
+    # against what is already on disk. Generating is cheap next to rendering, and
+    # it is what makes --resume trustworthy: a resumed run that skipped purely on
+    # "the STL exists" would silently keep stale parts after a .scad module or a
+    # parameter CSV changed. Same code path for both sides of the comparison, so
+    # they are guaranteed comparable.
+    partial_scad = os.path.join(
+        full_output_dir, Path(file_name).with_suffix('.partial.scad').name)
+    solid2.scad_render_to_file(scad_obj, partial_scad)
+    relativize_scad_references(partial_scad)     # same directory, so same result
+
+    definition_unchanged = (
+        os.path.isfile(scad_filepath)
+        and filecmp.cmp(partial_scad, scad_filepath, shallow=False)
+    )
+
+    # Resume: skip a part whose definition is unchanged and whose STL is already a
+    # whole mesh. The mesh sentinel is mesh_stats.is_complete, not os.path.isfile --
+    # a killed render used to leave a partial .stl that every existence check
+    # treated as finished. Combined with the atomic write below, a present .stl now
+    # genuinely means a finished render of the definition sitting beside it.
+    if _RESUME and definition_unchanged and mesh_stats.is_complete(stl_filepath):
+        os.remove(partial_scad)
+        _RESUME_COUNTS['skipped'] += 1
+        if _RESUME_COUNTS['skipped'] % 50 == 0:
+            sys.stderr.write('    ...%d already rendered\n'
+                             % _RESUME_COUNTS['skipped'])
+            sys.stderr.flush()
+        # The geometry is done, but its preview may not be -- a run interrupted
+        # before the preview, or output from before previews existed. Collect the
+        # gap rather than rendering it here: this runs on the main thread, so
+        # backfilling inline would render hundreds of previews one at a time while
+        # every core sat idle. sweep_session renders the backlog across a pool.
+        if _PREVIEWS and not os.path.isfile(png_filepath):
+            _PREVIEW_BACKLOG.append(stl_filepath)
+        return (scad_filepath, stl_filepath, png_filepath)
+
+    if _RESUME and not definition_unchanged and os.path.isfile(scad_filepath):
+        _RESUME_COUNTS['changed'] += 1
+
+    os.replace(partial_scad, scad_filepath)
+
+    # Render to a temporary path and move it into place only on success. OpenSCAD
+    # writes its output progressively, so without this an interrupted run leaves a
+    # convincing partial .stl at the real path -- which a resume would then skip,
+    # permanently baking in a truncated part. os.replace is atomic within a volume.
+    #
+    # The temporary name must still end in .stl: OpenSCAD picks its export format
+    # from the extension, so `-o foo.stl.partial` fails outright with exit 1. Tools
+    # that scan the tree for parts filter '*.partial.stl' back out.
+    partial_filepath = os.path.join(
+        full_output_dir, Path(file_name).with_suffix('.partial.stl').name)
+    cmd = solid2.config.config.openscad_stl_command.format(scadfile=scad_filepath, stlfile=partial_filepath)
+
+    def _finalize(src=partial_filepath, dst=stl_filepath, png=png_filepath):
+        os.replace(src, dst)
+        if _PREVIEWS:
+            _write_preview(dst, png)
 
     # Submitted rather than run directly. With a serial queue -- the default --
     # this executes immediately and behaves exactly as the direct call did; with a
     # parallel queue installed by main() it is deferred and overlapped. The .scad
     # on disk is complete either way, so nothing downstream is affected by the
     # STL arriving later; none of the five call sites use the returned STL path.
-    _RENDER_QUEUE.submit(os.path.join(user_path, cmd))
+    _RENDER_QUEUE.submit(os.path.join(user_path, cmd), on_success=_finalize)
 
-    # The preview PNG is no longer rendered here. OpenSCAD produced it with a
-    # second invocation carrying --render, which re-solved the whole CSG tree a
-    # second time purely to take a picture -- the dominant cost of the sweep, for
-    # an image the STL above already contains all the information for.
+    # The preview PNG is rendered by _finalize above, from the finished STL, as
+    # soon as that STL is in place. OpenSCAD used to produce it with a second
+    # invocation carrying --render, which re-solved the whole CSG tree purely to
+    # take a picture -- the dominant cost of the sweep, for an image the STL
+    # already contains all the information for.
     #
-    # Previews are now a separate pass over the STLs:
-    #     uv run python src/Fuselage/tools/render_previews.py <output_dir>
-    # See render_previews.py and stl_preview.py. The path is still returned so
-    # callers know where the preview belongs, but nothing writes it here.
+    # To regenerate previews across an existing tree without re-rendering any
+    # geometry -- after a camera or shading change, say -- use --previews-only:
+    #     uv run python src/Fuselage/tools/fuselage_variants.py --previews-only --force
+    # The path is returned either way so callers know where the preview belongs.
     return (scad_filepath, stl_filepath, png_filepath)
 
 def lookup_anchor_diameter(bolt_diameter):
@@ -1605,22 +1829,81 @@ def axes(*names):
     return [os.path.join(PARAM_DIR, n) for n in names]
 
 
-def main(workers=None):
-    """Run all five sweeps.
+@contextlib.contextmanager
+def sweep_session(workers=None, resume=False, previews=True):
+    """Configure and tear down a sweep run.
 
-    `workers` is the number of concurrent OpenSCAD renders; None picks a default
-    from the core count, and 1 restores the original strictly serial behaviour.
-    Override without editing code via FUSELAGE_RENDER_WORKERS.
+    Owns the render queue, the resume and preview settings, and -- importantly --
+    the preview backfill. Any driver of the `run_*_parametric_sweep` functions
+    should go through this rather than setting the pieces up itself: the backfill
+    is easy to omit, and omitting it silently leaves finished parts with no image.
+
+        with sweep_session(workers=5, resume=True):
+            run_nose_parametric_sweep(axes(...), out_dir)
     """
     workers = default_render_workers() if workers is None else max(1, int(workers))
-    print('render workers: %d' % workers, flush=True)
+    queue = RenderQueue(workers)
+    previous_queue = set_render_queue(queue)
+    previous_resume = set_resume(resume)
+    previous_previews = set_previews(previews)
+    try:
+        yield queue
+        # Only on the clean path: an abandoned run should not drag its whole
+        # queue of pending renders along behind the failure.
+        queue.drain()
+    finally:
+        set_render_queue(previous_queue)
+        # Captured before set_resume, which zeroes the counters.
+        skipped = _RESUME_COUNTS['skipped']
+        changed = _RESUME_COUNTS['changed']
+        backlog = list(_PREVIEW_BACKLOG)
+        set_resume(previous_resume)
+        set_previews(previous_previews)
 
-    with RenderQueue(workers) as queue:
-        previous = set_render_queue(queue)
-        try:
-            _run_all_sweeps()
-        finally:
-            set_render_queue(previous)
+    if resume:
+        print('resume: skipped %d unchanged part(s)%s'
+              % (skipped,
+                 ', re-rendered %d whose definition changed' % changed
+                 if changed else ''),
+              flush=True)
+
+    # After the queue has closed, so the OpenSCAD renders have finished and
+    # released their memory before the preview pool starts competing for it.
+    if previews and backlog:
+        print('previews: backfilling %d missing preview(s) across %d process(es)'
+              % (len(backlog), workers), flush=True)
+        failures = render_preview_batch(backlog, workers=workers)
+        if failures:
+            print('previews: %d failed (the parts themselves are fine)'
+                  % len(failures), flush=True)
+
+
+def main(workers=None, resume=False, previews=True):
+    """Run all five sweeps, writing an STL and a preview PNG for every part.
+
+    `workers` is the number of concurrent OpenSCAD renders; None picks a default
+    bounded by cores and free memory, and 1 restores strictly serial behaviour.
+    Override without editing code via FUSELAGE_RENDER_WORKERS.
+
+    `resume` skips parts whose STL is already a complete mesh, so an interrupted
+    run finishes instead of starting over. It trusts what is on disk, so use it
+    only when the inputs have not changed since. A skipped part still gets its
+    preview if that is missing.
+
+    `previews` renders each part's PNG from its finished STL, on the worker thread,
+    as soon as the STL lands. One command produces the parts and the images.
+    """
+    workers = default_render_workers() if workers is None else max(1, int(workers))
+    budget, why = render_worker_budget()
+    print('render workers: %d  (%s)' % (workers, why if workers == budget else 'explicit'),
+          flush=True)
+    print('previews: %s' % ('on, rendered from each STL' if previews else 'off'),
+          flush=True)
+    if resume:
+        print('resume: skipping parts whose STL is already complete', flush=True)
+
+    with sweep_session(workers=workers, resume=resume, previews=previews):
+        _run_all_sweeps()
 
 
 def _run_all_sweeps():
@@ -1644,5 +1927,34 @@ def _run_all_sweeps():
                                    'tail_type_variants.csv'), OUTPUT_DIR)
 
 if __name__ == "__main__":
-    main(workers=int(sys.argv[1]) if len(sys.argv) > 1 else None)
+    _parser = argparse.ArgumentParser(
+        description='Render every fuselage variant to STL.')
+    _parser.add_argument('workers', nargs='?', type=int, default=None,
+                         help='concurrent OpenSCAD renders '
+                              '(default: bounded by cores and free memory)')
+    _mode = _parser.add_mutually_exclusive_group()
+    _mode.add_argument('--resume', action='store_true',
+                       help='skip parts that are already rendered and whose '
+                            'generated .scad is unchanged; parts affected by a '
+                            'geometry or parameter edit re-render on their own')
+    _mode.add_argument('--force', action='store_true',
+                       help='re-render every part regardless of what is on disk '
+                            '(the default; state it explicitly to be unambiguous, '
+                            'and to override a change this tool cannot see, such '
+                            'as a new OpenSCAD version or an OML mesh replaced '
+                            'in place)')
+    _parser.add_argument('--no-previews', action='store_true',
+                         help='skip the preview PNGs (they are generated by '
+                              'default, from each finished STL)')
+    _parser.add_argument('--previews-only', action='store_true',
+                         help='render no geometry; regenerate previews for the '
+                              'STLs already in variant_output. Use after a look '
+                              'change -- with --force to redo every preview, '
+                              'without it to fill in only the missing ones')
+    _args = _parser.parse_args()
+    if _args.previews_only:
+        _failures = rebuild_previews(workers=_args.workers, force=_args.force)
+        raise SystemExit(1 if _failures else 0)
+    main(workers=_args.workers, resume=_args.resume and not _args.force,
+         previews=not _args.no_previews)
 
