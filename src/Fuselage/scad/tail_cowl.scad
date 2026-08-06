@@ -38,7 +38,10 @@ bottom_buttress_z_end = U*20;
 bottom_buttress_r_start = U*0;
 bottom_buttress_r_end = U*28.8; // U*38.3;
 
-oml_filename = "vsp_tail.stl";
+// Relative to scad/, because the import() lives in cowl_geometry.scad and OpenSCAD
+// resolves it against the file containing the call. This is the same prefix
+// oml_ref() adds in fuselage_variants.py -- keep the two in step.
+oml_filename = "../oml/vsp_tail.stl";
 oml_scale = 1e-3;
 oml_length = 0.1;
 oml_offset_x = -0.25;
