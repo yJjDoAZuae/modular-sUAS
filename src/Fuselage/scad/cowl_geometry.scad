@@ -90,7 +90,7 @@ module tail_cowl_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_of
 
 module nose(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle) {
      
-    eps = 0.01;
+    eps = geometry_eps();
    
     difference() {
         union() {
@@ -119,7 +119,7 @@ module nose(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, 
 }
 module nose_plate(plate_diam, plate_thickness, plate_flange_width, plate_flange_height, cone_angle) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     difference() {
     union() {

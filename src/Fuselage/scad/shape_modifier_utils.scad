@@ -1,3 +1,12 @@
+// Overlap used to break coincident faces in booleans. Subtracting a cut that lands
+// exactly on a surface leaves zero-thickness geometry, which renders unpredictably and
+// slices worse; every cut is extended by this much so the faces genuinely cross.
+//
+// A function rather than a variable: `use <...>` exports functions but not top-level
+// variable assignments, and the sweep reaches these files through `use`. Twelve modules
+// across four files each declared their own `eps = 0.01` before this existed.
+function geometry_eps() = 0.01;
+
 
 module octant_to_full() {
     mirror_x() {
@@ -62,7 +71,7 @@ module octant_tiled(unit_width, corner_radius) {
 
 // mask lower diagonal quadrant
 module octant_mask(unit_width, corner_radius) {
-    eps = 0.01;
+    eps = geometry_eps();
     polygon([[corner_radius+eps,corner_radius],
             [corner_radius+eps,-unit_width/2-corner_radius],
             [-unit_width/2-corner_radius+eps,-unit_width/2-corner_radius]]);
