@@ -95,6 +95,40 @@ behavior, the behavior is in the wrong place. That migration tool replaced
 Both should have been documented parameters on `fuselage_variants` that the tool passed
 arguments to — at which point discarding the tool would have cost nothing.
 
+### Weigh a refactor against what replaces the code
+
+Before improving something, ask whether it survives. Work that only makes scheduled-for-
+deletion code nicer to *read* is spent twice: once doing it, once discarding it — and in
+between it carries the full risk of changing behaviour.
+
+This is the general form of the unit exemption above, which is one instance of it. The
+test is not "is this better?" but **"does this survive the next phase, and does it make
+that phase easier?"**
+
+Three outcomes, and they are treated differently:
+
+- **Survives the port** — Python parameter handling, sweep logic, validity checks,
+  verification tooling, design documentation. Improve freely; this is where effort
+  compounds.
+- **Does not survive, but makes the current phase safe to operate** — worth doing, in
+  proportion. Making a 28-argument call keyword-based prevents silently wrong parts
+  during the months the path is still in use, which is a different justification from
+  tidiness.
+- **Does not survive and only improves readability** — decline it, and say why.
+
+A worked example, because the distinction is easy to lose. Grouping the OpenSCAD
+modules' parameters into vectors was planned, scoped, and started before anyone asked
+whether it survived Phase 3. It does not: the parameter groups already exist on the
+Python side, and what the refactor actually builds is an *encoding* of them in OpenSCAD
+vectors plus accessor functions to make that encoding safe — both workarounds for
+OpenSCAD's lack of records, and both discarded the moment generation moves to FreeCAD,
+where a group is a dataclass. The equivalent work on the Python side does survive, and is
+what got done instead. See OQ-GEO-1 in
+[doc/implementation/geometry_refactor.md](../implementation/geometry_refactor.md).
+
+Note that this cuts against the instinct to tidy what you are reading. A file being
+unpleasant is not, on its own, a reason to change it — check the roadmap first.
+
 ### SOLID Principles
 
 | Principle | Summary |
