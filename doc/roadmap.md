@@ -119,11 +119,11 @@ interactive driver broken. See OQ-GEO-2.
 - [ ] **Separate library modules from drivers.** Geometry primitives and shared utilities
       (`shape_modifier_utils.scad`, `*_geometry.scad`) are a different kind of thing from
       the top-level part definitions that produce printable output.
-- [ ] **Make the parameter interface explicit.** Parameters currently arrive as loosely
-      structured dicts assembled in Python (`null_parameters()` and friends). Decide what
-      the contract between Python and OpenSCAD is, and validate it at the boundary where
-      CSV/JSON is read — not deep in geometry code where the error loses the row that
-      caused it.
+- [x] **Make the parameter interface explicit.** Done as IP-GEO-16: parameters are
+      dataclasses (`Parameters`, `NoseParameters`), not dicts, so a misspelled field is
+      an `AttributeError` where it is written rather than a silently added key. What
+      remains open is *validation* at the boundary where CSV/JSON is read — the types are
+      declared but nothing checks a row's values before geometry consumes them.
 - [ ] **Leave the OpenSCAD path in millimeters.** The project standard is SI internally
       (see [general.md](guidelines/general.md#units--si-is-the-project-standard)), but the
       OpenSCAD implementation is transitional — Phase 3 replaces it. Converting code that is

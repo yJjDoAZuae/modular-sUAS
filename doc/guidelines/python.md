@@ -142,9 +142,17 @@ class CornerParameters:
     bolt_offset_mm: float
 ```
 
-Note that the inherited code passes parameters as loosely structured nested dicts.
-Replacing that with explicit types is roadmap Phase 2 work — until then, new code takes
-explicit named parameters rather than reaching further into the dict.
+The inherited code passed parameters as loosely structured nested dicts. IP-GEO-16
+replaced them with dataclasses — `Parameters`, `NoseParameters` and the twenty groups
+below them in `fuselage_variants.py`. Follow that pattern; do not reintroduce a dict of
+parameters.
+
+The reason is assignment. A dict raises `KeyError` on a misspelled *read*, so lookups
+were already safe, but it accepts a misspelled *write* in silence: the new key lands
+beside the real field, the real field keeps its default, and the result is off by
+exactly the amount the assignment was meant to apply. The conversion found a field that
+had existed for exactly that reason — `bolt["diameter"]`, assigned and read for years,
+never declared in the constructor.
 
 ---
 
