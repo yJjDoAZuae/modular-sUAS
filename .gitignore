@@ -7,19 +7,25 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+#
+# Anchored to the repository root with a leading slash. Unanchored, these match at
+# every level, and this project has directories that collide: `parts/` silently hid
+# src/Fuselage/parts -- 122 files and 118 MB of hand-modelled and hardware geometry --
+# from git entirely. distutils writes all of these at the root, so anchoring keeps the
+# intent and drops the collisions.
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -205,4 +211,40 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ---------------------------------------------------------------------------
+# modular-sUAS
+# ---------------------------------------------------------------------------
+
+# Parametric sweep output. Regenerable by re-running fuselage_variants.py, and
+# large: variant_output alone is ~2.4 GB across 576 parts. The pattern covers the
+# _original and _baseline copies kept as references.
+#
+# Each of those directories also holds its own .gitignore containing `*`, which
+# matches the .gitignore itself -- so those files were never committed and the
+# protection existed only in one working tree. Ignoring from here instead makes it
+# part of the repository, and those nested files can be deleted.
+variant_output*/
+
+# Scratch output from test_fuse.ipynb -- one-off renders, ~106 MB.
+test_fuse_output/
+
+# In-flight renders. solid_render writes to <name>.partial.stl and moves it into
+# place only after OpenSCAD exits zero, so a leftover means an interrupted run
+# rather than a finished part. The name must end in .stl because OpenSCAD selects
+# its export format from the extension.
+*.partial.stl
+*.partial.scad
+
+# Snapshots from scad_snapshot.py: build artifacts, ~0.5 MB each, regenerate rather
+# than commit.
+scad_snapshot*.json
+
+# Blender writes a .blend1 backup beside every save.
+*.blend1
+
+# Explorer thumbnail caches. Previously only ignored via a machine-local global
+# gitignore, so they reappeared for anyone else.
+Thumbs.db
+ehthumbs.db
 src/Fuselage/variant_output/

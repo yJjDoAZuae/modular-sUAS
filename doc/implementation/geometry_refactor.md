@@ -32,6 +32,7 @@ IP-GEO-11.
 | IP-GEO-9 | todo | Named helper for oversized cutting solids, replacing ad-hoc `3*bulkhead_thickness` / `2*corner_radius` multipliers | IP-GEO-1 |
 | IP-GEO-10 | blocked (IP-GEO-2) | Group parameters so `bulkhead_section_full` takes ~8 arguments instead of 28 | IP-GEO-2 |
 | IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
+| IP-GEO-12 | todo | Repair `test_fuse.ipynb`: its preview cells broke when `solid_render` stopped writing PNGs | — |
 
 > **IP-GEO-10 blocked reason:** Regrouping 28 positional parameters is the change most
 > able to silently transpose two same-typed floats. Keyword arguments (IP-GEO-2) make
@@ -69,8 +70,17 @@ while `fuselage_corner_geometry.scad` carries the commented-out original:
 ```
 
 `2*U` against `2*sqrt(U)`. The dead code is not merely dead — re-enabling it would
-silently change every part. Delete it, or make one side authoritative and have the
-other read from it.
+silently change every part.
+
+**Resolved: the `sqrt` is current and deliberate; the SCAD line is a stale ancestor.**
+An abandoned scratch copy, `tools/tmp.py` (last modified 2025-08-20, since deleted),
+carried `2*U` — matching the commented-out SCAD. So `2*U` was the original in both
+languages, the Python was later changed to `2*sqrt(U)`, and the SCAD copy was commented
+out rather than updated and has disagreed ever since.
+
+The action is therefore to **delete the commented SCAD lines**, not to reconcile toward
+them. Every rendered part in `variant_output` and `variant_output_baseline` was built
+with `sqrt`, so restoring `2*U` would silently change all of them.
 
 ### IP-GEO-5 — a library function that exists and is not used
 
@@ -97,6 +107,28 @@ module octant_tiled(unit_width, corner_radius) {
     octant_to_full() corner_translate(unit_width, corner_radius) children();
 }
 ```
+
+### IP-GEO-12 — the notebook's preview cells are broken
+
+`test_fuse.ipynb` uses `png_filename` eleven times as `Image(filename=png_filename)`.
+`solid_render` still returns that path, but nothing writes a file there any more:
+OpenSCAD's second `--render` invocation was removed, and previews are now rasterized
+from the finished STL. Every one of those cells raises on a missing file.
+
+The fix is one added line per cell:
+
+```python
+import stl_preview
+(scad_filename, stl_filename, png_filename) = fv.solid_render(corn, 'test_fuse_output', 'tmp_corner.scad')
+stl_preview.render_stl_to_png(stl_filename, png_filename)
+Image(filename=png_filename)
+```
+
+Two things to settle while in there. The notebook is tracked and ~1.5 MB with outputs
+embedded, so cell outputs should be cleared before it is committed again. And its
+scratch directory `tools/test_fuse_output/` holds 36 files and 106 MB last written
+2025-08-23; it is now gitignored, and can be deleted once the notebook can regenerate
+it — which is what this item unblocks.
 
 ### IP-GEO-9 — cutting solids sized by guesswork
 
