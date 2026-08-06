@@ -34,17 +34,37 @@ from pathlib import Path
 
 import numpy as np
 
-# Close enough to OpenSCAD's "BeforeDawn" scheme that new previews sit beside the
-# existing ones without looking out of place.
-BACKGROUND = (0x39, 0x39, 0x3A)
-FACE_FRONT = (0xC8, 0xC8, 0xC8)
-FACE_BACK = (0x28, 0x2C, 0x8C)
-EDGE_COLOR = (0x20, 0x20, 0x22)
+# The part is chromatic and the background is not, so the two separate by hue as
+# well as by value. A grey part on a grey ground has only value to work with, and
+# the shading range runs straight through the background tone: any face turned
+# away from the light lands on roughly the background's grey and its silhouette
+# stops reading there.
+BACKGROUND = (0x26, 0x28, 0x2C)     # neutral dark; no hue to compete with the part
+FACE_FRONT = (0xA6, 0xC6, 0xE6)     # light blue
 
-# The camera rotation the sweep has always used, from the `--camera` argument in
-# solid_render: rot_x, rot_y, rot_z in degrees. Translation and distance are not
-# carried over because `--viewall --autocenter` overrode them anyway.
-CAMERA_ROTATION_DEG = (64.10, 0.00, 305.20)
+# Back faces mark a defect (see `render`), so this must stay unmistakable against
+# FACE_FRONT. It used to be blue, which was fine against a grey part and useless
+# against a blue one. Red-orange is the widest hue separation available here, and
+# reads as a fault besides.
+FACE_BACK = (0xD2, 0x4B, 0x38)
+
+EDGE_COLOR = (0x14, 0x18, 0x1F)     # near-black, faintly cool so it sits in the blue
+
+# Floor of the diffuse term: a face pointing fully away still renders at this
+# fraction of its base colour. High enough that the darkest face stays clearly
+# above the background, which is what keeps a silhouette readable where the part
+# curves away. Face-to-face separation is carried by the edge lines and the
+# occlusion rather than by driving the shading down towards black.
+AMBIENT = 0.42
+
+# Camera rotation as rot_x, rot_y, rot_z in degrees, originally the `--camera`
+# argument in solid_render. Translation and distance are not carried over because
+# `--viewall --autocenter` overrode them anyway.
+#
+# rot_z was swung 45 degrees clockwise (as seen from above) from OpenSCAD's 305.20:
+# the eye azimuth is -rot_z - 90, so adding to rot_z rotates the camera clockwise.
+# That puts square parts square to the frame instead of on the diagonal.
+CAMERA_ROTATION_DEG = (64.10, 0.00, 350.20)
 
 # Fraction of the frame left as margin around the fitted part.
 DEFAULT_MARGIN = 1.06
@@ -56,6 +76,11 @@ DEFAULT_SIZE = (2048, 1080)
 # Crease sharper than this reads as an edge. Tessellated cylinders at the sweep's
 # $fa=1 have facet angles near 1 degree, so this is far clear of them.
 CREASE_ANGLE_DEG = 28.0
+
+# Render this many times larger in each axis, then box-filter down. 2x is the knee:
+# it removes the stair-stepping on silhouettes and edge lines, while 3x costs more
+# than it visibly returns at this output size.
+DEFAULT_SUPERSAMPLE = 2
 
 
 def load_stl(path: str | Path) -> np.ndarray:
@@ -93,13 +118,20 @@ def _load_ascii_stl(data: bytes, path: str | Path) -> np.ndarray:
 def _rotation(rot_deg: tuple[float, float, float]) -> np.ndarray:
     """Build OpenSCAD's gimbal camera rotation as applied to the object.
 
-    OpenSCAD issues glRotated(x), glRotated(y), glRotated(z) onto the modelview
-    stack after gluLookAt, which rotates the *camera frame*. The object therefore
-    receives the inverse, so the angles are negated here. Verified by rendering a
-    known STL under all four plausible conventions and comparing against the
-    matching baseline PNG -- the other three put the part at visibly wrong angles.
+    OpenSCAD issues gluLookAt and then glRotated(x), glRotated(y), glRotated(z),
+    which post-multiply onto the modelview stack. A vertex therefore reaches eye
+    space as `V @ Rx @ Ry @ Rz @ p`, so the object takes the rotation with the
+    angles *as given* -- they are not inverted.
+
+    Checked by putting the eye back into the part's own frame: `R.T @ (0, -1, 0)`
+    gives (+0.357, -0.252, +0.900) for these angles, so the camera looks down at
+    the part. Negating the angles flips that z to -0.900 and views it from
+    underneath, which is what an earlier version of this function did. Comparing
+    renders by eye is what let that through -- a corner post looks plausible
+    upside down, and only a part with an unmistakable top, like the nose cowl with
+    its flat circular face, makes the error obvious.
     """
-    rx, ry, rz = -np.radians(rot_deg)
+    rx, ry, rz = np.radians(rot_deg)
     cx, sx, cy, sy, cz, sz = (
         np.cos(rx), np.sin(rx), np.cos(ry), np.sin(ry), np.cos(rz), np.sin(rz),
     )
@@ -168,10 +200,23 @@ def _occlusion(
     return np.where(solid, ao, 1.0).astype(np.float32)
 
 
-def _edge_mask(
+def _smoothstep(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    """Ramp from 0 at `lo` to 1 at `hi`, with zero slope at both ends."""
+    t = np.clip((x - lo) / max(hi - lo, 1e-12), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _edge_strength(
     zbuf: np.ndarray, nbuf: np.ndarray, unit: float, crease_deg: float
 ) -> np.ndarray:
-    """Locate silhouette, step, and crease edges.
+    """Per-pixel edge coverage in 0..1 for silhouette, step, and crease edges.
+
+    Continuous rather than a boolean mask. A hard threshold makes a line whose
+    measure sits near the cutoff flicker on and off from pixel to pixel, so a
+    weak edge renders as a dotted line rather than a faint one. Ramping between a
+    lower and upper bound turns that into partial coverage, which reads as a
+    continuous line of reduced intensity -- which is what a weak edge should look
+    like.
 
     Depth uses a Laplacian rather than a gradient on purpose. A first difference is
     large anywhere the surface is steeply slanted, which paints false edges across
@@ -187,20 +232,27 @@ def _edge_mask(
         _shift(solid, 1, 0, False) & _shift(solid, -1, 0, False)
         & _shift(solid, 0, 1, False) & _shift(solid, 0, -1, False)
     )
+
     laplacian = np.abs(4.0 * z - (up + down + left + right))
-    step = solid & neighbours_solid & (laplacian > 1.5 * unit)
+    step = np.where(solid & neighbours_solid,
+                    _smoothstep(laplacian, 0.6 * unit, 2.6 * unit), 0.0)
 
-    # Silhouette: solid abutting background. Drawn on the solid side so the outline
-    # sits on the part rather than bleeding into the background.
-    silhouette = solid & ~neighbours_solid
+    # Silhouette: solid abutting background. A genuine discontinuity, so it takes
+    # full strength -- its softening comes from supersampling, not from ramping.
+    silhouette = (solid & ~neighbours_solid).astype(np.float32)
 
-    cos_limit = np.cos(np.radians(crease_deg))
-    crease = np.zeros(zbuf.shape, dtype=bool)
+    # Crease strength ramps in angle rather than in the dot product: the cosine
+    # compresses near zero degrees, so equal steps in dot are not equal steps in
+    # the quantity being judged, and the ramp would be lopsided.
+    crease = np.zeros(zbuf.shape, dtype=np.float32)
     for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        dot = np.sum(nbuf * _shift(nbuf, dy, dx, 0.0), axis=2)
-        crease |= solid & _shift(solid, dy, dx, False) & (dot < cos_limit)
+        dot = np.clip(np.sum(nbuf * _shift(nbuf, dy, dx, 0.0), axis=2), -1.0, 1.0)
+        angle = np.degrees(np.arccos(dot))
+        pair = solid & _shift(solid, dy, dx, False)
+        ramp = _smoothstep(angle, crease_deg * 0.55, crease_deg * 1.30)
+        crease = np.maximum(crease, np.where(pair, ramp, 0.0))
 
-    return step | silhouette | crease
+    return np.clip(np.maximum(np.maximum(step, silhouette), crease), 0.0, 1.0)
 
 
 def render(
@@ -214,6 +266,44 @@ def render(
     edges: bool = True,
     occlusion: bool = True,
     crease_deg: float = CREASE_ANGLE_DEG,
+    supersample: int = DEFAULT_SUPERSAMPLE,
+) -> np.ndarray:
+    """Render at `supersample`x and box-filter down, then delegate to _render_at.
+
+    Supersampling is what antialiases the silhouette and the edge lines. Edge
+    coverage alone cannot: a silhouette is a genuine discontinuity in the depth
+    buffer, so at 1x it is exactly one pixel wide and hard, however it is shaded.
+
+    The cost is well under the naive 4x. The rasterizer loops in Python over
+    triangles and vectorizes each triangle's pixel span, so quadrupling the pixels
+    grows the vectorized part while the per-triangle overhead -- which dominates at
+    these mesh sizes -- stays fixed.
+    """
+    factor = max(1, int(supersample))
+    if factor == 1:
+        return _render_at(tris, size, rot_deg, margin, background, front, back,
+                          edges, occlusion, crease_deg)
+
+    width, height = size
+    big = _render_at(tris, (width * factor, height * factor), rot_deg, margin,
+                     background, front, back, edges, occlusion, crease_deg)
+    return (big.reshape(height, factor, width, factor, 3)
+               .mean(axis=(1, 3))
+               .round()
+               .astype(np.uint8))
+
+
+def _render_at(
+    tris: np.ndarray,
+    size: tuple[int, int],
+    rot_deg: tuple[float, float, float],
+    margin: float,
+    background: tuple[int, int, int],
+    front: tuple[int, int, int],
+    back: tuple[int, int, int],
+    edges: bool,
+    occlusion: bool,
+    crease_deg: float,
 ) -> np.ndarray:
     """Rasterize triangles to an (h, w, 3) uint8 image.
 
@@ -276,7 +366,7 @@ def render(
     # separate instead of flattening into one tone.
     light = np.array([-0.35, -0.82, 0.45])
     light /= np.linalg.norm(light)
-    shade = 0.34 + 0.66 * np.abs(normals @ light)
+    shade = AMBIENT + (1.0 - AMBIENT) * np.abs(normals @ light)
 
     base = np.where(facing_front[:, None], np.array(front), np.array(back))
     colors = (base * shade[:, None]).astype(np.float32)
@@ -304,8 +394,11 @@ def render(
     if occlusion:
         image *= _occlusion(zbuf, nbuf, unit)[:, :, None]
     if edges:
-        mask = _edge_mask(zbuf, nbuf, unit, crease_deg)
-        image[mask] = EDGE_COLOR
+        # Blend by coverage rather than overwriting. A partially-covered pixel keeps
+        # some of the shading underneath, which is what makes a faint edge read as a
+        # faint line instead of a broken one.
+        alpha = _edge_strength(zbuf, nbuf, unit, crease_deg)[:, :, None]
+        image = image * (1.0 - alpha) + np.asarray(EDGE_COLOR, dtype=np.float32) * alpha
 
     return np.clip(image, 0, 255).astype(np.uint8)
 
@@ -389,6 +482,32 @@ def render_stl_to_png(
     """Load an STL, render it, and write the PNG. Returns the PNG path."""
     write_png(png_path, render(load_stl(stl_path), size=size, **kwargs))
     return Path(png_path)
+
+
+def render_one(job: tuple) -> tuple[str, str | None]:
+    """Render one STL to the PNG beside it. Returns (path, error-or-None).
+
+    The entry point for a process pool, so it lives here rather than in the sweep:
+    a spawned worker imports the module this is defined in, and importing a numpy
+    renderer is far cheaper than importing the whole generator toolchain with
+    pandas and solid2 behind it.
+
+    Returns the error rather than raising so one bad mesh names itself instead of
+    taking down the batch.
+    """
+    stl_path, size, edges, occlusion, supersample = job
+    try:
+        render_stl_to_png(
+            stl_path,
+            Path(stl_path).with_suffix(".png"),
+            size=size,
+            edges=edges,
+            occlusion=occlusion,
+            supersample=supersample,
+        )
+        return stl_path, None
+    except Exception as exc:  # noqa: BLE001 - reported per file, never swallowed
+        return stl_path, f"{type(exc).__name__}: {exc}"
 
 
 if __name__ == "__main__":
