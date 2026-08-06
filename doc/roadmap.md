@@ -89,6 +89,12 @@ paths, covers nose and tail, and is reproducible run-to-run.
 Only start once Phase 1's tests exist. Without them there is no way to tell a refactor
 from a regression.
 
+**Tracked in detail:** [doc/implementation/geometry_refactor.md](implementation/geometry_refactor.md)
+carries the specific work items from the 2026-08-06 review of the geometry modules —
+positional-argument hazards, a formula duplicated across the language boundary, and the
+library extractions the code is already asking for — each with the check that proves it
+changed no geometry.
+
 - [ ] **Map the current geometry.** 13 hand-written `.scad` modules in `scad/`, currently
       all siblings, so every `include`/`use` is a bare filename. That is why they resolve
       at all — any restructuring into subdirectories means editing every include line.
