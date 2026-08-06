@@ -26,7 +26,7 @@ IP-GEO-11.
 | IP-GEO-3 | done | Resolve the greeble-thickness formula duplicated between Python and commented-out SCAD | IP-GEO-1 |
 | IP-GEO-4 | done | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
 | IP-GEO-5 | done | Use the existing `mirror_xy()` at the **four** open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-13 |
-| IP-GEO-6 | todo | Extract `octant_tiled()` to replace four structurally identical wrapper modules | IP-GEO-13 |
+| IP-GEO-6 | done | Extract `octant_tiled()` and use it in the four wrapper bodies | IP-GEO-13 |
 | IP-GEO-7 | todo | Extract greeble dimensions (`greeble_radius`, `greeble_nub_radius`, `greeble_nub_height`, `longeron_chamfer`) as SCAD functions | IP-GEO-13 |
 | IP-GEO-8 | todo | Single shared `eps`, replacing the per-module redeclarations | IP-GEO-13 |
 | IP-GEO-13 | done | Geometric verification harness for `.scad` changes — [`verify_scad_change.py`](../../src/Fuselage/tools/verify_scad_change.py) | — |
@@ -132,14 +132,31 @@ identical triangle count, volume and bounding box.
 octant_to_full() { corner_translate(unit_width, corner_radius) { <X>_octant(...) } }
 ```
 
-One `children()`-based module replaces all four and deletes four 10-parameter
-signatures:
+A `children()`-based module in `shape_modifier_utils.scad` carries that body once:
 
 ```scad
 module octant_tiled(unit_width, corner_radius) {
     octant_to_full() corner_translate(unit_width, corner_radius) children();
 }
 ```
+
+**Done 2026-08-06 — and narrower than this item originally proposed.** The original
+plan was to delete the four wrappers and inline `octant_tiled(...)` at every call,
+"deleting four 10-parameter signatures". Checking the call sites first showed why that
+is wrong: there are **seven**, and **five of them are in
+`fuselage_boom_bulkhead_geometry.scad`**, a different file.
+
+Inlining would have made all seven more verbose and leaked the tiling mechanism into
+callers. The wrappers are a real abstraction — they name the full shape as distinct
+from the octant. What was duplicated is the three-line *body*, not the interface, and
+that is what was removed. Reducing those signatures is IP-GEO-10's job, applied
+uniformly rather than ad-hoc to four modules.
+
+The `octant_to_full()` calls that remain are genuinely different patterns, not misses:
+`cowl_geometry.scad:5`, and `bulkhead_section_full` which tiles without a
+`corner_translate`.
+
+Verified with `verify_scad_change.py`: 10 parts, identical geometry.
 
 ### IP-GEO-12 — the notebook's preview cells are broken
 
