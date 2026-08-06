@@ -9,7 +9,7 @@ def get_params():
     all_combinations = fv.flatten_param_space(param_axes)
 
     printer_settings = fv.null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
 
     # print(len(param_axes))
     # print(len(param_axes[0]))

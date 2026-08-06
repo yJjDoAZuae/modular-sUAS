@@ -29,7 +29,10 @@ buttress_r_end = U*6.6;
 buttress_r_inset = U*3;
 buttress_thickness = 0.05;
 
-oml_filename="vsp_nose.stl";
+// Relative to scad/, because the import() lives in cowl_geometry.scad and OpenSCAD
+// resolves it against the file containing the call. This is the same prefix
+// oml_ref() adds in fuselage_variants.py -- keep the two in step.
+oml_filename="../oml/vsp_nose.stl";
 oml_scale=1e-3;
 oml_length = 0.050;
 oml_offset_x=0;
