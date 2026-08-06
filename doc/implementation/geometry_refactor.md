@@ -25,10 +25,11 @@ IP-GEO-11.
 | IP-GEO-2 | done | Convert the seven `scad_module` invocations from positional to keyword arguments | IP-GEO-1 |
 | IP-GEO-3 | done | Resolve the greeble-thickness formula duplicated between Python and commented-out SCAD | IP-GEO-1 |
 | IP-GEO-4 | done | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
-| IP-GEO-5 | todo | Use the existing `mirror_xy()` at the three open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-1 |
-| IP-GEO-6 | todo | Extract `octant_tiled()` to replace four structurally identical wrapper modules | IP-GEO-1 |
-| IP-GEO-7 | todo | Extract greeble dimensions (`greeble_radius`, `greeble_nub_radius`, `greeble_nub_height`, `longeron_chamfer`) as SCAD functions | IP-GEO-1 |
-| IP-GEO-8 | todo | Single shared `eps`, replacing the per-module redeclarations | IP-GEO-1 |
+| IP-GEO-5 | done | Use the existing `mirror_xy()` at the **four** open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-13 |
+| IP-GEO-6 | todo | Extract `octant_tiled()` to replace four structurally identical wrapper modules | IP-GEO-13 |
+| IP-GEO-7 | todo | Extract greeble dimensions (`greeble_radius`, `greeble_nub_radius`, `greeble_nub_height`, `longeron_chamfer`) as SCAD functions | IP-GEO-13 |
+| IP-GEO-8 | todo | Single shared `eps`, replacing the per-module redeclarations | IP-GEO-13 |
+| IP-GEO-13 | done | Geometric verification harness for `.scad` changes — [`verify_scad_change.py`](../../src/Fuselage/tools/verify_scad_change.py) | — |
 | IP-GEO-9 | todo | Named helper for oversized cutting solids, replacing ad-hoc `3*bulkhead_thickness` / `2*corner_radius` multipliers | IP-GEO-1 |
 | IP-GEO-10 | blocked (IP-GEO-2) | Group parameters so `bulkhead_section_full` takes ~8 arguments instead of 28 | IP-GEO-2 |
 | IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
@@ -102,9 +103,24 @@ with `sqrt`, so restoring `2*U` would silently change all of them.
 ### IP-GEO-5 — a library function that exists and is not used
 
 `shape_modifier_utils.scad` defines `mirror_xy()` as exactly
-`union() { children(); mirror([1,-1,0]) children(); }`.
-`fuselage_corner_geometry.scad` open-codes that union three times, at lines 34-39,
-97-102, and 140-145.
+`union() { children(); mirror([1,-1,0]) children(); }`, and
+`fuselage_corner_geometry.scad` open-codes that union rather than calling it.
+
+**Done 2026-08-06.** Two corrections to the finding as originally written:
+
+- It was **four** sites, not three. The fourth sits at a deeper indentation inside
+  `corner_transition`, so a whitespace-exact replace-all converted only three and
+  reported success. Counting the remaining `mirror([1,-1,0])` occurrences afterwards
+  is what caught it.
+- `fuselage_corner_geometry.scad` had **no includes at all**, so `mirror_xy()` was not
+  in scope there. It resolved only when the file was pulled in via
+  `fuselage_bulkhead_geometry.scad`, and not when used standalone — which is exactly
+  how `corner_render` uses it. An `include <shape_modifier_utils.scad>` was added;
+  OpenSCAD renders clean with no duplicate-definition warnings, even though
+  `fuselage_geometry.scad` already pulls `corner_geometry` in three separate ways.
+
+Verified with `verify_scad_change.py`: 10 parts across all five kinds and two U scales,
+identical triangle count, volume and bounding box.
 
 ### IP-GEO-6 — four structurally identical wrappers
 
