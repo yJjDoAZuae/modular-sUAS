@@ -22,7 +22,7 @@ IP-GEO-11.
 | ID | Status | Title | Depends on |
 | --- | --- | --- | --- |
 | IP-GEO-1 | done | `.scad`-text snapshot harness — [`scad_snapshot.py`](../../src/Fuselage/tools/scad_snapshot.py) | — |
-| IP-GEO-2 | todo | Convert the five `scad_module` call sites from positional to keyword arguments | IP-GEO-1 |
+| IP-GEO-2 | done | Convert the seven `scad_module` invocations from positional to keyword arguments | IP-GEO-1 |
 | IP-GEO-3 | todo | Resolve the greeble-thickness formula duplicated between Python and commented-out SCAD | IP-GEO-1 |
 | IP-GEO-4 | todo | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
 | IP-GEO-5 | todo | Use the existing `mirror_xy()` at the three open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-1 |
@@ -52,7 +52,24 @@ valid-looking geometry that is silently wrong.
 Verified that solid2 accepts keyword arguments, emits **byte-identical** output,
 is order-independent, and raises `TypeError` on a misspelled name. The generated
 `.scad` already reads `fuselage_corner(U = 4.0, ...)`, so solid2 has always known the
-parameter names — only the Python call sites are positional.
+parameter names — only the Python call sites were positional.
+
+**Done 2026-08-06.** Seven invocations converted, not five — `nose_render` makes three
+(`nose_cowl`, `nose`, `nose_plate`) depending on which part it is building. Argument
+counts: 28 (`bulkhead_section_full`), 25 (`boom_bulkhead`), 23 (`tail_cowl`), 14
+(`fuselage_corner`), 14 (`nose_cowl`), 13 (`nose`), 5 (`nose_plate`).
+
+`scad_snapshot.py compare` reports IDENTICAL across all 576 parts, so the change
+provably altered no geometry.
+
+Two hazards this removed, both invisible positionally:
+
+- `nose` takes **no** `oml_length`, while `nose_cowl` and `tail_cowl` both do — so the
+  same conceptual argument list is off by one between neighbouring calls in the same
+  function, with every surrounding argument the same type.
+- `tail_cowl` carries eighteen buttress floats in four groups distinguished only by
+  prefix (`side_`, `top_`, `bottom_`, `top_diag_`). Transposing two was a silent
+  geometry change; it is now a `TypeError`.
 
 ### IP-GEO-3 — a formula duplicated across the language boundary, and the copies disagree
 
