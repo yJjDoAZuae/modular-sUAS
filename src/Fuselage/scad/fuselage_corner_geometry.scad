@@ -4,6 +4,29 @@
 // -- which is exactly how the sweep uses it.
 include <shape_modifier_utils.scad>
 
+// Greeble dimensions, derived rather than passed in. corner_end() and
+// corner_transition() computed all of these identically, so the two could drift apart
+// silently -- and the greeble is a mating feature, where the corner's nub and the
+// bulkhead's pocket must agree exactly or the parts do not assemble.
+
+// Outer radius of the greeble seat: the longeron, its clearance, the greeble wall, and
+// the fit tolerance.
+function greeble_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
+                           greeble_tolerance) =
+    longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance;
+
+// The nub stands proud of the seat by exactly its own thickness. Written in terms of
+// greeble_radius_of() rather than repeating the sum, so that relationship is explicit
+// and cannot be broken by editing one and not the other.
+function greeble_nub_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
+                               greeble_nub_thickness, greeble_tolerance) =
+    greeble_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
+                      greeble_tolerance) + greeble_nub_thickness;
+
+// The nub occupies the middle third of the bulkhead's thickness, leaving a third of
+// lead-in either side.
+function greeble_nub_height_of(bulkhead_thickness) = bulkhead_thickness/3;
+
 module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
 
 
@@ -26,12 +49,15 @@ module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_
 
 module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     longeron_chamfer = nozzle_diameter;
-    greeble_nub_height = bulkhead_thickness/3;
-    greeble_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_tolerance;
-    greeble_nub_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_nub_thickness+greeble_tolerance;
+    greeble_nub_height = greeble_nub_height_of(bulkhead_thickness);
+    greeble_radius = greeble_radius_of(longeron_radius, longeron_tolerance,
+                                       greeble_thickness, greeble_tolerance);
+    greeble_nub_radius = greeble_nub_radius_of(longeron_radius, longeron_tolerance,
+                                               greeble_thickness, greeble_nub_thickness,
+                                               greeble_tolerance);
     
     difference() {
         linear_extrude(height=bulkhead_thickness+eps,center=false,convexity=3,twist=0,slices=1) {
@@ -80,12 +106,15 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
 
 module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     longeron_chamfer = nozzle_diameter;
-    greeble_nub_height = bulkhead_thickness/3;
-    greeble_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_tolerance;
-    greeble_nub_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_nub_thickness+greeble_tolerance;
+    greeble_nub_height = greeble_nub_height_of(bulkhead_thickness);
+    greeble_radius = greeble_radius_of(longeron_radius, longeron_tolerance,
+                                       greeble_thickness, greeble_tolerance);
+    greeble_nub_radius = greeble_nub_radius_of(longeron_radius, longeron_tolerance,
+                                               greeble_thickness, greeble_nub_thickness,
+                                               greeble_tolerance);
     
     translate([0,0,1*bulkhead_thickness]) {
         
@@ -127,7 +156,7 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
 
 module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, nozzle_diameter) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     longeron_chamfer = nozzle_diameter;
     
     translate([0,0,2*bulkhead_thickness-eps]) {

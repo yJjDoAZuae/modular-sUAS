@@ -54,7 +54,7 @@ module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, unit_len
 module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter)
 {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     difference() {
         
@@ -215,7 +215,7 @@ module greeble_bolt_web(bulkhead_thickness, bolt_offset, plate_thickness, flange
 // make a fillet between the side wall of the flange at the greeble and the diagonal web that connects it to the bolt hole flange
 module greeble_to_web_fillet(bulkhead_thickness, panel_offset, panel_overlap, panel_tolerance, bolt_offset, plate_thickness, flange_fillet_radius, flange_thickness, flange_chamfer) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     // upper intersection between bolt flange fillet and corner flange
     x_corner_fillet_start = max(-panel_tolerance-panel_offset-panel_overlap-flange_thickness, -bolt_offset);
@@ -265,7 +265,7 @@ module greeble_to_web_fillet(bulkhead_thickness, panel_offset, panel_overlap, pa
 // make a fillet between the bolt hole flange and the side wall of the flange at the greeble
 module bulkhead_bolt_flange_fillet(bulkhead_thickness, panel_offset, panel_overlap, panel_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, plate_thickness, flange_fillet_radius, flange_thickness, flange_chamfer) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     x_bolt_center = -bolt_offset;
     y_bolt_center = -bolt_offset;
@@ -394,7 +394,7 @@ module bulkhead_web(is_interconnect, unit_width, bulkhead_thickness, corner_radi
 module web_to_bolt_fillet(bulkhead_thickness, bolt_hole_radius, bolt_thickness, bolt_offset, plate_thickness, flange_fillet_radius, flange_thickness, flange_chamfer)
  {
     
-    eps = 0.01;
+    eps = geometry_eps();
      
     x_bolt_center = -bolt_offset;
     y_bolt_center = -bolt_offset;
@@ -574,7 +574,7 @@ module bulkhead_flange_positive(make_web, is_interconnect, is_cowling, unit_widt
 
 module outer_corner_fillet(make_web, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, plate_thickness, flange_fillet_radius, flange_thickness, flange_chamfer) {
     
-    eps = 0.01;
+    eps = geometry_eps();
     
     difference() {
         
@@ -614,7 +614,7 @@ module outer_corner_fillet(make_web, bulkhead_thickness, corner_radius, panel_th
 
 module bulkhead_web_shape(is_interconnect, unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, web_fillet_radius, web_width, flange_thickness) {
     
-    eps=0.01;
+    eps = geometry_eps();
     
     if (!is_interconnect) {
         polygon([

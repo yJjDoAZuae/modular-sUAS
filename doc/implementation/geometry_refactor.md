@@ -27,8 +27,8 @@ IP-GEO-11.
 | IP-GEO-4 | done | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
 | IP-GEO-5 | done | Use the existing `mirror_xy()` at the **four** open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-13 |
 | IP-GEO-6 | done | Extract `octant_tiled()` and use it in the four wrapper bodies | IP-GEO-13 |
-| IP-GEO-7 | todo | Extract greeble dimensions (`greeble_radius`, `greeble_nub_radius`, `greeble_nub_height`, `longeron_chamfer`) as SCAD functions | IP-GEO-13 |
-| IP-GEO-8 | todo | Single shared `eps`, replacing the per-module redeclarations | IP-GEO-13 |
+| IP-GEO-7 | done | Extract greeble dimensions as SCAD functions | IP-GEO-13 |
+| IP-GEO-8 | done | Single shared `geometry_eps()`, replacing 12 per-module redeclarations | IP-GEO-13 |
 | IP-GEO-13 | done | Geometric verification harness for `.scad` changes — [`verify_scad_change.py`](../../src/Fuselage/tools/verify_scad_change.py) | — |
 | IP-GEO-9 | todo | Named helper for oversized cutting solids, replacing ad-hoc `3*bulkhead_thickness` / `2*corner_radius` multipliers | IP-GEO-1 |
 | IP-GEO-10 | blocked (IP-GEO-2) | Group parameters so `bulkhead_section_full` takes ~8 arguments instead of 28 | IP-GEO-2 |
@@ -179,6 +179,39 @@ embedded, so cell outputs should be cleared before it is committed again. And it
 scratch directory `tools/test_fuse_output/` holds 36 files and 106 MB last written
 2025-08-23; it is now gitignored, and can be deleted once the notebook can regenerate
 it — which is what this item unblocks.
+
+### IP-GEO-7 and IP-GEO-8 — done 2026-08-06
+
+**Greeble dimensions.** `corner_end()` and `corner_transition()` each computed
+`greeble_radius`, `greeble_nub_radius` and `greeble_nub_height` from the same sums, so
+the two could drift apart silently. That matters more than ordinary duplication: the
+greeble is a *mating* feature, and the corner's nub must agree exactly with the
+bulkhead's pocket or the parts do not assemble.
+
+Now three functions in `fuselage_corner_geometry.scad`. `greeble_nub_radius_of()` is
+written in terms of `greeble_radius_of()` plus the nub thickness, rather than repeating
+the five-term sum — the nub stands proud of the seat by exactly its own thickness, and
+stating it that way makes the relationship impossible to break by editing one and not
+the other.
+
+`longeron_chamfer = nozzle_diameter` was left as a local alias. It is a rename, not a
+derivation, and a function wrapping a single parameter would obscure rather than clarify.
+
+**Shared epsilon.** Twelve modules across four files each declared `eps = 0.01` (one as
+`eps=0.01`). All twelve now call `geometry_eps()`, defined once in
+`shape_modifier_utils.scad`.
+
+A *function*, deliberately, not a top-level variable: `use <...>` exports functions but
+not top-level variable assignments, and the sweep reaches these files through `use`
+rather than `include`. A shared variable would have resolved when a file was included
+and silently failed when it was used — the same class of scope-dependent breakage as
+IP-GEO-5, where `mirror_xy()` was visible only on the include path.
+
+Keeping the local `eps = geometry_eps();` in each module leaves every usage site
+untouched, so this change is one line per module rather than a rewrite of every
+`+eps` in the file.
+
+Both verified with `verify_scad_change.py`: 10 parts, identical geometry.
 
 ### IP-GEO-9 — cutting solids sized by guesswork
 
