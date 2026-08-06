@@ -164,7 +164,7 @@ the commented `$fa = 1; $fs = 0.1` for final output.
 1. Each CSV in [variant_param/](../variant_param) is one independent axis of variation.
    `read_all_param_axes` loads them, `flatten_param_space` takes the full Cartesian product.
 2. `derived_parameters(U, FX, params, printer_settings, is_bulkhead)` expands a flat CSV
-   row into the nested parameter dict the geometry modules need — deriving greeble
+   row into the `Parameters` dataclass tree the geometry modules need — deriving greeble
    thickness from nozzle diameter, panel overlap from panel thickness, anchor bore from
    bolt diameter via [threaded_insert_dimensions.csv](../tools/threaded_insert_dimensions.csv)
    (McMaster part numbers included).
@@ -283,6 +283,53 @@ uv run python src/Fuselage/tools/fuselage_variants.py --previews-only --force
 That batch runs across a **process** pool, not the sweep's thread pool: rasterizing is
 numpy-bound and would serialize on the GIL, which is the opposite of the OpenSCAD renders,
 where threads are right precisely because each job blocks in a child process.
+
+**Verification**
+
+Four tools, each covering a case the others cannot. Which one applies depends on *what
+changed*, and using the wrong one gives a false pass.
+
+| Tool | Proves | Use when |
+| --- | --- | --- |
+| [mesh_stats.py](../tools/mesh_stats.py) | Triangle count, enclosed volume, bounding box of one STL; detects truncation | Underpins the other three; also a CLI for comparing two STLs |
+| [scad_snapshot.py](../tools/scad_snapshot.py) | Generated `.scad` text is byte-identical across 576 parts, in seconds, without rendering | **Python-side changes only** |
+| [verify_scad_change.py](../tools/verify_scad_change.py) | Re-renders existing `.stl.scad` files and compares geometry | **`.scad` library changes**, where the signature is unchanged |
+| [verify_sweep_change.py](../tools/verify_sweep_change.py) | Runs the real sweep end to end for a sample and compares STLs | **Changes spanning Python and SCAD together**, where signatures move |
+
+Two traps worth knowing:
+
+- `scad_snapshot.py` is **blind to `.scad` library files**. A generated `.scad` names its
+  library by path and contains none of its text, so editing a geometry module leaves every
+  generated file byte-identical. It will report IDENTICAL however badly such an edit broke
+  the geometry — a false negative, not an absence of evidence.
+- `verify_scad_change.py` **stops working** once a module signature changes, because the
+  `.stl.scad` files it re-renders pin the old signature. That is what
+  `verify_sweep_change.py` exists for.
+
+[sweep_check.py](../tools/sweep_check.py) is separate again: it audits a finished output
+tree for integrity, scaling-family completeness, and agreement with a reference.
+
+```text
+uv run python src/Fuselage/tools/sweep_check.py src/Fuselage/variant_output --reference src/Fuselage/variant_output_baseline
+```
+
+None of those four render the GUI driver files — they all reach the geometry through the
+sweep's call path. [verify_drivers.py](../tools/verify_drivers.py) covers that gap:
+
+```text
+uv run python src/Fuselage/tools/verify_drivers.py
+```
+
+It renders every driver and **treats a warning as a failure**. That is the point rather
+than strictness: OpenSCAD reports an unknown identifier as a warning and carries on with
+`undef`, so a driver broken by a signature change still renders, still produces a shape,
+and still exits zero. Checking the exit code alone passes exactly the cases worth
+catching.
+
+Two drivers currently fail: `nose_cowl.scad` and `tail_cowl.scad` name their OML mesh as
+`vsp_nose.stl` rather than `../oml/vsp_nose.stl`, so neither has rendered since the
+meshes moved into `oml/`. The sweep is unaffected — `oml_ref()` adds the prefix. See
+IP-GEO-18.
 
 **Other Python**
 

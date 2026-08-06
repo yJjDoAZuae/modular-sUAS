@@ -374,9 +374,15 @@ into generated `.scad`, in one named function. Everything above that line is SI.
 
 ### Parameter passing
 
-Parameters currently travel as loosely structured nested dicts assembled in Python. Making
-this contract explicit is roadmap Phase 2 work. Until then, do not deepen the coupling:
-new code should take explicit named parameters rather than reaching further into the dict.
+Parameters travel as dataclasses assembled in Python — `Parameters` and `NoseParameters`
+in `fuselage_variants.py`, with a group per subsystem. IP-GEO-16 converted them from
+nested dicts; see [python.md](python.md#dataclasses) for why, and do not reintroduce a
+dict of parameters.
+
+They are still *flattened* into keyword arguments to cross into OpenSCAD, which has no
+records. That is deliberate and is not a gap to close — OQ-GEO-1 assessed encoding the
+groups as SCAD vectors and rejected it, because the encoding is discarded at the FreeCAD
+port while the Python structure survives it.
 
 ---
 

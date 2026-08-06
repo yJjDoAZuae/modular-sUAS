@@ -23,6 +23,7 @@ import contextlib
 import filecmp
 import sys
 import time
+from dataclasses import dataclass, field, fields
 from enum import Enum
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -121,15 +122,6 @@ def standard_values():
 
     return c
 
-def null_printer_settings():
-
-    c = dict()
-    
-    c["nozzle_diameter"] = 0.4
-    c["layer_height"] = 0.2
-
-    return c
-
 class BulkheadType(Enum):
     NULL         = 0
     END          = 1
@@ -137,243 +129,285 @@ class BulkheadType(Enum):
     COWLING      = 3
     TAIL_BOOM    = 4
 
+
+# ------------------------------------------------------------
+# Parameter groups
+# ------------------------------------------------------------
+# Each group is a dataclass rather than a dict. The difference that matters is
+# assignment: a dict accepts `c["greeble"]["thicknes"] = 1.2` in silence, adding
+# a new key while the real field keeps its default, so the part comes out wrong
+# by exactly the amount the assignment was meant to change. The same typo on a
+# dataclass raises AttributeError at the line that made it. Reads were already
+# safe -- a dict raises KeyError -- so this closes the half that was open.
+#
+# Every field default is the value the corresponding null_*_parameters()
+# constructor used to assign a line at a time, and those constructors remain as
+# the named way to obtain a zeroed group.
+#
+# This is deliberately on the Python side. OQ-GEO-1 in
+# doc/implementation/geometry_refactor.md weighed grouping these in OpenSCAD
+# instead and rejected it: the groups already exist here, they are flattened
+# only to cross into SCAD, and FreeCAD is driven from Python -- so structure
+# built here survives the Phase 3 port and an OpenSCAD vector encoding does not.
+
+
+@dataclass
+class PrinterSettings:
+    nozzle_diameter: float = 0.4
+    layer_height: float = 0.2
+
+
+@dataclass
+class CornerParameters:
+    FX: float = 1
+    radius: float = 0
+    length: float = 0
+
+
+@dataclass
+class BulkheadParameters:
+    U: float = 1
+    width: float = 0
+    thickness: float = 0
+    type: BulkheadType = BulkheadType.NULL
+    type_name: str = ""
+
+
+@dataclass
+class BoomBulkheadParameters:
+    diameter: float = 0
+    thickness: float = 0
+    y_position: float = 0
+    z_position: float = 0
+    collet_thickness: float = 0
+    key_width: float = 0
+    key_height: float = 0
+    key_radius: float = 0
+    key_web_width: float = 0
+    key_angle: float = 0
+    tolerance: float = 0
+    type_name: str = ""
+    make_vert_web: bool = False
+    make_lower_web: bool = False
+
+
+@dataclass
+class PanelParameters:
+    thickness: float = 0
+    offset: float = 0
+    overlap: float = 0
+    tolerance: float = 0
+    type_name: str = ""
+    is_metric: bool = True
+
+
+@dataclass
+class LongeronParameters:
+    radius: float = 0
+    tolerance: float = 0
+
+
+@dataclass
+class BoltParameters:
+    radius: float = 0
+    thickness: float = 0
+    offset: float = 0
+    is_anchor: bool = False
+    # Declared here for the first time. derived_parameters() has always assigned
+    # and read it, but null_bolt_parameters() never listed it -- the dict simply
+    # accepted the new key. It is the nominal bolt size from the variant table;
+    # `radius` is derived from it and differs for an anchor.
+    diameter: float = 0
+
+
+@dataclass
+class GreebleParameters:
+    opening_angle: float = 0
+    tolerance: float = 0
+    thickness: float = 0
+    nub_thickness: float = 0
+
+
+@dataclass
+class PlateParameters:
+    """The bulkhead's plate. NosePlateParameters is the different one."""
+    thickness: float = 0
+
+
+@dataclass
+class WebParameters:
+    fillet_radius: float = 0
+    width: float = 0
+
+
+@dataclass
+class BulkheadFlangeParameters:
+    fillet_radius: float = 0
+    thickness: float = 0
+    chamfer: float = 0
+
+
+@dataclass
+class CowlFlangeParameters:
+    height: float = 0
+    tolerance: float = 0
+
+
+@dataclass
+class Parameters:
+    """Everything the bulkhead and corner geometry modules are driven from."""
+    corner: CornerParameters = field(default_factory=CornerParameters)
+    bulkhead: BulkheadParameters = field(default_factory=BulkheadParameters)
+    boom_bulkhead: BoomBulkheadParameters = field(
+        default_factory=BoomBulkheadParameters)
+    panel: PanelParameters = field(default_factory=PanelParameters)
+    longeron: LongeronParameters = field(default_factory=LongeronParameters)
+    bolt: BoltParameters = field(default_factory=BoltParameters)
+    greeble: GreebleParameters = field(default_factory=GreebleParameters)
+    plate: PlateParameters = field(default_factory=PlateParameters)
+    web: WebParameters = field(default_factory=WebParameters)
+    bulkhead_flange: BulkheadFlangeParameters = field(
+        default_factory=BulkheadFlangeParameters)
+    cowl_flange: CowlFlangeParameters = field(default_factory=CowlFlangeParameters)
+    printer: PrinterSettings = field(default_factory=PrinterSettings)
+
+
+def null_printer_settings():
+    return PrinterSettings()
+
 def null_parameters():
-
-    c = dict()
-    
-    c["corner"] = null_corner_parameters()
-    c["bulkhead"] = null_bulkhead_parameters()
-    c["boom_bulkhead"] = null_boom_bulkhead_parameters()
-    c["panel"] = null_panel_parameters()
-    c["longeron"] = null_longeron_parameters()
-    c["bolt"] = null_bolt_parameters()
-    c["greeble"] = null_greeble_parameters()
-    c["plate"] = null_plate_parameters()
-    c["web"] = null_web_parameters()
-    c["bulkhead_flange"] = null_bulkhead_flange_parameters()
-    c["cowl_flange"] = null_cowl_flange_parameters()
-    c["printer"] = null_printer_settings()
-
-    return c
+    return Parameters()
 
 def null_corner_parameters():
-
-    c = dict()
-
-    c["FX"] = 1
-    c["radius"] = 0
-    c["length"] = 0
-    
-    return c
+    return CornerParameters()
 
 def null_bulkhead_parameters():
-
-    c = dict()
-
-    c["U"] = 1
-    c["width"] = 0
-    c["thickness"] = 0
-    c["type"] = BulkheadType.NULL
-    c["type_name"] = ""
-    
-    return c
+    return BulkheadParameters()
 
 def null_boom_bulkhead_parameters():
-
-    c = dict()
-
-    c["diameter"] = 0
-    c["thickness"] = 0
-    c["y_position"] = 0
-    c["z_position"] = 0
-    c["collet_thickness"] = 0
-    c["key_width"] = 0
-    c["key_height"] = 0
-    c["key_radius"] = 0
-    c["key_web_width"] = 0
-    c["key_angle"] = 0
-    c["tolerance"] = 0
-    c["type_name"] = ""
-    c["make_vert_web"] = False;
-    c["make_lower_web"] = False;
-    
-    return c
+    return BoomBulkheadParameters()
 
 def null_panel_parameters():
-
-    c = dict()
-
-    c["thickness"] = 0
-    c["offset"] = 0
-    c["overlap"] = 0
-    c["tolerance"] = 0
-    c["type_name"] = ""
-    c["is_metric"] = True
-
-    return c
+    return PanelParameters()
 
 def null_longeron_parameters():
-
-    c = dict()
-
-    c["radius"] = 0
-    c["tolerance"] = 0
-
-    return c
+    return LongeronParameters()
 
 def null_bolt_parameters():
-
-    c = dict()
-
-    c["radius"] = 0
-    c["thickness"] = 0
-    c["offset"] = 0
-    c["is_anchor"] = False
-
-    return c
+    return BoltParameters()
 
 def null_greeble_parameters():
-
-    c = dict()
-
-    c["opening_angle"] = 0
-    c["tolerance"] = 0
-    c["thickness"] = 0
-    c["nub_thickness"] = 0
-
-    return c
+    return GreebleParameters()
 
 def null_plate_parameters():
-
-    c = dict()
-
-    c["thickness"] = 0
-    
-    return c
+    return PlateParameters()
 
 def null_web_parameters():
-
-    c = dict()
-
-    c["fillet_radius"] = 0
-    c["width"] = 0
-    
-    return c
+    return WebParameters()
 
 def null_bulkhead_flange_parameters():
-
-    c = dict()
-
-    c["fillet_radius"] = 0
-    c["thickness"] = 0
-    c["chamfer"] = 0
-    
-    return c
+    return BulkheadFlangeParameters()
 
 def null_cowl_flange_parameters():
+    return CowlFlangeParameters()
 
-    c = dict()
+@dataclass
+class OmlParameters:
+    filename: str = ""
+    scale: float = 0
+    length: float = 0
+    offset_x: float = 0
+    reversed: bool = False
 
-    c["height"] = 0
-    c["tolerance"] = 0
-    
-    return c
+
+@dataclass
+class NosePlateParameters:
+    """The nose plate, which is not the bulkhead plate.
+
+    PlateParameters describes the bulkhead's plate and carries a thickness and
+    nothing else; this one carries a diameter and a flange. Constructing the
+    wrong one here silently produced a plate with no diameter.
+    """
+    active: bool = False
+    diameter: float = 0
+    thickness: float = 0
+    flange_width: float = 0
+    flange_height: float = 0
+    tolerance: float = 0
+
+
+@dataclass
+class NoseTipParameters:
+    active: bool = False
+    flange_inset: float = 0
+    flange_height: float = 0
+
+
+@dataclass
+class ButtressParameters:
+    active: bool = False
+    angle: float = 0
+    y_offset: float = 0
+    z_start: float = 0
+    depth: float = 0      # named "depth" to match the JSON parameter files
+    z_end: float = 0
+    r_start: float = 0
+    r_end: float = 0
+
+
+@dataclass
+class ButtressSet:
+    """The buttresses, plus the three settings they share.
+
+    Field order matters here in one respect only: the five buttress fields are
+    the names read out of the JSON parameter files, so they are iterated by
+    name rather than by position -- see derived_nose_parameters().
+    """
+    z_offset: float = 0
+    r_inset: float = 0
+    thickness: float = 0
+    top: ButtressParameters = field(default_factory=ButtressParameters)
+    top_diag1: ButtressParameters = field(default_factory=ButtressParameters)
+    top_diag2: ButtressParameters = field(default_factory=ButtressParameters)
+    bottom: ButtressParameters = field(default_factory=ButtressParameters)
+    side: ButtressParameters = field(default_factory=ButtressParameters)
+
+
+@dataclass
+class NoseParameters:
+    """Everything the nose and tail cowl geometry modules are driven from."""
+    cowl_type: str = "nose"     # "nose" or "tail"; set from the parameter file
+    type_name: str = ""
+    U: float = 1
+    unit_width: float = 0
+
+    cut_len: float = 0
+    cone_angle: float = 0
+
+    oml: OmlParameters = field(default_factory=OmlParameters)
+    plate: NosePlateParameters = field(default_factory=NosePlateParameters)
+    nose: NoseTipParameters = field(default_factory=NoseTipParameters)
+    buttress: ButtressSet = field(default_factory=ButtressSet)
+    printer: PrinterSettings = field(default_factory=PrinterSettings)
+
 
 def null_nose_parameters():
-
-    c = dict()
-
-    c["cowl_type"] = "nose"     # "nose" or "tail"; set from the parameter file
-    c["type_name"] = ""
-    c["U"] = 1
-    c["unit_width"] = 0
-
-    c["cut_len"] = 0
-    c["cone_angle"] = 0
-
-    c["oml"] = null_oml_parameters()
-    # NOTE: the nose plate is not the bulkhead plate. null_plate_parameters()
-    # describes the bulkhead's plate (thickness only); the nose plate carries a
-    # diameter and flange. Calling the wrong one here silently produced a plate
-    # with no diameter.
-    c["plate"] = null_nose_plate_parameters()
-    c["nose"] = null_nose_nose_parameters()
-    c["buttress"] = null_buttress_full_parameters()
-    c["printer"] = null_printer_settings()
-
-    return c
+    return NoseParameters()
 
 def null_oml_parameters():
-
-    c = dict()
-
-    c["filename"] = ""
-    c["scale"] = 0
-    c["length"] = 0
-    c["offset_x"] = 0
-    c["reversed"] = False
-
-    return c
+    return OmlParameters()
 
 def null_nose_plate_parameters():
-
-    c = dict()
-
-    c["active"] = False
-    c["diameter"] = 0
-    c["thickness"] = 0
-    c["flange_width"] = 0
-    c["flange_height"] = 0
-    c["tolerance"] = 0
-
-    return c
+    return NosePlateParameters()
 
 def null_nose_nose_parameters():
-
-    c = dict()
-
-    c["active"] = False
-    c["flange_inset"] = 0
-    c["flange_height"] = 0
-
-    return c
+    return NoseTipParameters()
 
 def null_buttress_full_parameters():
-
-    c = null_buttress_common_parameter()
-
-    c["top"] = null_buttress_parameter()
-    c["top_diag1"] = null_buttress_parameter()
-    c["top_diag2"] = null_buttress_parameter()
-    c["bottom"] = null_buttress_parameter()
-    c["side"] = null_buttress_parameter()
-
-    return c
-
-def null_buttress_common_parameter():
-
-    c = dict()
-
-    c["z_offset"] = 0
-    c["r_inset"] = 0
-    c["thickness"] = 0
-
-    return c
+    return ButtressSet()
 
 def null_buttress_parameter():
-
-    c = dict()
-
-    c["active"] = False
-    c["angle"] = 0
-    c["y_offset"] = 0
-    c["z_start"] = 0
-    c["depth"] = 0      # named "depth" to match the JSON parameter files
-    c["z_end"] = 0
-    c["r_start"] = 0
-    c["r_end"] = 0
-
-    return c
+    return ButtressParameters()
     
 def scaled_standard_values(U,FX):
 
@@ -395,20 +429,20 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
 
     # transcribe standard values
     ssv = scaled_standard_values(U,FX)
-    c["bulkhead"]["U"] = U
-    c["bulkhead"]["width"] = ssv["unit_width"]
-    c["corner"]["FX"] = FX
-    c["corner"]["radius"] = ssv["corner_radius"]
-    c["corner"]["length"] = ssv["unit_length"]
-    c["longeron"]["radius"] = ssv["longeron_radius"]
-    c["bolt"]["offset"] = ssv["bolt_offset"]
+    c.bulkhead.U = U
+    c.bulkhead.width = ssv["unit_width"]
+    c.corner.FX = FX
+    c.corner.radius = ssv["corner_radius"]
+    c.corner.length = ssv["unit_length"]
+    c.longeron.radius = ssv["longeron_radius"]
+    c.bolt.offset = ssv["bolt_offset"]
 
-    c["printer"] = printer_settings
+    c.printer = printer_settings
 
     # fixed parameters -- see the constants beside standard_values() for what each is
 
-    c["longeron"]["tolerance"] = LONGERON_TOLERANCE_MM
-    c["greeble"]["opening_angle"] = GREEBLE_OPENING_ANGLE_DEG
+    c.longeron.tolerance = LONGERON_TOLERANCE_MM
+    c.greeble.opening_angle = GREEBLE_OPENING_ANGLE_DEG
     
     # derive values from user_paraemters
 
@@ -419,8 +453,8 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         is_boom = user_parameters["is_boom"]
         is_anchor = user_parameters["is_anchor"]
     
-        c["bulkhead"]["type_name"] = user_parameters["bulkhead_type_name"]
-        c["greeble"]["tolerance"] = GREEBLE_TOLERANCE_BULKHEAD_MM
+        c.bulkhead.type_name = user_parameters["bulkhead_type_name"]
+        c.greeble.tolerance = GREEBLE_TOLERANCE_BULKHEAD_MM
     else:
         is_end = False
         is_interconnect = False
@@ -428,36 +462,36 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         is_boom = False
         is_anchor = False
         
-        c["bulkhead"]["type_name"] = ""
-        c["greeble"]["tolerance"] = GREEBLE_TOLERANCE_CORNER_MM
+        c.bulkhead.type_name = ""
+        c.greeble.tolerance = GREEBLE_TOLERANCE_CORNER_MM
         
-    c["bulkhead"]["type"] = encode_bulkhead_type(is_end, is_interconnect, is_cowling, is_boom)
-    c["bulkhead"]["thickness"] = user_parameters["bulkhead_thickness"]
-    c["panel"]["is_metric"] = user_parameters["panel_is_metric"]
-    c["panel"]["thickness"] = user_parameters["panel_thickness_mm"]
-    c["panel"]["type_name"] = user_parameters["panel_name"]
+    c.bulkhead.type = encode_bulkhead_type(is_end, is_interconnect, is_cowling, is_boom)
+    c.bulkhead.thickness = user_parameters["bulkhead_thickness"]
+    c.panel.is_metric = user_parameters["panel_is_metric"]
+    c.panel.thickness = user_parameters["panel_thickness_mm"]
+    c.panel.type_name = user_parameters["panel_name"]
 
     # recreate derived dimensions from corner_end()
-    c["greeble"]["thickness"] = max(2*math.sqrt(U)*c["printer"]["nozzle_diameter"], 2*c["printer"]["nozzle_diameter"])
-    c["greeble"]["nub_thickness"] = max(2*math.sqrt(U)*c["printer"]["nozzle_diameter"], 2*c["printer"]["nozzle_diameter"])
+    c.greeble.thickness = max(2*math.sqrt(U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
+    c.greeble.nub_thickness = max(2*math.sqrt(U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
 
-    if is_cowling or c["panel"]["thickness"]==0:
-        c["panel"]["tolerance"] = 0.0
+    if is_cowling or c.panel.thickness==0:
+        c.panel.tolerance = 0.0
     else:
-        c["panel"]["tolerance"] = 0.1
+        c.panel.tolerance = 0.1
     
     if not is_cowling:
         
-        if c["panel"]["thickness"]==0:
-            c["panel"]["overlap"] = 0
+        if c.panel.thickness==0:
+            c.panel.overlap = 0
         else:
-            c["panel"]["overlap"] = max(c["panel"]["thickness"], 4)
+            c.panel.overlap = max(c.panel.thickness, 4)
 
         # keep the inside corner of the panel from coming too close to the greeble perimeter
-        panel_clearance_radius = c["longeron"]["radius"] + c["longeron"]["tolerance"] + c["greeble"]["thickness"]  + c["greeble"]["nub_thickness"] + 2*c["printer"]["nozzle_diameter"]
+        panel_clearance_radius = c.longeron.radius + c.longeron.tolerance + c.greeble.thickness  + c.greeble.nub_thickness + 2*c.printer.nozzle_diameter
 
         # lower edge of the panel
-        panel_corner_y = max(c["corner"]["radius"] - c["panel"]["thickness"] - c["panel"]["tolerance"], 0)
+        panel_corner_y = max(c.corner.radius - c.panel.thickness - c.panel.tolerance, 0)
 
         if panel_clearance_radius > panel_corner_y:
             panel_offset = math.sqrt(panel_clearance_radius*panel_clearance_radius - panel_corner_y*panel_corner_y);
@@ -472,49 +506,49 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         greeble_clearance_width = 1*U # extra width around the greeble to allow the corner to snap in on the back side
         # print("greeble_clearance_width = " + str(greeble_clearance_width))
         
-        panel_offset = max(panel_offset, (panel_clearance_radius - 2*c["printer"]["nozzle_diameter"])/math.sqrt(2) + 2*c["printer"]["nozzle_diameter"] + greeble_clearance_width - c["panel"]["overlap"])
+        panel_offset = max(panel_offset, (panel_clearance_radius - 2*c.printer.nozzle_diameter)/math.sqrt(2) + 2*c.printer.nozzle_diameter + greeble_clearance_width - c.panel.overlap)
         panel_offset = max(panel_offset, 0)
-        panel_offset = min(panel_offset, math.sqrt(2)*c["corner"]["radius"])
+        panel_offset = min(panel_offset, math.sqrt(2)*c.corner.radius)
         panel_offset = 0.25*math.ceil(4*panel_offset) # inflate to nearest 0.25 mm
 
         # print("panel_offset = " + str(panel_offset))
         
-        c["panel"]["offset"] = panel_offset
+        c.panel.offset = panel_offset
     else:
-        c["panel"]["overlap"] = 0
-        c["panel"]["offset"] = 0
+        c.panel.overlap = 0
+        c.panel.offset = 0
 
-    c["bolt"]["diameter"] = user_parameters["bulkhead_bolt_diameter"]
+    c.bolt.diameter = user_parameters["bulkhead_bolt_diameter"]
     
     if is_anchor:
         # look up anchor size from bolt radius
-        c["bolt"]["radius"] = lookup_anchor_diameter(c["bolt"]["diameter"])/2
+        c.bolt.radius = lookup_anchor_diameter(c.bolt.diameter)/2
     else:
-        c["bolt"]["radius"] = c["bolt"]["diameter"]/2
+        c.bolt.radius = c.bolt.diameter/2
 
     if is_cowling:
-        c["cowl_flange"]["height"]=2*U;
-        c["cowl_flange"]["tolerance"]=0.2;
-        c["bulkhead_flange"]["thickness"]=max(math.ceil(3*U)*c["printer"]["nozzle_diameter"], 3*c["printer"]["nozzle_diameter"])
+        c.cowl_flange.height=2*U;
+        c.cowl_flange.tolerance=0.2;
+        c.bulkhead_flange.thickness=max(math.ceil(3*U)*c.printer.nozzle_diameter, 3*c.printer.nozzle_diameter)
     else:
-        c["cowl_flange"]["height"]=0;
-        c["cowl_flange"]["tolerance"]=0.0;
-        c["bulkhead_flange"]["thickness"]=max(math.ceil(2*U)*c["printer"]["nozzle_diameter"], 2*c["printer"]["nozzle_diameter"])
+        c.cowl_flange.height=0;
+        c.cowl_flange.tolerance=0.0;
+        c.bulkhead_flange.thickness=max(math.ceil(2*U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
     
-    c["bolt"]["thickness"]=max(3*U, 3)
-    c["plate"]["thickness"]=math.ceil(4*U)*c["printer"]["layer_height"]
-    c["web"]["fillet_radius"]=2*U
+    c.bolt.thickness=max(3*U, 3)
+    c.plate.thickness=math.ceil(4*U)*c.printer.layer_height
+    c.web.fillet_radius=2*U
     
     if is_boom:
-        c["web"]["width"]=6*U
+        c.web.width=6*U
     else:
-        c["web"]["width"]=3*U
+        c.web.width=3*U
         
-    c["bulkhead_flange"]["fillet_radius"]=2*U
-    c["bulkhead_flange"]["chamfer"]=1*U
+    c.bulkhead_flange.fillet_radius=2*U
+    c.bulkhead_flange.chamfer=1*U
 
     if is_boom:
-        c["boom_bulkhead"] = derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings)
+        c.boom_bulkhead = derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings)
     
     return c
 
@@ -564,19 +598,23 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
     param_path = os.path.join(COWL_DIR, user_parameters["parameter_filename"])
     src = read_param_json(param_path)
 
-    c["cowl_type"] = src.get("cowl_type", "nose")
-    c["type_name"] = (user_parameters.get("nose_type_name")
-                      or user_parameters.get("tail_type_name")
-                      or user_parameters.get("cowl_type_name", ""))
-    c["U"] = U
-    c["unit_width"] = unit_width
-    c["printer"] = printer_settings
+    c.cowl_type = src.get("cowl_type", "nose")
+    c.type_name = (user_parameters.get("nose_type_name")
+                   or user_parameters.get("tail_type_name")
+                   or user_parameters.get("cowl_type_name", ""))
+    c.U = U
+    c.unit_width = unit_width
+    c.printer = printer_settings
 
-    c["cone_angle"] = src["cone_angle"]
-    c["cut_len"] = src["cut_len"] * unit_width
+    c.cone_angle = src["cone_angle"]
+    c.cut_len = src["cut_len"] * unit_width
 
-    for k in c["oml"]:
-        c["oml"][k] = src["oml"][k]
+    # Driven by the declared fields, not by whatever the JSON happens to carry:
+    # a missing key is still a KeyError at this line, and an extra one in the
+    # file is still ignored -- the same behaviour the dict version had, now
+    # stated by the dataclass rather than by the dict it was copied into.
+    for f in fields(c.oml):
+        setattr(c.oml, f.name, src["oml"][f.name])
 
     # Absolute millimetres from the per-U variation table
     # (nose_size_variants.csv), NOT scaled by unit_width. These are set by the
@@ -589,27 +627,29 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
     # carries no size row for them, so they are read only when they apply --
     # requiring them of a tail would be demanding dimensions for parts it does
     # not have.
-    c["nose"]["active"] = src["nose"]["active"]
-    c["nose"]["flange_inset"] = src["nose"]["flange_inset"]
-    c["nose"]["flange_height"] = user_parameters.get("nose_flange_height", 0)
+    c.nose.active = src["nose"]["active"]
+    c.nose.flange_inset = src["nose"]["flange_inset"]
+    c.nose.flange_height = user_parameters.get("nose_flange_height", 0)
 
-    c["plate"]["active"] = src["plate"]["active"]
-    c["plate"]["tolerance"] = src["plate"]["tolerance"]
-    c["plate"]["diameter"] = src["plate"]["diameter"] * unit_width
-    c["plate"]["thickness"] = user_parameters.get("plate_thickness", 0)
-    c["plate"]["flange_width"] = user_parameters.get("plate_flange_width", 0)
-    c["plate"]["flange_height"] = user_parameters.get("plate_flange_height", 0)
+    c.plate.active = src["plate"]["active"]
+    c.plate.tolerance = src["plate"]["tolerance"]
+    c.plate.diameter = src["plate"]["diameter"] * unit_width
+    c.plate.thickness = user_parameters.get("plate_thickness", 0)
+    c.plate.flange_width = user_parameters.get("plate_flange_width", 0)
+    c.plate.flange_height = user_parameters.get("plate_flange_height", 0)
 
     b_src = src["buttress"]
-    c["buttress"]["thickness"] = b_src["thickness"]
-    c["buttress"]["z_offset"] = b_src["z_offset"] * unit_width
-    c["buttress"]["r_inset"] = b_src["r_inset"] * unit_width
+    c.buttress.thickness = b_src["thickness"]
+    c.buttress.z_offset = b_src["z_offset"] * unit_width
+    c.buttress.r_inset = b_src["r_inset"] * unit_width
 
     for name in ("top", "top_diag1", "top_diag2", "bottom", "side"):
         s = b_src[name]
-        d = c["buttress"][name]
-        for k in d:
-            d[k] = s[k] if k in NOSE_UNSCALED else s[k] * unit_width
+        d = getattr(c.buttress, name)
+        for f in fields(d):
+            value = s[f.name]
+            setattr(d, f.name,
+                    value if f.name in NOSE_UNSCALED else value * unit_width)
 
     return c
 
@@ -619,20 +659,20 @@ def derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings):
     c = null_boom_bulkhead_parameters()
     ssv = scaled_standard_values(U,FX)
 
-    c["diameter"] = ssv["unit_width"]*user_parameters["boom_diameter"]
-    c["thickness"] = U*2
-    c["y_position"] = ssv["unit_width"]*user_parameters["y_position"]
-    c["z_position"] = ssv["unit_width"]*user_parameters["z_position"]
-    c["collet_thickness"] = U*3
-    c["key_width"] = max(U*2, 2)
-    c["key_height"] = max(U*2, 2)
-    c["key_radius"] = max(U*0.5, 0.5)
-    c["key_web_width"] = U*6
-    c["key_angle"] = 0
-    c["tolerance"] = 0.2
-    c["type_name"] = user_parameters["bulkhead_type_name"]
-    c["make_vert_web"] = user_parameters["make_vert_web"]
-    c["make_lower_web"] = user_parameters["make_lower_web"]
+    c.diameter = ssv["unit_width"]*user_parameters["boom_diameter"]
+    c.thickness = U*2
+    c.y_position = ssv["unit_width"]*user_parameters["y_position"]
+    c.z_position = ssv["unit_width"]*user_parameters["z_position"]
+    c.collet_thickness = U*3
+    c.key_width = max(U*2, 2)
+    c.key_height = max(U*2, 2)
+    c.key_radius = max(U*0.5, 0.5)
+    c.key_web_width = U*6
+    c.key_angle = 0
+    c.tolerance = 0.2
+    c.type_name = user_parameters["bulkhead_type_name"]
+    c.make_vert_web = user_parameters["make_vert_web"]
+    c.make_lower_web = user_parameters["make_lower_web"]
 
     return c
 
@@ -685,17 +725,17 @@ def generate_fuselage_corner_variant_filename_from_params(dp, extension=".scad")
     Creates a unique filename based on parameter values.
     """
     
-    if dp["panel"]["is_metric"]:
+    if dp.panel.is_metric:
         unit_str = "metric"
     else:
         unit_str = "imperial"
             
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
     
-    dir_name = os.path.join("U_" + str(dp["bulkhead"]["U"]), unit_str, "panel_" + dp["panel"]["type_name"].replace('/', '_'), "corner")
-    file_name = "U_" + str(dp["bulkhead"]["U"]) + "__" + unit_str + "_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__" + "corner_FX_" + str(dp["corner"]["FX"]) + extension
+    dir_name = os.path.join("U_" + str(dp.bulkhead.U), unit_str, "panel_" + dp.panel.type_name.replace('/', '_'), "corner")
+    file_name = "U_" + str(dp.bulkhead.U) + "__" + unit_str + "_panel_" + dp.panel.type_name.replace('/', '_') + "__" + "corner_FX_" + str(dp.corner.FX) + extension
     
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
 
     return os.path.join(dir_name, file_name)
 
@@ -706,15 +746,15 @@ def corner_validity_check(dp):
 
     sv = standard_values()
     
-    U = (dp["bulkhead"]["width"]/sv["unit_width"])
+    U = (dp.bulkhead.width/sv["unit_width"])
     
     bulkhead_min_panel_thickness_parametric = U * 1
-    bulkhead_max_panel_thickness_parametric = dp["corner"]["radius"] - (dp["longeron"]["radius"] + dp["longeron"]["tolerance"] + dp["greeble"]["thickness"] + dp["greeble"]["nub_thickness"])
+    bulkhead_max_panel_thickness_parametric = dp.corner.radius - (dp.longeron.radius + dp.longeron.tolerance + dp.greeble.thickness + dp.greeble.nub_thickness)
     
     # check bulkead_thickness >= bulkhead_max_panel_thickness_parametric
 
-    is_valid = dp["panel"]["thickness"] == 0 or dp["panel"]["thickness"] >= bulkhead_min_panel_thickness_parametric
-    is_valid &= dp["panel"]["thickness"] <= bulkhead_max_panel_thickness_parametric
+    is_valid = dp.panel.thickness == 0 or dp.panel.thickness >= bulkhead_min_panel_thickness_parametric
+    is_valid &= dp.panel.thickness <= bulkhead_max_panel_thickness_parametric
     
     return is_valid
 
@@ -734,7 +774,7 @@ def run_corner_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -760,17 +800,17 @@ def generate_fuselage_bulkhead_variant_filename_from_params(dp, extension=".scad
     Creates a unique filename based on parameter values.
     """
     
-    if dp["panel"]["is_metric"]:
+    if dp.panel.is_metric:
         unit_str = "metric"
     else:
         unit_str = "imperial"
             
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
     
-    dir_name = os.path.join("U_" + str(dp["bulkhead"]["U"]), unit_str, "panel_" + dp["panel"]["type_name"].replace('/', '_'), "bulkhead")
-    file_name = "U_" + str(dp["bulkhead"]["U"]) + "__" + unit_str + "_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__" + "bulkhead_" + dp["bulkhead"]["type_name"] + extension
+    dir_name = os.path.join("U_" + str(dp.bulkhead.U), unit_str, "panel_" + dp.panel.type_name.replace('/', '_'), "bulkhead")
+    file_name = "U_" + str(dp.bulkhead.U) + "__" + unit_str + "_panel_" + dp.panel.type_name.replace('/', '_') + "__" + "bulkhead_" + dp.bulkhead.type_name + extension
     
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
 
     return os.path.join(dir_name, file_name)
 
@@ -779,17 +819,17 @@ def generate_fuselage_boom_bulkhead_variant_filename_from_params(dp, extension="
     Creates a unique filename based on parameter values.
     """
     
-    if dp["panel"]["is_metric"]:
+    if dp.panel.is_metric:
         unit_str = "metric"
     else:
         unit_str = "imperial"
             
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
     
-    dir_name = os.path.join("U_" + str(dp["bulkhead"]["U"]), unit_str, "panel_" + dp["panel"]["type_name"].replace('/', '_'), "bulkhead")
-    file_name = "U_" + str(dp["bulkhead"]["U"]) + "__" + unit_str + "_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__" + "boom_bulkhead_" + dp["bulkhead"]["type_name"] + extension
+    dir_name = os.path.join("U_" + str(dp.bulkhead.U), unit_str, "panel_" + dp.panel.type_name.replace('/', '_'), "bulkhead")
+    file_name = "U_" + str(dp.bulkhead.U) + "__" + unit_str + "_panel_" + dp.panel.type_name.replace('/', '_') + "__" + "boom_bulkhead_" + dp.bulkhead.type_name + extension
     
-    # return "bulk" + "__U_" + str(dp["bulkhead"]["U"]) + "__metric_panel_" + dp["panel"]["type_name"].replace('/', '_') + "__type_" + dp["bulkhead"]["type"] + extension
+    # return "bulk" + "__U_" + str(dp.bulkhead.U) + "__metric_panel_" + dp.panel.type_name.replace('/', '_') + "__type_" + dp.bulkhead.type + extension
 
     return os.path.join(dir_name, file_name)
     
@@ -809,7 +849,7 @@ def generate_fuselage_nose_variant_filename_from_params(U, dp, is_nose_cowl, is_
     # The nose-type name has to be in the path: the sweep now runs one pass per
     # JSON parameter file, and without it every variant would write over the
     # previous one at the same U.
-    variant = dp["type_name"]
+    variant = dp.type_name
 
     dir_name = os.path.join("U_" + str(U), "nose", variant)
     file_name = "U_" + str(U) + "__" + variant + "__nose_" + type_name + extension
@@ -823,7 +863,7 @@ def generate_fuselage_tail_variant_filename_from_params(U, dp, extension=".scad"
     # The variant name is in the path for the same reason it is on the nose
     # side: one pass per parameter file, and without it a second tail type
     # would overwrite the first at the same path rather than sit beside it.
-    variant = dp["type_name"]
+    variant = dp.type_name
 
     dir_name = os.path.join("U_" + str(U), "tail", variant)
     file_name = "U_" + str(U) + "__" + variant + "__tail" + extension
@@ -837,16 +877,16 @@ def bulkhead_validity_check(dp):
 
     sv = standard_values()
     
-    U = (dp["bulkhead"]["width"]/sv["unit_width"])
+    U = (dp.bulkhead.width/sv["unit_width"])
     
     bulkhead_min_panel_thickness_parametric = U * 1
-    bulkhead_max_panel_thickness_parametric = dp["corner"]["radius"] - (dp["longeron"]["radius"] + dp["longeron"]["tolerance"] + dp["greeble"]["thickness"] + dp["greeble"]["nub_thickness"])
+    bulkhead_max_panel_thickness_parametric = dp.corner.radius - (dp.longeron.radius + dp.longeron.tolerance + dp.greeble.thickness + dp.greeble.nub_thickness)
     
     # check bulkead_thickness >= bulkhead_max_panel_thickness_parametric
 
-    is_valid = dp["panel"]["thickness"] == 0 or dp["panel"]["thickness"] >= bulkhead_min_panel_thickness_parametric
-    is_valid &= dp["panel"]["thickness"] <= bulkhead_max_panel_thickness_parametric
-    is_valid &= (not dp["bulkhead"]["type"] == BulkheadType.COWLING) or dp["panel"]["thickness"] == 0
+    is_valid = dp.panel.thickness == 0 or dp.panel.thickness >= bulkhead_min_panel_thickness_parametric
+    is_valid &= dp.panel.thickness <= bulkhead_max_panel_thickness_parametric
+    is_valid &= (not dp.bulkhead.type == BulkheadType.COWLING) or dp.panel.thickness == 0
     
     return is_valid
 
@@ -866,7 +906,7 @@ def run_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
     
     FX = 1.0
 
@@ -903,7 +943,7 @@ def run_boom_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
     
     FX = 1.0
 
@@ -945,7 +985,7 @@ def run_nose_parametric_sweep(csv_files, output_dir):
     # with the other sweeps, which takes it.
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -954,21 +994,21 @@ def run_nose_parametric_sweep(csv_files, output_dir):
 
         dp = derived_cowl_parameters(U, FX, params, printer_settings)
 
-        if dp["cowl_type"] != "nose":
+        if dp.cowl_type != "nose":
             raise ValueError(
                 "%s declares cowl_type=%r but is listed in the NOSE type axis. "
                 "A tail parameter file rendered through the nose modules "
                 "produces geometry nobody designed; put it in "
                 "tail_type_variants.csv instead."
-                % (params["parameter_filename"], dp["cowl_type"]))
+                % (params["parameter_filename"], dp.cowl_type))
 
         print(dp)
 
         # Which of the three parts exist is a property of the parameter file.
         wanted = [(True, False, False)]
-        if dp["nose"]["active"]:
+        if dp.nose.active:
             wanted.append((False, True, False))
-        if dp["plate"]["active"]:
+        if dp.plate.active:
             wanted.append((False, False, True))
 
         for (is_nose_cowl, is_nose_nose, is_nose_plate) in wanted:
@@ -995,7 +1035,7 @@ def run_tail_parametric_sweep(csv_files, output_dir):
 
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings["nozzle_diameter"] = 0.6
+    printer_settings.nozzle_diameter = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1004,10 +1044,10 @@ def run_tail_parametric_sweep(csv_files, output_dir):
 
         dp = derived_cowl_parameters(U, FX, params, printer_settings)
 
-        if dp["cowl_type"] != "tail":
+        if dp.cowl_type != "tail":
             raise ValueError(
                 "%s declares cowl_type=%r but is listed in the TAIL type axis."
-                % (params["parameter_filename"], dp["cowl_type"]))
+                % (params["parameter_filename"], dp.cowl_type))
 
         print(dp)
 
@@ -1607,20 +1647,20 @@ def corner_render(dp, output_dir, filename):
     # the generated geometry is unchanged -- but a transposition here is now a
     # TypeError rather than a part that renders cleanly and is silently wrong.
     scadobj = fgeom.fuselage_corner(
-        U=dp["bulkhead"]["U"],
-        unit_length=dp["corner"]["length"],
-        bulkhead_thickness=dp["bulkhead"]["thickness"],
-        corner_radius=dp["corner"]["radius"],
-        panel_thickness=dp["panel"]["thickness"],
-        panel_offset=dp["panel"]["offset"],
-        panel_overlap=dp["panel"]["overlap"],
-        panel_tolerance=dp["panel"]["tolerance"],
-        longeron_radius=dp["longeron"]["radius"],
-        longeron_tolerance=dp["longeron"]["tolerance"],
-        greeble_thickness=dp["greeble"]["thickness"],
-        greeble_nub_thickness=dp["greeble"]["nub_thickness"],
-        greeble_tolerance=dp["greeble"]["tolerance"],
-        nozzle_diameter=dp["printer"]["nozzle_diameter"])
+        U=dp.bulkhead.U,
+        unit_length=dp.corner.length,
+        bulkhead_thickness=dp.bulkhead.thickness,
+        corner_radius=dp.corner.radius,
+        panel_thickness=dp.panel.thickness,
+        panel_offset=dp.panel.offset,
+        panel_overlap=dp.panel.overlap,
+        panel_tolerance=dp.panel.tolerance,
+        longeron_radius=dp.longeron.radius,
+        longeron_tolerance=dp.longeron.tolerance,
+        greeble_thickness=dp.greeble.thickness,
+        greeble_nub_thickness=dp.greeble.nub_thickness,
+        greeble_tolerance=dp.greeble.tolerance,
+        nozzle_diameter=dp.printer.nozzle_diameter)
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
     
@@ -1631,37 +1671,37 @@ def bulkhead_render(dp, output_dir, filename):
     
     fgeom = scad_module('fuselage_bulkhead_geometry.scad')
 
-    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp["bulkhead"]["type"])
+    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
     
     scadobj = fgeom.bulkhead_section_full(
         is_interconnect=is_interconnect,
         is_cowling=is_cowling,
-        unit_width=dp["bulkhead"]["width"],
-        unit_length=dp["corner"]["length"],
-        bulkhead_thickness=dp["bulkhead"]["thickness"],
-        corner_radius=dp["corner"]["radius"],
-        panel_thickness=dp["panel"]["thickness"],
-        panel_offset=dp["panel"]["offset"],
-        panel_overlap=dp["panel"]["overlap"],
-        panel_tolerance=dp["panel"]["tolerance"],
-        longeron_radius=dp["longeron"]["radius"],
-        longeron_tolerance=dp["longeron"]["tolerance"],
-        bolt_hole_radius=dp["bolt"]["radius"],
-        bolt_thickness=dp["bolt"]["thickness"],
-        bolt_offset=dp["bolt"]["offset"],
-        greeble_opening_angle=dp["greeble"]["opening_angle"],
-        greeble_thickness=dp["greeble"]["thickness"],
-        greeble_nub_thickness=dp["greeble"]["nub_thickness"],
-        greeble_tolerance=dp["greeble"]["tolerance"],
-        plate_thickness=dp["plate"]["thickness"],
-        web_fillet_radius=dp["web"]["fillet_radius"],
-        web_width=dp["web"]["width"],
-        flange_fillet_radius=dp["bulkhead_flange"]["fillet_radius"],
-        flange_thickness=dp["bulkhead_flange"]["thickness"],
-        flange_chamfer=dp["bulkhead_flange"]["chamfer"],
-        cowl_flange_height=dp["cowl_flange"]["height"],
-        cowl_flange_tolerance=dp["cowl_flange"]["tolerance"],
-        nozzle_diameter=dp["printer"]["nozzle_diameter"])
+        unit_width=dp.bulkhead.width,
+        unit_length=dp.corner.length,
+        bulkhead_thickness=dp.bulkhead.thickness,
+        corner_radius=dp.corner.radius,
+        panel_thickness=dp.panel.thickness,
+        panel_offset=dp.panel.offset,
+        panel_overlap=dp.panel.overlap,
+        panel_tolerance=dp.panel.tolerance,
+        longeron_radius=dp.longeron.radius,
+        longeron_tolerance=dp.longeron.tolerance,
+        bolt_hole_radius=dp.bolt.radius,
+        bolt_thickness=dp.bolt.thickness,
+        bolt_offset=dp.bolt.offset,
+        greeble_opening_angle=dp.greeble.opening_angle,
+        greeble_thickness=dp.greeble.thickness,
+        greeble_nub_thickness=dp.greeble.nub_thickness,
+        greeble_tolerance=dp.greeble.tolerance,
+        plate_thickness=dp.plate.thickness,
+        web_fillet_radius=dp.web.fillet_radius,
+        web_width=dp.web.width,
+        flange_fillet_radius=dp.bulkhead_flange.fillet_radius,
+        flange_thickness=dp.bulkhead_flange.thickness,
+        flange_chamfer=dp.bulkhead_flange.chamfer,
+        cowl_flange_height=dp.cowl_flange.height,
+        cowl_flange_tolerance=dp.cowl_flange.tolerance,
+        nozzle_diameter=dp.printer.nozzle_diameter)
     
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
@@ -1673,31 +1713,31 @@ def boom_bulkhead_render(dp, output_dir, filename):
     fbbgeom = scad_module('fuselage_boom_bulkhead_geometry.scad')
     
     scadobj = fbbgeom.boom_bulkhead(
-        unit_width=dp["bulkhead"]["width"],
-        corner_radius=dp["corner"]["radius"],
-        panel_thickness=dp["panel"]["thickness"],
-        panel_offset=dp["panel"]["offset"],
-        panel_overlap=dp["panel"]["overlap"],
-        panel_tolerance=dp["panel"]["tolerance"],
-        longeron_radius=dp["longeron"]["radius"],
-        longeron_tolerance=dp["longeron"]["tolerance"],
-        bolt_hole_radius=dp["bolt"]["radius"],
-        bolt_offset=dp["bolt"]["offset"],
-        web_fillet_radius=dp["web"]["fillet_radius"],
-        web_width=dp["web"]["width"],
-        boom_diameter=dp["boom_bulkhead"]["diameter"],
-        boom_bulkhead_thickness=dp["boom_bulkhead"]["thickness"],
-        boom_y_position=dp["boom_bulkhead"]["y_position"],
-        boom_z_position=dp["boom_bulkhead"]["z_position"],
-        boom_collet_thickness=dp["boom_bulkhead"]["collet_thickness"],
-        boom_key_width=dp["boom_bulkhead"]["key_width"],
-        boom_key_height=dp["boom_bulkhead"]["key_height"],
-        boom_key_radius=dp["boom_bulkhead"]["key_radius"],
-        boom_key_angle=dp["boom_bulkhead"]["key_angle"],
-        boom_key_web_width=dp["boom_bulkhead"]["key_web_width"],
-        boom_tolerance=dp["boom_bulkhead"]["tolerance"],
-        boom_make_vert_web=dp["boom_bulkhead"]["make_vert_web"],
-        boom_make_lower_web=dp["boom_bulkhead"]["make_lower_web"])
+        unit_width=dp.bulkhead.width,
+        corner_radius=dp.corner.radius,
+        panel_thickness=dp.panel.thickness,
+        panel_offset=dp.panel.offset,
+        panel_overlap=dp.panel.overlap,
+        panel_tolerance=dp.panel.tolerance,
+        longeron_radius=dp.longeron.radius,
+        longeron_tolerance=dp.longeron.tolerance,
+        bolt_hole_radius=dp.bolt.radius,
+        bolt_offset=dp.bolt.offset,
+        web_fillet_radius=dp.web.fillet_radius,
+        web_width=dp.web.width,
+        boom_diameter=dp.boom_bulkhead.diameter,
+        boom_bulkhead_thickness=dp.boom_bulkhead.thickness,
+        boom_y_position=dp.boom_bulkhead.y_position,
+        boom_z_position=dp.boom_bulkhead.z_position,
+        boom_collet_thickness=dp.boom_bulkhead.collet_thickness,
+        boom_key_width=dp.boom_bulkhead.key_width,
+        boom_key_height=dp.boom_bulkhead.key_height,
+        boom_key_radius=dp.boom_bulkhead.key_radius,
+        boom_key_angle=dp.boom_bulkhead.key_angle,
+        boom_key_web_width=dp.boom_bulkhead.key_web_width,
+        boom_tolerance=dp.boom_bulkhead.tolerance,
+        boom_make_vert_web=dp.boom_bulkhead.make_vert_web,
+        boom_make_lower_web=dp.boom_bulkhead.make_lower_web)
     
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
@@ -1709,30 +1749,30 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     # Every value below now comes from the JSON parameter file via
     # derived_nose_parameters(), rather than being hard-coded to the U=1
     # nose_round_plate case as it was before.
-    unit_width = dp["unit_width"]
-    cone_angle = dp["cone_angle"]
-    cut_len = dp["cut_len"]
+    unit_width = dp.unit_width
+    cone_angle = dp.cone_angle
+    cut_len = dp.cut_len
 
-    plate_diam = dp["plate"]["diameter"]
-    plate_tol = dp["plate"]["tolerance"]
-    plate_thickness = dp["plate"]["thickness"]
-    plate_flange_width = dp["plate"]["flange_width"]
-    plate_flange_height = dp["plate"]["flange_height"]
+    plate_diam = dp.plate.diameter
+    plate_tol = dp.plate.tolerance
+    plate_thickness = dp.plate.thickness
+    plate_flange_width = dp.plate.flange_width
+    plate_flange_height = dp.plate.flange_height
 
-    nose_flange_inset = dp["nose"]["flange_inset"]
-    nose_flange_height = dp["nose"]["flange_height"]
+    nose_flange_inset = dp.nose.flange_inset
+    nose_flange_height = dp.nose.flange_height
 
-    buttress_z_offset = dp["buttress"]["z_offset"]
-    buttress_r_inset = dp["buttress"]["r_inset"]
-    buttress_thickness = dp["buttress"]["thickness"]
-    buttress_r_start = dp["buttress"]["top"]["r_start"]
-    buttress_r_end = dp["buttress"]["top"]["r_end"]
+    buttress_z_offset = dp.buttress.z_offset
+    buttress_r_inset = dp.buttress.r_inset
+    buttress_thickness = dp.buttress.thickness
+    buttress_r_start = dp.buttress.top.r_start
+    buttress_r_end = dp.buttress.top.r_end
 
-    oml_filename = oml_ref(dp["oml"]["filename"])
-    oml_scale = dp["oml"]["scale"]
-    oml_length = dp["oml"]["length"]
-    oml_offset_x = dp["oml"]["offset_x"]
-    oml_reversed = dp["oml"]["reversed"]
+    oml_filename = oml_ref(dp.oml.filename)
+    oml_scale = dp.oml.scale
+    oml_length = dp.oml.length
+    oml_offset_x = dp.oml.offset_x
+    oml_reversed = dp.oml.reversed
 
     if is_nose_cowl:
         scadobj = cgeom.nose_cowl(
@@ -1795,36 +1835,36 @@ def tail_render(U, dp, output_dir, filename):
     # The tail uses five independently specified buttress groups because it is
     # mirrored about one plane; the nose needs only one because it is built
     # from an octant and repeated radially.
-    b = dp["buttress"]
+    b = dp.buttress
 
-    unit_width = dp["unit_width"]
-    cut_len = dp["cut_len"]
-    cone_angle = dp["cone_angle"]
+    unit_width = dp.unit_width
+    cut_len = dp.cut_len
+    cone_angle = dp.cone_angle
 
-    buttress_z_offset = b["z_offset"]
-    buttress_r_inset = b["r_inset"]
-    buttress_thickness = b["thickness"]
+    buttress_z_offset = b.z_offset
+    buttress_r_inset = b.r_inset
+    buttress_thickness = b.thickness
 
-    side_buttress_z_end = b["side"]["z_end"]
-    side_buttress_r_start = b["side"]["r_start"]
-    side_buttress_r_end = b["side"]["r_end"]
+    side_buttress_z_end = b.side.z_end
+    side_buttress_r_start = b.side.r_start
+    side_buttress_r_end = b.side.r_end
 
-    top_buttress_z_end = b["top"]["z_end"]
-    top_buttress_r_start = b["top"]["r_start"]
-    top_buttress_r_end = b["top"]["r_end"]
+    top_buttress_z_end = b.top.z_end
+    top_buttress_r_start = b.top.r_start
+    top_buttress_r_end = b.top.r_end
 
-    top_diag_buttress_z_start = b["top_diag1"]["z_start"]
-    top_diag_buttress_depth = b["top_diag1"]["depth"]
+    top_diag_buttress_z_start = b.top_diag1.z_start
+    top_diag_buttress_depth = b.top_diag1.depth
 
-    bottom_buttress_z_end = b["bottom"]["z_end"]
-    bottom_buttress_r_start = b["bottom"]["r_start"]
-    bottom_buttress_r_end = b["bottom"]["r_end"]
+    bottom_buttress_z_end = b.bottom.z_end
+    bottom_buttress_r_start = b.bottom.r_start
+    bottom_buttress_r_end = b.bottom.r_end
 
-    oml_filename = oml_ref(dp["oml"]["filename"])
-    oml_scale = dp["oml"]["scale"]
-    oml_length = dp["oml"]["length"]
-    oml_offset_x = dp["oml"]["offset_x"]
-    oml_reversed = dp["oml"]["reversed"]
+    oml_filename = oml_ref(dp.oml.filename)
+    oml_scale = dp.oml.scale
+    oml_length = dp.oml.length
+    oml_offset_x = dp.oml.offset_x
+    oml_reversed = dp.oml.reversed
 
     # Twenty-three arguments, of which eighteen are floats describing buttresses in
     # four groups that differ only by prefix. Positionally this was the single most

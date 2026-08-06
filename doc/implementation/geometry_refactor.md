@@ -34,9 +34,9 @@ IP-GEO-11.
 | IP-GEO-15 | done | Render every GUI driver and treat warnings as failures — [`verify_drivers.py`](../../src/Fuselage/tools/verify_drivers.py) | — |
 | IP-GEO-9 | done | `through_cut()` and `mask_reach()` replacing 11 raw multipliers | IP-GEO-13 |
 | IP-GEO-10 | superseded | Group SCAD parameters so `bulkhead_section_full` takes ~8 arguments instead of 28. Dropped per OQ-GEO-1: the work does not survive the FreeCAD port. Replaced by IP-GEO-16. | — |
-| IP-GEO-16 | todo | Replace the nested parameter dicts with typed dataclasses in Python — the same idea on the side that survives Phase 3 | — |
+| IP-GEO-16 | done | Replace the nested parameter dicts with typed dataclasses in Python — the same idea on the side that survives Phase 3 | — |
 | IP-GEO-17 | done | Revert the partially-applied greeble grouping pilot | — |
-| IP-GEO-18 | todo | Fix `nose_cowl.scad` and `tail_cowl.scad`: they name the OML mesh without its `../oml/` prefix, so neither has rendered since the meshes moved. Pre-existing, found by IP-GEO-15 | IP-GEO-15 |
+| IP-GEO-18 | done | Fix `nose_cowl.scad` and `tail_cowl.scad`: they named the OML mesh without its `../oml/` prefix, so neither had rendered since the meshes moved. Pre-existing, found by IP-GEO-15 | IP-GEO-15 |
 | IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
 | IP-GEO-12 | todo | Repair `test_fuse.ipynb`: its preview cells broke when `solid_render` stopped writing PNGs | — |
 
@@ -83,6 +83,74 @@ rendered correctly throughout — reports 10,932 triangles before and after:
 The Python side needed no change: `fuselage_variants.py` was never migrated, which is
 what made the tree inconsistent in the first place and what now makes it consistent
 again.
+
+### IP-GEO-18 — done 2026-08-06: the cowl drivers had not rendered in months
+
+`nose_cowl.scad` and `tail_cowl.scad` set `oml_filename = "vsp_nose.stl"`, but the
+`import()` that consumes it lives in `cowl_geometry.scad`, and OpenSCAD resolves
+`import()` against the file containing the call — so the name had to be `../oml/...`
+from the moment the meshes moved into `oml/`. Fixed by adding the prefix in both
+drivers, with a comment pointing at `oml_ref()` in `fuselage_variants.py`, which is the
+Python half of the same rule.
+
+The sweep never noticed because `oml_ref()` supplies the prefix; only the interactive
+path was broken, and nothing rendered the interactive path until IP-GEO-15 existed.
+All eight drivers now render:
+
+```text
+  OK  fuselage_boom_bulkhead (2,364)   OK  fuselage_bulkhead (3,272)
+  OK  fuselage_corner (10,932)         OK  fuselage_cowling_bulkhead (2,712)
+  OK  fuselage_oml (1,372)             OK  nose_cowl (21,092)
+  OK  tail_cowl (89,910)               --  fuselage_geometry (aggregator, skipped)
+```
+
+There is no reference to compare the two cowls against — they had no working output to
+be a baseline. What is established is that the OML import resolves and the boolean
+tree completes; the shapes themselves are unreviewed, and IP-GEO-11's design documents
+are where that would be settled.
+
+### IP-GEO-16 — done 2026-08-06: the parameter groups are dataclasses
+
+Twenty groups across two trees — `Parameters` for the bulkhead and corner sweeps,
+`NoseParameters` for the cowls — replacing the `null_*_parameters()` dicts. The
+constructors remain, one line each, so every existing call site still reads
+`null_greeble_parameters()`; what changed is that the thing returned has declared
+fields. 332 subscripts became attribute access.
+
+**The hazard this closes is assignment, not lookup.** A dict already raised `KeyError`
+on a misspelled *read*. On a *write* it silently accepted the new key, left the real
+field at its default, and produced a part wrong by exactly the amount the assignment
+was meant to change. `c.greeble.thicknes = 1.2` now raises `AttributeError` at the line
+that made the mistake.
+
+**It found one immediately.** `derived_parameters()` sets and reads
+`c["bolt"]["diameter"]`, but `null_bolt_parameters()` never declared it — the field
+existed only because a dict accepted it. It is real and load-bearing (`bolt.radius` is
+derived from it, differently for an anchor), so it is now a declared field with a
+comment saying where it came from. Nothing else in either tree turned out to be
+undeclared; the runtime dump of all twelve groups was checked field by field against
+the new definitions.
+
+**Where the dicts stayed.** Only the parameter *groups* were converted. `src` and
+`b_src` in `derived_cowl_parameters()` are parsed JSON, the CSV rows are pandas records,
+and `standard_values()` / `scaled_standard_values()` are flat constant tables written
+once in the function that returns them. Converting those would mean asserting a schema
+over data this code does not own.
+
+Two generic copy loops needed rewriting rather than translating. `for k in c["oml"]`
+became `for f in fields(c.oml)`, and the buttress loop the same. The behaviour is
+preserved exactly — a key missing from the JSON is still a `KeyError`, an extra key in
+the file is still ignored — but the schema being iterated is now the dataclass
+declaration rather than whatever the dict happened to have been initialised with.
+
+**Proven by `scad_snapshot.py`.** All 576 parts across all five sweeps — corner,
+bulkhead, boom, nose, tail — generate byte-identical `.scad` before and after. This is
+the case the text diff proves outright and the case its blind spot does not touch: no
+`.scad` file was edited, so nothing about it depends on library contents.
+
+`fuselage_splode.py` also constructs parameters and was updated with the module; it runs
+and returns its five sets. `test_fuse.ipynb` uses no dict-style parameter access, so
+IP-GEO-12 inherits nothing new from this.
 
 ---
 
