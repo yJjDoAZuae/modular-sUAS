@@ -23,8 +23,6 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
     eps = 0.01;
     
     longeron_chamfer = nozzle_diameter;
-//    greeble_thickness = max(2*U*nozzle_diameter, 2*nozzle_diameter);
-//    greeble_nub_thickness = max(2*U*nozzle_diameter, 2*nozzle_diameter);
     greeble_nub_height = bulkhead_thickness/3;
     greeble_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_tolerance;
     greeble_nub_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_nub_thickness+greeble_tolerance;
@@ -82,8 +80,6 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
     eps = 0.01;
     
     longeron_chamfer = nozzle_diameter;
-//    greeble_thickness = max(2*U*nozzle_diameter, 2*nozzle_diameter);
-//    greeble_nub_thickness = max(2*U*nozzle_diameter, 2*nozzle_diameter);
     greeble_nub_height = bulkhead_thickness/3;
     greeble_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_tolerance;
     greeble_nub_radius = longeron_radius+longeron_tolerance+greeble_thickness+greeble_nub_thickness+greeble_tolerance;
