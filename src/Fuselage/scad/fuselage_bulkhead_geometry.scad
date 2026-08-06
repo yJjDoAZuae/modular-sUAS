@@ -710,10 +710,8 @@ module bolt_flange_fillet(bolt_hole_radius, bolt_thickness, bolt_offset, plate_t
 
 module bulkhead_oml_shape(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset) {
     
-    octant_to_full() {
-        corner_translate(unit_width, corner_radius) {
-            bulkhead_oml_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
-        }
+    octant_tiled(unit_width, corner_radius) {
+        bulkhead_oml_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
     }
 }
 
@@ -721,10 +719,8 @@ module bulkhead_oml_shape(unit_width, corner_radius, panel_thickness, panel_offs
 
 module bulkhead_oml_outer_shape(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset) {
     
-    octant_to_full() {
-        corner_translate(unit_width, corner_radius) {
-            bulkhead_oml_outer_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
-        }
+    octant_tiled(unit_width, corner_radius) {
+        bulkhead_oml_outer_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
     }
 }
 
@@ -732,19 +728,15 @@ module bulkhead_oml_outer_shape(unit_width, corner_radius, panel_thickness, pane
 
 module bulkhead_oml_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset) {
     
-    octant_to_full() {
-        corner_translate(unit_width, corner_radius) {
-            bulkhead_oml_inner_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
-        }
+    octant_tiled(unit_width, corner_radius) {
+        bulkhead_oml_inner_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset);
     }
 }
 
 module bulkhead_web_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset, web_fillet_radius, web_width) {
     
-    octant_to_full() {
-        corner_translate(unit_width, corner_radius) {
-            bulkhead_web_inner_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset, web_fillet_radius, web_width);
-        }
+    octant_tiled(unit_width, corner_radius) {
+        bulkhead_web_inner_shape_octant(unit_width, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_offset, web_fillet_radius, web_width);
     }
 }
 
