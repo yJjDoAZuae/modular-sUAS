@@ -51,7 +51,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Archived .bak-adjacent scratch files are kept for history, not held to current style.
 "src/Fuselage/archive/*" = ["ALL"]
-"src/Fuselage/tools/tmp.py" = ["ALL"]
 
 [tool.mypy]
 python_version = "3.13"
