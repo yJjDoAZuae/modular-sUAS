@@ -23,8 +23,8 @@ IP-GEO-11.
 | --- | --- | --- | --- |
 | IP-GEO-1 | done | `.scad`-text snapshot harness — [`scad_snapshot.py`](../../src/Fuselage/tools/scad_snapshot.py) | — |
 | IP-GEO-2 | done | Convert the seven `scad_module` invocations from positional to keyword arguments | IP-GEO-1 |
-| IP-GEO-3 | todo | Resolve the greeble-thickness formula duplicated between Python and commented-out SCAD | IP-GEO-1 |
-| IP-GEO-4 | todo | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
+| IP-GEO-3 | done | Resolve the greeble-thickness formula duplicated between Python and commented-out SCAD | IP-GEO-1 |
+| IP-GEO-4 | done | Hoist `import math` to module level; name the hardcoded "fixed parameters" | — |
 | IP-GEO-5 | todo | Use the existing `mirror_xy()` at the three open-coded sites in `fuselage_corner_geometry.scad` | IP-GEO-1 |
 | IP-GEO-6 | todo | Extract `octant_tiled()` to replace four structurally identical wrapper modules | IP-GEO-1 |
 | IP-GEO-7 | todo | Extract greeble dimensions (`greeble_radius`, `greeble_nub_radius`, `greeble_nub_height`, `longeron_chamfer`) as SCAD functions | IP-GEO-1 |
@@ -182,9 +182,29 @@ Verified against itself: two captures of unmodified code report IDENTICAL across
 576 parts. The snapshots are **disposable build artifacts** — roughly half a megabyte
 each, regenerate rather than commit them.
 
-**Geometric comparison.** The SCAD-side items (IP-GEO-5 through IP-GEO-9) change the
-`.scad` text by construction, so the text diff cannot prove them. Render a sample and
-compare with:
+### ⚠ The text diff is blind to `.scad` library files — do not use it for IP-GEO-5..9
+
+A generated `.scad` contains only a `use <...>` line and the module call:
+
+```scad
+use <../../../../../scad/fuselage_corner_geometry.scad>;
+$fn = 0; $fa = 1; $fs = 0.05;
+fuselage_corner(U = 1.0, bulkhead_thickness = 6, ...);
+```
+
+The library's *contents* are referenced by path, never captured. So editing a `.scad`
+module does not merely leave the text diff unable to prove the change — **the diff will
+report IDENTICAL even if the edit destroyed the geometry.** That is a false negative, not
+an absence of evidence, and it is the one way this tooling could actively mislead.
+
+Use it only for changes to the Python that builds the call. For anything under
+`src/Fuselage/scad/`, the geometric comparison below is the only check that means
+anything.
+
+(The exception is deleting a *comment* from a `.scad` file, as IP-GEO-3 does: OpenSCAD
+discards comments before evaluation, so that is safe by construction rather than by test.)
+
+**Geometric comparison.** Render a sample and compare with:
 
 ```text
 uv run python src/Fuselage/tools/sweep_check.py <output> --reference <baseline>
@@ -198,3 +218,4 @@ Note that triangle count is the strictest of the three and will shift if a refac
 alters the order of boolean operations, even when the solid is identical. A volume and
 bounding-box match with a changed triangle count is a result to investigate, not an
 automatic failure.
+
