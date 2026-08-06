@@ -90,10 +90,28 @@ Only start once Phase 1's tests exist. Without them there is no way to tell a re
 from a regression.
 
 **Tracked in detail:** [doc/implementation/geometry_refactor.md](implementation/geometry_refactor.md)
-carries the specific work items from the 2026-08-06 review of the geometry modules —
-positional-argument hazards, a formula duplicated across the language boundary, and the
-library extractions the code is already asking for — each with the check that proves it
-changed no geometry.
+carries the specific work items from the 2026-08-06 review of the geometry modules, each
+with the check that proves it changed no geometry.
+
+**Progress as of 2026-08-06.** Nine items complete and verified — keyword arguments at
+the seven Python→SCAD call sites, a formula duplicated across the language boundary
+resolved, and five library extractions the code was already asking for. Four verification
+tools built along the way, each covering a case the others cannot; they are documented in
+[src/Fuselage/docs/fuselage_folder_summary.md](../src/Fuselage/docs/fuselage_folder_summary.md).
+
+**Scope corrected.** The largest planned item — regrouping the 28-parameter SCAD
+signatures — was **dropped** after assessing it against Phase 3. The parameter groups
+already exist in Python; the refactor would only have built an encoding of them in
+OpenSCAD vectors, which the FreeCAD port discards entirely. The equivalent work on the
+Python side, typed parameter objects, survives and replaced it. See OQ-GEO-1.
+
+That assessment is now a standing guideline — see *Weigh a refactor against what replaces
+the code* in [doc/guidelines/general.md](guidelines/general.md) — because the same
+question applies to every remaining item in this phase.
+
+**Open and blocking:** nothing in the verification tooling renders the seven GUI driver
+`.scad` files, so a change can be certified geometry-preserving while leaving every
+interactive driver broken. See OQ-GEO-2.
 
 - [ ] **Map the current geometry.** 13 hand-written `.scad` modules in `scad/`, currently
       all siblings, so every `include`/`use` is a bare filename. That is why they resolve

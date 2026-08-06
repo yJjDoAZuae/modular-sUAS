@@ -30,15 +30,59 @@ IP-GEO-11.
 | IP-GEO-7 | done | Extract greeble dimensions as SCAD functions | IP-GEO-13 |
 | IP-GEO-8 | done | Single shared `geometry_eps()`, replacing 12 per-module redeclarations | IP-GEO-13 |
 | IP-GEO-13 | done | Geometric verification harness for `.scad` changes — [`verify_scad_change.py`](../../src/Fuselage/tools/verify_scad_change.py) | — |
+| IP-GEO-14 | done | End-to-end sweep verification — [`verify_sweep_change.py`](../../src/Fuselage/tools/verify_sweep_change.py) | — |
+| IP-GEO-15 | done | Render every GUI driver and treat warnings as failures — [`verify_drivers.py`](../../src/Fuselage/tools/verify_drivers.py) | — |
 | IP-GEO-9 | done | `through_cut()` and `mask_reach()` replacing 11 raw multipliers | IP-GEO-13 |
-| IP-GEO-10 | blocked (IP-GEO-2) | Group parameters so `bulkhead_section_full` takes ~8 arguments instead of 28 | IP-GEO-2 |
+| IP-GEO-10 | superseded | Group SCAD parameters so `bulkhead_section_full` takes ~8 arguments instead of 28. Dropped per OQ-GEO-1: the work does not survive the FreeCAD port. Replaced by IP-GEO-16. | — |
+| IP-GEO-16 | todo | Replace the nested parameter dicts with typed dataclasses in Python — the same idea on the side that survives Phase 3 | — |
+| IP-GEO-17 | done | Revert the partially-applied greeble grouping pilot | — |
+| IP-GEO-18 | todo | Fix `nose_cowl.scad` and `tail_cowl.scad`: they name the OML mesh without its `../oml/` prefix, so neither has rendered since the meshes moved. Pre-existing, found by IP-GEO-15 | IP-GEO-15 |
 | IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
 | IP-GEO-12 | todo | Repair `test_fuse.ipynb`: its preview cells broke when `solid_render` stopped writing PNGs | — |
 
-> **IP-GEO-10 blocked reason:** Regrouping 28 positional parameters is the change most
-> able to silently transpose two same-typed floats. Keyword arguments (IP-GEO-2) make
-> each move checkable at the call site and turn a mistake into a `TypeError`, so that
-> lands first.
+> **IP-GEO-10 blocked reason (historical):** Regrouping 28 positional parameters is the
+> change most able to silently transpose two same-typed floats. Keyword arguments
+> (IP-GEO-2) make each move checkable at the call site and turn a mistake into a
+> `TypeError`, so that landed first. IP-GEO-10 was then superseded outright — see
+> OQ-GEO-1.
+
+### IP-GEO-17 — done 2026-08-06: the revert, and how it was proven
+
+The pilot had migrated `fuselage_corner_geometry.scad`, `fuselage_bulkhead_geometry.scad`
+and the `fuselage_corner.scad` driver to a single `greeble` vector, while
+`fuselage_variants.py` and the other drivers still passed four scalars. Reverted:
+`make_greeble()` and the four accessors are gone from `shape_modifier_utils.scad`, and
+every signature is back to `greeble_thickness, greeble_nub_thickness, greeble_tolerance`
+(plus `greeble_opening_angle` on the bulkhead side).
+
+**IP-GEO-7 is untouched.** `greeble_radius_of()`, `greeble_nub_radius_of()` and
+`greeble_nub_height_of()` remain — they took scalar arguments before the pilot and take
+scalar arguments again. The pilot changed how they were *called*, never why they exist.
+
+**Proven by the diff, not by rendering.** The pilot was entirely uncommitted, so the
+whole of it reverts to HEAD — which is IP-GEO-9's verified state. What remains different
+from HEAD across all four files is **two comments and no code**, and OpenSCAD discards
+comments before evaluation, so the geometry is unchanged by construction. Both comments
+were kept deliberately: the bulkhead's now says *why* the pocket tolerance is zeroed
+(the clearance lives entirely on the corner's nub, so splitting it would make the joint
+carry it twice), which the original one-liner did not.
+
+Corroborated by IP-GEO-15 anyway. Every driver that the pilot had broken is now clean,
+and `fuselage_corner.scad` — the one driver the pilot had migrated *consistently*, so it
+rendered correctly throughout — reports 10,932 triangles before and after:
+
+```text
+  OK       fuselage_boom_bulkhead.scad  (2,364 tris)
+  OK       fuselage_bulkhead.scad  (3,272 tris)     <- was 292 warnings, 1,960 tris
+  OK       fuselage_corner.scad  (10,932 tris)      <- unchanged across the revert
+  OK       fuselage_cowling_bulkhead.scad  (2,712 tris)  <- was warnings + non-manifold
+  OK       fuselage_oml.scad  (1,372 tris)
+  FAILED   nose_cowl.scad / tail_cowl.scad          <- pre-existing, IP-GEO-18
+```
+
+The Python side needed no change: `fuselage_variants.py` was never migrated, which is
+what made the tree inconsistent in the first place and what now makes it consistent
+again.
 
 ---
 
@@ -259,11 +303,372 @@ The root cause of most of the above. Parameters already arrive grouped in Python
 (`dp["panel"]`, `dp["greeble"]`, `dp["bolt"]`), and that grouping is flattened at the
 boundary and never reconstructed.
 
+#### The verification gap this item opens
+
+Every item so far changed one language at a time, and each had a tool that proved it.
+This one changes **both at once** — the SCAD signatures and the Python that calls them —
+and neither existing tool covers that:
+
+- `scad_snapshot.py` reports DIFF **by construction**: the generated call text is exactly
+  what changes. A DIFF here carries no information.
+- `verify_scad_change.py` **stops working**: it re-renders the `.stl.scad` files already
+  in the output tree, and those contain calls in the *old* signature. After the refactor
+  they name parameters that no longer exist, so it fails to render rather than reporting
+  a difference.
+
+The check that still means something is end-to-end: run the real sweep with the new code
+for a sample of combinations, and compare the resulting **STLs** against the reference
+tree by measured geometry. Signatures and generated text are free to change; the solid
+must not. That is IP-GEO-14.
+
+#### The trap in the obvious design
+
+OpenSCAD has no records, so "grouping" means passing vectors:
+
+```scad
+module bulkhead_section_full(panel, greeble, bolt, ...) { ... panel[0] ... }
+```
+
+That trades 28 *named* parameters for a handful of vectors whose elements are accessed
+**positionally** — reintroducing, inside the SCAD, exactly the transposition hazard
+IP-GEO-2 just removed at the Python boundary. `panel[0]` versus `panel[1]` is no safer
+than argument 7 versus argument 8, and is harder to spot.
+
+The grouping is only worth doing with **named accessor functions** alongside it:
+
+```scad
+function panel_thickness(p) = p[0];
+function panel_offset(p)    = p[1];
+```
+
+so no module indexes a vector directly. That is the design, and it is what makes this a
+net safety gain rather than a lateral move.
+
+#### Order of work
+
+One group at a time, each independently verifiable. A single flag-day rewrite is not
+verifiable in any useful sense: if the geometry moves, nothing localises which group
+caused it.
+
+#### Scale, measured
+
+Across **65 module definitions** in `*_geometry.scad`:
+
+| Group | Signatures | Occurrences | Members |
+| --- | --- | --- | --- |
+| panel | 25 | 164 | 4 |
+| bolt | 20 | 112 | 3 |
+| longeron | 17 | 77 | 2 |
+| web | 10 | 78 | 2 |
+| flange | 8 | 121 | 3 |
+| greeble | 6 | 50 | 4 |
+
+Roughly 600 occurrences in total.
+
+#### What the greeble pilot found
+
+`greeble` was migrated first as the smallest blast radius — fewest signatures, while
+still exercising a four-member group. Three findings, each of which changes the estimate
+for the remaining five groups:
+
+**1. `undef` propagates silently.** After converting the signatures, five bare
+`greeble_*` references survived in polygon coordinates and an extrude height. In
+OpenSCAD a bare identifier with no matching variable evaluates to `undef` with a
+*warning*, not an error — so a missed reference produces wrong geometry that still
+renders. They were caught only by explicitly grepping for non-accessor references
+afterwards. **That grep is mandatory for every group**, not optional diligence.
+
+**2. The GUI drivers are a third class of caller, and were not in the 65.** The scale
+table above counts `*_geometry.scad` only. `fuselage_corner.scad`,
+`fuselage_bulkhead.scad` and `fuselage_cowling_bulkhead.scad` each call these modules
+with flat parameters too. The Python sweep would have verified clean while all three
+interactive drivers were broken.
+
+**3. Nothing in the verification tooling renders those drivers.** All three tools work
+through the sweep or through generated `.stl.scad` files. The drivers are the
+"interactive knobs" path and are unverified by construction — see IP-GEO-15.
+
+The pilot is **partially applied and currently does not build**: `fuselage_bulkhead.scad`
+and `fuselage_cowling_bulkhead.scad` still pass flat greeble parameters, and the Python
+side still passes four keyword arguments. Finish or revert before running a sweep.
+
+---
+
+## Open questions
+
+Implementation-planning questions, in the `/oq` format. They belong in
+`doc/design/bulkhead.md` once IP-GEO-11 creates it; they live here until then.
+
+*No open questions — all three are resolved, and each note stays in numerical position
+with its original analysis retained below the resolution.*
+
+### ~~OQ-GEO-1 — Is grouping worth its cost for every group?~~ — RESOLVED 2026-08-06
+
+**Chosen: alternative 4 — drop the grouping entirely and revert the greeble pilot.**
+IP-GEO-10 is superseded; IP-GEO-16 and IP-GEO-17 replace it.
+
+**Rationale.** The question as originally posed — *which* groups are worth converting —
+was the wrong question. Assessed against Phase 3, the answer is none of them, because
+none of the work survives.
+
+The parameter groups **already exist in Python**: `null_parameters()` returns twelve of
+them. They are flattened only to cross into OpenSCAD. So the refactor would not have
+created structure; it would have built an *encoding* of existing structure in OpenSCAD
+vectors, plus accessor functions to make that encoding safe. Both are workarounds for
+OpenSCAD's lack of records. FreeCAD is driven from Python, where a group is a dataclass
+and no encoding is needed, so the vector machinery *and* the Python change that feeds it
+are discarded at the port.
+
+This is the same call the project already made for units. `doc/guidelines/general.md`
+exempts the OpenSCAD path from the SI standard because *"converting code that is
+scheduled for replacement spends real risk for no benefit"* — with a worse risk profile
+here, since a missed reference yields `undef` and renders anyway rather than failing.
+
+**Caveats attached to the decision.**
+
+- This does **not** apply retroactively to IP-GEO-2 through IP-GEO-9. Those were either
+  Python-side, or small and verified, and justified by making the current path safe to
+  *operate* through Phases 1 and 2 — a different rationale from readability.
+- The pilot was not wasted. It produced three findings that stand independently: the
+  `undef` propagation hazard, the GUI drivers as an uncounted third caller class, and
+  OQ-GEO-2. The last of those is a live gap regardless of this decision.
+- The general principle is now recorded in `doc/guidelines/general.md` under *Weigh a
+  refactor against what replaces the code*, because the same question applies to every
+  remaining Phase 2 item.
+
+The original analysis follows, retained because the measured costs inform IP-GEO-16 and
+any future decision of this shape.
+
+---
+
+Each parameter group can be collapsed into one vector argument with named accessor
+functions. The pilot established what that costs: for `greeble`, 36 references across
+two geometry files plus three GUI drivers, with five near-misses that would have
+produced silently wrong geometry.
+
+The benefit is not uniform across groups. Collapsing `greeble` removes 3 parameters from
+each of 6 signatures. Collapsing `panel` removes 3 from each of 25. The cost, meanwhile,
+scales with *occurrences* — 50 for greeble, 164 for panel — and so does the number of
+places a bare reference can hide.
+
+There is also a cost the signature count does not show: module bodies get noisier.
+`greeble_thickness` becomes `greeble_thickness(greeble)` at every use.
+
+**Alternatives**
+
+1. **All six groups.** Signatures drop from 28 parameters to roughly 8.
+   *Benefits:* uniform convention; the stated goal of IP-GEO-10 fully met.
+   *Drawbacks:* ~600 references to convert, each a chance to leave an `undef`; bodies
+   noticeably noisier; several days of careful work with a silent failure mode.
+   *Prerequisites:* OQ-GEO-2 resolved, so drivers are verifiable.
+
+2. **Only the high-signature groups — `panel`, `bolt`, `longeron`.** Covers 62 of the 86
+   signature slots.
+   *Benefits:* most of the readability gain for roughly half the risk; `bulkhead_section_full`
+   still drops from 28 parameters to about 15.
+   *Drawbacks:* mixed convention — some groups passed as vectors, others flat — which is
+   itself a readability cost and a thing to explain.
+   *Prerequisites:* same as 1.
+
+3. **Stop after the greeble pilot; revert it.** Keep flat parameters throughout.
+   *Benefits:* no further risk; the Python→SCAD boundary is already safe via keyword
+   arguments (IP-GEO-2), which was the actual hazard. The remaining pain is verbosity in
+   pass-through, which is mechanical and visible rather than silently wrong.
+   *Drawbacks:* 28-parameter signatures remain; adding a parameter still means editing
+   every level.
+   *Prerequisites:* none.
+
+4. **Drop IP-GEO-10 and revert the greeble pilot.** Keep flat named parameters in SCAD.
+   *Benefits:* no further risk; consistent with how the project already treats this code.
+   *Drawbacks:* 28-parameter signatures remain for the life of the OpenSCAD path.
+   *Prerequisites:* none.
+
+#### Assessed against Phase 3 — the FreeCAD port
+
+The question that settles this is not "is grouping better?" but "does it survive?"
+
+**It does not. IP-GEO-10 is entirely SCAD-side work on code scheduled for deletion.**
+
+The parameter groups **already exist in Python**. `null_parameters()` returns twelve of
+them — `corner`, `bulkhead`, `boom_bulkhead`, `panel`, `longeron`, `bolt`, `greeble`,
+`plate`, `web`, `bulkhead_flange`, `cowl_flange`, `printer`. The structure this item
+proposes to introduce is already there on the durable side; it is flattened only to
+cross into OpenSCAD.
+
+So what IP-GEO-10 actually builds is an *encoding* of that structure in OpenSCAD
+vectors, plus accessor functions to make the encoding safe. Both are workarounds for
+OpenSCAD's lack of records. FreeCAD is driven from Python, where the structure is a
+dataclass and needs no encoding at all. Every line of the vector/accessor machinery is
+discarded at the port, and the Python change — building vectors instead of passing
+keywords — is discarded with it.
+
+This is the same category the project has already ruled on. `doc/guidelines/general.md`
+exempts the OpenSCAD path from the SI unit standard on exactly these grounds:
+*"a deliberate exemption, not technical debt. The OpenSCAD implementation is
+transitional: Phase 3 replaces it with Python-driven FreeCAD. Converting code that is
+scheduled for replacement spends real risk for no benefit."* Grouping is that argument
+again, with a worse risk profile: the unit conversion at least had a mechanical check,
+whereas a missed reference here yields `undef` and renders anyway.
+
+**Recommendation: alternative 4 — drop IP-GEO-10, revert the greeble pilot.**
+
+What *would* serve the port, and is now tracked separately:
+
+- **IP-GEO-16** — replace the nested parameter dicts with typed dataclasses in Python.
+  This is the same structural idea applied to the side that survives, and it is the
+  interface the FreeCAD generators will be written against. It also gets static checking,
+  which the dict form cannot have.
+- **IP-GEO-11** — the design documents. For a port, a written statement of what each part
+  *is* and why is worth more than any amount of tidying of the implementation being
+  replaced. This is the highest-value remaining item in the plan.
+
+The work already completed under IP-GEO-2 through IP-GEO-9 is not affected by this
+reasoning. Those were either Python-side (surviving), or small, verified, and aimed at
+making the current path safe to *operate* through Phases 1 and 2 — which is a different
+justification from making it nicer to read.
+
+### ~~OQ-GEO-2 — How are the GUI driver files verified?~~ — RESOLVED 2026-08-06
+
+**Chosen: alternative 1 — render each driver and treat failure *or warning* as an
+error.** Built as [`verify_drivers.py`](../../src/Fuselage/tools/verify_drivers.py),
+IP-GEO-15.
+
+**Rationale.** "Does it still render" is most of the value for almost none of the cost —
+a driver takes no arguments, so it is one `openscad -o` per file. Stored reference STLs
+(alternative 2) were rejected because the drivers are hand-edited for experimentation, so
+references would go stale legitimately and constantly.
+
+**One change from the alternative as written: warnings count as failures.** OpenSCAD
+reports an unknown identifier as a *warning* and carries on, substituting `undef`. The
+driver still renders, still produces a shape, and still exits zero — just the wrong
+shape. Checking only the exit code would have passed every case this tool exists to
+catch.
+
+**What it found on the first run** — all four genuine, none of them hypothetical:
+
+| Driver | Finding |
+| --- | --- |
+| `fuselage_bulkhead.scad` | 292 warnings — "too many unnamed arguments", then `undef` propagating through `fuselage_corner_geometry.scad`. **Rendered 1,960 triangles and exited zero.** The half-applied greeble pilot; IP-GEO-17 clears it. |
+| `fuselage_cowling_bulkhead.scad` | Same argument-count breakage, plus `Object may not be a valid 2-manifold and may need repair!` |
+| `nose_cowl.scad` | **Pre-existing.** `Can't open import file 'vsp_nose.stl'` — byte-identical to HEAD, so not caused by this work. |
+| `tail_cowl.scad` | **Pre-existing**, same cause. |
+
+The cowl breakage is the clearest vindication of the item. Those drivers name their OML
+mesh as `vsp_nose.stl`, resolved relative to `scad/`, but the meshes live in `../oml/`.
+The sweep works because `oml_ref()` prepends `../oml/`; the GUI drivers were never
+updated when the meshes moved, and nothing has rendered them since. Tracked as
+IP-GEO-18.
+
+**A caveat about the tool itself.** Its first version misclassified the two broken cowl
+drivers as harmless aggregators: a failed import leaves no top-level geometry, OpenSCAD
+exits non-zero on empty output, and the aggregator branch swallowed it. That is a
+verification tool failing in the dangerous direction — reporting clean over a real
+breakage — and it is the fourth time this project has seen that shape of bug. The
+discriminator is now the warning list, checked first: empty output counts as an
+aggregator only when nothing was reported.
+
+The original analysis follows, retained because it records what the gap was before the
+tool existed.
+
+---
+
+`fuselage_corner.scad`, `fuselage_bulkhead.scad`, `fuselage_cowling_bulkhead.scad`,
+`fuselage_boom_bulkhead.scad`, `nose_cowl.scad`, `tail_cowl.scad` and
+`fuselage_oml.scad` set concrete values and call one geometry module each. They are the
+interactive path — how a person opens the geometry in OpenSCAD to look at it.
+
+**No tool renders them.** `scad_snapshot.py` and `verify_sweep_change.py` drive the
+Python sweep; `verify_scad_change.py` re-renders generated `.stl.scad` files. All three
+reach the geometry modules only through the sweep's call path. A signature change can
+therefore be verified as geometry-preserving while leaving every driver broken, which is
+precisely what the greeble pilot was about to do.
+
+This originally blocked IP-GEO-10, which is now superseded — but resolving that did not
+resolve this. The gap is in the *tooling*, not in any one refactor: the drivers are
+unverified today, and will stay unverified through every remaining change to
+`src/Fuselage/scad/`, including IP-GEO-17's revert. It also applies to hand edits made
+while working in the OpenSCAD GUI, which is how the geometry is actually developed.
+
+The question therefore stands on its own merits and remains open.
+
+**Alternatives**
+
+1. **Render each driver to STL in CI-style verification** (IP-GEO-15). A driver takes no
+   arguments, so this is one `openscad -o` per file.
+   *Benefits:* directly tests the real interactive path; catches `undef` breakage, since
+   an `undef` dimension makes the render fail or produce a measurably different solid;
+   cheap to write.
+   *Drawbacks:* the drivers set their own fixed parameters, so this tests one point per
+   driver rather than a range; roughly 7 extra renders per verification run.
+   *Prerequisites:* none.
+
+2. **Compare driver output against stored reference STLs.** As above, plus geometry
+   comparison rather than "did it render".
+   *Benefits:* catches silent geometry change, not just failure.
+   *Drawbacks:* needs reference STLs committed or generated once and trusted; the
+   drivers are edited by hand for experimentation, so references would go stale
+   legitimately and often.
+   *Prerequisites:* a decision on where those references live.
+
+3. **Delete the drivers**, on the grounds that the sweep supersedes them.
+   *Benefits:* removes the whole class of problem.
+   *Drawbacks:* loses the only way to open a part interactively and adjust it, which is
+   how geometry is actually developed. Almost certainly wrong.
+   *Prerequisites:* confirmation they are genuinely unused.
+
+**Recommendation:** alternative 1, as IP-GEO-15, before any further work on IP-GEO-10.
+"Does it still render" is most of the value and nearly free; a render failure is the
+signature of exactly the `undef` breakage this refactor risks. Alternative 2 can follow
+if it proves insufficient.
+
+### ~~OQ-GEO-3 — What enforces the cross-language field order?~~ — RESOLVED 2026-08-06
+
+**Chosen: alternative 1, strengthened — document on both sides, *and test both sides*.**
+Alternative 1 as originally written was "accept it, documented as a contract in both
+files", with no guard. The decision keeps the documentation requirement and adds the
+test, because documentation alone does not survive the failure it guards against: a
+reordered field produces plausible numbers in the correct units on both sides, and
+nothing but an assertion notices.
+
+**The standing rule.** Any parameter group crossing a language boundary positionally must
+
+1. state its field order in a comment on **both** sides, each naming the other as its
+   counterpart, and
+2. carry a test that constructs the group on one side and asserts the fields arrive where
+   intended on the other.
+
+**This is dormant today.** `make_greeble()` was the only such contract and IP-GEO-17
+removes it, after which nothing is encoded positionally anywhere — so there is no
+documentation to write and no test to build right now. The rule goes live again the
+moment the FreeCAD port serializes parameters positionally, which is exactly when it will
+be least obvious that it applies. Recorded now rather than rediscovered then.
+
+The original analysis follows.
+
+---
+
+`make_greeble(thickness, nub_thickness, tolerance, opening_angle)` defines the field
+order in SCAD, and Python must build the same vector in the same order. Nothing checks
+that they agree. Reorder one side and every part changes silently — the values are all
+plausible numbers in the same units.
+
+**Alternatives**
+
+1. **Accept it**, documented as a contract in both files.
+   *Benefits:* no work. *Drawbacks:* a silent failure mode with no guard.
+2. **A round-trip test**: build a group in Python, render a fixture that echoes each
+   field, assert the values land where intended.
+   *Benefits:* actually enforces it. *Drawbacks:* needs an echo fixture per group.
+3. **Have Python read the order from the SCAD source** and construct accordingly.
+   *Benefits:* one source of truth. *Drawbacks:* parsing SCAD from Python is fragile and
+   introduces a new failure mode to solve an old one.
+
 ---
 
 ## How each item is proven behaviour-preserving
 
-Two independent checks, cheapest first.
+Three independent checks, cheapest first. Each covers something the others structurally
+cannot, so none of them substitutes for another.
 
 **Generated-text diff — [`scad_snapshot.py`](../../src/Fuselage/tools/scad_snapshot.py).**
 solid2 emits named parameters, so if the `.scad` text generated for every variant is
@@ -317,4 +722,23 @@ Note that triangle count is the strictest of the three and will shift if a refac
 alters the order of boolean operations, even when the solid is identical. A volume and
 bounding-box match with a changed triangle count is a result to investigate, not an
 automatic failure.
+
+**GUI driver render — [`verify_drivers.py`](../../src/Fuselage/tools/verify_drivers.py).**
+Both checks above reach the geometry modules through the sweep's call path only. The
+hand-edited driver `.scad` files are a second caller class with its own argument lists,
+and a signature change can be proven geometry-preserving for every one of the 576 swept
+parts while leaving every driver broken.
+
+```text
+uv run python src/Fuselage/tools/verify_drivers.py
+```
+
+**A warning is a failure here.** OpenSCAD reports an unknown identifier as a warning,
+substitutes `undef`, renders a shape, and exits zero. On the run that found the
+half-applied greeble pilot, `fuselage_bulkhead.scad` emitted 292 warnings and produced
+1,960 triangles of wrong geometry with a clean exit status. Exit codes alone would have
+reported success.
+
+Cheap enough to run on every `.scad` edit: a driver takes no arguments, so it is one
+render per file.
 

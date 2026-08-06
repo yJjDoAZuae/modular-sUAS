@@ -136,7 +136,10 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
     }
 
    if (!is_cowling) {
-        // use corner_end as a negative shape to form the greeble.  Note greeble_tolerance is zeroed to make this shape smaller
+        // Use corner_end as a negative shape to form the greeble. The tolerance is
+        // zeroed here so the pocket comes out at nominal size: all of the fit
+        // clearance lives on the corner's nub, never split across both halves, or
+        // the joint would carry it twice.
        greeble_tolerance_local = 0;
        
        U = unit_width/100;
