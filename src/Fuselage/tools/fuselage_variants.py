@@ -9,6 +9,7 @@
 
 import pandas as pd
 import itertools
+import math
 import os
 import re
 from pathlib import Path
@@ -90,6 +91,23 @@ def example_design_tool(**params):
         "output_metric": sum(v for v in params.values() if isinstance(v, (int, float)))
     }
     return result
+
+# Fixed design values, previously written as bare literals inside
+# derived_parameters(). Named here so they are findable and so changing one is an
+# obvious edit rather than a number altered mid-function.
+#
+# Units are millimetres and degrees: this is the OpenSCAD path, which is exempt from
+# the project's SI standard. See doc/guidelines/openscad.md.
+
+LONGERON_TOLERANCE_MM = 0.05
+GREEBLE_OPENING_ANGLE_DEG = 35
+
+# Greeble clearance goes entirely on the corner. The bulkhead carries the pocket at
+# nominal size and the corner's nub is undersized to suit, so the fit is tuned from
+# one side only -- splitting it across both would double the clearance.
+GREEBLE_TOLERANCE_BULKHEAD_MM = 0.0
+GREEBLE_TOLERANCE_CORNER_MM = 0.05
+
 
 def standard_values():
     
@@ -373,8 +391,6 @@ def scaled_standard_values(U,FX):
 
 def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
 
-    import math
-
     c = null_parameters()
 
     # transcribe standard values
@@ -389,10 +405,10 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
 
     c["printer"] = printer_settings
 
-    # fixed parameters
+    # fixed parameters -- see the constants beside standard_values() for what each is
 
-    c["longeron"]["tolerance"] = 0.05
-    c["greeble"]["opening_angle"] = 35
+    c["longeron"]["tolerance"] = LONGERON_TOLERANCE_MM
+    c["greeble"]["opening_angle"] = GREEBLE_OPENING_ANGLE_DEG
     
     # derive values from user_paraemters
 
@@ -404,7 +420,7 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         is_anchor = user_parameters["is_anchor"]
     
         c["bulkhead"]["type_name"] = user_parameters["bulkhead_type_name"]
-        c["greeble"]["tolerance"] = 0.0
+        c["greeble"]["tolerance"] = GREEBLE_TOLERANCE_BULKHEAD_MM
     else:
         is_end = False
         is_interconnect = False
@@ -413,7 +429,7 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         is_anchor = False
         
         c["bulkhead"]["type_name"] = ""
-        c["greeble"]["tolerance"] = 0.05
+        c["greeble"]["tolerance"] = GREEBLE_TOLERANCE_CORNER_MM
         
     c["bulkhead"]["type"] = encode_bulkhead_type(is_end, is_interconnect, is_cowling, is_boom)
     c["bulkhead"]["thickness"] = user_parameters["bulkhead_thickness"]
