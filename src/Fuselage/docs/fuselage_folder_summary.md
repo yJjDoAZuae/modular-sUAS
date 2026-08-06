@@ -268,14 +268,21 @@ nose_round_plate.json   --oml.filename-------->  oml/vsp_nose.stl   (via ../oml/
   normal-oriented ambient occlusion darkening concavities. Back faces render blue as a
   **defect indicator**: a closed, consistently wound solid never shows one, so any blue
   means an open, inverted, or self-intersecting mesh.
-- [render_previews.py](../tools/render_previews.py) — walks a tree and renders every STL,
-  in parallel. Processes here, not threads: the work is numpy-bound rather than blocked in a
-  subprocess, so threads would serialize on the GIL. Skips PNGs newer than their STL unless
-  `--force`, and each failure names its own file rather than aborting the batch.
+Previews are produced by the sweep itself, from each finished STL, on the worker thread
+that rendered it. There is no separate preview command: `fuselage_variants.py` is the only
+user-facing entry point.
 
-  ```text
-  uv run python src/Fuselage/tools/render_previews.py src/Fuselage/variant_output
-  ```
+To regenerate previews across an existing tree without re-rendering geometry — after a
+camera or shading change, where the meshes are already correct and only the images are
+stale — use `--previews-only`:
+
+```text
+uv run python src/Fuselage/tools/fuselage_variants.py --previews-only --force
+```
+
+That batch runs across a **process** pool, not the sweep's thread pool: rasterizing is
+numpy-bound and would serialize on the GIL, which is the opposite of the OpenSCAD renders,
+where threads are right precisely because each job blocks in a child process.
 
 **Other Python**
 

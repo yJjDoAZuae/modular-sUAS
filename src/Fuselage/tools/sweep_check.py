@@ -63,8 +63,18 @@ def part_id(rel: str) -> str:
 
 
 def find_stls(root: Path) -> list[tuple[Path, str]]:
-    """Every .stl under root, paired with its path relative to root."""
-    return [(p, str(p.relative_to(root))) for p in sorted(root.rglob("*.stl"))]
+    """Every finished .stl under root, paired with its path relative to root.
+
+    `*.partial.stl` is excluded: those are in-flight renders, named that way
+    because OpenSCAD selects its export format from the extension and so cannot
+    write to a name that does not end in .stl. A leftover partial means a run was
+    interrupted, not that a part exists.
+    """
+    return [
+        (p, str(p.relative_to(root)))
+        for p in sorted(root.rglob("*.stl"))
+        if not p.name.endswith(".partial.stl")
+    ]
 
 
 def check_integrity(entries, quiet=False):
