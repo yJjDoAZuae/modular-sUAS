@@ -83,7 +83,7 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
                     
                 }
                     
-                linear_extrude(height=bulkhead_thickness*3, center=true, convexity=1,twist=0,slices=1,scale=1){
+                linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=1,twist=0,slices=1,scale=1){
                     polygon([[0,0], [0, corner_radius], [corner_radius,corner_radius]]);
                 }
                 
@@ -93,7 +93,7 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
                 cylinder(h=plate_thickness, r=corner_radius, center=false);
                     
                    
-                linear_extrude(height=bulkhead_thickness*3, center=true, convexity=1,twist=0,slices=1,scale=1){
+                linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=1,twist=0,slices=1,scale=1){
                     polygon([[0,0], [0, corner_radius], [corner_radius,corner_radius]]);
                 }
                 
@@ -146,17 +146,17 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
        }
         
         // longeron opening cutout
-        linear_extrude(height=bulkhead_thickness*3, center=true, convexity=3,twist=0,slices=1,scale=1){
+        linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=3,twist=0,slices=1,scale=1){
             polygon([[0,0],[sin(45-greeble_opening_angle)*corner_radius,cos(45-greeble_opening_angle)*corner_radius],[cos(45-greeble_opening_angle)*corner_radius,sin(45-greeble_opening_angle)*corner_radius]]);
         }
         
         // clean up the outer faces of the corner cutout
-        linear_extrude(height=bulkhead_thickness*3, center=true, convexity=5,twist=0,slices=1,scale=1){
+        linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=5,twist=0,slices=1,scale=1){
             difference() {
                 polygon([
                     [0,0], 
-                    [2*corner_radius,2*corner_radius], 
-                    [-(panel_offset+panel_overlap),2*corner_radius],
+                    [mask_reach(corner_radius),mask_reach(corner_radius)], 
+                    [-(panel_offset+panel_overlap),mask_reach(corner_radius)],
                     [-(panel_offset+panel_overlap),corner_radius-(panel_thickness+panel_tolerance+eps)],
                     [0,corner_radius-(panel_thickness+panel_tolerance+eps)]
                     ]);
@@ -167,17 +167,17 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
     }
 
         // longeron hole
-        cylinder(h=3*bulkhead_thickness, r=longeron_radius+longeron_tolerance, center=true);
+        cylinder(h=through_cut(bulkhead_thickness), r=longeron_radius+longeron_tolerance, center=true);
         
 
         if (!is_interconnect) {
             // bolt hole
             translate([-bolt_offset,-bolt_offset,0]){
-                cylinder(h=3*bulkhead_thickness, r=bolt_hole_radius, center=true);
+                cylinder(h=through_cut(bulkhead_thickness), r=bolt_hole_radius, center=true);
             }
         }
         
-        linear_extrude(height=bulkhead_thickness*3, center=true, convexity=5,twist=0,slices=1,scale=1) {
+        linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=5,twist=0,slices=1,scale=1) {
             octant_mask(unit_width, corner_radius);
         }
     }
@@ -384,7 +384,7 @@ module bulkhead_web(is_interconnect, unit_width, bulkhead_thickness, corner_radi
         
         // web fillet
         translate([-bolt_offset-(bolt_hole_radius+bolt_thickness+web_width)-web_fillet_radius, corner_radius - panel_thickness - panel_tolerance-flange_thickness-web_width-web_fillet_radius,0]) {
-            cylinder(h=3*bulkhead_thickness, r=web_fillet_radius, center=true);
+            cylinder(h=through_cut(bulkhead_thickness), r=web_fillet_radius, center=true);
         }
     }
     

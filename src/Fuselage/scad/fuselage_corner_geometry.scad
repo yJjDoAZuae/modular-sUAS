@@ -66,11 +66,11 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
             }
         }
     
-        cylinder(h=3*bulkhead_thickness,r1=greeble_radius, r2=greeble_radius, center=true);
+        cylinder(h=through_cut(bulkhead_thickness),r1=greeble_radius, r2=greeble_radius, center=true);
         
         rotate([0,0,45]){
             translate([-(greeble_radius),0,0]) {
-                cube([2*(greeble_radius),2*(greeble_radius), 3*bulkhead_thickness], center = true);
+                cube([2*(greeble_radius),2*(greeble_radius), through_cut(bulkhead_thickness)], center = true);
             }
         }
         difference() {
@@ -87,7 +87,7 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
                 );
             }
             rotate([0,0,-45]) {
-                linear_extrude(height = 3*bulkhead_thickness, center=true, convexity=3,twist=0,slices=1) {
+                linear_extrude(height = through_cut(bulkhead_thickness), center=true, convexity=3,twist=0,slices=1) {
                     polygon(
                         [[-(greeble_nub_radius+eps),-(greeble_nub_radius)],
                         [greeble_nub_radius+eps,-greeble_nub_radius],
@@ -193,22 +193,25 @@ module corner_middle_shape(corner_radius, panel_thickness, longeron_radius, pane
                 square(size = [2*panel_overlap,2*panel_thickness+2*panel_tolerance], center = false);
             }
             
-            // bulkhead boundary
+            // bulkhead boundary. The trailing vertices only have to sit off the part;
+            // mask_reach() states that intent and single-sources the distance.
+            far = mask_reach(corner_radius);
+
             polygon(points = [
             [flat_x,corner_radius],  // top inner edge of the panel interface
             [flat_x,flat_y],
             [flat_offset,0],
             [0,flat_offset],
             [flat_y,flat_x],
-            [0,-2*corner_radius],
-            [-2*corner_radius,-2*corner_radius],
-            [-2*corner_radius,2*corner_radius]]);
+            [0,-far],
+            [-far,-far],
+            [-far,far]]);
             
             // diagonal mirror line mask
-            polygon(points = [[-2*corner_radius,-2*corner_radius],[2*corner_radius,2*corner_radius],[2*corner_radius,-2*corner_radius]]);
+            polygon(points = [[-far,-far],[far,far],[far,-far]]);
             
             // longeron chamfer
-            polygon(points = [[0,0.0],[-2*corner_radius,0.0],[-2*corner_radius,-2*corner_radius],[0,-2*corner_radius]]);
+            polygon(points = [[0,0.0],[-far,0.0],[-far,-far],[0,-far]]);
             
         }
 
