@@ -43,6 +43,7 @@ the preamble of either before relying on a "why".
 | IP-GEO-21 | done | Resolve OQ-DES-B6: drop `greeble_tolerance` from the bulkhead side — the post is nominal by construction, so it was a knob that could not do anything | IP-GEO-11 |
 | IP-GEO-22 | done | Resolve OQ-DES-C1: derive `greeble_nub_thickness` from `greeble_thickness` through a named formula in Python, instead of computing both from the same expression | IP-GEO-11 |
 | IP-GEO-23 | done | Drop `unit_length` from the bulkhead modules and drivers. Passed through three signatures, used by none — it asserted a dependence on bay length that the design exists to avoid. Found via OQ-DES-C3 | IP-GEO-11 |
+| IP-GEO-24 | done | Rename `nozzle_diameter` → `extrusion_width`. Every use was extrusion-width semantics; the name described the wrong physical quantity | — |
 | IP-GEO-20 | done | Correct the greeble's mating direction in comments and design docs — it is the **positive post on the bulkhead**, not a nub on the corner | IP-GEO-11 |
 | IP-GEO-19 | withdrawn | Validate threaded-insert depth against `bulkhead_thickness`. Raised on a wrong assumption — the insert is set from the interior face and may stand proud of it, so it need not fit within the thickness. No check is warranted. See OQ-DES-B5 | IP-GEO-11 |
 
@@ -117,6 +118,40 @@ There is no reference to compare the two cowls against — they had no working o
 be a baseline. What is established is that the OML import resolves and the boolean
 tree completes; the shapes themselves are unreviewed, and IP-GEO-11's design documents
 are where that would be settled.
+
+### IP-GEO-24 — done 2026-08-07: `nozzle_diameter` never meant nozzle diameter
+
+Every use of the field was extrusion-width semantics — a wall *N* beads thick, or *N* beads
+of margin — and none referred to the nozzle's bore. The two are numerically close, which is
+why it went unnoticed, and conceptually different, which is why it mattered.
+
+Renamed across 36 sites in `scad/`, 20 in the Python, and 35 in the notebook.
+
+**Why rename code that Phase 3 replaces?** The standing guideline is to weigh a refactor
+against what replaces it, and this one survives that test on an argument specific to
+naming: the FreeCAD port will be written by *reading* this code. A field called
+`nozzle_diameter` gets ported as nozzle diameter — and then UC-4's cowl interior surface
+needs an extrusion width, adds one, and the model carries two parameters differing by
+10–20 % where the design has one. The rename costs an afternoon now and prevents a
+duplicated parameter that would be genuinely hard to unpick later. See
+[freecad_migration.md](../architecture/freecad_migration.md).
+
+**Two regressions surfaced, both mine, neither caused by the rename.** The notebook still
+passed `unit_length` and `greeble_tolerance` to `bulkhead_section_full` — arguments removed
+by IP-GEO-23 and IP-GEO-21, *after* IP-GEO-12 had repaired those cells. Fixing the notebook
+and then changing the signatures it calls left it broken again, and nothing noticed because
+nothing checks the notebook.
+
+That gap is worth naming. `verify_drivers.py` covers the `.scad` drivers; the notebook is a
+third caller class with no coverage at all, and solid2's imported modules accept
+`(*args, **kwargs)`, so a wrong keyword is invisible until OpenSCAD runs. A static check
+comparing the notebook's keywords against the `.scad` signatures found all three call sites
+at once — see the note under *How each item is proven behaviour-preserving*.
+
+**Verification.** The generated `.scad` text changes by construction, so the check is
+geometric: all seven drivers render warning-free with unchanged triangle counts, all 21
+non-sweep notebook cells execute, and the five bulkhead types were re-rendered and compared
+against the IP-GEO-21 reference.
 
 ### IP-GEO-23 — done 2026-08-06: the bulkhead does not know how long the bay is
 
@@ -377,7 +412,11 @@ Two hazards this removed, both invisible positionally:
 
 ### IP-GEO-3 — a formula duplicated across the language boundary, and the copies disagree
 
-`fuselage_variants.py` computes, under a comment reading *"recreate derived dimensions
+Quoted as it stood in 2026-08-06. `nozzle_diameter` was later renamed `extrusion_width`
+(IP-GEO-24) and the second formula replaced by `greeble_nub_thickness_of()` (IP-GEO-22);
+the discrepancy this item is about is unaffected.
+
+`fuselage_variants.py` computed, under a comment reading *"recreate derived dimensions
 from corner_end()"*:
 
 ```python

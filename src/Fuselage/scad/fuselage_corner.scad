@@ -22,7 +22,7 @@ longeron_tolerance = 0.05;
 greeble_thickness = 0.8;
 greeble_nub_thickness = greeble_thickness;
 greeble_tolerance = 0.05;
-nozzle_diameter = 0.4;
+extrusion_width = 0.4;
 
 // These are based on the standard, don't change these
 corner_radius = 10*U;
@@ -35,5 +35,5 @@ bulkhead_thickness = 6;
 panel_offset = 0;
 
 
-fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter);
+fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
 

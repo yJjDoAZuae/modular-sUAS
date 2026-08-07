@@ -64,8 +64,12 @@ obvious from context:
 ```python
 corner_radius_m: float
 overhang_angle_rad: float
-nozzle_diameter_m: float
+extrusion_width_m: float
 ```
+
+Name the quantity you mean: that last field was called `nozzle_diameter` until IP-GEO-24,
+while every use of it was a wall *N* extrusions thick. See
+[general.md](general.md#units--si-is-the-project-standard).
 
 **The existing OpenSCAD sweep code is millimeters and stays that way.** It is transitional —
 roadmap Phase 3 replaces it with FreeCAD — so it is explicitly exempt from the SI standard.

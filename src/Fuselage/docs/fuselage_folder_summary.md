@@ -99,9 +99,11 @@ exact 4.7625 mm value.
 - **bulkhead** — the square frame that caps or joins bays. Five types: `end_bolt`,
   `end_anchor` (threaded insert instead of a through-bolt), `cowling_bolt`,
   `cowling_anchor`, `interconnect`.
-- **greeble** — the interlocking male/female detail where a corner registers into a
-  bulkhead. Sized to nozzle diameter (`2·√U·nozzle_diameter`) so it prints crisply at
-  any scale.
+- **greeble** — the interlocking detail where a corner registers onto a bulkhead. It is
+  the **positive post on the bulkhead**, with a snap rib around it; the corner carries
+  the matching bore and groove, and the longeron snaps into the post's centre through a
+  70° mouth. Its wall is sized in extrusions (`2·√U·extrusion_width`, floored at two) so
+  it prints crisply at any scale. See [bulkhead.md](../../../doc/design/bulkhead.md).
 - **web / flange / plate** — the internal stiffening structure of a bulkhead.
 - **OML** — outer mold line, imported as a mesh from OpenVSP for the nose and tail cowls.
 
