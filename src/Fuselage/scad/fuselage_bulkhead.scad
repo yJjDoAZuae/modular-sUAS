@@ -14,7 +14,7 @@ U = 1.0;
 DTF_thickness = 4.77;
 
 // printer settings
-nozzle_diameter = 0.4;
+extrusion_width = 0.4;
 layer_height=0.2;
 
 // User parameters
@@ -40,7 +40,7 @@ plate_thickness=4*layer_height;
 web_fillet_radius=2;
 web_width=3;
 flange_fillet_radius=2;
-flange_thickness=2*nozzle_diameter;
+flange_thickness=2*extrusion_width;
 flange_chamfer=1;
 cowl_flange_height=0;
 cowl_flange_tolerance=0;
@@ -52,7 +52,7 @@ corner_radius = 10*U;
 longeron_radius = 2*U;
 bolt_offset=8*U;
 
-bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
 
 //if (U==2) {
 //    
@@ -64,7 +64,7 @@ bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thicknes
 //    web_fillet_radius=6;
 //    flange_chamfer=2;
 //    flange_fillet_radius=4;
-//    flange_thickness=4*nozzle_diameter;
+//    flange_thickness=4*extrusion_width;
 //    plate_thickness=8*layer_height;
 //
 //    bulkhead_section_full();
@@ -80,7 +80,7 @@ bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thicknes
 //    web_fillet_radius=4;
 //    flange_chamfer=1.5;
 //    flange_fillet_radius=3;
-//    flange_thickness=3*nozzle_diameter;
+//    flange_thickness=3*extrusion_width;
 //    plate_thickness=5*layer_height;
 //
 //    bulkhead_section_full();
@@ -94,7 +94,7 @@ bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thicknes
 //    web_fillet_radius=2;
 //    flange_chamfer=1.0;
 //    flange_fillet_radius=2;
-//    flange_thickness=2*nozzle_diameter;
+//    flange_thickness=2*extrusion_width;
 //    plate_thickness=4*layer_height;
 //
 //    bulkhead_section_full();

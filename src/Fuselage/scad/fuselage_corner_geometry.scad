@@ -34,19 +34,19 @@ function greeble_nub_radius_of(longeron_radius, longeron_tolerance, greeble_thic
 // third of lead-in either side for the joint to ride over as it engages.
 function greeble_nub_height_of(bulkhead_thickness) = bulkhead_thickness/3;
 
-module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
+module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
 
 
     union() {
-    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, nozzle_diameter);
-    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter);
-    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter);
+    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width);
+    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
+    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
         translate([0,0,unit_length]) {
             mirror([0,0,1]) {
                 union() {    
-                    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, nozzle_diameter);
-                    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter);
-                    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter);
+                    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width);
+                    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
+                    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
                 }
             }
         }
@@ -54,11 +54,11 @@ module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_
 }
 
 
-module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
+module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
     
     eps = geometry_eps();
     
-    longeron_chamfer = nozzle_diameter;
+    longeron_chamfer = extrusion_width;
     greeble_nub_height = greeble_nub_height_of(bulkhead_thickness);
     greeble_radius = greeble_radius_of(longeron_radius, longeron_tolerance,
                                        greeble_thickness, greeble_tolerance);
@@ -111,11 +111,11 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
     }
 }
 
-module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
+module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
     
     eps = geometry_eps();
     
-    longeron_chamfer = nozzle_diameter;
+    longeron_chamfer = extrusion_width;
     greeble_nub_height = greeble_nub_height_of(bulkhead_thickness);
     greeble_radius = greeble_radius_of(longeron_radius, longeron_tolerance,
                                        greeble_thickness, greeble_tolerance);
@@ -161,10 +161,10 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
 }
 
 
-module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, nozzle_diameter) {
+module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width) {
     
     eps = geometry_eps();
-    longeron_chamfer = nozzle_diameter;
+    longeron_chamfer = extrusion_width;
     
     translate([0,0,2*bulkhead_thickness-eps]) {
         linear_extrude(height=unit_length/2-2*bulkhead_thickness+2*eps,center=false,convexity=3,twist=0,slices=1) {
