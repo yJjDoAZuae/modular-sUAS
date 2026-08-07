@@ -158,6 +158,17 @@ exactly the amount the assignment was meant to apply. The conversion found a fie
 had existed for exactly that reason — `bolt["diameter"]`, assigned and read for years,
 never declared in the constructor.
 
+**Use `@dataclass(slots=True)`, and treat it as load-bearing rather than a micro-
+optimization.** A *plain* dataclass does not close the hazard above at all: instances
+carry a `__dict__`, so `c.greeble.thicknes = 1.2` is accepted in silence exactly as the
+dict was. `__slots__` removes that `__dict__` and turns the typo into an `AttributeError`
+at the assignment.
+
+This is not hypothetical. IP-GEO-16 converted the dicts to plain dataclasses and stated in
+three places that misspelled writes now raised — they did not, and a script assigning a
+renamed field went on silently using a default, producing parts 13–30 % wrong in volume
+until a geometric check caught it. See IP-GEO-25.
+
 ---
 
 ## Enumerations
