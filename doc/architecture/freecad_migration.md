@@ -304,7 +304,7 @@ in [OQ-ARCH-9](#open-questions), including the one clause that does deserve atte
 | UC-3 | An export step |
 | UC-4 | Cowl interior surfaces; joint/mate definitions; an assembly structure |
 | UC-5 | A mesh export path to Blender; explode transforms and animation paths |
-| UC-6 | Several new generators, and a 2D vector output kind that nothing currently produces |
+| UC-6 | Several new generators, and a 2D vector output kind that nothing currently produces. **Its landing-gear bulkheads and structural blocks are members of an existing family** — the interstitial plate bulkheads, of which the tail-boom bulkhead is the first. See [bulkhead.md](../design/bulkhead.md) |
 | UC-7 | TechDraw pages, a dimensioning scheme, and a drawing template — and it consumes UC-4's assemblies, not just parts |
 | UC-8 | **A second class of model object**: the non-printed components — longerons, panels, inserts, bolts — plus material data, bonded-interface definitions, and each part's print orientation written down |
 | UC-9 | A driven OpenVSP path — parametric nose and tail generation, and configuration export for aero solving. The OML becomes a generated input rather than a committed mesh |
@@ -648,7 +648,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-6 | **open** | How are assembly joints defined and stored? |
 | ARCH-7 | **open** | What decides which dimensions a generated drawing carries? |
 | ARCH-8 | **open** | Does a permissively-licensed tool exist for non-uniform printed-material analysis? |
-| ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's licence compatible with the project's policy, and in which usage pattern? |
+| ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`?
 
@@ -797,11 +797,54 @@ extrusion_width`, so the count and the width stay separately visible. That match
 existing convention for `flange_thickness` and `plate_thickness`, which are already whole
 multiples of extrusion width and layer height respectively.
 
-**What remains open is the method**, and it belongs in an algorithm document rather than
-here. It needs to
-state how layers are sliced, how the inset is computed per layer, how the resulting
-sections are joined into a solid, and what rule supplies material at near-horizontal
-surfaces where the inset alone would leave none.
+**What remains open is the method** — how layers are sliced, how the inset is computed per
+layer, how the sections are joined into a solid, and what supplies material at
+near-horizontal surfaces where a horizontal inset leaves none.
+
+**Alternatives**
+
+1. **Slice-and-loft** — section the solid at `layer_height` intervals, offset each 2D
+   contour inward by `n_perimeters × extrusion_width`, and loft the resulting contours.
+   *Benefits:* directly mirrors what the slicer does, so the model matches the print by
+   construction; each step uses standard 2D offset operations that OCC provides.
+   *Drawbacks:* produces one contour per layer — thousands for a large cowl — so the loft
+   is heavy and the resulting B-rep is large; contour topology can change between layers
+   (a notch closing, a hole appearing) and a loft does not handle that gracefully.
+   *Prerequisites:* none.
+
+2. **Coarse slice-and-loft** — the same, at a spacing much larger than `layer_height`,
+   chosen so the offset error stays within tolerance.
+   *Benefits:* far cheaper; a smooth cowl needs few sections to capture an offset that
+   varies slowly; the result is a clean surface rather than a staircase.
+   *Drawbacks:* no longer exactly what the printer produces; needs a stated tolerance and
+   a way to check it.
+   *Prerequisites:* deciding the acceptable deviation from the true per-layer inset.
+
+3. **3D shell offset with local correction** — use `Part::Offset`/`makeThickness` for the
+   bulk, and correct where the surface approaches horizontal.
+   *Benefits:* one kernel operation for most of the surface; robust and fast where the
+   surface is steep.
+   *Drawbacks:* offsets normal to the surface, which is *not* what the slicer does, so it
+   is wrong by `1/cos α` everywhere the surface is not vertical — precisely the error this
+   use case exists to avoid; the correction region is where the method is least reliable.
+   *Prerequisites:* a criterion for where to switch methods.
+
+4. **Two surfaces, explicitly** — model a nominal interior independent of slicer behaviour,
+   and record that it is an idealisation.
+   *Benefits:* simplest to build and to reason about; adequate for mass properties and
+   assembly clearance.
+   *Drawbacks:* diverges from the printed part in a way that matters for UC-8; interacts
+   with OQ-DES-CW6, where the ribs have the same problem.
+   *Prerequisites:* agreement on what the model is *for*.
+
+**Recommendation: alternative 2.** It keeps the mechanism that makes the result correct —
+horizontal insets, matching the slicer — while avoiding a per-layer loft that no downstream
+consumer needs at full resolution. Alternative 3 is the tempting one and should be
+resisted: a normal offset is the exact error mode this use case was raised to prevent.
+The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
+decision as the top-and-bottom-solid-layers rule a slicer applies.
+
+**The full method belongs in an algorithm document**, not here — see IP-FC-16.
 
 ### OQ-ARCH-6 — How are assembly joints defined and stored?
 
@@ -936,7 +979,7 @@ properties need no solver at all, and an isotropic model with the *real* load pa
 longerons, panels, inserts, bonds — is a better answer than an anisotropic model of the
 printed parts alone.
 
-### ~~OQ-ARCH-9 — Is OpenVSP's licence compatible, and in which usage pattern?~~ — RESOLVED 2026-08-07
+### ~~OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern?~~ — RESOLVED 2026-08-07
 
 **Read from the installed copy:** `C:\Program Files\OpenVSP-3.50.5-win64\LICENSE` —
 **NASA Open Source Agreement version 1.3** (3.47.0 is also installed, same terms).
@@ -947,7 +990,7 @@ printed parts alone.
 | Clause | Says | Effect here |
 | --- | --- | --- |
 | §3.A | Obligations attach to "Distribution or Redistribution of the Subject Software" | We use OpenVSP; we do not ship it. **§3 does not bite.** |
-| §3.I | A Recipient may combine Subject Software with software not governed by the Agreement and distribute the result as a single product, provided the OpenVSP portions remain under NOSA | Component-level, **not viral**. Our code keeps its own licence even if OpenVSP were bundled. |
+| §3.I | A Recipient may combine Subject Software with software not governed by the Agreement and distribute the result as a single product, provided the OpenVSP portions remain under NOSA | Component-level, **not viral**. Our code keeps its own license even if OpenVSP were bundled. |
 | §1.F | "the act of including Subject Software as part of a Larger Work does not in and of itself constitute a Modification" | Using it does not make us a Contributor with §3.C change-log duties. |
 | §3.F | Registration "is requested" | A courtesy, not a condition. |
 
@@ -955,7 +998,7 @@ printed parts alone.
 was wrong.** That distinction is the GPL/LGPL mental model, where linkage is what triggers
 copyleft. NOSA has no such trigger — both patterns are equally fine, and the choice should
 be made on engineering grounds alone. Importing the Python API is the better option for
-UC-9's parametric generation, and there is no licence reason to avoid it.
+UC-9's parametric generation, and there is no license reason to avoid it.
 
 Two notes worth carrying forward:
 
@@ -966,7 +1009,7 @@ Two notes worth carrying forward:
   agreement. That is the commonly-cited objection to NOSA. It bears on shipping an
   *aircraft* designed with these tools, not on the code, and it is not a code-licensing
   question at all.
-- **The Python tree is mixed-licence, and OpenVSP states the split explicitly.**
+- **The Python tree is mixed-license, and OpenVSP states the split explicitly.**
   `python/openvsp/openvsp/LICENSE` opens: *"The base openvsp vsp api files (`_vsp.so`,
   `_vsp.pyd`, `vsp.py`) are distributed under the NOSA license listed below."* Everything
   else in `python/` — `utilities.py`, `parasite_drag.py`, `degen_geom_parse.py`,
@@ -984,8 +1027,8 @@ Two notes worth carrying forward:
   needs no separate install — and those are executables invoked as processes, the least
   encumbered pattern of all.
 
-**The project's licence table should gain a NOSA row**, since it now has a real dependency
-under a licence the table does not mention. Suggested wording: *acceptable as a separate
+**The project's license table should gain a NOSA row**, since it now has a real dependency
+under a license the table does not mention. Suggested wording: *acceptable as a separate
 tool or an imported module; obligations attach only on redistribution; note the §4.B
 indemnity.*
 

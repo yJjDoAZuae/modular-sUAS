@@ -22,12 +22,15 @@ The corner is the longitudinal structural member at each of the four corners of 
 fuselage unit. Four of them, plus a bulkhead at each end, make one bay. Each corner does
 three jobs at once:
 
-1. **Carries the longeron.** A tube passes through the bore that runs the full length of
-   the part. The corner is not itself the primary bending member — the longeron is — so
-   the corner is better understood as the fitting that locates everything else onto that
-   tube. Note that it *locates* rather than *retains*: the tube is snapped in and held by
-   the bulkhead's greeble, which is a C with a mouth narrower than the tube. See
-   [bulkhead.md](bulkhead.md#the-longeron-snaps-into-the-greeble).
+1. **Carries the longeron, and carries load in its own right.** A tube passes through the
+   bore that runs the full length of the part. The longeron takes the pure axial tension
+   and compression; the corner takes hoop and torsional load. See
+   [§Load path](#load-path) — the division is not "tube carries, corner locates", which is
+   the easy oversimplification.
+
+   Note also that the corner *locates* the tube rather than *retaining* it: the longeron is
+   snapped in and held by the bulkhead's greeble, a C with a mouth narrower than the tube.
+   See [bulkhead.md](bulkhead.md#the-longeron-snaps-into-the-greeble).
 2. **Registers onto the bulkheads.** Each end is bored to receive the bulkhead's
    *greeble* — the annular post that stands out of the bulkhead face — and carries an
    internal groove that the greeble's snap rib engages. The greeble is the bulkhead's
@@ -242,6 +245,69 @@ panel_thickness ≥ 1·U
 Nothing in the geometry fails at a thinner panel; it would simply be a panel too flimsy to
 be worth the corner that holds it.
 
+## Load path
+
+**Recorded 2026-08-07.** The corner is not a passive fitting. Three load types reach it,
+and they reach it in different directions relative to the printed layers — which is why
+this section has to be read together with the next one.
+
+| Load | Carried by | Direction relative to the corner's layers |
+| --- | --- | --- |
+| Axial tension and compression (body `x`) | **The longeron** | — |
+| **Hoop**, around the longeron between the panels | **The corner** | **In-plane** — the strong direction |
+| **Torsion**, fuselage twist | **The corner** | **Diagonally across the layer lines** |
+
+**Hoop load is the corner's main structural job.** The panels pull on it from two
+directions, and the corner reacts that circumferentially around the longeron bore — the
+material between the bore and the panel slots is what closes that path. This is also the
+load the `flat_offset` constraint and the `panel_clearance_radius` derivation exist to
+protect: they keep the panel slot from eating into the material that carries hoop stress.
+
+**Axial load goes to the longeron.** The tube takes pure `x` tension and compression at the
+corner; the corner does not, and is not sized for it.
+
+**Torsion is the awkward one.** Fuselage twist arrives at the corner as a diagonal load
+across the layer lines — see the next section for why that direction is the one to watch.
+
+### Why the split matters for analysis
+
+An orthotropic model (UC-8 tier 3) that treats the corner as a general structural member
+will mis-rank its margins in both directions: it will over-report axial capability the
+corner is not asked for, and under-weight the hoop path that it is. The three rows above
+are the correct load cases to check.
+
+**The modeled frame is the print frame** — the STLs the sweep writes are already oriented
+for the bed. System-wide, model `+z` is the build direction and corresponds to the
+**aircraft body `x` axis**. The corner is **symmetric in `z`, so the sign does not matter**;
+either end may go down.
+
+So the corner **prints standing on end**, and the reading the geometry suggested is the
+right one: the longeron bore is vertical — no bridging, no support, a round hole — and
+`longeron_chamfer = extrusion_width` at the bore mouth is a lead-in for that vertical hole.
+
+**The structural consequence, read against the load path.** Layers stack **along the
+corner's length**, so every layer interface is a plane normal to the axis between
+bulkheads, and the cross-section *is* the layer plane. Taking the three loads of
+[§Load path](#load-path) in turn:
+
+- **Axial** — the weak direction, and the corner is not asked to carry it. The longeron
+  does. This is the one that looks alarming in an orthotropic model and is not.
+- **Hoop** — carried **in-plane**, along the beads, in the strongest direction the process
+  offers. The orientation is well chosen for the corner's main job: the load that matters
+  most is the one the layers are best able to take.
+- **Torsion** — **diagonally across the layer lines.** This is the direction to watch. A
+  diagonal path puts shear across layer interfaces, which is where FDM is weakest and where
+  a uniform-material analysis will be most optimistic.
+
+So the print orientation is not a compromise forced by geometry — it is well matched to two
+of the three load cases and exposed on the third. **Torsion is the load case that most
+needs an orthotropic model rather than an isotropic one**, and it is the case a
+uniform-material FEM will silently pass.
+
+At `U·FX = 1` the part is 100 mm tall on a cross-section of roughly `2 × corner_radius`; at
+`U = 4` it is 400 mm tall. Whether the largest sizes are printed whole or split is not
+recorded — [OQ-DES-C4](#open-questions).
+
 ## Open questions
 
 | ID | Status | Question |
@@ -249,10 +315,35 @@ be worth the corner that holds it.
 | C1 | ~~resolved~~ 2026-08-06 | Are `greeble_thickness` and `greeble_nub_thickness` meant to be independent? |
 | C2 | ~~resolved~~ 2026-08-06 | What is the greeble actually toleranced for? |
 | C3 | ~~resolved~~ 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
+| C4 | ~~answered~~ 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
 
 **No open questions.** C1 became one parameter plus a formula (IP-GEO-22); C2 was closed
 by test prints at both ends of the range, U=0.5 and U=4; C3 was closed by the observation
-that the corner and its bulkhead are not independent designs at all.
+that the corner and its bulkhead are not independent designs at all. C4 is *answered* rather
+than resolved — the answer is "not currently possible", which names a future exploration
+rather than closing the subject.
+
+**~~OQ-DES-C4 — whole or split at the large sizes?~~ — ANSWERED 2026-08-07: whole, for now.**
+There is **no current method for printing large corners or bulkheads in pieces.** Splitting
+is a future exploration rather than an existing capability, and the two parts differ sharply
+in difficulty:
+
+- **A split corner would be relatively easy**, because *the corner does not carry
+  significant longitudinal loads.* A splice would not have to transmit much across the
+  joint. Untried, but not structurally fraught.
+- **A split bulkhead would likely require structural changes**, not merely a cut plane.
+
+The first is worth recording beyond its own sake, because it independently confirms the load
+path this document infers elsewhere. §Print orientation notes that layers stack along the
+corner's length, leaving the part weakest along the axis the fuselage loads it — and what
+makes that acceptable is that **the longeron carries the longitudinal load, not the
+corner.** That same fact is what would make a splice tractable. Two different questions,
+one underlying answer, arrived at independently.
+
+Practical position: `unit_length = 100·U·FX` is the printed height — 100 mm at U·FX = 1,
+**400 mm at U = 4**, more with `FX > 1` — so the large sizes need a printer whose Z envelope
+accommodates them. If splitting is explored, the splice is new geometry, it belongs in this
+document, and it interacts with the greeble at both ends.
 
 Resolved entries keep their full text below, in numerical position, with the reasoning
 that produced the answer.
@@ -340,7 +431,7 @@ the design is built to avoid. Both bulkhead drivers computed it too, and
 the repository contains. Removed in IP-GEO-23.
 
 **For the FreeCAD port** the consequence is that the corner and bulkhead should share
-their *cross-section and joint* parameters by construction — modelling them as separate
+their *cross-section and joint* parameters by construction — modeling them as separate
 parts that happen to agree would need a constraint to hold them together, and constraints
 can be violated — while bay length stays a parameter of the corner only.
 

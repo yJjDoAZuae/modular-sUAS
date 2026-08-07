@@ -42,19 +42,72 @@ spans between them. Nothing fills the middle unless a variant asks for it. *Infe
 this is a mass decision. The bulkhead's structural job is edge stiffness and load
 transfer into the bolts, neither of which the middle contributes to.
 
-## Four types
+## The taxonomy: one peer axis, two cousins, two families
 
-`BulkheadType` distinguishes them, and `encode_bulkhead_type()` resolves the boolean
-columns from the variation table into exactly one:
+`BulkheadType` lists four values as though they were four kinds of the same thing. **They
+are not, and the enum has the relationships close to backwards.**
 
-| Type | What it is | Distinguishing geometry |
-| --- | --- | --- |
-| `END` | Closes the end of a bay | Bolt bosses; greeble posts; optional web |
-| `INTERCONNECT` | Joins two bays back to back | Two sections stacked, `2·bt` overall; **no bolt bosses** |
-| `COWLING` | Mates a bay to a nose or tail cowl | Flange ring, plate, cowl lip; **no panel** |
-| `TAIL_BOOM` | Carries a tail boom tube | Adds the collet and key features of `fuselage_boom_bulkhead_geometry.scad` |
+### The only true peers are the fastener variants
+
+`end_bolt` and `end_anchor` are the same part, differing only in whether the hole is sized
+for a through-bolt or bored for a heat-set threaded insert. That is a genuine peer
+relationship — two interchangeable options for one decision.
+
+**And it is not in the enum.** It is `is_anchor`, a boolean, and it is *orthogonal* to the
+type — the variation table applies it to both `end` and `cowling`:
+
+| Variant | `is_end` | `is_interconnect` | `is_cowling` | `is_anchor` |
+| --- | --- | --- | --- | --- |
+| `end_bolt` | ✓ | | | |
+| `end_anchor` | ✓ | | | ✓ |
+| `cowling_bolt` | | | ✓ | |
+| `cowling_anchor` | | | ✓ | ✓ |
+| `interconnect` | | ✓ | | |
+
+`interconnect` has no `is_anchor` variant because it has no bolt bosses at all — the axis
+is *meaningless* there, not merely unused.
+
+So **the one relationship that is a true peering is expressed as an attribute, while three
+relationships that are not peerings are expressed as enum values.**
+
+### Cousins — the structural unit cell
+
+`END` and `INTERCONNECT` are **related but not peers.** Both exist to construct a fuselage
+structural unit cell, and both carry the cell's full mating vocabulary: corners, greeble
+posts, longeron bores, panel capture.
+
+| Type | Role in the cell |
+| --- | --- |
+| `END` | Closes a unit. Bolt bosses; greeble posts; optional web |
+| `INTERCONNECT` | Joins two units back to back. Two sections stacked, `2·bt`; **no bolt bosses** — captured between two bolted units rather than fastened |
+
+### Family — the cowl interface
+
+`COWLING` is a **distinct family**: used only with a cowl, never within a structural unit.
+It substitutes the cowl joint for the panel joint — flange ring, plate, cowl lip, and **no
+panel at all**, which `bulkhead_validity_check()` enforces.
+
+### Family — inter-unit plates
+
+`TAIL_BOOM` is a **second distinct family**: a flat plate used **between** structural units,
+never within one. It does not participate in the cell.
+
+**It is the first member of this family, not the last.** Landing-gear attachment bulkheads
+and structural blocks are named in UC-6 of the
+[migration architecture](../architecture/freecad_migration.md) and belong here.
+
+Three properties follow from being an inter-unit plate rather than from the boom design:
+
+- **Symmetric in `z`**, so print orientation carries no sign — unlike every cell bulkhead.
+- **None of the cell's mating vocabulary**: no greeble, no panel slot, no cowl lip.
+- **Separately generated already.** The boom bulkhead has its own geometry file
+  (`fuselage_boom_bulkhead_geometry.scad`), its own sweep function, and its own variation
+  table — the code has effectively separated this family already, while the *type enum*
+  has not.
 
 `NULL` exists as the unset default and never reaches geometry.
+
+See [OQ-DES-B8](#open-questions) on whether the enum should be split to match.
 
 The interconnect having no bolt bosses is the one that looks wrong and is not: it is
 sandwiched between two bays that are themselves bolted, so it is captured rather than
@@ -333,6 +386,51 @@ plus bulkhead, 264 + 148 — not a figure for the whole sweep. The 576 parts a f
 produces is the *output* count across all five sweeps, cowls included, and is not
 comparable to either.
 
+## Print orientation
+
+**Confirmed 2026-08-07 (IP-FC-3).**
+
+**The modeled frame is the print frame.** The STLs the sweep produces are already in print
+orientation — no rotation is applied between the model and the bed. That is a system-wide
+rule, not a bulkhead one: *every* printable part in this system is designed so that model
+`+z` is the build direction, and model `z` corresponds to the **aircraft body `x` axis**.
+
+For the bulkhead specifically: **flat surface down.** Layers stack along model `z`, which
+is the bulkhead's thickness direction.
+
+That is what the geometry already implied — the part is drawn in `xy` and extruded by
+`bulkhead_thickness`, the flange, web and bolt bosses all print without support in this
+orientation, and the interconnect's depth change is a 45° ramp in the `x–z` plane, which is
+self-supporting only if `z` is the build direction.
+
+**Consequence for analysis (UC-8 tier 3): the bulkhead is weakest in through-thickness
+tension** — separating one face from the other, across the layer interfaces. That is
+exactly the direction a bolted joint loads it, and it is the single most important input to
+an orthotropic model of this part.
+
+**Z sign matters, and the rule is: flat surface down.** Most bulkheads are **not**
+symmetric in `z`, and the geometry says so plainly — everything is built from the `z = 0`
+face upward:
+
+| Feature | `z` extent | Breaks symmetry because |
+| --- | --- | --- |
+| Flange, bolt bosses | `0 → bulkhead_thickness` | — |
+| `bulkhead_web` | `0 → plate_thickness` | present only near the bottom face |
+| `bolt_flange_fillet` | at `plate_thickness` | one-sided |
+| Cowl flange lip | `bulkhead_thickness → + cowl_flange_height` | stands proud of the top face only |
+
+So the `z = 0` face is the solid one — flange, web and bolt bosses all begin there — while
+the far face carries the cowl lip and the open web cavity. That is the flat surface, and it
+goes on the bed.
+
+The only bulkhead that genuinely is `z`-symmetric is the **tail boom bulkhead**, which is a
+flat plate. The interconnect is closer to symmetric than an end bulkhead, being two mirrored
+sections, but only one of its halves carries the web (`make_web`), so it is not symmetric
+either.
+
+Getting this sign wrong would print the cowl lip into the bed and leave the web as an
+unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of the family.
+
 ## Open questions
 
 | ID | Status | Question |
@@ -344,9 +442,11 @@ comparable to either.
 | B5 | ~~resolved~~ 2026-08-06 — not a defect | Should insert depth be a validity check? |
 | B6 | ~~resolved~~ 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
+| B8 | **open** | Should `BulkheadType` be split to match the two families? |
 
-**One open: B3**, and it is not a defect — it needs a decision, not an answer, because
-the original intent is not recoverable.
+**Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
+B3's original intent is not recoverable; B8 is a forward-looking structural choice that
+gets more expensive the longer it is deferred.
 
 B4 and B7 together mean the swept range is validated in hardware at **both** ends, U=0.5
 and U=4.
@@ -370,11 +470,16 @@ The question was posed badly — I had guessed it was clearance for the panel to
 between bays, which is wrong, and described it as a "relief cut", which named it after
 the wrong purpose. The shape is a depth profile, not a clearance.
 
-**OQ-DES-B3 — Should the web be a variant rather than a flag?** — **Original intent is
-not recoverable** (2026-08-06): whether `make_web` was meant to allow lighter bulkhead
-variants or was only ever a mechanization of the differences between bulkhead types is
-not remembered. Recorded so nobody spends time trying to recover it. What the code
-establishes is still worth stating, because it constrains the decision:
+### OQ-DES-B3 — Should the web be a variant rather than a flag?
+
+**Problem.** `make_web` is a boolean passed into the bulkhead geometry that decides whether
+a section carries its internal web — the thin span, `plate_thickness` tall, that stiffens
+the bulkhead between the bolt bosses and the flange.
+
+**Original intent is not recoverable** (2026-08-06): whether it was meant to allow lighter
+bulkhead variants, or was only ever a mechanization of the differences between bulkhead
+types, is not remembered. Recorded so nobody spends time trying to recover it. What the
+code establishes still constrains the decision:
 
 - **Nothing ever chooses it.** `make_web` is `true` for every non-interconnect bulkhead
   and for exactly one half of every interconnect, fixed by position in
@@ -392,9 +497,43 @@ establishes is still worth stating, because it constrains the decision:
   boolean — it changes three features at once, and the two halves of an interconnect must
   stay complementary.
 
-The question is therefore not *what was meant* but *what it should be*. Leaving it as a
-positional flag is defensible and cheapest; making it a variant would want the boom
-bulkhead's columns as the precedent to follow.
+The question is therefore not *what was meant* but *what it should be*.
+
+**Alternatives**
+
+1. **Leave it a positional flag**, and rename it to say so — `is_web_bearing_face` rather
+   than `make_web`.
+   *Benefits:* matches what it actually does today; no geometry change; removes the
+   implication of configurability that the current name carries.
+   *Drawbacks:* forecloses lighter bulkhead variants without deciding whether they are
+   wanted.
+   *Prerequisites:* none.
+
+2. **Promote it to a variation-table column**, following `boom_bulkhead_type_variants.csv`,
+   which already exposes `make_vert_web` and `make_lower_web`.
+   *Benefits:* precedent exists in the same part family; enables a lighter end bulkhead as
+   a swept variant; makes the two families consistent with each other.
+   *Drawbacks:* it changes three features at once (`bulkhead_web()`,
+   `bulkhead_flange_positive()`, `outer_corner_fillet()`), so it is not a simple boolean
+   exposure; the two halves of an interconnect must stay complementary, which a free
+   parameter does not guarantee; doubles the bulkhead sweep.
+   *Prerequisites:* deciding whether a webless bulkhead is structurally acceptable — this
+   is a strength question, not a plumbing one.
+
+3. **Defer to the FreeCAD port**, where the section is an object and "web-bearing" is a
+   property of it rather than an argument threaded four levels deep.
+   *Benefits:* the awkwardness is an artifact of OpenSCAD's parameter passing and largely
+   disappears; the port is rewriting this layer anyway.
+   *Drawbacks:* the misleading name survives until then.
+   *Prerequisites:* none.
+
+**Recommendation: alternative 1 now, and revisit as alternative 2 only if a mass case is
+made for a webless bulkhead.** The evidence says `make_web` describes *which face of a
+section this is*, not a design choice — it is `true` everywhere except the mirrored half of
+an interconnect, and no variation table asks for anything else. Renaming makes the code
+honest at negligible cost. Promoting it to a variant is a real capability, but it should be
+motivated by a mass or stiffness requirement rather than by the observation that the flag
+exists.
 
 **~~OQ-DES-B4 — Have large-`U` bulkheads been printed?~~ — RESOLVED 2026-08-06.**
 Yes. **A U=4 bulkhead section has been printed and assembled** with 16 mm
@@ -440,7 +579,7 @@ must ignore in order to stay correct is advertising control it cannot offer — 
 person most likely to reach for it is someone whose parts do not snap together, who
 would change the number, see no difference, and conclude the geometry is at fault.
 
-Honouring the caller instead would have been behaviour-identical today, since every
+Honouring the caller instead would have been behavior-identical today, since every
 caller passes zero. It was rejected because it re-opens the double-clearance failure
 mode the design deliberately closed, in exchange for a knob nobody should turn.
 
@@ -463,6 +602,50 @@ snaps.
 So a single experimentally-tuned angle does hold across an 8× span of `U`, and the
 `√U` thickness rule with its two-extrusion floor is doing the right thing at both
 extremes. Nothing here needs a formula.
+
+### OQ-DES-B8 — Should `BulkheadType` be split to match the two families?
+
+**Problem.** The enum lists
+`END`, `INTERCONNECT`, `COWLING` and `TAIL_BOOM` as peers, but the first three are frame
+bulkheads and the fourth is an interstitial plate — a different kind of part with a
+different mating vocabulary, different symmetry, its own geometry file, its own sweep
+function and its own variation table. The code has already separated them everywhere except
+in the type.
+
+This matters now rather than later because **the plate family is expected to grow**: UC-6
+names landing-gear attachment bulkheads and structural blocks, and the boom bulkhead is
+explicitly the first of a set. Each addition made against a flat enum widens the gap between
+how the parts are organized and how they are named.
+
+**Alternatives**
+
+1. **Split into two enums** — `FrameBulkheadType` and `PlateBulkheadType`.
+   *Benefits:* the type says which family a part belongs to; validity checks and geometry
+   dispatch stop needing to know that `TAIL_BOOM` is the odd one; new plate types are added
+   without touching the frame path.
+   *Drawbacks:* `derived_parameters()` and the filename scheme both branch on the single
+   enum today, so both change; the variation tables' boolean columns need rethinking.
+   *Prerequisites:* none.
+
+2. **Keep one enum, add a family attribute** — a `family` field beside `type`.
+   *Benefits:* smallest change; existing call sites keep working.
+   *Drawbacks:* two things to keep in step, which is the failure mode this project has spent
+   Phase 2 removing; nothing stops a mismatched pair.
+   *Prerequisites:* none.
+
+3. **Defer to the FreeCAD port**, and model the families as separate classes there.
+   *Benefits:* the port is rewriting the parameter layer anyway, and Phase 3's guideline is
+   not to refactor code scheduled for replacement.
+   *Drawbacks:* every plate bulkhead designed before the port lands is built against the
+   flat enum, so the cost of the eventual split grows with each one.
+   *Prerequisites:* none.
+
+**Recommendation: alternative 3 for the OpenSCAD path, alternative 1 in the port — but
+decide the taxonomy now and record it here.** The naming does not need to change to make
+the *design* explicit, and this document now states the two families regardless. What must
+not happen is landing-gear bulkheads being designed as though they were peers of `COWLING`;
+that is a design error the enum would quietly encourage, and it is not fixed by renaming
+anything later.
 
 ## See also
 

@@ -199,6 +199,109 @@ losing the cheapest verification tier the project has.
 **Exit criteria:** the full parameter sweep runs headless through FreeCAD and produces
 geometry that is verifiably equivalent to the OpenSCAD output it replaces.
 
+**Implementation plan:**
+[doc/implementation/freecad_migration.md](implementation/freecad_migration.md).
+
+---
+
+## Phases 4–7 — the capabilities the port exists to enable
+
+Phase 3 delivers **UC-1** and nothing else: the same parts, generated a different way. It
+is worth being blunt that UC-1 alone would not justify the migration. The reason to do it
+is that **UC-2, UC-3, UC-4 and UC-7 are unreachable in OpenSCAD at any effort** — it has no
+boundary representation, so there is no curved geometry to write into a STEP file, nothing
+for an assembly constraint to attach to, and no arc for a drawing to dimension.
+
+The nine use cases and their reasoning are in
+[doc/architecture/freecad_migration.md](architecture/freecad_migration.md). The phases below
+order them by dependency.
+
+```mermaid
+flowchart LR
+    p2["Phase 2<br/>refactor ✓"] --> p3["Phase 3<br/>UC-1 port"]
+    oml["UC-9a<br/>OML as surface"] --> p4
+    p3 --> p4["Phase 4<br/>UC-2, UC-3<br/>solid outputs"]
+    p4 --> p5["Phase 5<br/>UC-4 assemblies"]
+    p4 --> d1["UC-7a<br/>part drawings"]
+    p5 --> p6["Phase 6<br/>UC-7b, UC-8, UC-9b<br/>analysis + drawings"]
+    p3 --> p7["Phase 7<br/>UC-5, UC-6<br/>visualization + new parts"]
+
+    style oml fill:#a6c6e6,color:#000
+```
+
+**`UC-9a` — the OML arriving as a STEP surface instead of a 36 MB mesh — is on the critical
+path and depends on nothing.** It can start today, in parallel with everything else. It is
+called out separately because deferring it is the single most likely way to get this wrong:
+the cowls are built by importing a tessellated STL, so until the OML is a surface, *the
+cowls are not solid models*. Phase 4 would ship B-rep export with the cowls quietly
+excluded, and Phase 5 and UC-7 would inherit the same hole.
+
+### Phase 4 — Solid model outputs
+
+- [ ] **OML as a surface.** Export the nose and tail OML from
+      [`cad/modular_sUAS_nose_tail.vsp3`](../src/Fuselage/cad/modular_sUAS_nose_tail.vsp3)
+      as STEP or IGES rather than STL. Removes 36 MB of committed mesh and is what makes
+      every later solid-model capability real for the cowls.
+- [ ] **UC-2 — native FreeCAD solids.** `.FCStd` per part from the sweep.
+- [ ] **UC-3 — STEP export.** Neutral solid geometry for other CAD systems.
+- [ ] **UC-7a — part drawings.** Dimensioned drawings of individual parts; assembly
+      drawings wait for Phase 5.
+
+**No mesh as an intermediate.** Tessellating and re-fitting a surface would produce a
+nominally-solid model whose faces are approximations of approximations. The solid must stay
+a B-rep from construction to export.
+
+**Exit criteria:** every part in the sweep exports as a `.FCStd` and a `.step` whose volume
+and bounding box match the Phase 3 mesh within the tessellation tolerance, and a cowl STEP
+file opens in another CAD system with curved faces rather than facets.
+
+### Phase 5 — Assemblies
+
+- [ ] **Cowl interior surfaces.** New geometry: the interior generated as a per-layer 2D
+      inset matching slicer behavior, *not* a perpendicular shell offset. Needed before a
+      cowl can be a closed solid in an assembly.
+- [ ] **UC-4 — assemblies with joints.** Fuselage unit, nose, tail, and full fuselage.
+- [ ] **Non-printed components.** Longerons, panels, threaded inserts, bolts — derived from
+      the same parameters that already cut their clearances, never specified separately.
+
+**Exit criteria:** a full fuselage assembly opens with every component placed, and its
+mass properties are computable.
+
+### Phase 6 — Analysis and documentation
+
+- [ ] **UC-8 tier 1 — mass properties.** Mass, CG, inertia tensor. Needs no solver and
+      answers a question the project asks constantly; schedulable as soon as Phase 5's
+      components exist.
+- [ ] **UC-8 tier 2 — isotropic FEM.** Deformation, stress, yield margin, with bonded
+      interfaces modeled as assembly properties.
+- [ ] **UC-8 tier 3 — orthotropic FEM.** Printed parts as layered material. The prerequisite
+      is *recording* each part's print orientation, which is already designed in and simply
+      not written down.
+- [ ] **UC-7b — assembly drawings.**
+- [ ] **UC-9b — aerodynamic analysis.** Driven OpenVSP, VSPAERO force and moment on the
+      fuselage, building toward full-configuration analysis.
+
+**Exit criteria:** a load case runs end to end on a full fuselage assembly and reports
+stress and margin against a stated yield strength.
+
+### Phase 7 — Visualization and new components
+
+Ordered last by dependency, **not by priority.** Nothing here is gated by Phases 4–6, and
+any of it can be pulled forward the moment the airframe needs it. It sits after Phase 3
+only because new geometry should be authored in FreeCAD rather than added to an
+implementation being retired.
+
+- [ ] **UC-5 — Blender assemblies.** Full fuselage, units, exploded, exploded with
+      animation paths. `blender/splode.blend` and
+      [`fuselage_splode.py`](../src/Fuselage/tools/fuselage_splode.py) are the starting
+      point.
+- [ ] **UC-6 — new components.** Printable panels and cutting templates (a 2D vector output
+      kind nothing currently produces), wing joiners, boom collet and clamp, landing-gear
+      bulkheads and structural blocks.
+
+**Exit criteria:** none stated yet — this phase is a container for work whose scope is set
+by the airframe rather than by the migration.
+
 ---
 
 ## Reference documents — from another repository, not this one
