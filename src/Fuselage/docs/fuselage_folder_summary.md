@@ -295,6 +295,7 @@ changed*, and using the wrong one gives a false pass.
 | --- | --- | --- |
 | [mesh_stats.py](../tools/mesh_stats.py) | Triangle count, enclosed volume, bounding box of one STL; detects truncation | Underpins the other three; also a CLI for comparing two STLs |
 | [scad_snapshot.py](../tools/scad_snapshot.py) | Generated `.scad` text is byte-identical across 576 parts, in seconds, without rendering | **Python-side changes only** |
+| [params_snapshot.py](../tools/params_snapshot.py) | The derived `Parameters`/`NoseParameters` tree is identical across 576 parts, diffed to the individual field | **Anything upstream of geometry construction** — axes, derivation, validity, naming. Backend-independent, so it survives the FreeCAD port that removes `scad_snapshot.py` |
 | [verify_scad_change.py](../tools/verify_scad_change.py) | Re-renders existing `.stl.scad` files and compares geometry | **`.scad` library changes**, where the signature is unchanged |
 | [verify_sweep_change.py](../tools/verify_sweep_change.py) | Runs the real sweep end to end for a sample and compares STLs | **Changes spanning Python and SCAD together**, where signatures move |
 
