@@ -9,9 +9,10 @@ This is roadmap [Phase 2](../roadmap.md) work — "Refactor and improve the Open
 implementation" — and it is unblocked because Phase 1 delivered the verification it
 depends on (`mesh_stats.py`, `sweep_check.py`).
 
-**Design authority:** None yet. The findings below are the authority; a `doc/design/`
-document for the bulkhead and corner modules would be the proper home and is item
-IP-GEO-11.
+**Design authority:** [doc/design/bulkhead.md](../design/bulkhead.md) and
+[doc/design/corner.md](../design/corner.md), written as IP-GEO-11. They are reconstructed
+from the implementation rather than inherited, so they mark inference as inference — read
+the preamble of either before relying on a "why".
 
 **Last updated:** 2026-08-06
 
@@ -37,8 +38,13 @@ IP-GEO-11.
 | IP-GEO-16 | done | Replace the nested parameter dicts with typed dataclasses in Python — the same idea on the side that survives Phase 3 | — |
 | IP-GEO-17 | done | Revert the partially-applied greeble grouping pilot | — |
 | IP-GEO-18 | done | Fix `nose_cowl.scad` and `tail_cowl.scad`: they named the OML mesh without its `../oml/` prefix, so neither had rendered since the meshes moved. Pre-existing, found by IP-GEO-15 | IP-GEO-15 |
-| IP-GEO-11 | todo | Write `doc/design/bulkhead.md` and `doc/design/corner.md` to give this work a design authority | — |
-| IP-GEO-12 | todo | Repair `test_fuse.ipynb`: its preview cells broke when `solid_render` stopped writing PNGs | — |
+| IP-GEO-11 | done | [`doc/design/bulkhead.md`](../design/bulkhead.md) and [`doc/design/corner.md`](../design/corner.md) — a design authority for this work | — |
+| IP-GEO-12 | done | Repair `test_fuse.ipynb`. The stated cause was wrong — previews were never broken; the notebook had drifted years behind the API | IP-GEO-16 |
+| IP-GEO-21 | done | Resolve OQ-DES-B6: drop `greeble_tolerance` from the bulkhead side — the post is nominal by construction, so it was a knob that could not do anything | IP-GEO-11 |
+| IP-GEO-22 | done | Resolve OQ-DES-C1: derive `greeble_nub_thickness` from `greeble_thickness` through a named formula in Python, instead of computing both from the same expression | IP-GEO-11 |
+| IP-GEO-23 | done | Drop `unit_length` from the bulkhead modules and drivers. Passed through three signatures, used by none — it asserted a dependence on bay length that the design exists to avoid. Found via OQ-DES-C3 | IP-GEO-11 |
+| IP-GEO-20 | done | Correct the greeble's mating direction in comments and design docs — it is the **positive post on the bulkhead**, not a nub on the corner | IP-GEO-11 |
+| IP-GEO-19 | withdrawn | Validate threaded-insert depth against `bulkhead_thickness`. Raised on a wrong assumption — the insert is set from the interior face and may stand proud of it, so it need not fit within the thickness. No check is warranted. See OQ-DES-B5 | IP-GEO-11 |
 
 > **IP-GEO-10 blocked reason (historical):** Regrouping 28 positional parameters is the
 > change most able to silently transpose two same-typed floats. Keyword arguments
@@ -63,9 +69,12 @@ scalar arguments again. The pilot changed how they were *called*, never why they
 whole of it reverts to HEAD — which is IP-GEO-9's verified state. What remains different
 from HEAD across all four files is **two comments and no code**, and OpenSCAD discards
 comments before evaluation, so the geometry is unchanged by construction. Both comments
-were kept deliberately: the bulkhead's now says *why* the pocket tolerance is zeroed
-(the clearance lives entirely on the corner's nub, so splitting it would make the joint
-carry it twice), which the original one-liner did not.
+were kept deliberately: the bulkhead's now says *why* the greeble tolerance is zeroed
+(the clearance is taken entirely on the corner's bore, so splitting it would make the
+joint carry it twice), which the original one-liner did not.
+
+Both of those comments were subsequently corrected — they described the greeble as a
+feature of the corner mating into a bulkhead pocket, which is backwards. See IP-GEO-20.
 
 Corroborated by IP-GEO-15 anyway. Every driver that the pilot had broken is now clean,
 and `fuselage_corner.scad` — the one driver the pilot had migrated *consistently*, so it
@@ -108,6 +117,188 @@ There is no reference to compare the two cowls against — they had no working o
 be a baseline. What is established is that the OML import resolves and the boolean
 tree completes; the shapes themselves are unreviewed, and IP-GEO-11's design documents
 are where that would be settled.
+
+### IP-GEO-23 — done 2026-08-06: the bulkhead does not know how long the bay is
+
+Came out of OQ-DES-C3's answer, which is worth quoting because it is the sharper form of
+the design rule:
+
+> Different bay lengths share the same bulkhead design. That is why `FX` is a separate
+> parameter and the bulkhead does not reference it.
+
+Checking that against the code turned up a defect. `unit_length` was threaded through
+`bulkhead_section_full` → `_octant` → `_section` and **used by none of them**, and both
+GUI drivers computed it — `unit_length = 100*U*FX` — solely to pass it in.
+
+That is the same shape as OQ-DES-B6 but worse in kind. A dead `greeble_tolerance` merely
+did nothing. A dead `unit_length` *asserted a dependency on bay length*, which is exactly
+what the parameterisation is built to avoid: it invited the next reader to believe a
+bulkhead has to be regenerated per `FX`, when the whole point is that one bulkhead serves
+every bay length.
+
+The demonstration was already sitting in the tree: `fuselage_cowling_bulkhead.scad` set
+`FX = 0.5` while `fuselage_bulkhead.scad` set `FX = 1`, and both produced identically
+shaped bulkheads.
+
+Removed from three signatures, four internal call sites, both drivers (along with their
+now-purposeless `FX`), and `bulkhead_render()`. The sweep already agreed with the design
+and needed no change: `FX` appears only in `corner_size_variants.csv`, so bulkheads are
+generated once per (panel, type, size) and reused across bay lengths, while corners carry
+`FX` in their filenames.
+
+**Verification.** A signature moved, so `scad_snapshot.py` reports DIFF by construction
+and the check is geometric. All seven drivers render warning-free with unchanged triangle
+counts, and one bulkhead of each of the five types was re-rendered through the sweep path
+and compared against the IP-GEO-21 reference — **all five identical** in triangle count,
+enclosed volume and bounding box, to the same figures quoted for IP-GEO-21 below
+(`end_bolt` 30,392 tris / 7122.0821, `interconnect` 25,608 / 7259.7447, and the rest).
+
+That the numbers are unchanged across *both* signature removals is the point: neither
+parameter was ever reaching the geometry.
+
+### IP-GEO-22 — done 2026-08-06: one wall thickness, not two
+
+Closes OQ-DES-C1. `greeble_thickness` and `greeble_nub_thickness` were computed from the
+*same expression, written out twice* — so they were not independent in fact, only in
+form, and nothing stopped one being edited without the other. They are the mating halves
+of a snap fit, so drift between them means parts that do not assemble.
+
+Now `greeble_nub_thickness_of(greeble_thickness)` in `fuselage_variants.py`, identity
+today. Written as a formula rather than collapsed to a single value deliberately: scale
+problems may yet want the rib thicker or thinner than the seat wall, and that fix belongs
+in one function rather than in the reintroduction of a second parameter.
+
+**Python owns the formula, not OpenSCAD.** Both languages need the value — SCAD to build
+the geometry, Python for the panel-clearance validity checks — so the choice was which
+side is authoritative. Python, on the same grounds as OQ-GEO-1: the geometry modules take
+both values as arguments and derive neither, so the relationship is stated in exactly one
+place, and it is the place that survives the FreeCAD port. The cost is that the SCAD
+signatures keep both arguments and the hand-edited GUI drivers can still set them
+inconsistently; those now read `greeble_nub_thickness = greeble_thickness` with a comment
+pointing at the formula, which makes the intent visible at the only site that can get it
+wrong.
+
+**Verification.** No signature changed, so this is the case `scad_snapshot.py` proves
+outright: all 576 parts across all five sweeps generate **byte-identical `.scad`**. All
+seven GUI drivers render warning-free with unchanged triangle counts.
+
+### IP-GEO-21 — done 2026-08-06: a parameter that could not do anything
+
+Closes OQ-DES-B6, and with it the refactor. `greeble_tolerance` was threaded positionally
+through `bulkhead_section_full` → `_octant` → `bulkhead_section` and then thrown away:
+`greeble_tolerance_local = 0` was what reached `corner_end()`.
+
+**Chosen: drop the parameter, not honour it.** Both options were behaviour-identical
+today, since every caller passed zero. The deciding argument is that *the greeble post is
+nominal* is an **invariant, not a setting** — all fit clearance lives on the corner's
+bore because splitting it makes the joint carry it twice. A module that accepts a
+tolerance it must ignore in order to stay correct advertises control it does not have,
+and the person most likely to reach for it is someone whose parts will not snap together:
+they would change the number, see nothing happen, and conclude the geometry was at fault.
+Honouring the caller would have bought that knob back at the price of re-opening the
+double-clearance failure mode the design deliberately closed.
+
+Removed from three SCAD signatures and four internal call sites, from
+`fuselage_bulkhead.scad` and `fuselage_cowling_bulkhead.scad`, from `bulkhead_render()`,
+and from the Python constants — `GREEBLE_TOLERANCE_BULKHEAD_MM` is gone and
+`derived_parameters()` no longer sets `greeble.tolerance` for bulkheads. The literal `0`
+now sits at the `corner_end()` call with the invariant stated beside it.
+
+**Verification.** `scad_snapshot.py` cannot speak to this one — a signature change alters
+the generated text by construction — so the check is geometric, per
+*How each item is proven behaviour-preserving* below:
+
+- `verify_drivers.py`: all seven drivers render warning-free, with **identical triangle
+  counts** to before the change (`fuselage_bulkhead` 3,272; `fuselage_cowling_bulkhead`
+  2,712).
+- One bulkhead of each of the five types rendered through the real sweep path
+  (`derived_parameters` → `bulkhead_render`) before and after, compared by triangle
+  count, enclosed volume and bounding box — **all five identical**:
+
+```text
+  IDENTICAL  cowling_anchor   36,704 tris  vol 10211.8535
+  IDENTICAL  cowling_bolt     34,256 tris  vol  9854.7238
+  IDENTICAL  end_anchor       32,008 tris  vol  7391.2568
+  IDENTICAL  end_bolt         30,392 tris  vol  7122.0821
+  IDENTICAL  interconnect     25,608 tris  vol  7259.7447
+```
+
+### IP-GEO-12 — done 2026-08-06: the notebook, and a wrong diagnosis
+
+**The item's stated cause was wrong.** It read *"its preview cells broke when
+`solid_render` stopped writing PNGs"*. `solid_render` never stopped: `_PREVIEWS`
+defaults to `True` and the render queue defaults to serial, so the preview is written
+from the finished STL before the call returns. Verified by rendering — every
+`Image(filename=png_filename)` cell finds its PNG.
+
+The real problem was drift. The notebook predates several refactors; its stored outputs
+still show `BulkheadType.END_BOLT`, an enum member that no longer exists. What was
+actually broken:
+
+| | |
+| --- | --- |
+| `fgeom.fuselage_corner` did not exist | `fuselage_geometry.scad` is three `include` lines. Imported with `use_not_include` it exposes **no modules at all**, so every `fgeom.*` call failed. Now imports the geometry files directly through `fv.scad_module()`, which also fixes the cwd-dependent bare filenames. |
+| Dict access on dataclasses | `printer_settings["nozzle_diameter"]`, `dp["panel"]["offset"]` — four cells, broken by IP-GEO-16. |
+| Stale signatures | `fuselage_corner` missing `U` and both greeble thicknesses; `bulkhead_section_full` missing both, three times; `boom_bulkhead` passing a `plate_thickness` that is not a parameter and omitting four that are; `derived_parameters` missing `is_bulkhead`; `tail_cowl` missing `oml_reversed`. |
+| The IP-GEO-18 bug again | The cowl cells named the OML as bare `"vsp_nose.stl"`. Now `fv.oml_ref()`. |
+| Cell 3 entirely stale | Wrong CSV axes, and `is_nose_cowl`/`is_nose_nose`/`is_nose_plate` columns that no longer exist. Rewritten around `derived_cowl_parameters` and `dp.nose.active` / `dp.plate.active`. |
+| `unit_frame()` leaked globals | It read `cowl_flange_height` and `cowl_flange_tolerance` from module scope, inheriting whatever the cowling cell above had left behind — a plain bay grew a cowling lip if that cell had been run. Now self-contained. |
+
+All the long calls are now **keyword arguments**, so the next signature change is an
+error rather than a silent shift — the same reasoning as IP-GEO-2, applied to the caller
+that had already been bitten by it.
+
+**A hazard removed on judgement, not on request.** Cells 7–11 ran full sweeps into
+`'variant_output'`. A stray *Run All* would have overwritten the protected output. They
+now write to an `OUTPUT_DIR` constant set to `test_fuse_output`, with a pointer to the
+CLI for real sweeps.
+
+**Jupyter is now a dev dependency.** The notebook imports `IPython.display.Image` and
+the project environment did not have IPython, so it could not be opened at all —
+repairing the cells without that would have fixed nothing.
+
+**Verified by executing it.** All 21 non-sweep cells run to completion; cells 14–20 and
+22 were rendered live and each produced its preview PNG. The five sweep cells were not
+run — they are the hours-long ones — but they differ from the CLI only in the output
+directory.
+
+### IP-GEO-20 — done 2026-08-06: the greeble points the other way
+
+Corrected on report from the design owner. Every comment and document that described the joint had it
+inverted: the greeble was described as a nub on the *corner* snapping into a *pocket* in
+the bulkhead. It is the reverse. **The greeble is the positive annular post on the
+bulkhead, with the snap rib around it; the corner carries the bore and the internal
+groove.**
+
+The code was always right — only the prose was wrong, so no geometry changed and none of
+the verification above is affected.
+
+**Why it was easy to get backwards, which is worth recording because the next reader will
+hit the same trap.** The line that creates the greeble is
+
+```scad
+corner_end(U, bulkhead_thickness + 2*eps, …, greeble_tolerance_local, …);
+```
+
+and it sits inside the *negative* half of `bulkhead_section()`'s `difference()`. Read
+casually, a corner shape in the subtraction list is cutting a corner-shaped pocket. But
+`corner_end()` is itself mostly a difference — the corner's end section is a bore of
+`greeble_radius` with a groove out to `greeble_nub_radius` through its middle third —
+so subtracting it removes bulkhead material where the corner is solid and leaves it where
+the corner is hollow. What survives is the post.
+
+The naming settles it independently. `greeble_bolt_web` is commented "greeble to bolt
+web"; three fillet modules speak of "the side wall of the flange **at the greeble**".
+Those are all locations on the bulkhead, and none of them would parse if the greeble
+lived on the corner.
+
+**Corrected in:** `fuselage_bulkhead_geometry.scad`, `fuselage_corner_geometry.scad` and
+`fuselage_corner.scad` (comments), `fuselage_variants.py` (the tolerance constants),
+`corner.md`, `bulkhead.md`, `fuselage_folder_summary.md`, and two places in this file.
+
+**A second finding fell out of it:** `greeble_tolerance` is threaded through four bulkhead
+module signatures and then discarded by a local zero, so it has no effect on anything.
+OQ-DES-B6.
 
 ### IP-GEO-16 — done 2026-08-06: the parameter groups are dataclasses
 
@@ -297,14 +488,14 @@ it — which is what this item unblocks.
 **Greeble dimensions.** `corner_end()` and `corner_transition()` each computed
 `greeble_radius`, `greeble_nub_radius` and `greeble_nub_height` from the same sums, so
 the two could drift apart silently. That matters more than ordinary duplication: the
-greeble is a *mating* feature, and the corner's nub must agree exactly with the
-bulkhead's pocket or the parts do not assemble.
+greeble is a *mating* feature, and the bulkhead's post must agree exactly with the
+corner's bore or the parts do not assemble.
 
 Now three functions in `fuselage_corner_geometry.scad`. `greeble_nub_radius_of()` is
 written in terms of `greeble_radius_of()` plus the nub thickness, rather than repeating
-the five-term sum — the nub stands proud of the seat by exactly its own thickness, and
-stating it that way makes the relationship impossible to break by editing one and not
-the other.
+the five-term sum — the snap feature sits one wall thickness outboard of the greeble
+body, and stating it that way makes the relationship impossible to break by editing one
+and not the other.
 
 `longeron_chamfer = nozzle_diameter` was left as a local alias. It is a rename, not a
 derivation, and a function wrapping a single parameter would obscure rather than clarify.
@@ -464,8 +655,71 @@ side still passes four keyword arguments. Finish or revert before running a swee
 
 ## Open questions
 
-Implementation-planning questions, in the `/oq` format. They belong in
-`doc/design/bulkhead.md` once IP-GEO-11 creates it; they live here until then.
+Implementation-planning questions, in the `/oq` format — questions about *how to carry
+out this refactor*, all now resolved. They stay here rather than moving into the design
+documents IP-GEO-11 created, because they are about the work and not about the parts.
+
+Questions about the *design* live in [corner.md](../design/corner.md#open-questions) and
+[bulkhead.md](../design/bulkhead.md#open-questions) as the OQ-DES series. Writing those
+documents raised ten, none of which this refactor introduced. **Nine are now closed. One
+remains — OQ-DES-B3 — and it is not a defect:** it needs a decision about whether the
+bulkhead web should be a variation axis, and the original intent turned out not to be
+recoverable, so there is nothing to look up.
+
+Seven were answered from design knowledge that had never been written down, and three of
+those corrected a wrong inference rather than merely filling a gap:
+
+- **OQ-DES-B1** — the 35° opening angle is a **half**-angle, tuned by experiment, and the
+  70° mouth it produces is how the longeron snaps into the greeble. So the greeble retains
+  the longeron as well as registering the corner, and its wall thickness is not free to be
+  tuned for either job alone.
+- **OQ-DES-B2** — the interconnect's trapezoidal cut is a **mass reduction**, not a
+  clearance: full `2·bt` depth only at the corners where the load is, narrowed to `1·bt`
+  between them. I had guessed it was relief for the panel to pass between bays.
+- **OQ-DES-B4 and OQ-DES-B7** — the swept range is validated in hardware at **both**
+  ends: a U=4 bulkhead assembled with 16 mm longerons and a corner, and a U=0.5 part with
+  the tolerances working. These are the only physical test results anywhere in the
+  repository, and between them they close OQ-DES-C2 as well.
+
+  Worth recording *why* C2 was wrong, since the instinct behind it is a common one: it
+  assumed a fit clearance ought to scale with the part. It should not. A snap fit is
+  governed by what the printer can hold and what the material will flex, neither of which
+  cares how large the airframe is — the same reasoning that keeps `longeron_tolerance`
+  and `panel_tolerance` unscaled. Two prints settled an argument the geometry could not.
+
+Both answers are recorded at the geometry as well as in the design documents, since that
+is where someone would otherwise re-derive them wrongly.
+
+**OQ-DES-B5 has also been answered, and withdrawn.** I had reported it as a defect — an
+anchor bulkhead at U = 0.5 being 4 mm thick while the shortest M3 insert it is bored for
+is 4.5 mm long. The premise was wrong: the insert is set from the interior face and may
+stand proud of it, so it never needed to fit within the thickness. IP-GEO-19 is
+withdrawn, and no validity check is warranted.
+
+**Two genuine defects came out of the design documents, and both were dead parameters on
+the bulkhead's interface** — found by writing down what the parts are for and then
+checking the code against it, which is the whole argument for IP-GEO-11 existing:
+
+- **OQ-DES-B6** — `greeble_tolerance`, threaded through four signatures and discarded by
+  a local zero. Fixed in IP-GEO-21.
+- **OQ-DES-C3** — `unit_length`, threaded through three signatures and used by none.
+  Worse in kind than B6: it did not merely do nothing, it asserted that a bulkhead
+  depends on bay length, which is the one thing the parameterisation exists to avoid.
+  Fixed in IP-GEO-23.
+
+**OQ-DES-B3 has a third kind of answer: the intent is not recoverable.** Whether the
+`make_web` flag was meant to allow lighter bulkhead variants or was only ever a
+mechanization of the type differences is not remembered. That is recorded in the design
+document as an answer, not left looking pending, so nobody spends time trying to recover
+it. The question survives as a forward decision rather than an archaeology problem.
+
+**Worth noting about the pattern.** Of the questions answered so far, four corrected an
+inference of mine rather than filling a blank, and one of those inferences had been
+promoted to a work item. Reconstructed *structure* — what the code does, the transforms,
+the dimension chains — has held up under every answer. Reconstructed *intent* has not.
+The inference markers in the design documents should be read as a genuine warning rather
+than a formality, and "the designer does not recall" is a legitimate terminal state for
+one of these.
 
 *No open questions — all three are resolved, and each note stays in numerical position
 with its original analysis retained below the resolution.*

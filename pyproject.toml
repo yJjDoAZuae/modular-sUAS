@@ -21,6 +21,11 @@ dev = [
     "ruff>=0.14",
     "mypy>=1.18",
     "pandas-stubs",
+    # src/Fuselage/tools/test_fuse.ipynb is the interactive bench for poking at a
+    # single part. It imports IPython.display.Image to show the preview PNGs, so
+    # without these the notebook cannot be opened in this environment at all.
+    "jupyterlab>=4.0",
+    "ipykernel>=6.29",
 ]
 
 [tool.uv]
