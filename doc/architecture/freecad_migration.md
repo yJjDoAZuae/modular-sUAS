@@ -461,8 +461,28 @@ Spawning `freecadcmd.exe` per part instead preserves the queue, the memory budge
 atomic writes, and the retry path exactly as they are, and swaps one command string.
 
 The cost of that choice is process startup per part, which is higher for FreeCAD than for
-OpenSCAD. **That is a measurement, not a design question** — take it first (IP-FC-1) and
-the answer follows mechanically:
+OpenSCAD. **That was a measurement, not a design question** — and it has now been taken.
+
+> **MEASURED 2026-08-07 (IP-FC-1): startup is 0.24 s. Subprocess-per-part it is.**
+>
+> `freecadcmd` on this machine — wall time minus in-script time, stable across runs:
+>
+> | Workload | In-script | Wall | Startup |
+> | --- | --- | --- | --- |
+> | Import only | 0.032 s | 0.27 s | **0.24 s** |
+> | Box minus cylinder | 0.044 s | 0.40 s | ~0.24 s |
+> | Boolean-heavy — 16 cuts, a fuse, 4-way mirror, `removeSplitter` | 0.60 s | 0.84 s | ~0.24 s |
+>
+> The decisive figure is not the per-part ratio but the **total**: 576 parts × 0.24 s is
+> **about 2.3 minutes of startup across an entire sweep**, against a sweep that currently
+> runs for hours. Negligible regardless of what a real ported part costs to build — which
+> makes the conclusion robust to the one quantity still unknown.
+>
+> A caveat kept deliberately: the boolean-heavy case is a *synthetic* analogue at 7,776
+> triangles, while real bulkheads run 25,000–37,000. A true part will build more slowly,
+> which only strengthens the conclusion by raising the denominator.
+
+The decision tree that measurement resolves, kept for the record:
 
 | Measurement | Choose | Consequence |
 | --- | --- | --- |
