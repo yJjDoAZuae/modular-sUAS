@@ -461,8 +461,18 @@ Spawning `freecadcmd.exe` per part instead preserves the queue, the memory budge
 atomic writes, and the retry path exactly as they are, and swaps one command string.
 
 The cost of that choice is process startup per part, which is higher for FreeCAD than for
-OpenSCAD. That is measurable before committing, and it is the first thing to measure —
-see [OQ-ARCH-3](#open-questions).
+OpenSCAD. **That is a measurement, not a design question** — take it first (IP-FC-1) and
+the answer follows mechanically:
+
+| Measurement | Choose | Consequence |
+| --- | --- | --- |
+| Startup small next to a part's build time | **One `freecadcmd` per part** | Queue, worker budget, atomic writes, retry and resume all survive unchanged; crash isolation per part; threads keep working |
+| Startup dominates | **One long-lived worker per thread** | Startup paid once per worker, but crash isolation is lost — a bad part takes its worker's whole batch — and document state leaks between parts unless each is closed explicitly |
+| Neither acceptable | **In-process, multiprocessing** | Rewrites the queue; parameter objects must be picklable; the memory-budget logic changes shape |
+
+These parts take seconds to minutes of kernel work each, so the first row is the likely
+outcome. It costs one measurement to know, and rows two and three are progressively larger
+rewrites that should not be entered speculatively.
 
 **`--resume` needs a new staleness key.** It currently compares the freshly generated
 `.scad` text against what is on disk, byte for byte. There is no generated text after the
@@ -640,17 +650,17 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 
 | ID | Status | Question |
 | --- | --- | --- |
-| ARCH-1 | **open** | `Part::` primitives with booleans, or `PartDesign::` bodies with sketches? |
-| ARCH-2 | **open** | What replaces the exact-and-cheap verification tier? |
-| ARCH-3 | **open** | Is subprocess-per-part viable at FreeCAD's startup cost? |
-| ARCH-4 | **open** | What is the fate of the OpenSCAD implementation? |
-| ARCH-5 | **open** | How is the cowl interior surface generated, and where does extrusion width come from? |
-| ARCH-6 | **open** | How are assembly joints defined and stored? |
-| ARCH-7 | **open** | What decides which dimensions a generated drawing carries? |
-| ARCH-8 | **open** | Does a permissively-licensed tool exist for non-uniform printed-material analysis? |
+| ARCH-1 | ~~decided~~ 2026-08-07 | `Part::` or `PartDesign::`? — build both, then choose (IP-FC-5) |
+| ARCH-2 | ~~decided~~ 2026-08-07 | What replaces the exact verification tier? — do both, plus every method that works |
+| ARCH-3 | ~~withdrawn~~ 2026-08-07 | Not an open question — a measurement. See IP-FC-1 |
+| ARCH-4 | ~~decided~~ 2026-08-07 | Retire it after IP-FC-13; FreeCAD becomes the definition of correctness |
+| ARCH-5 | ~~decided~~ 2026-08-07 | Adaptive curvature-aware slice-and-fit; G1 threshold, G2 objective; never ruled |
+| ARCH-6 | ~~decided~~ 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
+| ARCH-7 | ~~decided~~ 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
+| ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
 
-### OQ-ARCH-1 — `Part::` or `PartDesign::`?
+### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
 The roadmap calls this the decision that shapes the whole phase. The geometry today is
 CSG: unions and differences of primitives and extrusions, with masks trimming an octant and
@@ -683,14 +693,44 @@ mirrors tiling it.
    thing to get wrong.
    *Prerequisites:* both of the above understood first.
 
-**Recommendation: alternative 1.** The single-description property of the greeble is the
+**Recommendation was alternative 1.** The single-description property of the greeble is the
 strongest constraint in the geometry and `Part::` preserves it for free. The fillet
 fragility is real but confined to the flange and web features, which are the least
-load-bearing geometry in the project. Revisit if TechDraw or assemblies later demand
-`PartDesign::` — porting a part a second time is cheaper than losing the joint's safety
-property in the first port.
+load-bearing geometry in the project.
 
-### OQ-ARCH-2 — What replaces the exact verification tier?
+---
+
+**DECIDED 2026-08-07: build the parts *both* ways, then choose.** Neither alternative is
+selected on paper. IP-FC-5 produces a `Part::` corner **and** a `PartDesign::` corner, and
+the paradigm decision follows from comparing them.
+
+This is a deliberate deferral, and it is bought rather than free — it costs a second
+prototype. It is worth that because the roadmap calls this "the decision that shapes the
+whole phase", and the arguments on each side are of a kind that prototypes settle and
+reasoning does not:
+
+- Whether `PartDesign::` can express the greeble's single-description property at all, or
+  needs a constraint where `Part::` has an identity, is a question about how the workbench
+  behaves — not about the geometry.
+- Whether programmatic edge selection for fillets is as fragile as feared is a question
+  about topological naming stability across a parameter sweep, which only a sweep answers.
+- Whether sketch-based construction is genuinely a "bigger rewrite" is a question about how
+  much of the octant-and-mirror structure survives, which is visible once one part exists
+  in both forms.
+
+**What the comparison must produce**, so it decides something rather than becoming two
+prototypes nobody chooses between:
+
+1. Identical measured geometry from both — volume and bounding box against the OpenSCAD
+   reference, to prove both are correct before either is preferred.
+2. A statement of whether the greeble can be formed in `PartDesign::` by reusing the
+   corner's end section, and what it costs if not.
+3. Line counts and, more importantly, how each behaves when a parameter changes — a
+   regenerate across several `U` values, checking whether fillet references survive.
+
+Until IP-FC-5 reports, no other part is ported. That is the point of the deferral.
+
+### ~~OQ-ARCH-2 — What replaces the exact verification tier?~~ — DECIDED 2026-08-07: do both, and more
 
 `scad_snapshot.py` is exact, runs in seconds, and disappears with the generated `.scad`.
 
@@ -716,41 +756,71 @@ property in the first port.
    built tooling to escape.
    *Prerequisites:* none.
 
-**Recommendation: alternative 1 now, and measure alternative 2 opportunistically.** They
-compose — parameters above, BREP below — and 1 is cheap enough to build before it is
-needed.
+**Recommendation was alternative 1 now, alternative 2 opportunistically.** They compose —
+parameters above, BREP below — and 1 is cheap enough to build before it is needed.
 
-### OQ-ARCH-3 — Is subprocess-per-part viable?
+---
 
-Keeping "render is a subprocess" preserves the entire sweep driver. It costs a FreeCAD
-process start per part, and FreeCAD starts far more slowly than OpenSCAD.
+**DECIDED 2026-08-07: do both, and pursue every shape-comparison method available.**
+Alternative 3 — accepting the loss — is rejected outright. The governing statement:
 
-**Alternatives**
+> **At this point we cannot afford to operate without verification coverage.**
 
-1. **One `freecadcmd` process per part.**
-   *Benefits:* the queue, worker budget, atomic writes, retry, and resume all survive
-   unchanged; crash isolation per part; parallelism keeps working through threads.
-   *Drawbacks:* startup cost multiplied by part count.
-   *Prerequisites:* measure startup.
+That is a stronger position than any single alternative above, and it reframes the
+question. The default is **not** "pick the cheapest adequate check". It is **try every
+method, keep everything that works, and deprecate a method only after demonstrating it
+cannot be made to work** — a failed attempt is evidence; an untried idea is not.
 
-2. **One long-lived worker process handling many parts.**
-   *Benefits:* startup paid once per worker.
-   *Drawbacks:* loses crash isolation — one bad part can take a worker's whole batch;
-   document state leaks between parts unless carefully closed; a new failure mode where
-   part N is contaminated by part N−1.
-   *Prerequisites:* alternative 1 measured and found too slow.
+**What this commits to building:**
 
-3. **In-process, multiprocessing instead of threads.**
-   *Benefits:* no process-per-part startup.
-   *Drawbacks:* rewrites the queue; parameter objects must be picklable; the memory budget
-   logic changes shape.
-   *Prerequisites:* both of the above ruled out.
+| Method | Layer it covers | Item |
+| --- | --- | --- |
+| Parameter snapshot | everything above geometry construction — axes, derivation, validity, naming | IP-FC-2 |
+| BREP serialization compare | the geometry layer, exactly, within FreeCAD | IP-FC-32 |
+| Measured geometry | cross-toolchain and within-toolchain | survives as `sweep_check.py` |
+| Generator-script render | that every part still builds at all | successor to `verify_drivers.py` |
 
-**Recommendation: measure before choosing**, and this is step 1 of the sequence above.
-If startup is a small fraction of a part's build time — plausible, since these parts take
-seconds to minutes of kernel work — alternative 1 wins on every other axis.
+These are complements, not competitors. A parameter snapshot cannot see a geometry change; a
+BREP compare cannot see a naming change; measured geometry sees both but costs a render.
+**Layered coverage is the goal and redundancy between layers is a feature** — Phase 2 found
+defects that only one of its three tiers could have caught, more than once, and the two dead
+parameters (OQ-DES-B6, OQ-DES-C3) were invisible to *all* of them.
 
-### OQ-ARCH-4 — What becomes of the OpenSCAD implementation?
+**Grounds for deprecating a method:** demonstrate that it produces false results or cannot
+be made to work, and record the finding. "It seemed redundant" is not sufficient, because
+redundancy is the property being bought.
+
+**Why this matters more after the port than before.** Phase 2's cheapest tier was exact,
+ran in seconds, and carried most of the verification load. The port deletes it. Replacing
+one strong check with one weaker check would quietly reduce coverage at exactly the moment
+the codebase is least trustworthy — a newly ported geometry engine with no track record.
+Several partial checks is the right response, even though it is more work than the
+arrangement it replaces.
+
+### ~~OQ-ARCH-3 — Is subprocess-per-part viable?~~ — WITHDRAWN 2026-08-07: not an open question
+
+**This was miscategorized.** An open question is a decision requiring judgment between
+alternatives whose merits cannot be settled by looking. This is a **measurement** — take the
+`freecadcmd` startup time and a single part's build time, and the answer follows
+mechanically from the ratio. There is no design judgment in it.
+
+The substance has moved to where it belongs:
+
+- **The measurement** is [IP-FC-1](../implementation/freecad_migration.md), already an
+  unblocked work item and the first thing in the plan.
+- **The decision tree** — which architecture each outcome implies, and what each costs — is
+  in [§What must be preserved](#what-must-be-preserved), beside the discussion of why the
+  driver keeps its subprocess model.
+
+Nothing is lost by withdrawing it; the ID is retained rather than renumbered so that
+references elsewhere stay valid.
+
+**Worth noting as a pattern**, since this document raised nine questions and one of them
+was not a question: *"we do not know X"* is not sufficient grounds for an OQ. The test is
+whether knowing X requires a **decision** or merely an **observation**. If an afternoon of
+measurement settles it, it is a work item.
+
+### ~~OQ-ARCH-4 — What becomes of the OpenSCAD implementation?~~ — DECIDED 2026-08-07: retire it
 
 The roadmap says do not delete it before the FreeCAD path is proven across the full
 parameter range, which settles the near term but not the end state.
@@ -775,13 +845,52 @@ parameter range, which settles the near term but not the end state.
    *Drawbacks:* the reference goes stale the moment the geometry legitimately changes.
    *Prerequisites:* none.
 
-**Recommendation: alternative 3.** A frozen corpus captures nearly all the value of
+**Recommendation was alternative 3.** A frozen corpus captures nearly all the value of
 alternative 2 — an independent statement of what the geometry was — without the standing
 cost of maintaining two implementations, which alternative 2 will lose to entropy.
 
 ---
 
-### OQ-ARCH-5 — How is the cowl interior surface generated?
+**DECIDED 2026-08-07: alternative 1 — retire it.** No new geometry will be developed in
+OpenSCAD, and two implementations will not be maintained in parallel. **Once verified, the
+FreeCAD implementation becomes the definition of correctness.**
+
+That last clause settles it, and it is what my recommendation missed. Alternative 3 proposed
+keeping the OpenSCAD output as a frozen reference corpus — but a corpus is only useful as a
+*datum*, and there cannot be two definitions of correctness. The moment IP-FC-13 signs off
+equivalence, the OpenSCAD tree stops being an independent check and becomes a second,
+unmaintained answer to a question that now has an authoritative one. Keeping it invites
+someone to read a disagreement as ambiguous when it is not.
+
+**The corpus is therefore a migration instrument with a defined end of life, not an asset:**
+
+| Phase | Role of the OpenSCAD output |
+| --- | --- |
+| Until IP-FC-13 | **The datum** — every ported part is checked against it |
+| At IP-FC-13 | Equivalence demonstrated across the full parameter range |
+| After IP-FC-13 | **Superseded** — FreeCAD defines correctness; the OpenSCAD implementation is removed |
+
+**Deleting it is safer than it feels**, which is worth stating because working code is hard
+to throw away: the implementation lives in git history and stays recoverable indefinitely.
+Removing it from the working tree destroys nothing — it stops it being read, maintained, or
+mistaken for authoritative. And the part that *would* genuinely have been lost, the design
+intent the code was the only record of, is now in [corner.md](../design/corner.md),
+[bulkhead.md](../design/bulkhead.md) and [cowl.md](../design/cowl.md).
+
+**Two conditions on the removal**, both still binding:
+
+1. **Not before the full parameter range is proven** — IP-FC-13, not the first part that
+   matches.
+2. **Not before the design documents are checked against it one last time.** They were
+   reconstructed *from* this code; once it is gone, an error in them is no longer
+   falsifiable against the original. This session found several such errors, so the risk is
+   demonstrated rather than theoretical.
+
+Tracked as IP-FC-34.
+
+---
+
+### ~~OQ-ARCH-5 — How is the cowl interior surface generated?~~ — DECIDED 2026-08-07: adaptive slice-and-fit
 
 Required by UC-4. The interior must be a per-layer 2D inset matching slicer behavior, not
 a perpendicular shell offset — see the use-case section for why the two differ and why the
@@ -846,7 +955,48 @@ decision as the top-and-bottom-solid-layers rule a slicer applies.
 
 **The full method belongs in an algorithm document**, not here — see IP-FC-16.
 
-### OQ-ARCH-6 — How are assembly joints defined and stored?
+---
+
+**DECIDED 2026-08-07: alternative 2, with four requirements on the surface it produces.**
+
+1. **Curvature-aware, adaptive section spacing.** Not a fixed interval. Section density
+   follows local curvature — close where the OML turns hard, sparse where it is nearly
+   straight. Uniform spacing wastes sections on the parallel midbody and under-samples the
+   nose radius, which is the one place accuracy matters.
+2. **Bidirectional curvature.** The interior must be doubly curved — circumferentially
+   *and* axially. Not developable, not ruled.
+3. **Axial continuity: G1 tangency is the threshold, G2 curvature is the objective.**
+   Tangency across every section join is the minimum acceptable result; curvature
+   continuity is the goal to design toward.
+4. **Explicitly not a ruled surface with tangency discontinuity.** A loft that
+   straight-lines between adjacent contours and meets only C0 at each section is precisely
+   the failure this requirement excludes.
+
+**Why the continuity requirement is not cosmetic.** Wall thickness is the *difference*
+between exterior and interior surfaces. The exterior is a piecewise cubic Bézier carrying
+G2 across several stations by design (§1.2). If the interior is only C0 at its section
+joins, then **wall thickness is discontinuous at every join** — a thickness step at a seam
+the exterior does not have — even though each surface is individually acceptable. That is a
+stress raiser for UC-8 and a visible artifact in UC-4 and UC-7.
+
+Matching the interior's continuity class to the exterior's is the real requirement; G1
+threshold / G2 objective is how it is stated.
+
+**What this rules out in implementation.** A `ruled=True` loft is excluded by (4). So is a
+`ruled=False` loft that merely interpolates the section curves without tangency
+constraints, since that satisfies neither (3) nor generally (2). The method wants a surface
+**fit** through the offset contours with continuity conditions imposed — the same class of
+construction OpenVSP uses for the exterior, applied to the interior.
+
+**Adaptive spacing has a natural termination test:** refine the interval until the deviation
+between the fitted surface and the true per-layer offset falls below tolerance. That makes
+spacing a derived quantity rather than a tuning knob, and gives the algorithm document a
+convergence criterion to state.
+
+The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
+layers — remains the main undecided item inside IP-FC-16.
+
+### ~~OQ-ARCH-6 — How are assembly joints defined and stored?~~ — DECIDED 2026-08-07: Assembly joints
 
 Required by UC-4: fuselage unit, nose, tail, and full fuselage assemblies with real joints.
 
@@ -879,12 +1029,47 @@ construction rather than by constraint. That is the same argument that appears i
    of duplication this project has spent Phase 2 removing.
    *Prerequisites:* both of the above understood.
 
-**Recommendation: measure alternative 2's headless behavior first**, because it decides
-whether the choice is real. If the Assembly workbench does not script cleanly under
-`freecadcmd`, alternative 1 is the only option that runs in a sweep and the question closes
-itself.
+**Recommendation was to measure alternative 2's headless behavior first**, because it
+decides whether the choice is real. If the Assembly workbench does not script cleanly under
+`freecadcmd`, alternative 1 is the only option that runs in a sweep.
 
-### OQ-ARCH-7 — What decides which dimensions a generated drawing carries?
+---
+
+**DECIDED 2026-08-07: alternative 2 — FreeCAD Assembly with real joints.**
+
+This buys what UC-4 and UC-7 actually need: interference checking, kinematics, and an
+assembly that exports to STEP as an assembly rather than as a bag of solids.
+
+**The headless question becomes a work item, not a decision gate.** Confirming that the
+Assembly workbench scripts under `freecadcmd` is now a prerequisite task inside IP-FC-19
+rather than a condition on the choice. If it turns out not to script, that is a problem to
+solve — not a reason to revisit the decision.
+
+**The one real objection to this option has a cheap mitigation, and it should be built in
+from the start.** The drawback of joints over construction is that a constraint can fail to
+solve, or solve to something unintended, and in a batch context nothing would notice.
+
+But **the constructed placement remains computable from the parameters** — that is what
+alternative 1 would have used, and those parameters do not go away. So:
+
+> **Solve with joints; verify against the constructed placement.**
+> For every assembly, compute where each part *should* sit from `unit_width`,
+> `bulkhead_thickness`, `unit_length` and the rest, and assert the solver put it there
+> within tolerance.
+
+That converts the failure mode from silent into loud, at the cost of arithmetic that is
+already available. It preserves the property [OQ-DES-C3](../design/corner.md#open-questions)
+established — that parts sharing parameters cannot drift — while still producing a real
+assembly with real joints.
+
+**Note what this does and does not change about the geometry.** Parts still share their
+cross-section and joint parameters by construction; the greeble is still formed by cutting
+with `corner_end()`. Joints are an additional layer describing how parts relate, for the
+benefit of downstream consumers. They are not a substitute for the parametric consistency
+that makes the parts fit in the first place, and nothing here should be read as license to
+let the two representations diverge.
+
+### ~~OQ-ARCH-7 — What decides which dimensions a generated drawing carries?~~ — DECIDED 2026-08-07
 
 Required by UC-7. Projecting a view is the easy part; TechDraw does it from any shape.
 The hard part is *which* dimensions to place, and that is a question about design intent,
@@ -931,53 +1116,88 @@ Note that this use case does **not** change the OQ-ARCH-1 recommendation. TechDr
 projects any shape and does not require `PartDesign::` bodies or sketches — its dimensions
 attach to projected edges and vertices, not to sketch constraints.
 
-### OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material?
+---
 
-Required by UC-8 tier 4. An FDM part is not the isotropic solid an FEM solver assumes by
-default: it is stiff along the deposited beads and weak across the layer interface, and
-its properties depend on toolpath and orientation rather than on shape alone.
+**DECIDED 2026-08-07: none of the three as posed.** The alternatives framed this as a choice
+between dimensioning *interfaces* and dimensioning *parameters*. That framing is wrong twice
+over.
 
-**This question is a survey, not a decision.** It should be answered by looking at what
-exists, and the answer may be "nothing suitable" — which is itself a useful result,
-because it bounds tier 3 as the ceiling and stops the ladder being planned around a rung
-that is not there.
+**First: a dimension is an expression over parameters, not a parameter.** Some are a
+parameter directly — `corner_radius`, `bolt_offset`. Many are *combinations*: the bulkhead's
+flange inner edge sits at `corner_radius − panel_thickness − panel_tolerance`, its outer
+flange face a further `flange_thickness` in. Neither is a parameter anyone set; both are
+what a machinist or inspector needs.
 
-**Alternatives**
+The dimension scheme is therefore a set of **named expressions**, each bound to two
+topological references. Alternative 1's "generate from the `Parameters` object" was too
+literal — the object supplies the *inputs*, not the dimensions.
 
-1. **Stop at tier 3 — orthotropic per part, from recorded print orientation.**
-   *Benefits:* reachable with the stack already in use; CalculiX supports orthotropic
-   elasticity and FreeCAD invokes it as a separate process, which the license policy
-   already sanctions; captures the dominant effect, which is Z-axis weakness at layer
-   interfaces.
-   *Drawbacks:* treats each part as a uniform orthotropic continuum, so it cannot see
-   infill pattern, perimeter count, or a weak seam; conservative in some places and
-   optimistic in others without saying which.
-   *Prerequisites:* print orientation becomes a recorded parameter.
+**A useful consequence:** the design documents already contain many of these expressions,
+because documenting the geometry required deriving them.
+`corner_radius − panel_thickness − panel_tolerance` appears in
+[bulkhead.md](../design/bulkhead.md); the buttress profile vertices in
+[cowl.md §4.1](../design/cowl.md) are expressions of exactly this kind. The scheme starts
+from the design authority rather than blank.
 
-2. **Adopt a permissively-licensed additive-manufacturing analysis tool, if one exists.**
-   *Benefits:* the stated ideal — properties that follow the actual deposition.
-   *Drawbacks:* unknown whether such a tool exists at usable maturity; would add a
-   dependency far larger than anything currently in the project.
-   *Prerequisites:* **the survey.** Establish what exists, its license, and whether it can
-   be driven headless from a batch.
+**Second: interfaces are a floor, not the scope.** The physical interface must be documented
+with dimensioning — that part of alternative 3 stands — but the drawing must also be
+**complete**, and complete and **readable** pull against one another. That tension is the
+real design problem and neither side is negotiable.
 
-3. **Calibrate tier 3 against test articles** rather than seeking a finer model.
-   *Benefits:* a coupon test gives real orthotropic constants for *this* printer,
-   material and profile, which is more trustworthy than a finer model fed generic data;
-   the project already prints and assembles at both ends of the size range.
-   *Drawbacks:* physical test work; constants are specific to the process used.
-   *Prerequisites:* tier 3.
+### What this implies
 
-**Recommendation: 1, then 3, and treat 2 as a survey to run before committing to
-either.** The largest single error in analyzing a printed part is assuming isotropy, and
-tier 3 removes it. Going from measured orthotropic constants to bead-level modeling is a
-much smaller refinement than the one before it, and it is not obviously worth a heavy
-dependency — but that judgement should follow the survey rather than precede it.
+**Completeness has a testable definition** and should be stated as one: every dimension
+needed to manufacture and inspect the part is present, and none is redundant.
+Over-dimensioning — the same distance implied twice through different chains — is a genuine
+defect rather than mere clutter, because the two chains can disagree once tolerances apply.
 
-Note also that tiers 1 and 2 are worth having regardless of how this resolves. Mass
-properties need no solver at all, and an isotropic model with the *real* load path —
-longerons, panels, inserts, bonds — is a better answer than an anisotropic model of the
-printed parts alone.
+**The sweep makes readability easier, not harder.** 576 variants share one *scheme* and
+differ only in *values*. That is exactly what classical drafting solves with a **family
+drawing**: lettered callouts (A, B, C …) on the views and a table of values per variant. One
+readable sheet replaces 576 crowded ones, completeness is checked once against the scheme
+rather than per part, and a new variant adds a table row rather than a drawing.
+
+That form also inverts the earlier worry about which dimensions to include: with values in a
+table rather than on the view, an extra dimension costs a column instead of a crowded leader
+line — so **completeness becomes affordable in a way it is not on a one-off drawing.**
+
+**Still to settle**, and belonging to the drawing scheme's own design work:
+
+1. Which expressions constitute the interface set — the floor, and something
+   `overview.md`'s interface-conventions section should own once it exists.
+2. What "complete" means for this family: fully defining every part, or fully defining
+   every mating and inspected feature.
+3. Whether internal structure — webs, fillets, chamfers — is dimensioned at all, or shown
+   as reference geometry governed by the model.
+4. How topological references survive a parameter change. This is the same edge-naming
+   stability question IP-FC-5's two prototypes will answer, so it need not be solved twice.
+
+### ~~OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material?~~ — WITHDRAWN 2026-08-07: not an open question
+
+**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions).** The question was
+"does a permissively-licensed tool exist for bead-level FDM analysis" — and I said in the
+original text that it "should be answered by looking". That is the admission that it is a
+**work item**: an observation, not a decision between alternatives.
+
+It is [IP-FC-6](../implementation/freecad_migration.md), already an unblocked survey task.
+
+The substance that was worth keeping is not the question but the **ladder it sat at the top
+of**, and that is recorded in [§UC-8 is a ladder](#uc-8-is-a-ladder-not-a-single-capability):
+
+- Tier 3 — orthotropic per part — is reachable with the stack already in use. CalculiX
+  supports orthotropic elasticity, FreeCAD invokes it as a separate process, and the layer
+  axis per part is now recorded (IP-FC-3).
+- Tier 4 — bead-level or toolpath-resolved — depends on tooling whose existence is unknown.
+
+**The decision that *would* have been an open question is a different one:** whether to
+stop at tier 3 or pursue tier 4 at the cost of a heavy dependency. That question cannot be
+posed usefully until the survey reports, because its alternatives depend on what the survey
+finds. If IP-FC-6 turns up a viable tool, raise it then.
+
+**Two of the nine questions in this document were work items** — this and OQ-ARCH-3. Both
+had the same shape: *"we do not know the value of X"*, where X is discoverable by looking.
+The test that separates them is whether resolution requires a **judgment** or an
+**observation**. Recorded here because it is a cheap mistake to repeat.
 
 ### ~~OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern?~~ — RESOLVED 2026-08-07
 
