@@ -101,13 +101,47 @@ def example_design_tool(**params):
 # the project's SI standard. See doc/guidelines/openscad.md.
 
 LONGERON_TOLERANCE_MM = 0.05
+
+# Half-angle of the wedge cut out of the greeble, so the mouth is 70 degrees wide. That
+# mouth is what makes the greeble a C rather than a closed ring, and it is how the
+# longeron is assembled: the tube presses in sideways and snaps into the bore, which the
+# chord across the mouth (2*r*sin35 = 57% of the tube diameter) is narrow enough to hold.
+#
+# Arrived at by experiment. It is a tuned value, not a derived one -- do not replace it
+# with a formula. See doc/design/bulkhead.md.
 GREEBLE_OPENING_ANGLE_DEG = 35
 
-# Greeble clearance goes entirely on the corner. The bulkhead carries the pocket at
-# nominal size and the corner's nub is undersized to suit, so the fit is tuned from
-# one side only -- splitting it across both would double the clearance.
-GREEBLE_TOLERANCE_BULKHEAD_MM = 0.0
+# The greeble is the positive post on the *bulkhead*; the corner carries the matching
+# bore and snap groove. Clearance goes entirely on the corner: its bore is opened out by
+# this much while the bulkhead's post stays nominal, so the fit is tuned from one side
+# only -- splitting it across both halves would double the clearance.
+#
+# There is deliberately no bulkhead counterpart. The bulkhead geometry takes no greeble
+# tolerance at all, because "the post is nominal" is an invariant rather than a setting.
+# A GREEBLE_TOLERANCE_BULKHEAD_MM used to exist, was passed down four levels of SCAD
+# module, and was discarded by a local zero at the bottom -- see OQ-DES-B6.
 GREEBLE_TOLERANCE_CORNER_MM = 0.05
+
+
+def greeble_nub_thickness_of(greeble_thickness):
+    """Wall thickness of the snap rib, derived from the greeble's seat wall.
+
+    The two are **not independent parameters** -- there is one wall thickness and a
+    formula relating the rib to it. Identity today, because a rib the same thickness as
+    the wall it stands on is what has been printed and assembled at both ends of the
+    swept range (U=0.5 and U=4; see OQ-DES-B4 and OQ-DES-B7 in doc/design/bulkhead.md).
+
+    It is written as a formula rather than collapsed into a single value on purpose: if
+    scale problems turn up and the rib needs to be thicker or thinner than the seat,
+    the fix belongs here, in one place. Reintroducing a second independent parameter
+    would let the rib and its mating groove drift apart silently -- and they are the two
+    halves of a snap fit, so drift means parts that do not assemble.
+
+    Authoritative here rather than in OpenSCAD (OQ-DES-C1). The geometry modules take
+    both values as arguments and never derive either, so Python is the only place the
+    relationship is stated -- and it is the side that survives the FreeCAD port.
+    """
+    return greeble_thickness
 
 
 def standard_values():
@@ -225,6 +259,10 @@ class GreebleParameters:
     opening_angle: float = 0
     tolerance: float = 0
     thickness: float = 0
+    # Derived from `thickness`, never set independently -- see
+    # greeble_nub_thickness_of(). The two are one wall thickness and a formula, not two
+    # parameters: they are the mating halves of a snap fit, so letting them drift apart
+    # produces parts that do not assemble.
     nub_thickness: float = 0
 
 
@@ -454,7 +492,8 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         is_anchor = user_parameters["is_anchor"]
     
         c.bulkhead.type_name = user_parameters["bulkhead_type_name"]
-        c.greeble.tolerance = GREEBLE_TOLERANCE_BULKHEAD_MM
+        # greeble.tolerance is left at its zero default: the bulkhead's greeble post
+        # is nominal by construction and the geometry takes no tolerance for it.
     else:
         is_end = False
         is_interconnect = False
@@ -472,8 +511,12 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     c.panel.type_name = user_parameters["panel_name"]
 
     # recreate derived dimensions from corner_end()
+    #
+    # sqrt(U), not U: the greeble wall is a printed feature sized to survive a snap fit,
+    # so it scales in extrusions rather than as a fraction of the airframe. The max()
+    # floors it at two extrusion widths, because a one-extrusion wall has no interior.
     c.greeble.thickness = max(2*math.sqrt(U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
-    c.greeble.nub_thickness = max(2*math.sqrt(U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
+    c.greeble.nub_thickness = greeble_nub_thickness_of(c.greeble.thickness)
 
     if is_cowling or c.panel.thickness==0:
         c.panel.tolerance = 0.0
@@ -1677,7 +1720,9 @@ def bulkhead_render(dp, output_dir, filename):
         is_interconnect=is_interconnect,
         is_cowling=is_cowling,
         unit_width=dp.bulkhead.width,
-        unit_length=dp.corner.length,
+        # No unit_length: a bulkhead is independent of bay length, which is why one
+        # bulkhead design serves every FX and why the bulkhead sweep carries no FX
+        # axis at all. It used to be passed and ignored. See OQ-DES-C3.
         bulkhead_thickness=dp.bulkhead.thickness,
         corner_radius=dp.corner.radius,
         panel_thickness=dp.panel.thickness,
@@ -1692,7 +1737,9 @@ def bulkhead_render(dp, output_dir, filename):
         greeble_opening_angle=dp.greeble.opening_angle,
         greeble_thickness=dp.greeble.thickness,
         greeble_nub_thickness=dp.greeble.nub_thickness,
-        greeble_tolerance=dp.greeble.tolerance,
+        # No greeble_tolerance: the bulkhead's greeble post is nominal by
+        # construction, so bulkhead_section_full does not take one. The clearance
+        # is on the corner -- see corner_render above.
         plate_thickness=dp.plate.thickness,
         web_fillet_radius=dp.web.fillet_radius,
         web_width=dp.web.width,

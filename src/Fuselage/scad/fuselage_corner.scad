@@ -12,10 +12,15 @@ DTF_thickness = 4.77;
 panel_thickness = DTF_thickness;
 panel_tolerance = 0.1;
 longeron_tolerance = 0.05;
-// The corner carries all of the greeble fit clearance; the bulkhead's pocket is
-// cut at nominal size. See bulkhead_section() in fuselage_bulkhead_geometry.scad.
+// The corner carries all of the greeble fit clearance -- this tolerance opens out
+// the corner's bore. The bulkhead's greeble post is cut at nominal size. See
+// bulkhead_section() in fuselage_bulkhead_geometry.scad.
+// One wall thickness, stated twice. The rib thickness is derived from the seat wall by
+// greeble_nub_thickness_of() in fuselage_variants.py -- identity today -- and the sweep
+// can never make them disagree. This driver sets them by hand, so keep them equal
+// unless that formula changes.
 greeble_thickness = 0.8;
-greeble_nub_thickness = 0.8;
+greeble_nub_thickness = greeble_thickness;
 greeble_tolerance = 0.05;
 nozzle_diameter = 0.4;
 
