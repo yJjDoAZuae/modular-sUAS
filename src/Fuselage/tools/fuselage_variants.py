@@ -170,9 +170,20 @@ class BulkheadType(Enum):
 # Each group is a dataclass rather than a dict. The difference that matters is
 # assignment: a dict accepts `c["greeble"]["thicknes"] = 1.2` in silence, adding
 # a new key while the real field keeps its default, so the part comes out wrong
-# by exactly the amount the assignment was meant to change. The same typo on a
-# dataclass raises AttributeError at the line that made it. Reads were already
+# by exactly the amount the assignment was meant to change. Reads were already
 # safe -- a dict raises KeyError -- so this closes the half that was open.
+#
+# `slots=True` is what actually closes it, and it is not optional. A PLAIN
+# dataclass accepts `c.greeble.thicknes = 1.2` just as silently as the dict did:
+# instances carry a __dict__ and Python is happy to add an attribute to it. Only
+# __slots__ removes that __dict__ and turns the typo into an AttributeError at
+# the line that made it.
+#
+# This was found the hard way. IP-GEO-24 renamed nozzle_diameter to
+# extrusion_width; a verification script still assigning the old name kept
+# working, silently left extrusion_width at its default, and reported bulkheads
+# 13-30% off in volume -- the exact failure the dataclasses were introduced to
+# prevent, reproduced by the dataclasses because slots had been left off.
 #
 # Every field default is the value the corresponding null_*_parameters()
 # constructor used to assign a line at a time, and those constructors remain as
@@ -185,20 +196,20 @@ class BulkheadType(Enum):
 # built here survives the Phase 3 port and an OpenSCAD vector encoding does not.
 
 
-@dataclass
+@dataclass(slots=True)
 class PrinterSettings:
     extrusion_width: float = 0.4
     layer_height: float = 0.2
 
 
-@dataclass
+@dataclass(slots=True)
 class CornerParameters:
     FX: float = 1
     radius: float = 0
     length: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class BulkheadParameters:
     U: float = 1
     width: float = 0
@@ -207,7 +218,7 @@ class BulkheadParameters:
     type_name: str = ""
 
 
-@dataclass
+@dataclass(slots=True)
 class BoomBulkheadParameters:
     diameter: float = 0
     thickness: float = 0
@@ -225,7 +236,7 @@ class BoomBulkheadParameters:
     make_lower_web: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class PanelParameters:
     thickness: float = 0
     offset: float = 0
@@ -235,13 +246,13 @@ class PanelParameters:
     is_metric: bool = True
 
 
-@dataclass
+@dataclass(slots=True)
 class LongeronParameters:
     radius: float = 0
     tolerance: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class BoltParameters:
     radius: float = 0
     thickness: float = 0
@@ -254,7 +265,7 @@ class BoltParameters:
     diameter: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class GreebleParameters:
     opening_angle: float = 0
     tolerance: float = 0
@@ -266,32 +277,32 @@ class GreebleParameters:
     nub_thickness: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class PlateParameters:
     """The bulkhead's plate. NosePlateParameters is the different one."""
     thickness: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class WebParameters:
     fillet_radius: float = 0
     width: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class BulkheadFlangeParameters:
     fillet_radius: float = 0
     thickness: float = 0
     chamfer: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class CowlFlangeParameters:
     height: float = 0
     tolerance: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class Parameters:
     """Everything the bulkhead and corner geometry modules are driven from."""
     corner: CornerParameters = field(default_factory=CornerParameters)
@@ -349,7 +360,7 @@ def null_bulkhead_flange_parameters():
 def null_cowl_flange_parameters():
     return CowlFlangeParameters()
 
-@dataclass
+@dataclass(slots=True)
 class OmlParameters:
     filename: str = ""
     scale: float = 0
@@ -358,7 +369,7 @@ class OmlParameters:
     reversed: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class NosePlateParameters:
     """The nose plate, which is not the bulkhead plate.
 
@@ -374,14 +385,14 @@ class NosePlateParameters:
     tolerance: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class NoseTipParameters:
     active: bool = False
     flange_inset: float = 0
     flange_height: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class ButtressParameters:
     active: bool = False
     angle: float = 0
@@ -393,7 +404,7 @@ class ButtressParameters:
     r_end: float = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class ButtressSet:
     """The buttresses, plus the three settings they share.
 
@@ -411,7 +422,7 @@ class ButtressSet:
     side: ButtressParameters = field(default_factory=ButtressParameters)
 
 
-@dataclass
+@dataclass(slots=True)
 class NoseParameters:
     """Everything the nose and tail cowl geometry modules are driven from."""
     cowl_type: str = "nose"     # "nose" or "tail"; set from the parameter file

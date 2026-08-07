@@ -408,6 +408,7 @@ port while the Python structure survives it.
 | ISC | Preferred. Functionally equivalent to MIT. |
 | LGPL (any) | Acceptable for a separate-process tool; avoid for linked libraries. |
 | GPL (any) | Avoid for libraries. Note that OpenSCAD and FreeCAD are themselves GPL/LGPL applications invoked as **separate processes**, which does not propagate to this project's code. |
+| NASA Open Source Agreement 1.3 | Acceptable, as a separate tool **or** as an imported module. OpenVSP is under NOSA 1.3, including its Python API surface (`vsp.py`, `_vsp.pyd`); the helper packages layered above it are MIT. NOSA's obligations attach to *distribution* of the covered software (§3.A), not to linkage, so using it imposes nothing on this project's code, and §3.I explicitly permits a Larger Work in which only the covered portions stay under NOSA. Read §4.B before shipping a *product* designed with it — a waiver-and-indemnity term covering the US Government, which is a liability question rather than a code-licensing one. |
 | Proprietary | Avoid unless no open-source alternative exists and explicit approval is obtained. |
 
 ### Dependency Selection Criteria

@@ -48,14 +48,24 @@ OpenSCAD at any effort** — which is the actual justification for the migration
 | **UC-4** | Solid assemblies with defined joints — fuselage unit, nose, tail, full fuselage | `*.FCStd` assembly | B-rep | **No** |
 | **UC-5** | Blender mesh assemblies: full fuselage, units, exploded, exploded with animation paths | `*.blend` | mesh | Partly — `blender/splode.blend` exists |
 | **UC-6** | New components: printable panels, panel cutting templates, wing joiners, boom collet and clamp, landing-gear bulkheads and structural blocks | solid + 2D vector | mixed | No — new design work |
+| **UC-7** | High-quality dimensioned engineering drawings, of both individual parts and assemblies | `*.pdf` / `*.svg` drawing | drawing | **No** |
+| **UC-8** | Structural analysis — mass properties, deformation, stress, yield margin — including the components the model does not yet contain | analysis results | analysis | **No** |
+| **UC-9** | Aerodynamic analysis via OpenVSP — parametric nose and tail generation, fuselage force and moment, building toward full-configuration analysis | OML surfaces + aero coefficients | analysis | Partly — OpenVSP is already the OML source, driven by hand |
 
-**UC-2, UC-3 and UC-4 are blocked by OpenSCAD's representation, not by its interface.**
-OpenSCAD has no boundary representation. Its solid model is a polyhedral mesh — a
-`cylinder()` *is* a prism of `$fa`/`$fs` facets, not a cylindrical surface — so there is
-no curved geometry to write into a STEP file and nothing for an assembly constraint to
-attach to. **No amount of work on the OpenSCAD path reaches these three.** That is a
-stronger argument for the port than convenience, and it is worth stating plainly because
-it also bounds the argument: UC-1 alone would not justify the migration.
+**UC-2, UC-3, UC-4 and UC-7 are blocked by OpenSCAD's representation, not by its
+interface.** OpenSCAD has no boundary representation. Its solid model is a polyhedral
+mesh — a `cylinder()` *is* a prism of `$fa`/`$fs` facets, not a cylindrical surface — so
+there is no curved geometry to write into a STEP file, nothing for an assembly constraint
+to attach to, and **no circle for a drawing to dimension**. **No amount of work on the
+OpenSCAD path reaches these four.** That is a stronger argument for the port than
+convenience, and it bounds the argument too: UC-1 alone would not justify the migration.
+
+UC-7 is worth spelling out because it is the least obvious of the four. A dimensioned
+drawing needs to attach a diameter callout to a *cylindrical face* and a radius to an
+*arc*. Projecting OpenSCAD's output gives a 360-sided polygon: every "circle" is a chain
+of short line segments, so there is no arc to select, no center to reference, and a
+diameter callout has nothing to bind to. The drawing would have to be dimensioned by hand
+against coordinates, which is exactly the manual step the generator exists to remove.
 
 **Mesh is not acceptable as an intermediate for UC-2, UC-3 or UC-4.** Tessellating and
 re-fitting a surface would produce a nominally-solid model whose faces are approximations
@@ -75,7 +85,9 @@ flowchart LR
     solid --> step["*.step<br/>UC-3"]
     solid --> asm["assembly + joints<br/>UC-4"]
     solid --> tess["tessellate"]
-    solid --> draw["TechDraw / SVG<br/>UC-6 templates"]
+    solid --> draw["TechDraw<br/>UC-7 drawings"]
+    solid --> flat["2D vector<br/>UC-6 templates"]
+    asm --> draw
 
     tess --> stl["*.stl (mm)<br/>UC-1"]
     tess --> blend["Blender<br/>UC-5"]
@@ -138,6 +150,151 @@ The method belongs in an algorithm document (`doc/algorithms/`, per the `/arch` 
 rather than here; this section states the requirement and the trap. Tracked as
 [OQ-ARCH-5](#open-questions).
 
+### UC-8: analysis needs a second class of model object
+
+Every part the generator produces today is a **printed** part. Structural analysis needs
+the whole load path, and most of it is missing:
+
+| Component | In the model today | Needed for analysis |
+| --- | --- | --- |
+| Longeron | only its bore | the tube — the primary bending member |
+| Panel | only its capture slot | the sheet, as a structural skin |
+| Threaded insert | only the bore, and a dimension table | the insert as a stiff body |
+| Bolt | only the hole | preload and shear path |
+| Glue bond | nothing at all | the bonded interface |
+
+The architectural point is that these are **not new designs**. The model already knows
+their dimensions, because it cuts the clearances that receive them: `longeron_radius`,
+`panel_thickness`, `bolt_hole_radius`, and the anchor diameter looked up from
+[`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv).
+
+**So the non-printed components should be derived from the same parameters that create
+their clearances, never specified separately.** That is the same argument the greeble
+already settles for the joint: a bore and the thing that fills it are two views of one
+dimension, and two independent statements of one dimension eventually disagree. A longeron
+modeled at 16 mm against a bore cut for a 15.9 mm tube is a bug that no test would catch,
+because both parts would be individually correct.
+
+**Glue bonds are different in kind.** They are not solids; they are interfaces between
+solids, and in analysis they are contact or tie conditions rather than geometry. They
+therefore belong to the *assembly*, not to any part, which makes this part of UC-8 depend
+on UC-4.
+
+### UC-8 is a ladder, not a single capability
+
+The four tiers differ by orders of magnitude in cost, and only the last is uncertain:
+
+| Tier | Capability | Needs | Status |
+| --- | --- | --- | --- |
+| 1 | **Mass properties** — mass, center of gravity, inertia tensor | densities per component; the non-printed solids | Available immediately once the solids exist; FreeCAD computes these exactly from the B-rep, no solver involved |
+| 2 | **Isotropic FEM** — deformation, stress, yield margin | tier 1, plus an assembly with loads, restraints and bonded interfaces | Reachable with the existing stack |
+| 3 | **Orthotropic FEM** — printed parts as layered material, weak through the layer axis | tier 2, plus print orientation **stated** per part | Solver-side capability exists; the orientation is already designed in, it is simply not written down |
+| 4 | **Mesostructure / toolpath-level** — bead geometry, infill pattern, layer adhesion as modeled features | tier 3, plus tooling that may not exist permissively | **Unverified** — see below |
+
+Separating tier 1 matters. Mass properties are exact from a B-rep, need no solver, and
+answer a question the project asks constantly — what does this airframe weigh, and where
+is its CG. That is available as soon as the non-printed components are modeled, which is
+work UC-8 needs anyway.
+
+**Tier 3 is closer than it looks.** Treating a printed part as orthotropic — stiff along
+the beads, weak across the layer interface — requires knowing which way the layers run.
+
+**Every printable component in this system already has a print orientation by design.**
+The parts are not shapes that might be printed any way up; each one was drawn for a
+specific orientation, and the features that show it are already in the geometry — chamfers
+sized to be self-supporting, the 45° ramp on the interconnect's depth change, the greeble's
+lead-in. So the layer normal is a *known* property of every part.
+
+What is missing is that it is nowhere **stated**. Nothing in the model or the design
+documents says, for each part, which axis the layers stack along and whether the modeled
+frame is the print frame or a rotation of it. That distinction matters — the `/arch`
+convention already notes that assembly orientation and print orientation are not the same
+thing — and an orthotropic material assignment needs the answer per part.
+
+So tier 3's prerequisite is a **recording** task, not a design decision: write down what
+was already decided, one line per part, in each part's design document. That is much
+cheaper than adding a parameter someone has to choose.
+
+**On licensing**, the project's policy already answers most of the question:
+
+> GPL (any) — Avoid for libraries. Note that OpenSCAD and FreeCAD are themselves GPL/LGPL
+> applications invoked as **separate processes**, which does not propagate to this
+> project's code.
+
+FreeCAD's FEM workbench drives **CalculiX**, a GPL solver, as a separate process — exactly
+the pattern the policy already sanctions. Orthotropic elasticity is standard CalculiX
+capability, so tier 3 does not require a new solver; what is unverified is whether
+FreeCAD's material editor exposes it or whether the input deck must be written directly.
+
+**Tier 4 is where I cannot give an answer.** Whether a mature, permissively-licensed tool
+exists for bead-level or layer-adhesion modeling of FDM parts is a survey question, and it
+should be answered by looking rather than by assuming in either direction. The commercially
+established tools in this space are proprietary. Recorded as [OQ-ARCH-8](#open-questions)
+rather than guessed at.
+
+### UC-9: OpenVSP is already in the pipeline, one-way and by hand
+
+This use case does not introduce OpenVSP — it closes a loop that already exists and is
+currently manual. Today:
+
+```mermaid
+flowchart LR
+    vsp3["cad/modular_sUAS_nose_tail.vsp3"] -. "opened by hand" .-> gui["OpenVSP GUI"]
+    gui -. "exported by hand" .-> mesh["oml/vsp_nose.stl (12 MB)<br/>oml/vsp_tail.stl (24 MB)"]
+    mesh --> cowl["cowl_geometry.scad<br/>import()"]
+    cowl --> parts["cowl parts"]
+
+    style gui stroke-dasharray: 4 4
+```
+
+The source model **is** version-controlled — `src/Fuselage/cad/modular_sUAS_nose_tail.vsp3`
+— so the provenance exists. What does not exist is any automation between it and the
+meshes, and no check that the committed meshes were exported from the committed model.
+
+**The OML import is a third unit boundary, and the only metre-to-millimetre conversion in
+the OpenSCAD path.** `body_blank_full()` applies `scale([U/oml_scale, …])` with
+`oml_scale = 1e-3`, so the factor is `1000·U`: the exported mesh is in **meters** and the
+model is in millimeters. The companion values in the cowl JSON are metres too —
+`oml_length = 0.050` for the nose, `0.1` for the tail. Worth stating plainly, because it
+is the one place the existing millimeter-throughout rule already meets SI data, and the
+port has to keep the conversion rather than discover it.
+
+### UC-9 has a hard dependency on UC-2 and UC-3
+
+This is the interaction most likely to be missed, and it runs the opposite way to
+intuition.
+
+**A cowl built from an imported mesh cannot be a clean B-rep.** The cowls are currently
+built by importing a tessellated STL and cutting it. Whatever comes out is a polyhedron —
+so for the cowls specifically, UC-2 and UC-3 do not deliver true solid models even after
+the port, and UC-7 cannot dimension a cowl's curvature, for the same reason it cannot
+dimension OpenSCAD's faceted cylinders.
+
+**OpenVSP can export STEP and IGES**, i.e. real surfaces rather than a tessellation. So
+the fix is available and it belongs to UC-9: the OML should arrive as a *surface*, not a
+mesh. That single change is what makes the cowls first-class in UC-2, UC-3, UC-4 and UC-7,
+and it also removes 36 MB of committed mesh from the repository.
+
+The corollary is a sequencing constraint: **the OML-as-surface part of UC-9 should land
+before or with UC-2**, not after it. Otherwise the B-rep export ships with the cowls
+quietly excluded, which is exactly the kind of partial capability that gets forgotten.
+
+### What UC-9 needs
+
+| Piece | Notes |
+| --- | --- |
+| Driven OpenVSP | The Python API drives the `.vsp3` model headlessly, so nose and tail shapes become generated artifacts with parameters rather than hand-exported files |
+| OML as surface | STEP or IGES export instead of STL — see above |
+| Configuration export | The fuselage geometry, and later the whole aircraft, presented to the aero solver |
+| Force and moment | VSPAERO. Note that its vortex-lattice method models lifting surfaces; body force and moment want the panel solver, and fuselage-alone results should be treated as a step toward configuration analysis rather than an answer in themselves |
+
+**Licensing: checked, and it is fine.** OpenVSP 3.50.5 is under the **NASA Open Source
+Agreement v1.3**, whose obligations attach to *distribution* rather than to linkage — so
+using it, in either pattern, imposes nothing on this project's code, and importing its
+Python API is no different from spawning the binary. Details and the clause references are
+in [OQ-ARCH-9](#open-questions), including the one clause that does deserve attention
+(§4.B, an indemnity term about products built with the software, not about code).
+
 ### What each use case adds
 
 | Use case | Beyond the port itself |
@@ -148,6 +305,9 @@ rather than here; this section states the requirement and the trap. Tracked as
 | UC-4 | Cowl interior surfaces; joint/mate definitions; an assembly structure |
 | UC-5 | A mesh export path to Blender; explode transforms and animation paths |
 | UC-6 | Several new generators, and a 2D vector output kind that nothing currently produces |
+| UC-7 | TechDraw pages, a dimensioning scheme, and a drawing template — and it consumes UC-4's assemblies, not just parts |
+| UC-8 | **A second class of model object**: the non-printed components — longerons, panels, inserts, bolts — plus material data, bonded-interface definitions, and each part's print orientation written down |
+| UC-9 | A driven OpenVSP path — parametric nose and tail generation, and configuration export for aero solving. The OML becomes a generated input rather than a committed mesh |
 
 **UC-1 is the port. UC-2 through UC-6 are capabilities the port enables.** Keeping that
 line sharp is what protects the migration from becoming an open-ended redesign: the
@@ -453,6 +613,19 @@ Ordered so that each step's failure is cheap and legible:
 10. **UC-6** — new components, in whatever order the airframe needs them. The 2D vector
     output kind for cutting templates has no precedent in the toolchain and should be
     prototyped on one panel before the others are designed around it.
+11. **UC-7** — drawings. Part drawings can follow UC-2 directly; assembly drawings depend
+    on UC-4, so the two halves of this use case land at different times and should be
+    planned as such.
+12. **UC-8** — analysis, in tiers. The non-printed components and mass properties (tier 1)
+    are worth doing early and independently: they need no solver, they answer the weight
+    and CG question the project asks constantly, and modeling the longerons and panels is
+    prerequisite work for every later tier anyway. Stress analysis follows UC-4, because
+    bonded interfaces are a property of the assembly.
+13. **UC-9** — but **its first half belongs at step 7, not here.** Getting the OML as a
+    STEP surface instead of a 36 MB mesh is what makes the cowls first-class in UC-2, UC-3,
+    UC-4 and UC-7; deferred to the end, those four ship with the cowls quietly excluded.
+    The aero half — driven generation, VSPAERO force and moment — has no such constraint
+    and can follow at leisure.
 
 Two orderings are deliberate. **Step 3 before step 4:** the greeble is the highest-risk
 geometry in the project, and finding out it does not map cleanly is worth more than having
@@ -473,6 +646,9 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-4 | **open** | What is the fate of the OpenSCAD implementation? |
 | ARCH-5 | **open** | How is the cowl interior surface generated, and where does extrusion width come from? |
 | ARCH-6 | **open** | How are assembly joints defined and stored? |
+| ARCH-7 | **open** | What decides which dimensions a generated drawing carries? |
+| ARCH-8 | **open** | Does a permissively-licensed tool exist for non-uniform printed-material analysis? |
+| ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's licence compatible with the project's policy, and in which usage pattern? |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`?
 
@@ -664,6 +840,154 @@ construction rather than by constraint. That is the same argument that appears i
 whether the choice is real. If the Assembly workbench does not script cleanly under
 `freecadcmd`, alternative 1 is the only option that runs in a sweep and the question closes
 itself.
+
+### OQ-ARCH-7 — What decides which dimensions a generated drawing carries?
+
+Required by UC-7. Projecting a view is the easy part; TechDraw does it from any shape.
+The hard part is *which* dimensions to place, and that is a question about design intent,
+not geometry. A part has hundreds of dimensionable edges and a useful drawing carries a
+dozen.
+
+The observation that shapes this: **the parameter set already is the design intent.**
+`corner_radius`, `bolt_offset`, `panel_thickness`, `bulkhead_thickness` are exactly the
+quantities a reader of the drawing needs, and they are exactly what the geometry was
+built from.
+
+**Alternatives**
+
+1. **Generate the dimension scheme from the `Parameters` object.**
+   *Benefits:* a drawing is guaranteed to dimension the things that are actually
+   parametric, and it cannot drift from the model — both come from one source; scales to
+   every variant in the sweep for free.
+   *Drawbacks:* needs a mapping from each parameter to the edges or faces that express it,
+   which is per-part work and brittle if the topology changes.
+   *Prerequisites:* stable topological references, which bears on OQ-ARCH-1.
+
+2. **Hand-author a drawing template per part type**, reused across variants.
+   *Benefits:* full control over layout and standards compliance; a draftsman's drawing
+   rather than a generated one.
+   *Drawbacks:* the template references specific edges, so it breaks when the geometry
+   changes; one template per part type is real ongoing work.
+   *Prerequisites:* none.
+
+3. **Dimension only the interfaces** — bolt pattern, mating diameters, overall envelope —
+   and treat internal structure as non-dimensioned reference geometry.
+   *Benefits:* small, stable set; matches what the drawing is actually *for*, which is
+   fit between parts and inspection of what mates.
+   *Drawbacks:* not a manufacturing drawing in the full sense.
+   *Prerequisites:* agreement on what belongs to the interface, which
+   [overview.md](#relationship-to-overviewmd)'s interface-conventions section should own.
+
+**Recommendation: alternative 3 first, then 1.** The interface dimensions are the ones
+that matter and the ones that are already named as shared conventions, so they are both
+the most valuable and the most stable. Growing that into a full parameter-driven scheme is
+a natural second step; starting there risks spending the effort on internal dimensions
+nobody reads.
+
+Note that this use case does **not** change the OQ-ARCH-1 recommendation. TechDraw
+projects any shape and does not require `PartDesign::` bodies or sketches — its dimensions
+attach to projected edges and vertices, not to sketch constraints.
+
+### OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material?
+
+Required by UC-8 tier 4. An FDM part is not the isotropic solid an FEM solver assumes by
+default: it is stiff along the deposited beads and weak across the layer interface, and
+its properties depend on toolpath and orientation rather than on shape alone.
+
+**This question is a survey, not a decision.** It should be answered by looking at what
+exists, and the answer may be "nothing suitable" — which is itself a useful result,
+because it bounds tier 3 as the ceiling and stops the ladder being planned around a rung
+that is not there.
+
+**Alternatives**
+
+1. **Stop at tier 3 — orthotropic per part, from recorded print orientation.**
+   *Benefits:* reachable with the stack already in use; CalculiX supports orthotropic
+   elasticity and FreeCAD invokes it as a separate process, which the license policy
+   already sanctions; captures the dominant effect, which is Z-axis weakness at layer
+   interfaces.
+   *Drawbacks:* treats each part as a uniform orthotropic continuum, so it cannot see
+   infill pattern, perimeter count, or a weak seam; conservative in some places and
+   optimistic in others without saying which.
+   *Prerequisites:* print orientation becomes a recorded parameter.
+
+2. **Adopt a permissively-licensed additive-manufacturing analysis tool, if one exists.**
+   *Benefits:* the stated ideal — properties that follow the actual deposition.
+   *Drawbacks:* unknown whether such a tool exists at usable maturity; would add a
+   dependency far larger than anything currently in the project.
+   *Prerequisites:* **the survey.** Establish what exists, its license, and whether it can
+   be driven headless from a batch.
+
+3. **Calibrate tier 3 against test articles** rather than seeking a finer model.
+   *Benefits:* a coupon test gives real orthotropic constants for *this* printer,
+   material and profile, which is more trustworthy than a finer model fed generic data;
+   the project already prints and assembles at both ends of the size range.
+   *Drawbacks:* physical test work; constants are specific to the process used.
+   *Prerequisites:* tier 3.
+
+**Recommendation: 1, then 3, and treat 2 as a survey to run before committing to
+either.** The largest single error in analyzing a printed part is assuming isotropy, and
+tier 3 removes it. Going from measured orthotropic constants to bead-level modeling is a
+much smaller refinement than the one before it, and it is not obviously worth a heavy
+dependency — but that judgement should follow the survey rather than precede it.
+
+Note also that tiers 1 and 2 are worth having regardless of how this resolves. Mass
+properties need no solver at all, and an isotropic model with the *real* load path —
+longerons, panels, inserts, bonds — is a better answer than an anisotropic model of the
+printed parts alone.
+
+### ~~OQ-ARCH-9 — Is OpenVSP's licence compatible, and in which usage pattern?~~ — RESOLVED 2026-08-07
+
+**Read from the installed copy:** `C:\Program Files\OpenVSP-3.50.5-win64\LICENSE` —
+**NASA Open Source Agreement version 1.3** (3.47.0 is also installed, same terms).
+
+**It is compatible, and the usage pattern does not matter.** NOSA's obligations key on
+*distribution*, not on linkage:
+
+| Clause | Says | Effect here |
+| --- | --- | --- |
+| §3.A | Obligations attach to "Distribution or Redistribution of the Subject Software" | We use OpenVSP; we do not ship it. **§3 does not bite.** |
+| §3.I | A Recipient may combine Subject Software with software not governed by the Agreement and distribute the result as a single product, provided the OpenVSP portions remain under NOSA | Component-level, **not viral**. Our code keeps its own licence even if OpenVSP were bundled. |
+| §1.F | "the act of including Subject Software as part of a Larger Work does not in and of itself constitute a Modification" | Using it does not make us a Contributor with §3.C change-log duties. |
+| §3.F | Registration "is requested" | A courtesy, not a condition. |
+
+**So the distinction I drew between driving it as a process and importing its Python API
+was wrong.** That distinction is the GPL/LGPL mental model, where linkage is what triggers
+copyleft. NOSA has no such trigger — both patterns are equally fine, and the choice should
+be made on engineering grounds alone. Importing the Python API is the better option for
+UC-9's parametric generation, and there is no licence reason to avoid it.
+
+Two notes worth carrying forward:
+
+- **§4.B is the clause that actually deserves thought**, and it is a liability term rather
+  than a copyleft one: the Recipient waives all claims against the US Government and
+  agrees to indemnify it for damages "from products based on, or resulting from,
+  Recipient's use of the Subject Software", with the sole remedy being termination of the
+  agreement. That is the commonly-cited objection to NOSA. It bears on shipping an
+  *aircraft* designed with these tools, not on the code, and it is not a code-licensing
+  question at all.
+- **The Python tree is mixed-licence, and OpenVSP states the split explicitly.**
+  `python/openvsp/openvsp/LICENSE` opens: *"The base openvsp vsp api files (`_vsp.so`,
+  `_vsp.pyd`, `vsp.py`) are distributed under the NOSA license listed below."* Everything
+  else in `python/` — `utilities.py`, `parasite_drag.py`, `degen_geom_parse.py`,
+  `surface_patches.py`, `facade.py`, and the sibling packages `AvlPy`, `CHARM`,
+  `degen_geom`, `utilities` — is **MIT, Copyright 2018–2020 Uber Technologies**, and
+  `python/openvsp/setup.py` declares `license='MIT', author='Uber Technologies'`.
+
+  So the file you `import` for the API itself (`vsp.py`, wrapping the 30 MB `_vsp.pyd`) is
+  **NOSA** — which is why the import-versus-subprocess question genuinely was a NOSA
+  question, and why the answer above settles it. The higher-level helpers layered on top
+  are MIT and unconditionally fine.
+
+- **VSPAERO ships inside the Python package.** `vspaero.exe`, `vspaero_opt.exe`,
+  `vsploads.exe` and `vspviewer.exe` sit in `python/openvsp/openvsp/`, so UC-9's aero half
+  needs no separate install — and those are executables invoked as processes, the least
+  encumbered pattern of all.
+
+**The project's licence table should gain a NOSA row**, since it now has a real dependency
+under a licence the table does not mention. Suggested wording: *acceptable as a separate
+tool or an imported module; obligations attach only on redistribution; note the §4.B
+indemnity.*
 
 ---
 

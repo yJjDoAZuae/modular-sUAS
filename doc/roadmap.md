@@ -121,7 +121,9 @@ interactive driver broken. See OQ-GEO-2.
       the top-level part definitions that produce printable output.
 - [x] **Make the parameter interface explicit.** Done as IP-GEO-16: parameters are
       dataclasses (`Parameters`, `NoseParameters`), not dicts, so a misspelled field is
-      an `AttributeError` where it is written rather than a silently added key. What
+      an `AttributeError` where it is written rather than a silently added key — though
+      only since IP-GEO-25 added `slots=True`; a plain dataclass accepts undeclared
+      attributes exactly as a dict does, so IP-GEO-16 alone did not deliver this. What
       remains open is *validation* at the boundary where CSV/JSON is read — the types are
       declared but nothing checks a row's values before geometry consumes them.
 - [ ] **Leave the OpenSCAD path in millimeters.** The project standard is SI internally
