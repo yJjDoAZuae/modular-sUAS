@@ -7,7 +7,8 @@ $fs=0.5;
 //$fa=1;
 //$fs=0.1;
 
-FX = 1;
+// FX -- the bay length multiplier -- is deliberately absent. It scales unit_length,
+// which only the corner uses, so the same bulkhead serves every bay length.
 U = 1.0;
 
 DTF_thickness = 4.77;
@@ -29,9 +30,12 @@ longeron_tolerance = 0.05;
 bolt_hole_radius=5.33/2;
 bolt_thickness=3;
 greeble_opening_angle = 35;
+// Derived from the seat wall, not chosen separately -- see greeble_nub_thickness_of()
+// in fuselage_variants.py. Keep them equal unless that formula changes.
 greeble_thickness = 0.8;
-greeble_nub_thickness = 0.8;
-greeble_tolerance = 0.0;
+greeble_nub_thickness = greeble_thickness;
+// No greeble tolerance here: the bulkhead's greeble post is nominal by
+// construction and the corner's bore carries the clearance.
 plate_thickness=4*layer_height;
 web_fillet_radius=2;
 web_width=3;
@@ -43,12 +47,12 @@ cowl_flange_tolerance=0;
 
 // These are based on the standard, don't change these
 unit_width=100*U;
-unit_length=100*U*FX;
+// No unit_length here: a bulkhead is independent of bay length.
 corner_radius = 10*U;
 longeron_radius = 2*U;
 bolt_offset=8*U;
 
-bulkhead_section_full(is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
 
 //if (U==2) {
 //    

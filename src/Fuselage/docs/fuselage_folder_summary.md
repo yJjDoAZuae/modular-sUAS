@@ -117,7 +117,7 @@ every include line that references it.
 
 | File | Contents |
 | --- | --- |
-| [fuselage_bulkhead_geometry.scad](../scad/fuselage_bulkhead_geometry.scad) | The big one (42 KB). `bulkhead_section_full` and ~25 supporting modules: webs, bolt flanges, fillets, chamfers, greeble pockets, OML profiles. |
+| [fuselage_bulkhead_geometry.scad](../scad/fuselage_bulkhead_geometry.scad) | The big one (42 KB). `bulkhead_section_full` and ~25 supporting modules: webs, bolt flanges, fillets, chamfers, greeble posts, OML profiles. |
 | [fuselage_corner_geometry.scad](../scad/fuselage_corner_geometry.scad) | `fuselage_corner`, built from `corner_end` / `corner_transition` / `corner_middle`. |
 | [fuselage_boom_bulkhead_geometry.scad](../scad/fuselage_boom_bulkhead_geometry.scad) | `boom_bulkhead` — tail-boom collet interface with a keyed anti-rotation feature. |
 | [cowl_geometry.scad](../scad/cowl_geometry.scad) | Nose and tail cowls, nose plate, buttress ribs, body blanks, and an `assembly_tool`. Imports the OML mesh and cuts it to shape. |

@@ -1,15 +1,21 @@
 include <shape_modifier_utils.scad>
 include <fuselage_corner_geometry.scad>
 
-module bulkhead_section_full(is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter) {
+// A bulkhead does not know how long the bay is. Bay length is FX * unit_length and it
+// reaches the corner only -- which is exactly why one bulkhead design serves bays of
+// any length, and why FX is a separate axis of variation that the bulkhead sweep does
+// not carry. Until 2026-08-06 unit_length was threaded through all three modules here
+// and used by none of them, which quietly implied a dependency that does not exist.
+// See OQ-DES-C3 in doc/design/corner.md.
+module bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter) {
 
     octant_to_full() {
-        bulkhead_section_octant(is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+        bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
     }
     
 }
 
-module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter) {
+module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter) {
     
     if (is_interconnect) {
         
@@ -19,16 +25,26 @@ module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, unit_len
         
             // bottom section
             translate([unit_width/2-corner_radius,unit_width/2-corner_radius,0]) {
-                bulkhead_section(true, is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+                bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
             }
                 
             mirror([0,0,-1]) {
                 translate([unit_width/2-corner_radius,unit_width/2-corner_radius,-2*bulkhead_thickness]) {
-                    bulkhead_section(false, is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+                    bulkhead_section(false, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
                 }
                 
             }
         }
+        // Mass reduction: the interconnect is only full 2*bulkhead_thickness deep at the
+        // corners, where the longerons and the bolted joints put the load. Between the
+        // corners the upper section is cut away and the flange runs at 1*bulkhead_
+        // thickness. Full depth is kept out to the flange plus two fillet radii, so the
+        // retained region is defined by the flange rather than by a separate number.
+        //
+        // Watch the transform: rotate([90,0,0]) puts the polygon in the x-z plane and
+        // sweeps it along y, so the polygon's SECOND coordinate is a height, not a
+        // width. The two inboard vertices differ by one bulkhead_thickness in x over one
+        // bulkhead_thickness in z -- a 45 degree ramp, self-supporting when printed.
         translate([unit_width/2-corner_radius,unit_width/2-corner_radius,0]) {
         rotate([90,0,0]) {
         linear_extrude(height=unit_width, center=true, convexity=4,twist=0,slices=1,scale=1){
@@ -46,12 +62,12 @@ module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, unit_len
         
     } else {
         translate([unit_width/2-corner_radius,unit_width/2-corner_radius,0]) {
-            bulkhead_section(true, is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
+            bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter);
         }
     }
 }
 
-module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, greeble_tolerance, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter)
+module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, nozzle_diameter)
 {
     
     eps = geometry_eps();
@@ -136,19 +152,36 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, unit_
     }
 
    if (!is_cowling) {
-        // Use corner_end as a negative shape to form the greeble. The tolerance is
-        // zeroed here so the pocket comes out at nominal size: all of the fit
-        // clearance lives on the corner's nub, never split across both halves, or
-        // the joint would carry it twice.
-       greeble_tolerance_local = 0;
-       
+        // Use corner_end as a negative shape to form the greeble. Subtracting the
+        // corner's own end section leaves bulkhead material exactly where the corner
+        // has none -- so the greeble is the *positive* post standing out of the
+        // bulkhead, with the snap rib at greeble_nub_radius, and the corner carries
+        // the matching bore and groove. One description, two mating halves.
+        //
+        // The literal 0 is the greeble tolerance, and it is deliberately not a
+        // parameter of this module. The post is nominal by construction: all of the
+        // fit clearance is taken on the corner's bore instead
+        // (GREEBLE_TOLERANCE_CORNER_MM), because split across both halves the joint
+        // would carry it twice. That is an invariant of the design, not a setting.
+        //
+        // Until 2026-08-06 bulkhead_section_full/_octant/_section did each take a
+        // greeble_tolerance, and each threw it away for a local zero right here --
+        // so the interface advertised a knob that could not do anything. Anyone
+        // tuning the fit from this side would have seen no change at all. See
+        // OQ-DES-B6 in doc/design/bulkhead.md.
        U = unit_width/100;
        
        translate([0,0,-eps]) { // note sneaky eps shift to clean up the bottom of the greeble cutout
-        corner_end(U, bulkhead_thickness+2*eps, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance_local, nozzle_diameter);
+        corner_end(U, bulkhead_thickness+2*eps, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0, nozzle_diameter);
        }
         
-        // longeron opening cutout
+        // Longeron opening cutout: the mouth the longeron snaps in through, which is
+        // what makes the greeble a C rather than a closed ring. greeble_opening_angle is
+        // a HALF-angle -- the vertices below sit at 45-a and 45+a, so a=35 removes 70
+        // degrees centred on the diagonal. The chord across that mouth is 57% of the
+        // tube diameter, so the tube spreads the arms and snaps home rather than
+        // dropping through. The angle was arrived at by experiment; it is tuned, not
+        // derived. See doc/design/bulkhead.md.
         linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=3,twist=0,slices=1,scale=1){
             polygon([[0,0],[sin(45-greeble_opening_angle)*corner_radius,cos(45-greeble_opening_angle)*corner_radius],[cos(45-greeble_opening_angle)*corner_radius,sin(45-greeble_opening_angle)*corner_radius]]);
         }
