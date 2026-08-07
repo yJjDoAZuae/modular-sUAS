@@ -6,25 +6,32 @@ include <shape_modifier_utils.scad>
 
 // Greeble dimensions, derived rather than passed in. corner_end() and
 // corner_transition() computed all of these identically, so the two could drift apart
-// silently -- and the greeble is a mating feature, where the corner's nub and the
-// bulkhead's pocket must agree exactly or the parts do not assemble.
+// silently -- and the greeble is a mating feature, where the two halves must agree
+// exactly or the parts do not assemble.
+//
+// These radii describe the joint, not one part of it. The greeble itself is the
+// positive post on the *bulkhead*: bulkhead_section() subtracts corner_end() from the
+// bulkhead, so bulkhead material survives exactly where the corner has none. Read from
+// the corner's side -- which is where these functions are used -- the same radii are a
+// bore and an internal groove.
 
-// Outer radius of the greeble seat: the longeron, its clearance, the greeble wall, and
-// the fit tolerance.
+// Radius of the greeble body: the longeron, its clearance, the greeble wall, and the
+// fit tolerance. The post on the bulkhead; the bore in the corner.
 function greeble_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
                            greeble_tolerance) =
     longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance;
 
-// The nub stands proud of the seat by exactly its own thickness. Written in terms of
-// greeble_radius_of() rather than repeating the sum, so that relationship is explicit
-// and cannot be broken by editing one and not the other.
+// The snap feature, one wall thickness out from the body -- a rib around the bulkhead's
+// post, a groove in the corner's bore. Written in terms of greeble_radius_of() rather
+// than repeating the sum, so that relationship is explicit and cannot be broken by
+// editing one and not the other.
 function greeble_nub_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
                                greeble_nub_thickness, greeble_tolerance) =
     greeble_radius_of(longeron_radius, longeron_tolerance, greeble_thickness,
                       greeble_tolerance) + greeble_nub_thickness;
 
-// The nub occupies the middle third of the bulkhead's thickness, leaving a third of
-// lead-in either side.
+// The snap feature occupies the middle third of the bulkhead's thickness, leaving a
+// third of lead-in either side for the joint to ride over as it engages.
 function greeble_nub_height_of(bulkhead_thickness) = bulkhead_thickness/3;
 
 module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, nozzle_diameter) {
