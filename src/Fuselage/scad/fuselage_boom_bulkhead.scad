@@ -27,7 +27,7 @@ boom_diameter=8*U;
 boom_bulkhead_thickness=2*U;
 
 // printer settings
-nozzle_diameter = 0.4;
+extrusion_width = 0.4;
 
 // User parameters
 

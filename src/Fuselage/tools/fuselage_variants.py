@@ -187,7 +187,7 @@ class BulkheadType(Enum):
 
 @dataclass
 class PrinterSettings:
-    nozzle_diameter: float = 0.4
+    extrusion_width: float = 0.4
     layer_height: float = 0.2
 
 
@@ -515,7 +515,7 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     # sqrt(U), not U: the greeble wall is a printed feature sized to survive a snap fit,
     # so it scales in extrusions rather than as a fraction of the airframe. The max()
     # floors it at two extrusion widths, because a one-extrusion wall has no interior.
-    c.greeble.thickness = max(2*math.sqrt(U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
+    c.greeble.thickness = max(2*math.sqrt(U)*c.printer.extrusion_width, 2*c.printer.extrusion_width)
     c.greeble.nub_thickness = greeble_nub_thickness_of(c.greeble.thickness)
 
     if is_cowling or c.panel.thickness==0:
@@ -531,7 +531,7 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
             c.panel.overlap = max(c.panel.thickness, 4)
 
         # keep the inside corner of the panel from coming too close to the greeble perimeter
-        panel_clearance_radius = c.longeron.radius + c.longeron.tolerance + c.greeble.thickness  + c.greeble.nub_thickness + 2*c.printer.nozzle_diameter
+        panel_clearance_radius = c.longeron.radius + c.longeron.tolerance + c.greeble.thickness  + c.greeble.nub_thickness + 2*c.printer.extrusion_width
 
         # lower edge of the panel
         panel_corner_y = max(c.corner.radius - c.panel.thickness - c.panel.tolerance, 0)
@@ -549,7 +549,7 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         greeble_clearance_width = 1*U # extra width around the greeble to allow the corner to snap in on the back side
         # print("greeble_clearance_width = " + str(greeble_clearance_width))
         
-        panel_offset = max(panel_offset, (panel_clearance_radius - 2*c.printer.nozzle_diameter)/math.sqrt(2) + 2*c.printer.nozzle_diameter + greeble_clearance_width - c.panel.overlap)
+        panel_offset = max(panel_offset, (panel_clearance_radius - 2*c.printer.extrusion_width)/math.sqrt(2) + 2*c.printer.extrusion_width + greeble_clearance_width - c.panel.overlap)
         panel_offset = max(panel_offset, 0)
         panel_offset = min(panel_offset, math.sqrt(2)*c.corner.radius)
         panel_offset = 0.25*math.ceil(4*panel_offset) # inflate to nearest 0.25 mm
@@ -572,11 +572,11 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     if is_cowling:
         c.cowl_flange.height=2*U;
         c.cowl_flange.tolerance=0.2;
-        c.bulkhead_flange.thickness=max(math.ceil(3*U)*c.printer.nozzle_diameter, 3*c.printer.nozzle_diameter)
+        c.bulkhead_flange.thickness=max(math.ceil(3*U)*c.printer.extrusion_width, 3*c.printer.extrusion_width)
     else:
         c.cowl_flange.height=0;
         c.cowl_flange.tolerance=0.0;
-        c.bulkhead_flange.thickness=max(math.ceil(2*U)*c.printer.nozzle_diameter, 2*c.printer.nozzle_diameter)
+        c.bulkhead_flange.thickness=max(math.ceil(2*U)*c.printer.extrusion_width, 2*c.printer.extrusion_width)
     
     c.bolt.thickness=max(3*U, 3)
     c.plate.thickness=math.ceil(4*U)*c.printer.layer_height
@@ -817,7 +817,7 @@ def run_corner_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.nozzle_diameter = 0.6
+    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -949,7 +949,7 @@ def run_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.nozzle_diameter = 0.6
+    printer_settings.extrusion_width = 0.6
     
     FX = 1.0
 
@@ -986,7 +986,7 @@ def run_boom_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.nozzle_diameter = 0.6
+    printer_settings.extrusion_width = 0.6
     
     FX = 1.0
 
@@ -1028,7 +1028,7 @@ def run_nose_parametric_sweep(csv_files, output_dir):
     # with the other sweeps, which takes it.
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings.nozzle_diameter = 0.6
+    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1078,7 +1078,7 @@ def run_tail_parametric_sweep(csv_files, output_dir):
 
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings.nozzle_diameter = 0.6
+    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1703,7 +1703,7 @@ def corner_render(dp, output_dir, filename):
         greeble_thickness=dp.greeble.thickness,
         greeble_nub_thickness=dp.greeble.nub_thickness,
         greeble_tolerance=dp.greeble.tolerance,
-        nozzle_diameter=dp.printer.nozzle_diameter)
+        extrusion_width=dp.printer.extrusion_width)
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
     
@@ -1748,7 +1748,7 @@ def bulkhead_render(dp, output_dir, filename):
         flange_chamfer=dp.bulkhead_flange.chamfer,
         cowl_flange_height=dp.cowl_flange.height,
         cowl_flange_tolerance=dp.cowl_flange.tolerance,
-        nozzle_diameter=dp.printer.nozzle_diameter)
+        extrusion_width=dp.printer.extrusion_width)
     
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
