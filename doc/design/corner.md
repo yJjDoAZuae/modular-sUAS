@@ -152,8 +152,8 @@ side means one number to change when the fit is wrong.
 ### The thickness formula
 
 ```python
-greeble_thickness     = max(2·√U·nozzle_diameter, 2·nozzle_diameter)
-greeble_nub_thickness = max(2·√U·nozzle_diameter, 2·nozzle_diameter)
+greeble_thickness     = max(2·√U·extrusion_width, 2·extrusion_width)
+greeble_nub_thickness = greeble_nub_thickness_of(greeble_thickness)
 ```
 
 Two things are worth stating explicitly, because both look like mistakes and neither is:
@@ -199,7 +199,7 @@ flat_offset = -max(longeron_radius + longeron_tolerance + longeron_chamfer,
 This is a two-sided constraint written as a `max()`. The flat face where the corner meets
 the bulkhead must clear the longeron bore *and* its chamfer, and it must also sit outside
 wherever the panel interface has been pushed to. Whichever constraint binds, wins.
-`longeron_chamfer` is `nozzle_diameter` — one extrusion — which is *inferred* to be the
+`longeron_chamfer` is `extrusion_width` — one extrusion — which is *inferred* to be the
 smallest chamfer worth printing rather than a structural requirement.
 
 ## Panel offset

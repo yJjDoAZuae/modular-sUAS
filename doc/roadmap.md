@@ -154,6 +154,13 @@ The end state: parts are generated through FreeCAD's Python API rather than by e
 OpenSCAD source. This buys real solid modeling, assemblies, technical drawings, and FEM —
 none of which OpenSCAD offers. FreeCAD 1.1.1 is installed and driveable from the MCP.
 
+**Target architecture:**
+[doc/architecture/freecad_migration.md](architecture/freecad_migration.md) — what changes,
+what does not, the unit boundary, and four system-level open questions. Read it before
+starting: it records that only the geometry-construction and solid-evaluation layers are
+replaced, that the headless path is verified working, and that the migration begins by
+losing the cheapest verification tier the project has.
+
 - [ ] **Prototype one part first.** Port a single well-understood component — a corner or a
       bulkhead — before committing to the approach. Confirm it can express the same
       parametric intent.

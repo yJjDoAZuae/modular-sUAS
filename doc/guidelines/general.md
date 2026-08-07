@@ -179,10 +179,16 @@ When units are not obvious from context, encode them in the name:
 ```python
 corner_radius_m: float
 overhang_angle_rad: float
-nozzle_diameter_m: float
+extrusion_width_m: float
 ```
 
 The unit multiplier `U` is dimensionless — name what it scales, not `U` itself.
+
+**Name the quantity you actually mean.** `extrusion_width` above was called
+`nozzle_diameter` until IP-GEO-24, and every use of it was a wall *N* beads thick or *N*
+beads of margin — never the nozzle's bore. The two are numerically close, which is how it
+survived, and different quantities, which is why it had to be fixed before the FreeCAD
+port read the old name and reproduced it.
 
 ---
 
@@ -259,8 +265,10 @@ It does **not** apply to the existing OpenSCAD generator path.
 ### ⚠ The OpenSCAD path stays in millimeters. Do not convert it.
 
 The generators copied in from the source repository work in **millimeters throughout** —
-`standard_values()` returns `unit_width = 100`, `corner_radius = 10`, `nozzle_diameter =
-0.4`, and every parameter axis CSV is populated to match.
+`standard_values()` returns `unit_width = 100`, `unit_length = 100`, `corner_radius = 10`,
+`longeron_radius = 2` and `bolt_offset = 8`; `PrinterSettings` defaults to
+`extrusion_width = 0.4` and `layer_height = 0.2`; and every parameter axis CSV is
+populated to match.
 
 That is a **deliberate exemption, not technical debt.** The OpenSCAD implementation is
 transitional: Phase 3 replaces it with Python-driven FreeCAD. Converting code that is
