@@ -44,6 +44,7 @@ the preamble of either before relying on a "why".
 | IP-GEO-22 | done | Resolve OQ-DES-C1: derive `greeble_nub_thickness` from `greeble_thickness` through a named formula in Python, instead of computing both from the same expression | IP-GEO-11 |
 | IP-GEO-23 | done | Drop `unit_length` from the bulkhead modules and drivers. Passed through three signatures, used by none — it asserted a dependence on bay length that the design exists to avoid. Found via OQ-DES-C3 | IP-GEO-11 |
 | IP-GEO-24 | done | Rename `nozzle_diameter` → `extrusion_width`. Every use was extrusion-width semantics; the name described the wrong physical quantity | — |
+| IP-GEO-25 | done | Add `slots=True` to the parameter dataclasses. Without it a plain dataclass accepts undeclared attributes silently — IP-GEO-16 did not deliver what it claimed | IP-GEO-16 |
 | IP-GEO-20 | done | Correct the greeble's mating direction in comments and design docs — it is the **positive post on the bulkhead**, not a nub on the corner | IP-GEO-11 |
 | IP-GEO-19 | withdrawn | Validate threaded-insert depth against `bulkhead_thickness`. Raised on a wrong assumption — the insert is set from the interior face and may stand proud of it, so it need not fit within the thickness. No check is warranted. See OQ-DES-B5 | IP-GEO-11 |
 
@@ -118,6 +119,54 @@ There is no reference to compare the two cowls against — they had no working o
 be a baseline. What is established is that the OML import resolves and the boolean
 tree completes; the shapes themselves are unreviewed, and IP-GEO-11's design documents
 are where that would be settled.
+
+### IP-GEO-25 — done 2026-08-07: the dataclasses were not doing what they claimed
+
+**IP-GEO-16's central claim was false.** It says a misspelled *write* — the hazard the
+whole conversion existed to close — "raises `AttributeError` at the line that made it".
+A plain dataclass does no such thing. Instances carry a `__dict__`, and Python will
+happily add an attribute to it:
+
+```python
+@dataclass
+class Plain:
+    extrusion_width: float = 0.4
+
+p = Plain()
+p.nozzle_diameter = 0.6     # accepted in silence
+p.extrusion_width           # still 0.4
+```
+
+That is the *dict* behaviour, verbatim. The conversion changed the syntax of the failure
+and not the failure.
+
+**How it surfaced, which is the part worth keeping.** IP-GEO-24 renamed
+`nozzle_diameter` to `extrusion_width`. A verification script still setting the old name
+kept running, silently left `extrusion_width` at its 0.4 default instead of the sweep's
+0.6, and rendered five bulkheads that came out **13–30 % off in volume**. The comparison
+reported five DIFFERENT parts and briefly looked like a geometry regression in the rename.
+
+It was not. It was the exact failure mode IP-GEO-16 was introduced to prevent, reproduced
+by the code that was supposed to prevent it, and caught only because a geometric check
+happened to be pointed at it. Had the rename been verified by drivers alone — which
+passed, with unchanged triangle counts — nothing would have noticed.
+
+**Fixed** by `@dataclass(slots=True)` on all nineteen parameter classes. `__slots__`
+removes the instance `__dict__`, so an undeclared name raises at the assignment. Verified
+on both a top-level field and a nested group:
+
+```text
+'PrinterSettings' object has no attribute 'nozzle_diameter' and no __dict__ ...
+'GreebleParameters' object has no attribute 'thicknes' and no __dict__ ...
+```
+
+Nothing else changed: `field(default_factory=...)` is unaffected by slots, and the
+`setattr()` loops in `derived_cowl_parameters()` iterate `fields()`, so they only ever
+write declared names.
+
+**The general lesson, recorded in the guidelines:** a safety property that has not been
+*tested* is a claim, not a property. This one was written into a comment, a design
+document, and a guideline, and was wrong in all three for a day.
 
 ### IP-GEO-24 — done 2026-08-07: `nozzle_diameter` never meant nozzle diameter
 
@@ -346,8 +395,14 @@ fields. 332 subscripts became attribute access.
 **The hazard this closes is assignment, not lookup.** A dict already raised `KeyError`
 on a misspelled *read*. On a *write* it silently accepted the new key, left the real
 field at its default, and produced a part wrong by exactly the amount the assignment
-was meant to change. `c.greeble.thicknes = 1.2` now raises `AttributeError` at the line
-that made the mistake.
+was meant to change.
+
+> **Correction, 2026-08-07.** This paragraph originally ended by claiming that
+> `c.greeble.thicknes = 1.2` "now raises `AttributeError` at the line that made the
+> mistake". **It did not.** A plain dataclass accepts undeclared attributes exactly as the
+> dict did, so this item closed the *read* half of the hazard and left the *write* half
+> open — while asserting the opposite in a comment, a design document and a guideline.
+> `slots=True` was added in IP-GEO-25, and the claim is true now.
 
 **It found one immediately.** `derived_parameters()` sets and reads
 `c["bolt"]["diameter"]`, but `null_bolt_parameters()` never declared it — the field
