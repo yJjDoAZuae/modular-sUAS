@@ -149,6 +149,13 @@ doing nothing. Nothing warns you.
 
 **Never edit a generated file in place.** It is an output. The sweep rewrites it.
 
+**If a fillet errors after you change a parameter, re-run the generator.** A large enough
+change can alter the part's topology, and a fillet whose target edge no longer exists fails
+rather than moving somewhere wrong. It reports the failure — but the *shape it shows you is
+the last good one*, so the model can look fine while the tree is in error. Check for errors
+in the tree rather than trusting the picture. Regenerating re-derives the fillet targets and
+fixes it.
+
 ---
 
 ## Which workflow for which use case
