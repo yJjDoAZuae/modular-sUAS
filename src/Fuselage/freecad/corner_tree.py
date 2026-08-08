@@ -1,25 +1,31 @@
 """IP-FC-38: the corner as a parametric Part:: CSG document tree.
 
-Where part_middle.py builds a static TopoShape, this builds *document objects* -- primitives
-with live properties, boolean nodes, and every dimension an expression over a spreadsheet.
-The result is what a user actually receives: a .FCStd whose parameters are visible and
-editable, ending in a stable tip their own geometry can hang off.
+Where part_*.py build static TopoShapes, this builds *document objects* -- primitives with
+live properties, boolean nodes, and every dimension an expression over a spreadsheet. The
+result is what a user actually receives: a .FCStd whose parameters are visible and editable,
+ending in a stable tip their own geometry can hang off.
 
-The profile decomposes entirely into primitives, which is not obvious from the source. Each
-polygon mask in corner_middle_shape is a union of half-planes:
+Most of the corner reduces to primitives, which is not obvious from the source.
 
-  * the longeron chamfer, [(0,0), (-far,0), (-far,-far), (0,-far)], is the third quadrant
-    -- one axis-aligned box;
-  * the mirror-line mask, [(-far,-far), (far,far), (far,-far)], is the half-plane y < x
-    -- one box rotated -45 degrees;
+**The section profile is all half-planes.** Each polygon mask in corner_middle_shape is a
+union of half-planes, so every one is a box:
+
+  * the longeron chamfer, [(0,0), (-far,0), (-far,-far), (0,-far)], is the third quadrant;
+  * the mirror-line mask, [(-far,-far), (far,far), (far,-far)], is the half-plane y < x;
   * the bulkhead boundary is an 8-gon whose vertices (-4, 1.55), (-2.45, 0), (0, -2.45) and
-    (1.55, -4) are COLLINEAR on x + y = flat_offset. It is therefore the union of three
-    half-planes -- x < flat_x, y < flat_x, and x + y < flat_offset -- so three boxes, one of
-    them rotated 45 degrees.
+    (1.55, -4) are COLLINEAR on x + y = flat_offset -- so it is three half-planes.
 
-So no sketches are needed and nothing is baked: every mask is a Part::Box whose size and
-placement are expressions. The half-plane placements are derived in the spreadsheet rather
-than in expressions on the objects, so the arithmetic is visible to whoever opens the file.
+**The snap groove is a stack of primitives.** rotate_extrude of the nub profile is a bore
+cylinder, an expanding cone, the rib cylinder, and a contracting cone, fused.
+
+**Two polygons genuinely need sketches**: corner_end's wedge and corner_transition's relief
+are non-convex with no collinear vertices. Sketch coordinates are not expression-bindable but
+constraints are, so each is generated FULLY CONSTRAINED with every dimension driven from the
+sheet. Full constraint is not optional -- an under-constrained sketch deforms silently under
+a parameter change and still extrudes to a valid solid.
+
+Half-plane box placements are derived in the spreadsheet rather than in expressions on the
+objects, so the trigonometry is visible to whoever opens the file.
 """
 import os
 import sys
@@ -27,6 +33,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
+import Part
+import Sketcher
 
 from corner_common import is_entry_point
 
@@ -35,7 +43,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GENERATOR = 'fuselage_corner'
 
 # name, formula-or-value. Plain values are the user's to edit; '=' rows are derived and
-# exist so the geometry expressions stay readable.
+# exist so the geometry expressions stay readable. NB: an alias may not collide with a unit
+# symbol -- 'w' (watt) and 'h' (hour) are rejected as "Invalid alias".
 PARAMS = [
     ('U', '1.0'),
     ('FX', '1.0'),
@@ -45,6 +54,9 @@ PARAMS = [
     ('panel_overlap', '4.0'),
     ('panel_tolerance', '0.1'),
     ('longeron_tolerance', '0.05'),
+    ('greeble_thickness', '0.8'),
+    ('greeble_nub_thickness', '0.8'),
+    ('greeble_tolerance', '0.05'),
     ('extrusion_width', '0.4'),
 
     ('corner_radius', '=U * 10'),
@@ -53,6 +65,7 @@ PARAMS = [
     ('eps', '0.01'),
     ('longeron_chamfer', '=extrusion_width'),
     ('far', '=corner_radius * 2'),
+    ('through_cut', '=bulkhead_thickness * 3'),
 
     # flat_offset takes the chamfer as a floor, so the flat face clears the bore and its
     # chamfer *and* wherever the panel interface has been pushed out to.
@@ -61,11 +74,13 @@ PARAMS = [
                     '(corner_radius - panel_thickness - panel_tolerance))'),
     ('flat_x', '=-(panel_overlap + panel_offset)'),
 
-    # the section's z extent
-    ('z0', '=bulkhead_thickness * 2 - eps'),
-    ('height', '=unit_length / 2 - bulkhead_thickness * 2 + eps * 2'),
-    ('cut_z0', '=z0 - eps'),
-    ('cut_h', '=height + eps * 2'),
+    # section z extents: end, transition, middle
+    ('end_z0', '0.0'),
+    ('end_h', '=bulkhead_thickness + eps'),
+    ('trans_z0', '=bulkhead_thickness'),
+    ('trans_h', '=bulkhead_thickness'),
+    ('mid_z0', '=bulkhead_thickness * 2 - eps'),
+    ('mid_h', '=unit_length / 2 - bulkhead_thickness * 2 + eps * 2'),
 
     # panel interface
     ('rect_w', '=panel_overlap + panel_offset - panel_tolerance'),
@@ -77,18 +92,52 @@ PARAMS = [
     # A half-plane is a box rotated onto the cut line. For a box rotated by t about z,
     # local +x advances (x+y) by sqrt(2) per unit at +45 and (y-x) by -sqrt(2) at -45, so
     # the base corner is placed by solving for the sum and difference of its coordinates.
-    # mirror line, y < x, rotated -45:
-    ('diag_base', '=-far'),
+    ('diag_base', '=-far'),                                   # mirror line, y < x, at -45
     ('diag_len', '=far * 2'),
     ('diag_wid', '=far * 2 * sqrt(2)'),
-    # bulkhead boundary, x + y < flat_offset, rotated +45:
-    ('flatd_x', '=flat_offset / 2 + far * (1 - sqrt(2))'),
+    ('flatd_x', '=flat_offset / 2 + far * (1 - sqrt(2))'),    # x + y < flat_offset, at +45
     ('flatd_y', '=flat_offset / 2 - far * (1 + sqrt(2))'),
+
+    # the greeble socket
+    ('greeble_radius', '=longeron_radius + longeron_tolerance + greeble_thickness '
+                       '+ greeble_tolerance'),
+    ('greeble_nub_radius', '=greeble_radius + greeble_nub_thickness'),
+    ('greeble_nub_height', '=bulkhead_thickness / 3'),
+    ('nub_z1', '=bulkhead_thickness / 2 - greeble_nub_height / 2 - greeble_nub_thickness'),
+    ('nub_z2', '=bulkhead_thickness / 2 - greeble_nub_height / 2'),
+    ('nub_z3', '=bulkhead_thickness / 2 + greeble_nub_height / 2'),
+    ('nub_z4', '=bulkhead_thickness / 2 + greeble_nub_height / 2 + greeble_nub_thickness'),
+    # The mouth is a box rotated 45 about z. Placement.Base of a rotated box is the corner
+    # AFTER rotation, not before -- unlike Part.makeBox(...).rotate(), which turns an
+    # already-placed box about the world origin. The unrotated corner is (-2r, -r), so
+    # rotating it by 45 gives (-r, -3r)/sqrt(2).
+    ('mouth_w', '=greeble_radius * 2'),
+    ('mouth_x', '=-greeble_radius / sqrt(2)'),
+    ('mouth_y', '=-greeble_radius * 3 / sqrt(2)'),
+    ('cut_z0', '=-through_cut / 2'),
+
+    # the transition's tapered bore
+    ('relief_depth', '=longeron_radius + greeble_thickness + greeble_tolerance'),
+    ('relief_mid', '=0.75 * bulkhead_thickness + eps'),
+    ('relief_top', '=bulkhead_thickness + eps'),
+    ('relief_diag', '=longeron_radius / sqrt(2)'),
 ]
+
+
+# Every object name must be touched exactly once per emit(). Re-fetching a name that has
+# already been built this pass means two different nodes were given the same name, and
+# re-pointing the earlier one's Base at a descendant produces a dependency cycle -- which
+# FreeCAD reports only as "The graph must be a DAG", after which recompute order is wrong
+# and shapes come back null. Cheap to assert, very hard to diagnose from the symptom.
+_SEEN = set()
 
 
 def _owned(doc, typename, name):
     """Fetch the generator's own object by name, creating and tagging it if absent."""
+    if name in _SEEN:
+        raise RuntimeError('duplicate node name %r -- the second use would re-point the '
+                           'first and create a cycle' % name)
+    _SEEN.add(name)
     obj = doc.getObject(name)
     if obj is None:
         obj = doc.addObject(typename, name)
@@ -111,7 +160,6 @@ def _sheet(doc):
 
 
 def _box(doc, name, length, width, height, x, y, z, angle=None):
-    """A Part::Box with every dimension and placement component an expression."""
     box = _owned(doc, 'Part::Box', name)
     for prop, expr in (('Length', length), ('Width', width), ('Height', height)):
         box.setExpression(prop, expr)
@@ -131,59 +179,216 @@ def _cyl(doc, name, radius, height, z):
     return cyl
 
 
+def _cone(doc, name, r1, r2, height, z):
+    cone = _owned(doc, 'Part::Cone', name)
+    cone.setExpression('Radius1', r1)
+    cone.setExpression('Radius2', r2)
+    cone.setExpression('Height', height)
+    cone.setExpression('Placement.Base.z', z)
+    return cone
+
+
 def _cut(doc, name, base, tool):
     node = _owned(doc, 'Part::Cut', name)
     node.Base, node.Tool = base, tool
     return node
 
 
-def emit(doc):
-    """Create or update the corner's middle section as a live CSG tree."""
+def _fuse(doc, name, base, tool):
+    node = _owned(doc, 'Part::Fuse', name)
+    node.Base, node.Tool = base, tool
+    return node
+
+
+def _sketch(doc, name, pts, horizontals, verticals, on_x, dims, angle, z_expr):
+    """A fully constrained polygon sketch, every dimension driven from the sheet.
+
+    `pts` seeds the geometry; the constraints are what actually place it. `dims` is a list
+    of (vertex index, 'X'|'Y', expression) -- a signed distance from the origin to that
+    vertex. Full constraint is asserted, because an under-constrained sketch deforms
+    silently and still extrudes to a valid solid.
+    """
+    sk = _owned(doc, 'Sketcher::SketchObject', name)
+    if sk.GeometryCount == 0:
+        n = len(pts)
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            sk.addGeometry(Part.LineSegment(V(a[0], a[1], 0), V(b[0], b[1], 0)), False)
+        for i in range(n):
+            sk.addConstraint(Sketcher.Constraint('Coincident', i, 2, (i + 1) % n, 1))
+        for i in horizontals:
+            sk.addConstraint(Sketcher.Constraint('Horizontal', i))
+        for i in verticals:
+            sk.addConstraint(Sketcher.Constraint('Vertical', i))
+        for i in on_x:
+            sk.addConstraint(Sketcher.Constraint('PointOnObject', i, 1, -1))
+        for vertex, axis, expr in dims:
+            seed = pts[vertex][0 if axis == 'X' else 1]
+            ci = sk.addConstraint(Sketcher.Constraint(
+                'Distance' + axis, -1, 1, vertex, 1, seed))
+            sk.setExpression('Constraints[%d]' % ci, expr)
+        sk.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(0, 0, 1), angle))
+        sk.setExpression('Placement.Base.z', z_expr)
+    doc.recompute()
+    if not sk.FullyConstrained:
+        raise RuntimeError('%s is under-constrained (%d DoF) -- it would deform silently'
+                           % (name, sk.solve()))
+    return sk
+
+
+def _prism(doc, name, sketch, length_expr):
+    ext = _owned(doc, 'Part::Extrusion', name)
+    ext.Base = sketch
+    ext.DirMode = 'Normal'
+    ext.Solid = True
+    ext.setExpression('LengthFwd', length_expr)
+    return ext
+
+
+def _section(doc, tag, z0, h):
+    """The mirrored profile every axial section extrudes, from z0 through h."""
     P = 'Params.'
-    _sheet(doc)
+    cz = '%s - %seps' % (z0, P)
+    ch = '%s + %seps * 2' % (h, P)
 
-    body = _owned(doc, 'Part::Fuse', 'Body')
-    body.Base = _cyl(doc, 'Outer', P + 'corner_radius', P + 'height', P + 'z0')
-    body.Tool = _box(doc, 'PanelExt', P + 'rect_w', P + 'corner_radius', P + 'height',
-                     '-' + P + 'rect_w', '0', P + 'z0')
+    body = _fuse(doc, tag + 'Body',
+                 _cyl(doc, tag + 'Outer', P + 'corner_radius', h, z0),
+                 _box(doc, tag + 'PanelExt', P + 'rect_w', P + 'corner_radius', h,
+                      '-' + P + 'rect_w', '0', z0))
+    node = _cut(doc, tag + 'CutBore', body,
+                _cyl(doc, tag + 'Bore',
+                     P + 'longeron_radius + ' + P + 'longeron_tolerance', ch, cz))
+    node = _cut(doc, tag + 'CutSlot', node,
+                _box(doc, tag + 'PanelSlot', P + 'slot_w', P + 'slot_d', ch,
+                     P + 'slot_x', P + 'slot_y', cz))
+    node = _cut(doc, tag + 'CutFlatX', node,
+                _box(doc, tag + 'FlatX', P + 'far', P + 'far * 2', ch,
+                     P + 'flat_x - ' + P + 'far', '-' + P + 'far', cz))
+    node = _cut(doc, tag + 'CutFlatY', node,
+                _box(doc, tag + 'FlatY', P + 'far * 2', P + 'far', ch,
+                     '-' + P + 'far', P + 'flat_x - ' + P + 'far', cz))
+    node = _cut(doc, tag + 'CutFlatD', node,
+                _box(doc, tag + 'FlatDiag', P + 'diag_len', P + 'diag_wid', ch,
+                     P + 'flatd_x', P + 'flatd_y', cz, angle=45))
+    node = _cut(doc, tag + 'CutDiag', node,
+                _box(doc, tag + 'Diag', P + 'diag_len', P + 'diag_wid', ch,
+                     P + 'diag_base', P + 'diag_base', cz, angle=-45))
+    half = _cut(doc, tag + 'CutChamfer', node,
+                _box(doc, tag + 'Chamfer', P + 'far', P + 'far', ch,
+                     '-' + P + 'far', '-' + P + 'far', cz))
 
-    node = _cut(doc, 'CutBore', body,
-                _cyl(doc, 'Bore', P + 'longeron_radius + ' + P + 'longeron_tolerance',
-                     P + 'cut_h', P + 'cut_z0'))
-
-    node = _cut(doc, 'CutSlot', node,
-                _box(doc, 'PanelSlot', P + 'slot_w', P + 'slot_d', P + 'cut_h',
-                     P + 'slot_x', P + 'slot_y', P + 'cut_z0'))
-
-    # bulkhead boundary: three half-planes
-    node = _cut(doc, 'CutFlatX', node,
-                _box(doc, 'FlatX', P + 'far', P + 'far * 2', P + 'cut_h',
-                     P + 'flat_x - ' + P + 'far', '-' + P + 'far', P + 'cut_z0'))
-    node = _cut(doc, 'CutFlatY', node,
-                _box(doc, 'FlatY', P + 'far * 2', P + 'far', P + 'cut_h',
-                     '-' + P + 'far', P + 'flat_x - ' + P + 'far', P + 'cut_z0'))
-    node = _cut(doc, 'CutFlatDiag', node,
-                _box(doc, 'FlatDiag', P + 'diag_len', P + 'diag_wid', P + 'cut_h',
-                     P + 'flatd_x', P + 'flatd_y', P + 'cut_z0', angle=45))
-
-    # the diagonal mirror line, y < x
-    node = _cut(doc, 'CutDiag', node,
-                _box(doc, 'Diag', P + 'diag_len', P + 'diag_wid', P + 'cut_h',
-                     P + 'diag_base', P + 'diag_base', P + 'cut_z0', angle=-45))
-
-    # the longeron chamfer: the third quadrant
-    half = _cut(doc, 'CutChamfer', node,
-                _box(doc, 'Chamfer', P + 'far', P + 'far', P + 'cut_h',
-                     '-' + P + 'far', '-' + P + 'far', P + 'cut_z0'))
-
-    # mirror_xy(): reflect across the plane normal to (1,-1,0), then union
-    mirror = _owned(doc, 'Part::Mirroring', 'MirrorHalf')
+    mirror = _owned(doc, 'Part::Mirroring', tag + 'Mirror')
     mirror.Source = half
     mirror.Normal = V(1, -1, 0)
     mirror.Base = V(0, 0, 0)
+    return _fuse(doc, tag + 'Section', half, mirror)
 
-    whole = _owned(doc, 'Part::Fuse', 'Whole')
-    whole.Base, whole.Tool = half, mirror
+
+def _greeble_tool(doc):
+    """The snap groove: a full revolution, interrupted by a wedge.
+
+    The revolution is four primitives -- bore, expanding cone, rib, contracting cone. The
+    wedge is the one polygon here that will not decompose, so it is a sketch.
+    """
+    P = 'Params.'
+    rev = _fuse(doc, 'NubA',
+                _cyl(doc, 'NubBore', P + 'greeble_radius', P + 'bulkhead_thickness', '0'),
+                _cone(doc, 'NubRampUp', P + 'greeble_radius', P + 'greeble_nub_radius',
+                      P + 'nub_z2 - ' + P + 'nub_z1', P + 'nub_z1'))
+    rev = _fuse(doc, 'NubB', rev,
+                _cyl(doc, 'NubRib', P + 'greeble_nub_radius',
+                     P + 'nub_z3 - ' + P + 'nub_z2', P + 'nub_z2'))
+    rev = _fuse(doc, 'NubC', rev,
+                _cone(doc, 'NubRampDown', P + 'greeble_nub_radius', P + 'greeble_radius',
+                      P + 'nub_z4 - ' + P + 'nub_z3', P + 'nub_z3'))
+
+    # the wedge, at the driver's parameters:
+    #   (-3.71,-3.7) (3.71,-3.7) (3.71,0) (2.8,-0.8) (-2.9,-0.8) (-3.71,0)
+    gnr, eps, gr, gnt, lr, gt = 3.7, 0.01, 2.9, 0.8, 2.0, 0.8
+    pts = [(-(gnr + eps), -gnr), (gnr + eps, -gnr), (gnr + eps, 0.0),
+           (lr + gt, -gnt), (-gr, -gnt), (-(gnr + eps), 0.0)]
+    sk = _sketch(
+        doc, 'WedgeProfile', pts,
+        horizontals=(0, 3), verticals=(1, 5), on_x=(2, 5),
+        dims=[(0, 'X', '-(%sgreeble_nub_radius + %seps)' % (P, P)),
+              (0, 'Y', '-' + P + 'greeble_nub_radius'),
+              (1, 'X', P + 'greeble_nub_radius + ' + P + 'eps'),
+              (3, 'X', P + 'longeron_radius + ' + P + 'greeble_thickness'),
+              (3, 'Y', '-' + P + 'greeble_nub_thickness'),
+              (4, 'X', '-' + P + 'greeble_radius')],
+        angle=-45, z_expr=P + 'cut_z0')
+    wedge = _prism(doc, 'Wedge', sk, P + 'through_cut')
+    return _cut(doc, 'GrooveTool', rev, wedge)
+
+
+def _relief(doc):
+    """corner_transition's diagonal relief -- the second sketch, same pattern."""
+    P = 'Params.'
+    lr, lt, bt, eps, gr = 2.0, 0.05, 6.0, 0.01, 2.9
+    pts = [(gr, -eps), (lr + lt, 0.75 * bt + eps), (lr / 2 ** 0.5, bt + eps),
+           (-lr / 2 ** 0.5, bt + eps), (-(lr + lt), 0.75 * bt + eps), (-gr, -eps)]
+    sk = _sketch(
+        doc, 'ReliefProfile', pts,
+        horizontals=(2, 5), verticals=(), on_x=(),
+        dims=[(0, 'X', P + 'greeble_radius'), (0, 'Y', '-' + P + 'eps'),
+              (1, 'X', P + 'longeron_radius + ' + P + 'longeron_tolerance'),
+              (1, 'Y', P + 'relief_mid'),
+              (2, 'X', P + 'relief_diag'), (2, 'Y', P + 'relief_top'),
+              (3, 'X', '-' + P + 'relief_diag'),
+              (4, 'X', '-(%slongeron_radius + %slongeron_tolerance)' % (P, P)),
+              (4, 'Y', P + 'relief_mid'),
+              (5, 'X', '-' + P + 'greeble_radius')],
+        angle=0, z_expr='0')
+    # OpenSCAD composes this as extrude +z, rotate x 90, rotate z -45, translate. The
+    # sketch carries the first rotation as its own placement so the extrusion runs along
+    # -y, and the -45 and the translate are applied to the prism.
+    sk.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(1, 0, 0), 90))
+    prism = _prism(doc, 'Relief', sk, P + 'relief_depth')
+    prism.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(0, 0, 1), -45))
+    prism.setExpression('Placement.Base.z', P + 'trans_z0 - ' + P + 'eps')
+    return prism
+
+
+def emit(doc):
+    """Create or update the whole corner as a live CSG tree. Returns the stable tip."""
+    P = 'Params.'
+    _SEEN.clear()
+    _sheet(doc)
+
+    # --- the end: section, bore, mouth, interrupted groove ---------------------
+    # NB: not 'EndCutBore' -- _section already owns that name for the longeron bore.
+    end = _section(doc, 'End', P + 'end_z0', P + 'end_h')
+    end = _cut(doc, 'EndCutGreeble', end,
+               _cyl(doc, 'GreebleBore', P + 'greeble_radius', P + 'through_cut',
+                    P + 'cut_z0'))
+    end = _cut(doc, 'EndCutMouth', end,
+               _box(doc, 'Mouth', P + 'mouth_w', P + 'mouth_w', P + 'through_cut',
+                    P + 'mouth_x', P + 'mouth_y', P + 'cut_z0', angle=45))
+    end = _cut(doc, 'EndCutGroove', end, _greeble_tool(doc))
+
+    # --- the transition: section, tapered bore, diagonal relief ----------------
+    trans = _section(doc, 'Trans', P + 'trans_z0', P + 'trans_h')
+    trans = _cut(doc, 'TransCutCone', trans,
+                 _cone(doc, 'TaperBore', P + 'greeble_radius',
+                       P + 'longeron_radius + ' + P + 'longeron_tolerance',
+                       P + 'trans_h + ' + P + 'eps * 2',
+                       P + 'trans_z0 - ' + P + 'eps'))
+    trans = _cut(doc, 'TransCutRelief', trans, _relief(doc))
+
+    # --- the middle, and the half ----------------------------------------------
+    mid = _section(doc, 'Mid', P + 'mid_z0', P + 'mid_h')
+
+    half = _fuse(doc, 'HalfA', end, trans)
+    half = _fuse(doc, 'HalfB', half, mid)
+
+    # the corner is symmetric about mid-span
+    mirror = _owned(doc, 'Part::Mirroring', 'MirrorZ')
+    mirror.Source = half
+    mirror.Normal = V(0, 0, 1)
+    mirror.Base = V(0, 0, 0)
+    mirror.setExpression('Placement.Base.z', P + 'unit_length')
+
+    whole = _fuse(doc, 'Whole', half, mirror)
 
     # the stable tip: user features bind here and nowhere else
     tip = _owned(doc, 'Part::Refine', 'Tip')
@@ -194,20 +399,28 @@ def emit(doc):
 
 
 def main():
-    REF = 4041.5795009
+    REFS = [('EndSection', None), ('Tip', 10395.9608969)]
     doc = App.newDocument('corner_tree')
     tip = emit(doc)
 
+    print('PART:: CSG tree -- fuselage_corner')
+    for name, ref in (('EndCutGroove', 551.8157396),
+                      ('TransCutRelief', 607.6699024),
+                      ('MidSection', 4041.5795009),
+                      ('Tip', 10395.9608969)):
+        obj = doc.getObject(name)
+        v = obj.Shape.Volume
+        d = v - ref
+        print('  %-16s %13.6f  ref %13.6f  %+10.6f  %+8.4f%%'
+              % (name, v, ref, d, 100 * d / ref))
+
     s = tip.Shape
-    d = s.Volume - REF
-    print('PART:: CSG tree -- corner_middle')
-    print('  volume  = %.6f' % s.Volume)
-    print('  ref     = %.6f  (OpenSCAD, faceted)' % REF)
-    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * d / REF))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-    print('  nodes   = %d generated' % len([o for o in doc.Objects
-                                            if getattr(o, 'Generator', None)]))
+    print('  valid = %s  solids=%d faces=%d' % (s.isValid(), len(s.Solids),
+                                                len(s.Faces)))
+    print('  nodes = %d generated, %d sketches'
+          % (len([o for o in doc.Objects if getattr(o, 'Generator', None)]),
+             len([o for o in doc.Objects
+                  if o.isDerivedFrom('Sketcher::SketchObject')])))
 
     out = os.path.join(HERE, 'corner_tree.FCStd')
     doc.saveAs(out)

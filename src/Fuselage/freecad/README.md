@@ -51,8 +51,8 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 
 | File | Contents |
 | --- | --- |
-| `corner_tree.py` | `corner_middle` as a live CSG tree. Every polygon mask in the profile turns out to be a union of half-planes, so the whole section is cylinders and boxes with no sketches at all |
-| `check_tree.py` | The tree against OpenSCAD at four sizes, by editing the parameter sheet rather than re-running; then reload, a tolerance edit, and a parameter-bound user feature |
+| `corner_tree.py` | The whole corner as a live CSG tree — 82 nodes, 2 sketches. Every polygon mask in the section profile is a union of half-planes and the snap groove is a stack of cylinders and cones, so only two polygons in the part need sketches |
+| `check_tree.py` | The tree against OpenSCAD at four sizes, by editing the parameter sheet rather than re-running; then reload, a tolerance edit, and a parameter-bound user feature. Also re-asserts every sketch is fully constrained *at each size* |
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
 
 ## Verification
@@ -63,6 +63,14 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | `check_regenerate.py` | The whole corner rebuilt at U = 0.5, 1, 2, 4 against OpenSCAD, plus the invariants that must hold at every U |
 | `verify_pd_end.py` | Reloads the saved `.FCStd` and forces a recompute — the only measurement worth trusting, since figures taken during construction can be of a stale shape |
 | `variants.py` | The regenerate parameter table, from the real variant tables rather than the driver's 1.0U constants |
+
+`check_tree.py` and `check_regenerate.py` need reference meshes rendered first; they skip any
+size whose reference is missing rather than reporting a false pass:
+
+```
+openscad -o regen_U1.stl -D U=1 -D bulkhead_thickness=6 \
+         -D panel_thickness=4.77 -D panel_overlap=4.77 ref_regenerate.scad
+```
 
 `ref_*.scad` isolate the matching OpenSCAD module at the same parameters. They are the
 reference the ports are measured against, and they stop working when IP-FC-34 retires the
