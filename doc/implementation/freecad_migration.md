@@ -46,8 +46,8 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-4 | done | [`oml_export.py`](../../src/Fuselage/tools/oml_export.py) drives the committed `.vsp3` headlessly and writes real surfaces — 8 and 12 `BSplineSurface` faces, zero planar, 1.4 MB against 36 MB of STL. Scale resolved (IP-FC-37). **Do not repoint `oml_ref()`** — OpenSCAD cannot import STEP, so the STL stays until IP-FC-34 retires the OpenSCAD path. STEP now written to `oml/` beside the STL, with provenance recorded | IP-FC-37 | [cowl.md §1](../design/cowl.md), [freecad_migration.md §UC-9](../architecture/freecad_migration.md) |
 | IP-FC-37 | done | Resolved the OML STEP export scale. OpenVSP is **dimensionless** — the header's `FOOT` label is an exporter artifact, not adjustable via `CADLenUnit`. The project convention (1 model unit = 1 m) is applied on import as `STEP_IMPORT_SCALE = 3.28084` | — | [cowl.md §2.1](../design/cowl.md) |
 | IP-FC-5 | done | Prototyped the corner **both ways**. Both reproduce the OpenSCAD reference and each other; the greeble is the discriminator. See §IP-FC-5 findings below | — | [corner.md](../design/corner.md), [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md) |
-| IP-FC-38 | todo | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
-| IP-FC-40 | todo | Assert `FullyConstrained` on every generated sketch before it is used, and fail loudly when it is not. An under-constrained sketch deforms silently under a parameter change and still yields a valid solid — see §IP-FC-38 progress | IP-FC-38 | §IP-FC-38 progress |
+| IP-FC-38 | done | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
+| IP-FC-40 | done | `_sketch()` raises unless `FullyConstrained`, and `check_tree.py` re-asserts it at every size — not only the one the sketch was authored at. An under-constrained sketch deforms silently under a parameter change and still yields a valid solid | IP-FC-38 | §IP-FC-38 |
 | IP-FC-39 | done | Write the user guide for the FreeCAD workflows — [doc/guide/freecad_workflows.md](../guide/freecad_workflows.md). Covers the derived-part workflow, linking, the four quiet failure modes, and which workflow serves which use case. Written ahead of the implementation deliberately: the design was chosen to serve these workflows, so they are the acceptance criteria. **Revisit as each capability lands** — the output table names the item that delivers each row | IP-FC-38 | [freecad_workflows.md](../guide/freecad_workflows.md) |
 | IP-FC-32 | todo | Measure whether identical parameters yield byte-identical BREP serialization; if so, build a BREP-compare tier beside the parameter snapshot | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
 | IP-FC-33 | todo | Survey and trial every other shape-comparison method that could apply — mesh-to-B-rep deviation, section-curve compare, mass-property compare. Keep what works; deprecate only with a recorded demonstration that a method cannot be made to work | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
@@ -319,10 +319,24 @@ drawn.
 
 ---
 
-## IP-FC-38 progress — the corner as a CSG tree
+## IP-FC-38 — the corner as a CSG tree
 
-Recorded 2026-08-08. `corner_middle` is emitted as a live document tree and verified;
-`corner_end` and `corner_transition` remain, and the method for them is now settled.
+Recorded 2026-08-08. **Complete.** The whole corner — end, transition, middle, and the
+mirrored half — is emitted as a live document tree of 82 nodes and 2 sketches, and every
+section matches both the OpenSCAD reference and the static `Part::` port.
+
+| Node | Tree mm³ | OpenSCAD mm³ | Rel | Static port mm³ |
+| --- | --- | --- | --- | --- |
+| `EndCutGroove` | 551.827595 | 551.815740 | +0.0021% | 551.827595 |
+| `TransCutRelief` | 607.680165 | 607.669902 | +0.0017% | 607.680165 |
+| `MidSection` | 4041.580837 | 4041.579501 | +0.0000% | 4041.580837 |
+| `Tip` | 10396.006622 | 10395.960897 | +0.0004% | 10396.006622 |
+
+Bit-identical to the static port at the driver's parameters, with the same 52 faces. Across
+the regenerate the two diverge very slightly at the largest size — 585955.230 against
+585955.545 at U=4, 5 × 10⁻⁷ relative, with 34 faces against 32 — so the booleans resolve
+marginally differently there. Both are within 0.004% of OpenSCAD and both are one valid
+solid.
 
 ### The profile decomposes into primitives — no sketches needed
 
@@ -377,11 +391,40 @@ nominal values*, drifting further with every edit. Generated sketches must asser
 **A parameter alias may not collide with a unit symbol.** `w` (watt) and `h` (hour) are both
 rejected as `Invalid alias`. Name parameters in full.
 
-### Remaining
+The snap groove decomposed as predicted — bore cylinder, expanding cone, rib cylinder,
+contracting cone, fused — so only two polygons in the whole corner needed sketches:
+`corner_end`'s wedge and `corner_transition`'s relief. Both are generated fully constrained
+and both reproduce their `Part::` equivalents to **exactly zero**.
 
-`corner_end`'s revolve does decompose — the snap groove is cylinder + cone + cylinder + cone
-— so only the wedge needs a sketch. `corner_transition`'s relief is a six-vertex polygon and
-needs one too. Then the z-mirror and the three-section fuse, both of which are single nodes.
+### The regenerate, on the whole corner
+
+| U | bt | pt | OpenSCAD mm³ | Tree mm³ | Rel | Faces |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.5 | 4 | 2 | 1569.70900 | 1569.60773 | −0.0065% | 52 |
+| 1 | 6 | 4.77 | 10887.97936 | 10888.03662 | +0.0005% | 52 |
+| 2 | 8 | 4.77 | 83209.34993 | 83211.84701 | +0.0030% | 52 |
+| 4 | 16 | 4.77 | 585931.71560 | 585955.23049 | +0.0040% | 34 |
+
+Zero failures, and the checks now include *every sketch still being fully constrained* at
+every size, not just at the one it was authored at. Reloaded, the document is still live:
+`greeble_tolerance` 0.05 → 0.25 moved the volume by −47.27 mm³, and a user bracket bound to
+`Params.corner_radius` followed across sizes.
+
+### Two traps found by building it
+
+**A duplicate node name silently becomes a dependency cycle.** `_section()` already owns
+`tag + 'CutBore'` for the longeron bore, and reusing that name for the greeble bore re-fetched
+the existing node and re-pointed its `Base` at a descendant. FreeCAD reports only
+`The graph must be a DAG`, after which recompute order is wrong and unrelated shapes come
+back null — the visible symptom was `EndSection: Base shape is null`, four nodes away from
+the cause. `_owned()` now asserts each name is touched exactly once per `emit()`.
+
+**`Placement.Base` of a rotated box is the corner *after* rotation.** This differs from
+`Part.makeBox(...).rotate(origin, axis, angle)`, which turns an already-placed box about the
+world origin. Giving the mouth its unrotated corner put it 4 mm out and removed 12.07 mm³ too
+much — a valid solid, one solid, 2.19% wrong. The two diagonal masks were already derived in
+the rotated frame, which is why the middle section had matched all along and hid the problem.
+The unrotated corner must be rotated into place: `(-2r, -r)` becomes `(-r, -3r)/sqrt(2)`.
 
 ### Recommendation
 
