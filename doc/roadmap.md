@@ -163,6 +163,12 @@ starting: it records that only the geometry-construction and solid-evaluation la
 replaced, that the headless path is verified working, and that the migration begins by
 losing the cheapest verification tier the project has.
 
+**What users get out of it:**
+[doc/guide/freecad_workflows.md](guide/freecad_workflows.md) — the derived-part and linking
+workflows, and which one serves which use case. Written ahead of the implementation on
+purpose: the modeling paradigm was chosen to serve these workflows, so the guide doubles as
+the acceptance criteria for Phases 3–7.
+
 - [ ] **Prototype one part first.** Port a single well-understood component — a corner or a
       bulkhead — before committing to the approach. Confirm it can express the same
       parametric intent.
