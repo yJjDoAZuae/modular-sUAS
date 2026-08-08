@@ -209,11 +209,37 @@ R_y(-90^\circ):\;(x,y,z)\mapsto(-z,\,y,\,x)$$
 
 ### 2.1 Three consequences, each of which is a trap
 
-**(a) `oml_scale` is a divisor, and the mesh is in metres.** With `oml_scale = 1e-3`,
-$s = 1000\,U$. The exported OML is in **metres**; the model is in **millimetres**. This is
-the only metre→millimetre conversion anywhere in the OpenSCAD path, and it is written as a
-division by a small number rather than a multiplication by 1000 — so it does not look like a
-unit conversion at the call site.
+**(a) `oml_scale` is a divisor, and it encodes a convention rather than a fact.** With
+`oml_scale = 1e-3`, $s = 1000\,U$. This is the only metre→millimetre conversion anywhere in
+the OpenSCAD path, and it is written as a division by a small number rather than a
+multiplication by 1000 — so it does not look like a unit conversion at the call site.
+
+> **OpenVSP is dimensionless, so "the OML is in metres" is a project decision, not a
+> property of the file.** Confirmed 2026-08-08 while implementing IP-FC-4. An OpenVSP model
+> holds bare numbers: no unit travels with the geometry, which is why the API offers
+> `LEN_UNITLESS` beside the real units and why several unrelated settings containers each
+> carry an independent `*LenUnit` parm — every consumer declares its own interpretation.
+>
+> The convention this project uses is **1 model unit = 1 metre**, and the airframe is what
+> fixes it: the OML's rounded-rectangle sections are 0.1 × 0.1 model units and must equal
+> `unit_width` = 100 mm at U = 1 (§1.1). `oml_scale = 1e-3` *is* that convention, written
+> as a reciprocal.
+>
+> **Consequence for the STEP path.** The exporter must write some unit into the file
+> header, and it writes `CONVERSION_BASED_UNIT('FOOT')` — verified by reading the exported
+> file. That label is an artifact, and it is not adjustable through `CADLenUnit`: setting
+> it to `LEN_M` produces a **byte-identical** file. So a consumer reading the STEP
+> naïvely gets 0.1 ft = 30.48 mm where the convention means 100 mm, and must apply
+>
+> $$\texttt{STEP\_IMPORT\_SCALE} = \frac{1000}{304.8} = 3.28084$$
+>
+> which is stated and applied in
+> [`oml_export.py`](../../src/Fuselage/tools/oml_export.py). The number is exact:
+> $30.48 \times 3.28084 = 100.0$.
+>
+> This is the same hazard as everything else in this section, one layer out — geometry
+> that loads cleanly, carries valid surfaces, passes every structural check, and is
+> silently wrong by a constant factor.
 
 **(b) `oml_offset_x` is applied _before_ scaling, so it is in _mesh_ units — metres.** The
 tail's `offset_x = -0.25` is **−0.25 m**, i.e. −250 mm at U = 1. It selects which OML
