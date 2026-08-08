@@ -47,6 +47,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-37 | done | Resolved the OML STEP export scale. OpenVSP is **dimensionless** — the header's `FOOT` label is an exporter artifact, not adjustable via `CADLenUnit`. The project convention (1 model unit = 1 m) is applied on import as `STEP_IMPORT_SCALE = 3.28084` | — | [cowl.md §2.1](../design/cowl.md) |
 | IP-FC-5 | done | Prototyped the corner **both ways**. Both reproduce the OpenSCAD reference and each other; the greeble is the discriminator. See §IP-FC-5 findings below | — | [corner.md](../design/corner.md), [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md) |
 | IP-FC-38 | todo | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
+| IP-FC-40 | todo | Assert `FullyConstrained` on every generated sketch before it is used, and fail loudly when it is not. An under-constrained sketch deforms silently under a parameter change and still yields a valid solid — see §IP-FC-38 progress | IP-FC-38 | §IP-FC-38 progress |
 | IP-FC-39 | done | Write the user guide for the FreeCAD workflows — [doc/guide/freecad_workflows.md](../guide/freecad_workflows.md). Covers the derived-part workflow, linking, the four quiet failure modes, and which workflow serves which use case. Written ahead of the implementation deliberately: the design was chosen to serve these workflows, so they are the acceptance criteria. **Revisit as each capability lands** — the output table names the item that delivers each row | IP-FC-38 | [freecad_workflows.md](../guide/freecad_workflows.md) |
 | IP-FC-32 | todo | Measure whether identical parameters yield byte-identical BREP serialization; if so, build a BREP-compare tier beside the parameter snapshot | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
 | IP-FC-33 | todo | Survey and trial every other shape-comparison method that could apply — mesh-to-B-rep deviation, section-curve compare, mass-property compare. Keep what works; deprecate only with a recorded demonstration that a method cannot be made to work | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
@@ -315,6 +316,72 @@ is a modified variant of a part.
 The caveat from the hand-edit measurement applies here too: user geometry must bind to the
 parameter table to stay meaningful. A hard-coded bracket is correct only at the size it was
 drawn.
+
+---
+
+## IP-FC-38 progress — the corner as a CSG tree
+
+Recorded 2026-08-08. `corner_middle` is emitted as a live document tree and verified;
+`corner_end` and `corner_transition` remain, and the method for them is now settled.
+
+### The profile decomposes into primitives — no sketches needed
+
+Not obvious from the source, and worth recording because it is what makes the tree simple.
+Each polygon mask in `corner_middle_shape` is a union of half-planes:
+
+- the **longeron chamfer**, `[(0,0), (-far,0), (-far,-far), (0,-far)]`, is the third
+  quadrant — one axis-aligned box;
+- the **mirror-line mask**, `[(-far,-far), (far,far), (far,-far)]`, is the half-plane
+  `y < x` — one box rotated −45°;
+- the **bulkhead boundary** is an 8-gon whose vertices `(-4, 1.55)`, `(-2.45, 0)`,
+  `(0, -2.45)` and `(1.55, -4)` are **collinear** on `x + y = flat_offset`. It is therefore
+  the union of three half-planes — `x < flat_x`, `y < flat_x`, `x + y < flat_offset` — so
+  three boxes, one rotated 45°.
+
+So every mask is a `Part::Box` whose size and placement are expressions. Nothing is baked.
+The half-plane placements are derived **in the spreadsheet** rather than in expressions on
+the objects, so the trigonometry is visible to whoever opens the file.
+
+### Verified to the same bar as the static port
+
+| U | bt | pt | OpenSCAD mm³ | tree mm³ | Rel | Faces |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.5 | 4 | 2 | 567.06317 | 567.01817 | −0.0079% | 14 |
+| 1 | 6 | 4.77 | 4228.64541 | 4228.65064 | +0.0001% | 14 |
+| 2 | 8 | 4.77 | 35184.49573 | 35185.52607 | +0.0029% | 14 |
+| 4 | 16 | 4.77 | 246622.72699 | 246632.74517 | +0.0041% | 10 |
+
+At the driver's parameters the tree gives **4041.580837** — bit-identical to the static
+`Part::` port. A regenerate is now editing a spreadsheet cell and recomputing, not re-running
+a script, and all four sizes stay one valid solid with no stale nodes. Reloaded, the document
+is still a live tree, expressions intact; changing `longeron_tolerance` from 0.05 to 0.25
+moved the volume by −54.99 mm³, and a user bracket bound to `Params.corner_radius` followed
+across sizes (276.65 mm³ at U=1, 271.66 at U=2) instead of vanishing the way the hard-coded
+one did.
+
+### Sketches, for the polygons that do not decompose
+
+`corner_end`'s wedge is a non-convex hexagon with no collinear vertices and no nice angles;
+it will not decompose. Sketches are the answer, and they work: a sketch's raw coordinates are
+not expression-bindable but its **constraints** are, and an expression-driven sketch
+recomputes correctly headless and survives save and reload.
+
+**With one absolute requirement: the sketch must be fully constrained.** Six lines are 24
+degrees of freedom; closing the chain into a loop removes only 12. An under-constrained
+sketch whose driven dimensions change lets the solver deform everything else to suit, and it
+does so silently — the extrusion is still a valid solid of the wrong shape. Measured: the
+same polygon gave 28.00 mm² fully constrained and 28.48 mm² under-constrained at the *same
+nominal values*, drifting further with every edit. Generated sketches must assert
+`FullyConstrained` before use.
+
+**A parameter alias may not collide with a unit symbol.** `w` (watt) and `h` (hour) are both
+rejected as `Invalid alias`. Name parameters in full.
+
+### Remaining
+
+`corner_end`'s revolve does decompose — the snap groove is cylinder + cone + cylinder + cone
+— so only the wedge needs a sketch. `corner_transition`'s relief is a six-vertex polygon and
+needs one too. Then the z-mirror and the three-section fuse, both of which are single nodes.
 
 ### Recommendation
 
