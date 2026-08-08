@@ -36,6 +36,10 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 
 | File | Contents |
 | --- | --- |
+| `spike_csg_tree.py` | `Part::` **document objects** — a parametric CSG tree driven by spreadsheet expressions, which survives save/reload still editable. This is the path IP-FC-38 takes; the `part_*.py` above build static shapes and are the verified reference |
+| `spike_hand_edit.py` | How a hand edit interacts with a generated tree: writing an expression-bound property is silently discarded, clearing an expression decouples that dimension permanently and invisibly, and a user node added downstream survives but keeps whatever dimensions it was given |
+| `spike_derived_part.py` | The derived-part workflow — the user's document owns the parameter sheet, the generated nodes and its own geometry. Shows the two properties that make repeated generation safe: a `Generator` tag so a regenerate touches only its own nodes, and a stable `Tip` so user features keep a valid reference when the generated internals restructure |
+| `spike_link.py` | What `App::Link` to a generated file does (geometry reuse, follows the source live, accepts user geometry) and does not (no way to drive the source's parameters from the referencing document) |
 | `spike_partdesign.py` | Body, sketch, Pad, Pocket, Groove, datum plane all work headless |
 | `pd_middle.py` | The octant as sketches and features, then the `mirror_xy` question |
 | `pd_end.py` | The socket, including what a native `Groove` cannot express |
