@@ -58,7 +58,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-10 | blocked (IP-FC-1, IP-FC-9) | Swap the render call in the sweep driver, keeping the queue, worker budget, atomic writes and previews | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | blocked (IP-FC-10) | Replace `--resume`'s staleness key: hash the parameter object plus a geometry-code version, since no generated text exists to compare | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
-| IP-FC-13 | blocked (IP-FC-12) | Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md) |
+| IP-FC-13 | blocked (IP-FC-12) | Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
 | IP-FC-15 | blocked (IP-FC-13) | UC-3 — export `.step` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
@@ -465,13 +465,79 @@ cannot drift apart because both come from the same expressions. Referencing the 
 *built shape* — the natural `PartDesign::` idiom, a `SubShapeBinder` — would deliver the
 toleranced solid and silently apply the clearance twice.
 
+### `Part::Offset2D` matches a single offset and diverges on the fillet chain
+
+Measured next, because the bulkhead's web is built with `offset(r = -web_width)` and
+`fillet_inner(web_fillet_radius)`, and everything downstream depends on those porting
+faithfully. `fillet_inner` is itself a morphological construction:
+
+```scad
+intersection() { offset(-r) offset(2r) offset(-r) children; children; }
+```
+
+Isolated on a polygon with both convex and concave corners:
+
+| Step | OpenSCAD | `Part::Offset2D` | Delta |
+| --- | --- | --- | --- |
+| raw | 750.000000 | 750.000000 | 0 |
+| `offset(r=-3)` | 309.865500 | 309.862833 | −0.00086% |
+| then `offset(-2)` | 60.734761 | 60.730092 | −0.0077% |
+| then `offset(+4)` | **453.820893** | **384.092910** | **−15.4%** |
+| then `offset(-2)` | 244.711834 | 197.278760 | −19.4% |
+
+**A single offset is faithful.** Both the erosion steps match to under 0.01%, and the
+bounding boxes agree exactly — [5,35] × [5,15] eroded, [1,39] × [1,19] dilated — so the
+offset *distance* is right and this is not a join-style or units problem.
+
+**The divergence appears once the intermediate shape fragments.** The erosion leaves two
+disjoint islands, and the dilation of those islands differs: FreeCAD's total is 69.73 mm²
+short. Every `Join` and `Fill` combination was tried — `Tangent` fails outright with
+"offset result has no wires", `Intersection` gets closest at 397.83 and is still 12% short.
+Offsetting each island in isolation and fusing gives byte-identical areas (127.0465,
+257.0465), so FreeCAD is not clipping them against each other; its dilations are simply
+smaller. Matching bounding boxes with smaller area means the two disagree about the shape's
+interior, not its extent.
+
+**This was not a defect to fix but a semantic difference to decide about**, and it is
+decided: OpenSCAD's `fillet_inner` is an *approximation* of a fillet, built from offsets
+because OpenSCAD has no fillet operation. FreeCAD has one, so the port uses **real fillets**
+that closely resemble the OpenSCAD version without matching it to hundredths of a
+millimetre. See [OQ-DES-B9](../design/bulkhead.md).
+
+The single offset stays — `Part::Offset2D` reproduces `offset(r = -web_width)` to 0.01%, so
+only the morphological *fillet* chain is replaced, not the erosion that precedes it.
+
+### `Part::Fillet` is safe for dimension changes and fails loudly on topology changes
+
+Measured once OQ-DES-B9 settled on real fillets, because `Part::Fillet` stores its targets as
+edge references and IP-FC-5 already showed edge counts moving with `U`. A fillet that
+silently relocated to a different edge would be the worst version of the topological naming
+problem — a stress-relief feature in the wrong place.
+
+It does not do that.
+
+| Change | Result |
+| --- | --- |
+| `slot_w` 10 → 16, topology constant | **Correct.** Volume tracks 7058.58 → 6488.58, still four arcs at r=2, stored references still name the concave verticals |
+| `slot_d` 20 → 45, slot breaks through | **Fails visibly.** `Missing edge link`, state `['Touched', 'Invalid']`, recompute reports failure |
+
+FreeCAD stores a *topological name*, not a raw index — `;Edge3;:M;CUT;:Hd8a:7,E.Edge21` —
+and when it cannot resolve one it errors instead of guessing. That is the opposite of the
+silent failures catalogued above, and it makes real fillets usable in a generated document.
+
+**One trap, and it is the familiar shape.** When the fillet fails, its `Shape` goes *stale*
+rather than null: `Volume` still returns 6488.5841 and `isValid()` still returns `True`.
+Only `State` records the failure. Anything that reads a generated shape must check `State`,
+not `isValid()`.
+
+Fillet targets are therefore selected by a **geometric predicate** at emit time — never a
+hand-picked index — so re-running the generator re-derives them and a topology change is
+repaired by regeneration rather than by hand.
+
 ### Remaining
 
 `bulkhead_flange_positive`, `bulkhead_web`, `bolt_flange_positive`, and the four fillet
-modules. The fillets are the open question: OpenSCAD builds them as CSG, and whether they
-port as CSG or become `Part::Fillet` is a decision that has not been made yet — it bears on
-whether topological references survive a regenerate, so it should be measured rather than
-assumed.
+modules, now with real fillets throughout and the erosion still done by `Part::Offset2D`.
 
 ---
 
@@ -518,11 +584,11 @@ This is input to OQ-ARCH-1's final call, not the call itself.
 ## Open questions this plan is waiting on
 
 **None.** All nine architecture open questions are closed — seven decided 2026-08-07,
-OQ-ARCH-3 and OQ-ARCH-8 withdrawn as work items rather than decisions. Nothing in this plan
-is blocked on a judgement call; every remaining dependency is on other work in the plan.
+OQ-ARCH-3 and OQ-ARCH-8 withdrawn as work items rather than decisions. OQ-DES-B9, raised and
+decided 2026-08-08, briefly blocked IP-FC-9: **real fillets, closely resembling the OpenSCAD
+version but not required to match it to hundredths of a millimetre.**
 
-Two design questions want an answer that cannot be read out of the code, and each has its
-own work item rather than blocking anything:
+Two questions want answers that cannot be read out of the code, and block nothing:
 
 | OQ | Item | What it needs |
 | --- | --- | --- |
