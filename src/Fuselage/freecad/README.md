@@ -44,6 +44,17 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 | `pd_middle.py` | The octant as sketches and features, then the `mirror_xy` question |
 | `pd_end.py` | The socket, including what a native `Groove` cannot express |
 
+## The CSG document tree (IP-FC-38)
+
+This is what the generator will emit — document objects with live properties, every
+dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
+
+| File | Contents |
+| --- | --- |
+| `corner_tree.py` | `corner_middle` as a live CSG tree. Every polygon mask in the profile turns out to be a union of half-planes, so the whole section is cylinders and boxes with no sketches at all |
+| `check_tree.py` | The tree against OpenSCAD at four sizes, by editing the parameter sheet rather than re-running; then reload, a tolerance edit, and a parameter-bound user feature |
+| `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
+
 ## Verification
 
 | File | Checks |
