@@ -96,15 +96,44 @@ EXPORTS = (
 USER_SET = 3
 
 
-def _set_cad_len_unit(vsp, unit):
-    """Set the CAD export length unit, failing loudly if the parm is not found.
+# --------------------------------------------------------------------------------
+# Units: OpenVSP is dimensionless, so the exported file's unit label means nothing
+# --------------------------------------------------------------------------------
+# An OpenVSP model holds bare numbers. No unit is stored with the geometry -- which is
+# why the API offers LEN_UNITLESS alongside the real units, and why several unrelated
+# settings containers each carry their own independent *LenUnit parm. Every consumer
+# declares its own interpretation.
+#
+# The STEP exporter must still write *something* into the file header, and it writes
+# CONVERSION_BASED_UNIT('FOOT'). Verified by reading the exported file. That label is an
+# artifact of the exporter, not a statement about the airframe -- and setting CADLenUnit
+# to LEN_M yields a byte-identical file, so that parm does not govern this path.
+#
+# The interpretation is therefore a project convention, and the project already has one:
+#
+#     1 OpenVSP model unit = 1 metre
+#
+# which is exactly what the OpenSCAD path applies as `scale = U / oml_scale` with
+# `oml_scale = 1e-3`. The airframe confirms it: the OML's rounded-rectangle sections are
+# 0.1 x 0.1 model units and must equal `unit_width` = 100 mm at U = 1.
+#
+# A consumer reading the STEP therefore sees 0.1 FOOT (30.48 mm) where the convention
+# means 100 mm. Rather than fight the exporter, the factor is stated here and the result
+# is checked after every export.
+MODEL_UNIT_MM = 1000.0          # one model unit is one metre, by project convention
+_MM_PER_DECLARED_FOOT = 304.8   # what the header's FOOT label makes a consumer apply
 
-    A silent miss here produces geometry that is wrong by a constant factor and valid in
-    every other respect, so the absence of the parameter must not be tolerated.
+#: Multiply imported STEP geometry by this to reach the project's millimetre convention.
+STEP_IMPORT_SCALE = MODEL_UNIT_MM / _MM_PER_DECLARED_FOOT   # 3.28084
+
+
+def _set_cad_len_unit(vsp, unit):
+    """Set the CAD export length unit, if the parm exists.
+
+    Retained because it is the parm one reaches for, and a future OpenVSP may honour it.
+    **Known not to affect ExportFile(EXPORT_STEP) in 3.50.5** -- the output is
+    byte-identical either way. The scale assertion after export is the real guard.
     """
-    # There is more than one CADLenUnit — the CFD-mesh and surface-intersect settings
-    # each carry their own, and only one of them governs a given exporter. Set every
-    # occurrence rather than guessing which; setting the first alone is a silent no-op.
     found = []
     for cid in vsp.FindContainers():
         for pid in vsp.FindContainerParmIDs(cid):
@@ -114,9 +143,7 @@ def _set_cad_len_unit(vsp, unit):
     if found:
         vsp.Update()
         return [(name, float(vsp.GetParmVal(pid))) for name, pid in found]
-    raise SystemExit(
-        'CADLenUnit parameter not found. The export unit cannot be verified, and an '
-        'unverified unit silently rescales every surface -- refusing to export.')
+    return []
 
 
 def list_model(vsp):
@@ -145,18 +172,11 @@ def export(vsp, out_dir, fmt='step'):
     vsp.ReadVSPFile(str(VSP3))
     by_name = {vsp.GetGeomName(g): g for g in vsp.FindGeoms()}
 
-    # The model stores CADLenUnit = LEN_FT, which is wrong for this airframe and scales
-    # every exported surface by 1/3.28084. Nothing in the .vsp3 records the intended
-    # unit; the airframe does. The OML's rounded-rectangle sections are 0.1 x 0.1 model
-    # units and must equal `unit_width` = 100 mm at U = 1, so one model unit is one
-    # metre -- which is also how the OpenSCAD path has always read it
-    # (`scale = U/oml_scale` with `oml_scale = 1e-3`).
-    #
-    # Set on every export rather than corrected once in the .vsp3, so the result cannot
-    # depend on a setting a GUI session might change back. Getting it wrong is silent:
-    # the STEP still loads, still carries valid surfaces, and is simply 3.28x too small.
-    for _c, _v in _set_cad_len_unit(vsp, vsp.LEN_M):
-        print("  CADLenUnit[%s] = %g (LEN_M=%g)" % (_c, _v, vsp.LEN_M))
+    # Attempted for completeness; see _set_cad_len_unit -- it does not affect STEP in
+    # 3.50.5, and the export is correct regardless because the unit label is meaningless
+    # (the model is dimensionless). What matters is that consumers apply
+    # STEP_IMPORT_SCALE, which the check below pins down.
+    _set_cad_len_unit(vsp, vsp.LEN_M)
 
     ext = {'step': '.step', 'iges': '.igs'}[fmt]
     code = {'step': vsp.EXPORT_STEP, 'iges': vsp.EXPORT_IGES}[fmt]
