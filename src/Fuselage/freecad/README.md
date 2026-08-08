@@ -53,6 +53,8 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | --- | --- |
 | `corner_tree.py` | The whole corner as a live CSG tree — 82 nodes, 2 sketches. Every polygon mask in the section profile is a union of half-planes and the snap groove is a stack of cylinders and cones, so only two polygons in the part need sketches |
 | `check_tree.py` | The tree against OpenSCAD at four sizes, by editing the parameter sheet rather than re-running; then reload, a tolerance edit, and a parameter-bound user feature. Also re-asserts every sketch is fully constrained *at each size* |
+| `spike_offset2d.py` | Whether `Part::Offset2D` reproduces OpenSCAD's `offset(r=)` and `fillet_inner()`. A single offset matches to 0.01%; the chained morphological fillet diverges by 19% once the intermediate shape fragments. Settled by OQ-DES-B9 — the port uses real fillets, and keeps `Offset2D` for the erosion |
+| `spike_fillet.py` | Whether `Part::Fillet` survives a parameter change. It does for dimension-only changes, and fails *visibly* when the topology shifts — but its `Shape` goes stale rather than null, so `State` must be checked, not `isValid()` |
 | `bulkhead_tree.py` | The bulkhead's greeble-forming tool: `corner_end` re-evaluated at greeble tolerance **0** and `bulkhead_thickness + 2*eps`. Shows what "reuse the corner's end section" actually means — a second evaluation of the same builders against a second set of spreadsheet rows, never a reference to the corner's built shape, which carries the fit clearance |
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
 

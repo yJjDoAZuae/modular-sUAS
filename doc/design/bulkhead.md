@@ -647,6 +647,88 @@ not happen is landing-gear bulkheads being designed as though they were peers of
 that is a design error the enum would quietly encourage, and it is not fixed by renaming
 anything later.
 
+### ~~OQ-DES-B9 — Is the morphological fillet the authority, or is a true fillet?~~ — DECIDED 2026-08-08: true fillets
+
+**Decision.** The FreeCAD version uses **real fillets that make proper use of FreeCAD's
+capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
+it to hundredths of a millimetre**.
+
+This settles more than the web. It applies to all four fillet modules — `greeble_to_web_
+fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet` and `outer_corner_fillet` — and
+to any other geometry where OpenSCAD approximates a feature it cannot express directly.
+
+Two consequences follow, and both are load-bearing:
+
+- **Equivalence for filleted parts is a deviation tolerance, not volume equality.** IP-FC-13
+  cannot test the bulkhead the way it tests the corner. The corner remains strict; parts
+  with fillets need a stated tolerance and a comparison that measures deviation.
+- **The printed part changes slightly.** Parts printed before and after the port are not
+  interchangeable at the fillet, though they are at every interface, since no interface
+  dimension is set by a fillet.
+
+The original question and its alternatives are kept below, because the reasoning for
+rejecting a bit-exact reproduction is what justifies the tolerance.
+
+---
+
+**Problem.** The web's inner corners are rounded by `fillet_inner(web_fillet_radius)`, which
+is not a fillet operation — OpenSCAD has none. It is a morphological approximation built
+from three chained 2D offsets:
+
+```scad
+intersection() { offset(-r) offset(2r) offset(-r) children; children; }
+```
+
+Measured 2026-08-08, `Part::Offset2D` reproduces a *single* offset to under 0.01% but the
+chain diverges by **19%** once the intermediate shape fragments into disjoint islands. The
+bounding boxes agree exactly, so the offset distance is right; the two disagree about the
+interior. No `Join` or `Fill` setting closes the gap, and offsetting the islands separately
+gives identical results. See
+[freecad_migration.md §IP-FC-9](../implementation/freecad_migration.md).
+
+So the port cannot reproduce the current web shape by the current construction, and the
+question is which shape is actually wanted. This blocks `bulkhead_web` and everything that
+consumes its profile.
+
+**What the geometry is for.** These are inner corners in a load-carrying web, so the radius
+is there to reduce stress concentration. A morphological closing and a true fillet both do
+that; they differ in what happens where features are closer together than `2*r` — which is
+exactly the region where the two measurements diverged.
+
+**Alternatives**
+
+1. **A true fillet in the port** — round the inner corners with `Part::Fillet`, or with arcs
+   constructed in the profile sketch.
+   *Benefits:* it is what the feature means, and it is exact rather than approximate; a
+   constant radius is what a drawing would dimension and what an analyst would expect; it
+   does not degrade where features crowd.
+   *Drawbacks:* the printed part changes shape slightly, so parts printed before and after
+   the port are not identical; full-sweep equivalence (IP-FC-13) cannot use volume equality
+   for the web and needs a stated tolerance instead.
+   *Prerequisites:* a deviation tolerance for IP-FC-13.
+
+2. **Reproduce the morphological result exactly**, by whatever means that takes.
+   *Benefits:* comparable geometry across the migration; IP-FC-13 stays a strict test for
+   this part as it is for the corner.
+   *Drawbacks:* it preserves an approximation for its own sake, and the approximation is
+   worst precisely where the fillet matters most; `Part::Offset2D` demonstrably will not do
+   it, so this means writing the offset chain by hand.
+   *Prerequisites:* establishing why the dilations differ, which is not yet known.
+
+3. **Treat the current profile as incidental** and choose the radius afresh in the port.
+   *Benefits:* no effort spent matching a shape nobody chose deliberately.
+   *Drawbacks:* discards a shape that has been printed and flown; assumes the current
+   geometry carries no tuning, which has been the wrong assumption before on this project.
+   *Prerequisites:* confirmation that the web profile was never tuned by experiment.
+
+**Recommendation: alternative 1, conditional on the web never having been tuned by
+experiment.** The feature is a fillet and FreeCAD can make a fillet; carrying an
+approximation forward because it is what the old tool could express is the wrong reason to
+keep it. But this changes a part that has been printed, and OQ-DES-B1 above records that
+geometry here is sometimes arrived at by experiment rather than derivation — the greeble
+opening angle was exactly that. So whether the web profile was tuned needs answering before
+the change, not after.
+
 ## See also
 
 - [corner.md](corner.md) — the mating half; the greeble; where the fit clearance lives.
