@@ -1,0 +1,11 @@
+{
+  "source": "modular_sUAS_nose_tail.vsp3",
+  "source_sha256": "485c8ec84b772f65cbdf4abf3a3d5e5446bbaed140d371cab2c1fc1518eb69b9",
+  "model_unit_mm": 1000.0,
+  "step_import_scale": 3.2808398950131235,
+  "step_declares": "FOOT (an exporter artifact; OpenVSP is dimensionless)",
+  "files": [
+    "vsp_nose.step",
+    "vsp_tail.step"
+  ]
+}

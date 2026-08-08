@@ -208,13 +208,81 @@ def export(vsp, out_dir, fmt='step'):
     return written
 
 
+PROVENANCE = 'oml_provenance.json'
+
+
+def _model_hash():
+    """SHA-256 of the source model, so an export can be tied to the .vsp3 it came from."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(VSP3, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_provenance(out_dir, written):
+    """Record which model produced these files.
+
+    Nothing previously connected the committed `.vsp3` to the committed OML: the export
+    was done by hand, and a model edited in the GUI would leave the repository describing
+    an airframe that no longer exists, with no signal that anything was wrong. See
+    OQ-DES-CW7. This is the cheap half of the fix -- it does not prevent drift, but it
+    makes drift detectable instead of silent.
+    """
+    import json
+    record = {
+        'source': VSP3.name,
+        'source_sha256': _model_hash(),
+        'model_unit_mm': MODEL_UNIT_MM,
+        'step_import_scale': STEP_IMPORT_SCALE,
+        'step_declares': 'FOOT (an exporter artifact; OpenVSP is dimensionless)',
+        'files': sorted(p.name for p in written),
+    }
+    path = Path(out_dir) / PROVENANCE
+    path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
+    return path
+
+
+def check_provenance(out_dir):
+    """Verify the recorded export still matches the committed model. Returns problems."""
+    import json
+    path = Path(out_dir) / PROVENANCE
+    if not path.exists():
+        print('  NO PROVENANCE  %s is absent -- cannot tell whether the OML is current'
+              % PROVENANCE)
+        return 1
+    record = json.loads(path.read_text(encoding='utf-8'))
+    actual = _model_hash()
+    if record.get('source_sha256') != actual:
+        print('  STALE  %s has changed since the OML was exported' % VSP3.name)
+        print('     recorded %s' % record.get('source_sha256', '?')[:16])
+        print('     actual   %s' % actual[:16])
+        return 1
+    missing = [f for f in record.get('files', [])
+               if not (Path(out_dir) / f).exists()]
+    for f in missing:
+        print('  MISSING  %s was exported but is not present' % f)
+    if not missing:
+        print('  OK  OML matches %s (%s)' % (VSP3.name, actual[:16]))
+    return len(missing)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--list', action='store_true',
                     help='report what the model contains and exit')
+    ap.add_argument('--check', action='store_true',
+                    help='verify the exported OML matches the committed model, and exit')
     ap.add_argument('--out', default=str(OML_DIR), help='output directory')
     ap.add_argument('--format', choices=('step', 'iges'), default='step')
     args = ap.parse_args(argv)
+
+    if args.check:
+        # Deliberately does not import the OpenVSP API: a provenance check must be
+        # runnable in CI, or by anyone, without OpenVSP installed.
+        print('checking OML provenance against %s' % VSP3.name)
+        return 1 if check_provenance(args.out) else 0
 
     if not VSP3.exists():
         raise SystemExit('Source model not found: %s' % VSP3)
@@ -227,7 +295,9 @@ def main(argv=None):
         return 0
 
     print('exporting %s from %s' % (args.format.upper(), VSP3.name))
-    export(vsp, args.out, args.format)
+    written = export(vsp, args.out, args.format)
+    path = write_provenance(args.out, written)
+    print('  provenance   -> %s' % path.name)
     return 0
 
 
