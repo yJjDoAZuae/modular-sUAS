@@ -46,12 +46,13 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-4 | done | [`oml_export.py`](../../src/Fuselage/tools/oml_export.py) drives the committed `.vsp3` headlessly and writes real surfaces — 8 and 12 `BSplineSurface` faces, zero planar, 1.4 MB against 36 MB of STL. Scale resolved (IP-FC-37). **Do not repoint `oml_ref()`** — OpenSCAD cannot import STEP, so the STL stays until IP-FC-34 retires the OpenSCAD path. STEP now written to `oml/` beside the STL, with provenance recorded | IP-FC-37 | [cowl.md §1](../design/cowl.md), [freecad_migration.md §UC-9](../architecture/freecad_migration.md) |
 | IP-FC-37 | done | Resolved the OML STEP export scale. OpenVSP is **dimensionless** — the header's `FOOT` label is an exporter artifact, not adjustable via `CADLenUnit`. The project convention (1 model unit = 1 m) is applied on import as `STEP_IMPORT_SCALE = 3.28084` | — | [cowl.md §2.1](../design/cowl.md) |
 | IP-FC-5 | done | Prototyped the corner **both ways**. Both reproduce the OpenSCAD reference and each other; the greeble is the discriminator. See §IP-FC-5 findings below | — | [corner.md](../design/corner.md), [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md) |
+| IP-FC-38 | todo | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
 | IP-FC-32 | todo | Measure whether identical parameters yield byte-identical BREP serialization; if so, build a BREP-compare tier beside the parameter snapshot | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
 | IP-FC-33 | todo | Survey and trial every other shape-comparison method that could apply — mesh-to-B-rep deviation, section-curve compare, mass-property compare. Keep what works; deprecate only with a recorded demonstration that a method cannot be made to work | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
 | IP-FC-6 | todo | Survey permissively-licensed tooling for non-uniform printed-material analysis; record the finding either way | — | [freecad_migration.md §OQ-ARCH-8](../architecture/freecad_migration.md) |
 | IP-FC-7 | done | Write [`doc/design/cowl.md`](../design/cowl.md) — the cowl had no design authority, and it is the subject of the most blocking work in this plan | — | [cowl.md](../design/cowl.md) |
 | IP-FC-8 | todo | Write the SI↔mm conversion layer as one named module; verify by the bounding-box-÷1000 test | — | [general.md §Units](../guidelines/general.md) |
-| IP-FC-9 | todo | Port the bulkhead, forming the greeble by cutting with the corner's end section. Unblocked by IP-FC-5: cutting with an externally-built solid works in both paradigms — directly in `Part::`, and through `PartDesign::Boolean` with a `Part::Feature` tool | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
+| IP-FC-9 | todo | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. See §The greeble is cut nominal below. Unblocked by IP-FC-5: cutting with a separately-parameterised solid works in both paradigms | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | blocked (IP-FC-1, IP-FC-9) | Swap the render call in the sweep driver, keeping the queue, worker budget, atomic writes and previews | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | blocked (IP-FC-10) | Replace `--resume`'s staleness key: hash the parameter object plus a geometry-code version, since no generated text exists to compare | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
@@ -173,9 +174,33 @@ revolves a sketch and has no way to trim its own tool; the closest native featur
 360° groove, which is wrong by 278 mm³ — half the part. Expressing it needs
 `PartDesign::Boolean` cutting with a `Part::Feature`, which works and reloads clean.
 
-**This answers the question IP-FC-9 was waiting on.** Cutting with an externally-supplied
-solid works in both paradigms, so the bulkhead can form its greeble from the corner's end
-section either way.
+**This answers the question IP-FC-9 was waiting on**, but not in the shape it was asked.
+Cutting with an externally-supplied solid works in both paradigms. What must *not* happen is
+reusing the corner's built shape — see below.
+
+### The greeble is cut nominal, not from the corner's shape
+
+`bulkhead_section()` cuts with `corner_end(...)` passing a literal `0` for the greeble
+tolerance, against the corner's own `GREEBLE_TOLERANCE_CORNER_MM`. The comment in
+`fuselage_bulkhead_geometry.scad` states the reason as an invariant: the post is nominal by
+construction and all of the fit clearance is taken on the corner's bore, *because split
+across both halves the joint would carry it twice*.
+
+So "reuse the corner's end section" means reuse the **description**, re-evaluated at
+tolerance zero — a second call to the same builder with different parameters. It does not
+mean reuse the corner's solid, which is 0.05 mm oversize on the bore by design; cutting the
+bulkhead with it would apply the clearance a second time and leave the snap loose.
+
+**This rules out the natural `PartDesign::` idiom.** Reusing another Body's geometry there
+is a `SubShapeBinder`, and a binder delivers the corner's *actual* shape — the toleranced
+one. The tolerance would have to be re-applied as an offset afterwards, which is a second
+representation of a dimension the parameters already carry. Both paradigms must instead
+call the shared section builder twice with different tolerance arguments, which is exactly
+what `corner_common.Params` already supports and what the OpenSCAD source does today.
+
+This is a case where the automated tiers would not have caught the error: cutting with the
+corner's own shape produces a valid solid, one solid, a plausible volume, and a 0.05 mm
+loose fit that only shows up in a printed part.
 
 **`mirror_xy` needs `TransformMode = 'Whole shape'`.** OpenSCAD's `mirror_xy()` wraps the
 entire half-expression, so mirroring each feature individually is not equivalent — the
@@ -201,12 +226,117 @@ Measurements during construction are also untrustworthy while anything is touche
 figure worth reporting is one taken after a reload and a forced recompute, which is what the
 sweep does anyway.
 
+### "`Part::`" names two different things, and only one of them is editable
+
+The prototype above used the **Part module Python API** — `Part.makeCylinder`, `.cut`,
+`.fuse` — which returns a `TopoShape`: a solid with no history. It satisfies UC-1 and UC-3
+and **fails UC-2**, because a `.FCStd` containing a static shape offers a downstream editor
+nothing to edit. That is a property of the API chosen, not of `Part::`.
+
+**`Part::` document objects are a different thing with the same name.** `Part::Cylinder` has
+live `Radius` and `Height` properties, `Part::Cut` has `Base` and `Tool`, and together they
+form a parametric CSG tree — the same structure as the OpenSCAD source, one node per
+operation. Measured 2026-08-08:
+
+- built headless, with every dimension an **expression** over a `Spreadsheet::Sheet`, so the
+  parameters are a visible editable table rather than baked numbers;
+- exact — agreement with the closed form to 10⁻¹¹ mm³ across U = 0.5, 1, 2, 4;
+- **survives save and reload with expressions intact** (`Outer.Radius` reloads as
+  `Params.U * 10`), and recomputes correctly when the spreadsheet is edited afterwards;
+- a downstream editor can clear one expression, set that primitive by hand, and the rest of
+  the tree stays live and driven.
+
+### How a hand edit interacts with a generated tree
+
+Measured 2026-08-08, because "editable downstream" is worth nothing if the first edit fights
+the generator. A CSG tree and a hand edit **coexist structurally** — but on three specific
+terms, none of which is announced.
+
+**A node added downstream of the generated tip survives and recomputes.** A user `Part::Cut`
+taking the generated tip as its `Base` stays valid and follows a parameter change. What it
+does *not* do is follow it meaningfully: with hard-coded dimensions, the user's 5×5 box
+removed 248.67 mm³ at U=1 and **0.00 mm³ at U=2**, because the enlarged bore swallowed it.
+The edit persists and silently loses its intent. A hand edit has to bind to the parameter
+table the same way the generator does, or it is only correct at the size it was made.
+
+**Writing a property that carries an expression is silently discarded.** The assignment
+raises nothing and reads back as the new value — `Radius` reported 25.0 — and the next
+recompute reverts it to 10.0. Anyone editing a bound dimension in the GUI sees their change
+take and then vanish.
+
+**Clearing an expression is permanent and invisible.** Once unbound, that dimension stops
+tracking the table with no marker distinguishing it from one that never was: at U=4,
+`Outer.Radius` held 25.0 while `Bore.Radius` correctly followed to 8.0. Two dimensions that
+were coupled diverge with nothing recording that a decision was made.
+
+**None of this is specific to CSG trees** — `PartDesign::` has identical expression
+semantics. The genuine conflict is at the *file* level: the sweep re-emitting
+`corner_U1_FX1.FCStd` destroys whatever a human put in it, whichever paradigm wrote it. The
+mitigations are the sweep's staleness key (IP-FC-11) and the derived-part workflow below.
+
+### The derived part: two mechanisms, and only one does both jobs
+
+The wanted workflow is a modified part that starts from a generated one, where the user can
+**both** re-parameterise the original — a tolerance, a bolt diameter — **and** add or
+subtract their own geometry, such as a mounting bracket or a clearance notch. Both
+mechanisms were measured 2026-08-08.
+
+**`App::Link` gives geometry reuse, and only that.** The link resolves across documents,
+follows the source live when its parameters change, and accepts user geometry fused or cut
+onto it. What it cannot do is let the referencing document drive the source's parameters:
+the only route is re-pointing the *source's* expression at the user document
+(`<<linked_user>>#MyParams.U`), which works but edits the generated file — the exact thing
+the sweep overwrites. Note also that an external link requires the **linking** document to
+already exist on disk; a derived part can never be a scratch document.
+
+**Re-running the generator into the user's document does both.** The user's file owns a
+parameter sheet, the generated CSG nodes, and their own features. Measured: changing
+`longeron_tolerance` 0.05 → 0.25, `bolt_diameter` 4 → 6 and `U` 1 → 1.5 each propagated
+through to the final solid, with a user bracket fused on and a user notch cut out, all
+valid, and all surviving save and reload with expressions intact.
+
+Two properties make repeated generation safe, and both are required:
+
+1. **Generated objects carry a `Generator` tag**, so a regenerate can tell its own nodes
+   from the user's and touch only its own. Re-running produced **0 duplicate nodes**, left
+   all four user nodes in place, and did not undo the user's parameter overrides —
+   parameter *values* are written only when the sheet is first created.
+2. **The tree terminates in a stable tip.** User features bind to `Tip` and nothing else,
+   so the generated internals can restructure — which IP-FC-5 showed they do, face count
+   moving 52 → 32 across `U` — without invalidating anything downstream. After a
+   regenerate, `UserFuse.Base` was still `Tip`.
+
+**Use both, for different jobs.** `App::Link` where you want one source of truth and
+automatic propagation and do not need to re-parameterise — assemblies (UC-4) especially,
+which should reference the real generated parts. The derived-part regenerate where the point
+is a modified variant of a part.
+
+The caveat from the hand-edit measurement applies here too: user geometry must bind to the
+parameter table to stay meaningful. A hard-coded bracket is correct only at the size it was
+drawn.
+
 ### Recommendation
 
-**`Part::` for the generator.** It is the smaller, more direct expression of geometry that
-is already CSG, it has no feature tree to regenerate or corrupt, and it sidesteps all three
-traps above. `PartDesign::` earns its place where a human edits a part interactively or
-where a feature needs a named sketch — but the sweep is neither.
+**A parametric `Part::` CSG document tree, with parameters in a spreadsheet.** It is the
+only one of the three that serves both ends of the pipeline:
+
+| | Static `Part` shapes | `Part::` CSG tree | `PartDesign::` body |
+| --- | --- | --- | --- |
+| Matches OpenSCAD structure | yes | **one node per operation** | no — sketches, not CSG |
+| Editable downstream (UC-2, UC-6) | **no** | yes | yes |
+| Parameters visible to an editor | no | **spreadsheet + expressions** | expressions |
+| Regenerate risk in the sweep | none | properties only | feature tree, mirrors, cycles |
+| Expresses the interrupted groove | yes | yes | needs a `Part::` tool anyway |
+
+`PartDesign::` remains the right answer for a human authoring a *new* part from sketches,
+which is UC-6's likely mode — nothing here argues against using it there. What this
+measurement argues is that the **generated** parts should be a CSG tree: it is the structure
+the source already has, it survives the sweep without a feature tree to corrupt, and it
+hands a downstream editor live parameters rather than a dumb solid.
+
+The ported `part_*.py` modules are therefore a *verified reference*, not the final
+generator — their arithmetic is confirmed correct against OpenSCAD to 0.004%, and the
+remaining work is emitting the same operations as document objects instead of shapes.
 
 This is input to OQ-ARCH-1's final call, not the call itself.
 
