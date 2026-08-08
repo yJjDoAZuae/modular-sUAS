@@ -569,7 +569,7 @@ short unsupported span. Measuring one rendered part settles it.
 | OQ-DES-CW4 | Should buttress placement become parametric? | Not blocking |
 | OQ-DES-CW5 | Are the OML sections rounded rectangles? | ~~Resolved 2026-08-07~~ — yes, 10 of 16 stations |
 | OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | **Blocking** IP-FC-17, IP-FC-23 |
-| OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | **Blocking** IP-FC-4 |
+| OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields
 
@@ -820,7 +820,7 @@ and UC-4 something to assemble, and the honest thing is to state in the model wh
 diverges from the print. Alternative 1's slicer-specific fidelity is more precision than
 the rest of the analysis chain can use.
 
-### OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step
+### ~~OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step~~ — RESOLVED 2026-08-08
 
 **Problem.** The cowl's outer surface is defined in
 [`cad/modular_sUAS_nose_tail.vsp3`](../../src/Fuselage/cad/modular_sUAS_nose_tail.vsp3) and
@@ -861,11 +861,34 @@ would propagate the staleness into every downstream use case.
    workflow for anyone who only has the CAD toolchain.
    *Prerequisites:* alternative 1.
 
-**Recommendation: alternative 2 now, alternative 1 with IP-FC-4.** The hash check is small
-enough to do immediately and converts a silent failure into a loud one, which is the
-property that matters. Automating the export is the real fix and is already scheduled as
-part of the OML-as-surface work — at which point the mesh files disappear and the question
-closes itself.
+**Recommendation was alternative 2 now, alternative 1 with IP-FC-4.** The hash check is
+small enough to do immediately and converts a silent failure into a loud one; automating
+the export is the real fix.
+
+---
+
+**RESOLVED 2026-08-08 — both delivered, in [`oml_export.py`](../../src/Fuselage/tools/oml_export.py).**
+
+- **Alternative 1, automation:** the tool drives the committed `.vsp3` headlessly through
+  the OpenVSP Python API. The OML is now *derived* from the model rather than hand-exported
+  from a GUI session, so the two cannot silently diverge in the first place.
+- **Alternative 2, detection:** `--check` compares a SHA-256 of the committed `.vsp3`
+  against the hash recorded in `oml/oml_provenance.json` at export time, and exits
+  non-zero when they disagree.
+
+Two properties of the check worth keeping:
+
+- **It does not import the OpenVSP API.** A provenance check has to be runnable in CI, or
+  by anyone, without OpenVSP installed — otherwise only the people who could already
+  regenerate the file are able to detect that it is stale.
+- **It was tested in both directions and on its exit code.** Current → `OK`, exit 0;
+  perturbed hash → `STALE` naming both hashes, exit 1. The first attempt reported the
+  failure but exited 0, because a `grep` in the test pipeline masked the status — a check
+  that prints a failure and exits clean is useless to CI.
+
+**One thing this does not yet close.** The 36 MB of `.stl` remains, because OpenSCAD cannot
+import STEP and the OpenSCAD path still consumes it. The meshes disappear at IP-FC-34, when
+that path is retired — not before.
 
 ## See also
 
