@@ -54,7 +54,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-6 | todo | Survey permissively-licensed tooling for non-uniform printed-material analysis; record the finding either way | — | [freecad_migration.md §OQ-ARCH-8](../architecture/freecad_migration.md) |
 | IP-FC-7 | done | Write [`doc/design/cowl.md`](../design/cowl.md) — the cowl had no design authority, and it is the subject of the most blocking work in this plan | — | [cowl.md](../design/cowl.md) |
 | IP-FC-8 | todo | Write the SI↔mm conversion layer as one named module; verify by the bounding-box-÷1000 test | — | [general.md §Units](../guidelines/general.md) |
-| IP-FC-9 | todo | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. See §The greeble is cut nominal below. Unblocked by IP-FC-5: cutting with a separately-parameterised solid works in both paradigms | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
+| IP-FC-9 | active | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The greeble-forming tool is done and verified** (§IP-FC-9 progress); the rest of the bulkhead — flange positive, web, bolt flange, and four fillet modules — remains | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | blocked (IP-FC-1, IP-FC-9) | Swap the render call in the sweep driver, keeping the queue, worker budget, atomic writes and previews | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | blocked (IP-FC-10) | Replace `--resume`'s staleness key: hash the parameter object plus a geometry-code version, since no generated text exists to compare | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
@@ -426,7 +426,56 @@ much — a valid solid, one solid, 2.19% wrong. The two diagonal masks were alre
 the rotated frame, which is why the middle section had matched all along and hid the problem.
 The unrotated corner must be rotated into place: `(-2r, -r)` becomes `(-r, -3r)/sqrt(2)`.
 
-### Recommendation
+---
+
+## IP-FC-9 progress — the greeble-forming tool
+
+Recorded 2026-08-08. The bulkhead is a much larger port than the corner — 849 lines and 24
+modules, with webs, flanges and four fillet modules. The part of it that carries risk is the
+*interface*, so that was built and verified first; the rest is more of the decomposition
+already proven on the corner.
+
+**The tool matches.** 557.758041 against the OpenSCAD reference's 557.746362, **+0.0021%** —
+the same inscribed-polygon bias as every other section — spanning z −0.0100 to 6.0200
+exactly, one valid solid.
+
+**Reading the call site closely mattered.** `bulkhead_section()` passes two arguments that
+differ from the corner's own end section, and only one of them was in the plan text:
+
+| | Corner's socket | Bulkhead's post tool |
+| --- | --- | --- |
+| greeble tolerance | 0.05 | **0** (literal, not a parameter) |
+| bulkhead thickness | `bt` | **`bt + 2*eps`** |
+| bore radius | 2.90 | 2.85 |
+| rib height (`bt/3`) | 2.0000 | **2.0067** |
+
+The thickness bump is not decoration: it changes the rib height and every nub z level, and
+the whole shape is then shifted down by `eps` to clean up the bottom of the cutout. A port
+that copied only the tolerance would have been wrong by a rib height.
+
+**The clearance is asserted to appear once.** `corner bore − post bore = 0.0500 =
+greeble_tolerance`, checked in the script rather than left to inspection. This is the
+invariant the design document states — split across both halves, the joint would carry it
+twice.
+
+**Structurally, this is what "reuse the description" means.** `corner_tree.greeble_socket()`
+and `end_section()` now take an alias prefix, so the same builders are evaluated against a
+second set of spreadsheet rows (`gt_*`) derived from the shared ones. The post and socket
+cannot drift apart because both come from the same expressions. Referencing the corner's
+*built shape* — the natural `PartDesign::` idiom, a `SubShapeBinder` — would deliver the
+toleranced solid and silently apply the clearance twice.
+
+### Remaining
+
+`bulkhead_flange_positive`, `bulkhead_web`, `bolt_flange_positive`, and the four fillet
+modules. The fillets are the open question: OpenSCAD builds them as CSG, and whether they
+port as CSG or become `Part::Fillet` is a decision that has not been made yet — it bears on
+whether topological references survive a regenerate, so it should be measured rather than
+assumed.
+
+---
+
+## Recommendation — the modeling paradigm
 
 **A parametric `Part::` CSG document tree, with parameters in a spreadsheet.** It is the
 only one of the three that serves both ends of the pipeline:

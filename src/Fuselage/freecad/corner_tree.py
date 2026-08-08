@@ -103,6 +103,7 @@ PARAMS = [
                        '+ greeble_tolerance'),
     ('greeble_nub_radius', '=greeble_radius + greeble_nub_thickness'),
     ('greeble_nub_height', '=bulkhead_thickness / 3'),
+    ('nub_span', '=bulkhead_thickness'),      # the revolve's full z extent
     ('nub_z1', '=bulkhead_thickness / 2 - greeble_nub_height / 2 - greeble_nub_thickness'),
     ('nub_z2', '=bulkhead_thickness / 2 - greeble_nub_height / 2'),
     ('nub_z3', '=bulkhead_thickness / 2 + greeble_nub_height / 2'),
@@ -147,11 +148,13 @@ def _owned(doc, typename, name):
     return obj
 
 
-def _sheet(doc):
+def _sheet(doc, extra=()):
+    """The parameter sheet. `extra` appends rows for a part that re-evaluates these
+    descriptions at different arguments -- see bulkhead_tree.py."""
     fresh = doc.getObject('Params') is None
     sheet = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
     if fresh:
-        for row, (alias, value) in enumerate(PARAMS, start=1):
+        for row, (alias, value) in enumerate(list(PARAMS) + list(extra), start=1):
             sheet.set('A%d' % row, alias)
             sheet.setAlias('B%d' % row, alias)
             sheet.set('B%d' % row, value)
@@ -284,41 +287,71 @@ def _section(doc, tag, z0, h):
     return _fuse(doc, tag + 'Section', half, mirror)
 
 
-def _greeble_tool(doc):
+def greeble_socket(doc, tag='', pfx='', base_z='0'):
     """The snap groove: a full revolution, interrupted by a wedge.
 
     The revolution is four primitives -- bore, expanding cone, rib, contracting cone. The
     wedge is the one polygon here that will not decompose, so it is a sketch.
+
+    `pfx` selects which set of spreadsheet aliases drives it, so the same description can be
+    re-evaluated at different arguments. That is exactly what the bulkhead needs: it forms
+    its greeble post by cutting with this shape at greeble tolerance ZERO and at
+    bulkhead_thickness + 2*eps -- never with the corner's built shape, which carries the fit
+    clearance and would apply it a second time. See bulkhead_tree.py.
     """
     P = 'Params.'
-    rev = _fuse(doc, 'NubA',
-                _cyl(doc, 'NubBore', P + 'greeble_radius', P + 'bulkhead_thickness', '0'),
-                _cone(doc, 'NubRampUp', P + 'greeble_radius', P + 'greeble_nub_radius',
-                      P + 'nub_z2 - ' + P + 'nub_z1', P + 'nub_z1'))
-    rev = _fuse(doc, 'NubB', rev,
-                _cyl(doc, 'NubRib', P + 'greeble_nub_radius',
-                     P + 'nub_z3 - ' + P + 'nub_z2', P + 'nub_z2'))
-    rev = _fuse(doc, 'NubC', rev,
-                _cone(doc, 'NubRampDown', P + 'greeble_nub_radius', P + 'greeble_radius',
-                      P + 'nub_z4 - ' + P + 'nub_z3', P + 'nub_z3'))
+    Q = P + pfx
+    rev = _fuse(doc, tag + 'NubA',
+                _cyl(doc, tag + 'NubBore', Q + 'greeble_radius',
+                     Q + 'nub_span', base_z),
+                _cone(doc, tag + 'NubRampUp', Q + 'greeble_radius',
+                      Q + 'greeble_nub_radius',
+                      Q + 'nub_z2 - ' + Q + 'nub_z1', Q + 'nub_z1'))
+    rev = _fuse(doc, tag + 'NubB', rev,
+                _cyl(doc, tag + 'NubRib', Q + 'greeble_nub_radius',
+                     Q + 'nub_z3 - ' + Q + 'nub_z2', Q + 'nub_z2'))
+    rev = _fuse(doc, tag + 'NubC', rev,
+                _cone(doc, tag + 'NubRampDown', Q + 'greeble_nub_radius',
+                      Q + 'greeble_radius',
+                      Q + 'nub_z4 - ' + Q + 'nub_z3', Q + 'nub_z3'))
 
-    # the wedge, at the driver's parameters:
+    # the wedge, seeded at the corner's parameters:
     #   (-3.71,-3.7) (3.71,-3.7) (3.71,0) (2.8,-0.8) (-2.9,-0.8) (-3.71,0)
     gnr, eps, gr, gnt, lr, gt = 3.7, 0.01, 2.9, 0.8, 2.0, 0.8
     pts = [(-(gnr + eps), -gnr), (gnr + eps, -gnr), (gnr + eps, 0.0),
            (lr + gt, -gnt), (-gr, -gnt), (-(gnr + eps), 0.0)]
     sk = _sketch(
-        doc, 'WedgeProfile', pts,
+        doc, tag + 'WedgeProfile', pts,
         horizontals=(0, 3), verticals=(1, 5), on_x=(2, 5),
-        dims=[(0, 'X', '-(%sgreeble_nub_radius + %seps)' % (P, P)),
-              (0, 'Y', '-' + P + 'greeble_nub_radius'),
-              (1, 'X', P + 'greeble_nub_radius + ' + P + 'eps'),
+        dims=[(0, 'X', '-(%sgreeble_nub_radius + %seps)' % (Q, P)),
+              (0, 'Y', '-' + Q + 'greeble_nub_radius'),
+              (1, 'X', Q + 'greeble_nub_radius + ' + P + 'eps'),
               (3, 'X', P + 'longeron_radius + ' + P + 'greeble_thickness'),
               (3, 'Y', '-' + P + 'greeble_nub_thickness'),
-              (4, 'X', '-' + P + 'greeble_radius')],
-        angle=-45, z_expr=P + 'cut_z0')
-    wedge = _prism(doc, 'Wedge', sk, P + 'through_cut')
-    return _cut(doc, 'GrooveTool', rev, wedge)
+              (4, 'X', '-' + Q + 'greeble_radius')],
+        angle=-45, z_expr=Q + 'cut_z0')
+    wedge = _prism(doc, tag + 'Wedge', sk, Q + 'through_cut')
+    return _cut(doc, tag + 'GrooveTool', rev, wedge)
+
+
+def end_section(doc, tag, pfx, z0, h, base_z='0'):
+    """corner_end: the section, the greeble bore, the mouth, and the interrupted groove.
+
+    Parameterised the same way as greeble_socket, because the bulkhead calls exactly this
+    with a different thickness and a zero tolerance.
+    """
+    P = 'Params.'
+    Q = P + pfx
+    node = _section(doc, tag, z0, h)
+    node = _cut(doc, tag + 'CutGreeble', node,
+                _cyl(doc, tag + 'GreebleBore', Q + 'greeble_radius',
+                     Q + 'through_cut', Q + 'cut_z0'))
+    node = _cut(doc, tag + 'CutMouth', node,
+                _box(doc, tag + 'Mouth', Q + 'mouth_w', Q + 'mouth_w',
+                     Q + 'through_cut', Q + 'mouth_x', Q + 'mouth_y', Q + 'cut_z0',
+                     angle=45))
+    return _cut(doc, tag + 'CutGroove', node,
+                greeble_socket(doc, tag, pfx, base_z))
 
 
 def _relief(doc):
@@ -356,15 +389,10 @@ def emit(doc):
     _sheet(doc)
 
     # --- the end: section, bore, mouth, interrupted groove ---------------------
-    # NB: not 'EndCutBore' -- _section already owns that name for the longeron bore.
-    end = _section(doc, 'End', P + 'end_z0', P + 'end_h')
-    end = _cut(doc, 'EndCutGreeble', end,
-               _cyl(doc, 'GreebleBore', P + 'greeble_radius', P + 'through_cut',
-                    P + 'cut_z0'))
-    end = _cut(doc, 'EndCutMouth', end,
-               _box(doc, 'Mouth', P + 'mouth_w', P + 'mouth_w', P + 'through_cut',
-                    P + 'mouth_x', P + 'mouth_y', P + 'cut_z0', angle=45))
-    end = _cut(doc, 'EndCutGroove', end, _greeble_tool(doc))
+    # NB: the node names inside end_section() must not collide with _section()'s own --
+    # 'EndCutBore' is already the longeron bore, which is why the greeble bore is
+    # 'EndCutGreeble'. _owned() asserts this.
+    end = end_section(doc, 'End', '', P + 'end_z0', P + 'end_h')
 
     # --- the transition: section, tapered bore, diagonal relief ----------------
     trans = _section(doc, 'Trans', P + 'trans_z0', P + 'trans_h')
