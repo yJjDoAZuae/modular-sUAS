@@ -592,6 +592,16 @@ Built at the **derived** parameters for U=1.0 `end_bolt` 3/16 in, read off the `
 | flange base profile | 709.2890625 | 709.2890625 | **exact** |
 | simple positives | 1090.6890692 | 1090.6367096 | +0.0048% |
 | `bulkhead_web` | 223.8867259 | 223.8866978 | +0.0000% |
+| `outer_corner_fillet` | 8.344397 | 8.346225 | −0.0219% |
+| `bulkhead_flange_chamfer` | 151.536167 | 151.535166 | +0.0007% |
+| `greeble_to_web_fillet` | 3.142761 | 3.143595 | −0.0265% |
+| `greeble_bolt_web` | 55.4371716 | 55.4365498 | +0.0011% |
+
+The two fillets read **smaller** than OpenSCAD, which is the correct sign and worth noting:
+they are a block minus a cylinder, so FreeCAD's true circle removes more material than
+OpenSCAD's inscribed prism. Everywhere the part is bounded by curved *material* the sign is
+the other way. A fillet whose delta came out positive would be evidence of an error, not of
+tessellation.
 
 The flange base is exact because it is entirely planar — no tessellation bias to absorb. The
 other two carry curved surfaces and show the usual inscribed-polygon bias.
@@ -618,13 +628,21 @@ bulkhead. `bulkhead_web` — which the end, interconnect and cowling bulkheads d
 makes a true fillet by subtracting a cylinder. So the decision governs the plate family, and
 the frame bulkhead ports without it.
 
+**Still no sketches.** Eight modules in and every profile has decomposed into boxes,
+cylinders and cones. `greeble_bolt_web`'s plan view is a *parallelogram* — a strip of width
+`flange_thickness/2` laid along the corner-to-bolt diagonal — so it is a single box rotated
+−135°. Where a prism runs off-axis, it is built in the frame the source draws it in and the
+composed rotation applied to the result, rather than solving its cutting planes in world
+coordinates; `corner_tree._relief()` set that pattern and it has held three times since.
+
 ### Remaining
 
-`bulkhead_flange_chamfer`, the quadrant-intersection block in `bulkhead_flange_positive`, and
-the four fillet modules (`outer_corner_fillet`, `greeble_bolt_web`, `greeble_to_web_fillet`,
-`web_to_bolt_fillet`, `bulkhead_bolt_flange_fillet`). Then the cuts other than the greeble
-tool — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask — and the
-`octant_to_full` tiling.
+`web_to_bolt_fillet` and `bulkhead_bolt_flange_fillet`; the quadrant-intersection block in
+`bulkhead_flange_positive`; the cuts other than the greeble tool — opening wedge, outer-face
+cleanup, longeron and bolt holes, octant mask; and the `octant_to_full` tiling. Then the
+assembled `bulkhead_section` against a reference from
+[`render_variant.py`](../../src/Fuselage/tools/render_variant.py), which is also the point at
+which the per-module parameter sheets merge into one (IP-FC-41).
 
 ---
 
