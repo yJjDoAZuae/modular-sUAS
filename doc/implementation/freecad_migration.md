@@ -7,10 +7,12 @@ port enables. Plan abbreviation `FC`.
 [doc/architecture/freecad_migration.md](../architecture/freecad_migration.md) for the system
 shape and the nine use cases; [corner.md](../design/corner.md),
 [bulkhead.md](../design/bulkhead.md) and [cowl.md](../design/cowl.md) for the geometry being
-ported. All three parts now have one — `cowl.md` was written as IP-FC-7 and immediately
-unblocked IP-FC-16 and produced two new items, IP-FC-28 and IP-FC-29.
+ported. All three parts now have one — `cowl.md` was written as IP-FC-7, immediately
+unblocked IP-FC-16, and raised seven open questions about the cowl. **Five of those were
+answered on 2026-08-09**, closing the last blocking cowl question (OQ-DES-CW6) and adding
+IP-FC-42, IP-FC-43 and IP-FC-44.
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-09
 
 ---
 
@@ -69,17 +71,20 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-9 | active | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. What remains is the `octant_to_full` tiling | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | blocked (IP-FC-1, IP-FC-9) | Swap the render call in the sweep driver, keeping the queue, worker budget, atomic writes and previews | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | blocked (IP-FC-10) | Replace `--resume`'s staleness key: hash the parameter object plus a geometry-code version, since no generated text exists to compare | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
+| IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
 | IP-FC-13 | blocked (IP-FC-12) | Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
 | IP-FC-15 | blocked (IP-FC-13) | UC-3 — export `.step` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
 | IP-FC-16 | todo | Write the cowl interior-surface algorithm document. Method decided: per-layer 2D inset, **curvature-adaptive** section spacing with a deviation-based termination test, surface **fit** with G1 tangency (threshold) and G2 curvature (objective), bidirectional curvature, **never ruled**. The open part is the near-horizontal material rule | IP-FC-7 | [freecad_migration.md §OQ-ARCH-5](../architecture/freecad_migration.md), [cowl.md §6.2](../design/cowl.md) |
-| IP-FC-28 | todo | Resolve OQ-DES-CW2: what `cone_angle` measures, and whether it is a printability constraint. It is used as complementary angles at its two call sites | — | [cowl.md §4.2](../design/cowl.md) |
+| IP-FC-28 | todo | OQ-DES-CW2 resolved 2026-08-09: `cone_angle` is the **overhang angle measured from the print bed**, 35°, and both call sites are correct — the complementary spellings meet the same face because the radius lies in the bed plane and the axis is normal to it. What is left: rename to `overhang_angle_from_bed` and move it into `PrinterSettings`, since it is material-dependent process, not cowl shape. Per-feature overrides are open — the achievable angle depends on span, surface type and whether the face mates | IP-FC-12, IP-FC-42 | [cowl.md §OQ-DES-CW2](../design/cowl.md) |
 | IP-FC-30 | done | Establish each station's active section type. Resolved from the XML: read `<Type>` element TEXT, not the ParmContainer name, which is stale on 10 of 16 stations | — | [cowl.md §1.2](../design/cowl.md) |
+| IP-FC-44 | done | OQ-DES-CW1 resolved 2026-08-09 (alternative 1): the three metre-valued OML fields renamed to `oml_length_m`, `oml_offset_x_m` and `oml_scale_m_per_mm` across the SCAD signatures, `OmlParameters` and both cowl JSON files. `_m_per_mm` not `_m_per_unit` — "unit" already means `U`/`unit_width`/`unit_length` here. Verified geometry-identical by `verify_sweep_change.py`, which is the check this case needs: the signatures move, so `scad_snapshot.py` reports DIFF by construction | — | [cowl.md §OQ-DES-CW1](../design/cowl.md) |
 | IP-FC-31 | done | OQ-DES-CW7 addressed: `oml_export.py --check` verifies the exported OML against a SHA-256 of the committed `.vsp3`, recorded in `oml/oml_provenance.json`. Exits non-zero when stale; needs no OpenVSP install, so it runs anywhere | — | [cowl.md §OQ-DES-CW7](../design/cowl.md) |
-| IP-FC-29 | todo | Resolve OQ-DES-CW3: is `buttress.thickness = 0.05 mm` a wall or a cut clearance? Unscaled, and one eighth of an extrusion width | — | [cowl.md §4.1](../design/cowl.md) |
-| IP-FC-17 | blocked (IP-FC-16) | Implement cowl interior surfaces | IP-FC-16, IP-FC-14 | *(IP-FC-16 output)* |
+| IP-FC-29 | todo | OQ-DES-CW3 resolved 2026-08-09: `buttress.thickness` is the **cut** that produces the rib through slicing; the printed rib is `2·w·n_perimeters + t_cut`. Unscaled treatment confirmed correct. What is left here is the rename to `buttress_cut_thickness` — JSON schema, `ButtressSet`, eight SCAD signatures — deferred to the port so it is not done twice | IP-FC-12 | [cowl.md §OQ-DES-CW3](../design/cowl.md) |
+| IP-FC-42 | todo | Adopt `n_perimeters` into `PrinterSettings`. The cowl rib's thickness depends on it and it exists only in a slicer profile outside the repository — the same class of gap OQ-DES-CW7 closed for the OML. Prerequisite of any modelled rib | — | [cowl.md §OQ-DES-CW6](../design/cowl.md) |
+| IP-FC-43 | todo | Settle the buttress cut's factor of two: every call site extrudes `height = 2*buttress_thickness`, so the cut is 0.1 mm where the parameter says 0.05. Half-thickness-per-side convention or error — a question of intent, not measurable. **The port reproduces the doubling until it is settled** | IP-FC-29 | [cowl.md §OQ-DES-CW3](../design/cowl.md) |
+| IP-FC-17 | blocked (IP-FC-16) | Implement cowl interior surfaces. **OQ-DES-CW6 resolved 2026-08-09 and no longer blocks this** — but it attaches a constraint: the interior is *additive*, and the UC-1 print export must keep coming from the un-shelled notched blank, because cowls print in spiral vase mode and a modelled wall destroys that. Model the rib at `2·w·n_perimeters + t_cut`. The sweep's printing output must be verifiable as unchanged by this work | IP-FC-16, IP-FC-14, IP-FC-42 | *(IP-FC-16 output)*, [cowl.md §6.4](../design/cowl.md) |
 | IP-FC-18 | blocked (IP-FC-14) | Model the non-printed components — longeron, panel, threaded insert, bolt — derived from the clearances that already receive them | IP-FC-14 | [freecad_migration.md §UC-8](../architecture/freecad_migration.md) |
 | IP-FC-19 | blocked (IP-FC-17) | UC-4 — assemblies with FreeCAD Assembly joints for unit, nose, tail and full fuselage. Includes asserting each solved placement against the placement constructed from parameters | IP-FC-17, IP-FC-18, IP-FC-35 | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
 | IP-FC-35 | todo | Confirm the Assembly workbench scripts under `freecadcmd` — create an assembly, add joints, solve, and read back placements, all headless. Prerequisite of IP-FC-19, no longer a gate on the decision | — | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
@@ -107,7 +112,9 @@ Three things are worth noticing about the shape of the plan:
 > leave none. That last clause is the only part still genuinely open.
 
 > **IP-FC-17, IP-FC-19 blocked reason:** A cowl cannot close as a solid without its
-> interior surface, and an assembly of open shells is not an assembly.
+> interior surface, and an assembly of open shells is not an assembly. Both were also
+> blocked on OQ-DES-CW6, which is resolved as of 2026-08-09; IP-FC-16 is now the only
+> gate on IP-FC-17.
 
 > **IP-FC-19 note (OQ-ARCH-6):** Decided — Assembly joints, with each solved placement
 > asserted against the placement constructed from parameters. IP-FC-35 confirms the
@@ -920,14 +927,30 @@ bulkheads are bit-identical with the call corrected, or removed altogether — a
 U=4 does it carry material, where the fix moves about 0.1% of the part. The audit now reports
 zero mismatches tree-wide.
 
-Two questions want answers that cannot be read out of the code, and block nothing:
+Two questions wanted answers that could not be read out of the code. **Both were answered
+on 2026-08-09, along with CW1, CW4 and CW6** — five cowl questions closed in one pass, four
+of them by the designer stating intent that the code could not have revealed:
 
-| OQ | Item | What it needs |
+| OQ | Item | Answer |
 | --- | --- | --- |
-| [OQ-DES-CW2](../design/cowl.md) | IP-FC-28 | What `cone_angle` measures. Used as complementary angles at its two call sites, so the code cannot disambiguate it |
-| [OQ-DES-CW3](../design/cowl.md) | IP-FC-29 | Whether `buttress.thickness = 0.05 mm` is a wall or a cut clearance. Unscaled, and one eighth of an extrusion width |
+| [OQ-DES-CW1](../design/cowl.md) | IP-FC-44 | Yes, suffix them. Renamed and verified geometry-identical — **done** |
+| [OQ-DES-CW2](../design/cowl.md) | IP-FC-28 | `cone_angle` is the **overhang angle from the print bed**, 35°. Both call sites correct; the complementary spellings meet the same face |
+| [OQ-DES-CW3](../design/cowl.md) | IP-FC-29 | `buttress.thickness` is the **cut** that produces the rib through slicing — a slicer tolerance, not part geometry. Printed rib is `2·w·n_perimeters + t_cut` |
+| [OQ-DES-CW4](../design/cowl.md) | — | Buttress scaling is intended and already correct. Placement becomes a list at the port; general siting deferred |
+| [OQ-DES-CW6](../design/cowl.md) | IP-FC-17 | Model the rib nominally, **keep the notched blank as the print export** — cowls print in spiral vase mode, which a modelled wall would destroy |
 
-OQ-DES-B3, B8, CW1, CW4 and CW6 remain open and block nothing.
+**The one that changes the plan is CW6.** It was the only blocking cowl question, and its
+answer both unblocks IP-FC-17 and IP-FC-23 and constrains them: two representations of a
+cowl from one parametric source, with the print path untouched. Nothing in the repository
+recorded that cowls are vase-mode printable — the word does not appear anywhere in it — so
+IP-FC-17 would have shelled the cowl, exported the shelled solid, and silently removed a
+printing capability with no geometric signal that anything was wrong.
+
+Three new items fell out: **IP-FC-42** (adopt `n_perimeters` — the rib's thickness depends
+on a value held only in a slicer profile outside the repository), **IP-FC-43** (the buttress
+cut's factor of two), and **IP-FC-44** (CW1, done).
+
+OQ-DES-B3 and B8 remain open and block nothing.
 
 ---
 

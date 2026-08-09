@@ -1,40 +1,40 @@
 include <shape_modifier_utils.scad>
 
-module nose_cowl(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
+module nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
 
     octant_to_full() {
-        nose_cowl_octant(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
+        nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
     } 
 }
 
-module nose_cowl_octant(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
+module nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
     
     ang = 0;
     buttress_z_end = cut_len + buttress_z_offset;
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
     
     difference() {
-        body_blank_octant_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len);
+        body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
         
         side_buttress(ang, unit_width, body_len, buttress_thickness, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
     }
 }
 
 
-module tail_cowl(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
+module tail_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
     
     mirror_y() {
-        tail_cowl_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle);
+        tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle);
     }
 }
 
-module tail_cowl_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
+module tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
     
     
-    tail_len = U*oml_length/oml_scale;
+    tail_len = U*oml_length_m/oml_scale_m_per_mm;
     
     difference() {
-        body_blank_half_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len);
+        body_blank_half_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
         
         difference() {
             union() {
@@ -88,18 +88,18 @@ module tail_cowl_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_of
     }
 }
 
-module nose(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle) {
+module nose(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle) {
      
     eps = geometry_eps();
    
     difference() {
         union() {
-        body_blank_full_upper(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len);
+        body_blank_full_upper(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len);
             
         translate([0,0,-cut_len-nose_flange_height]) {
         linear_extrude(height=nose_flange_height,center=false,convexity=5,twist=0,slices=1,scale=1.0) {
             offset(r = -nose_flange_inset) {
-            projection(cut=false) body_blank_full_upper(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len);
+            projection(cut=false) body_blank_full_upper(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len);
             }
         }
         }
@@ -152,7 +152,7 @@ module nose_plate(plate_diam, plate_thickness, plate_flange_width, plate_flange_
 }
 
 
-module assembly_tool(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len, plate_diam, plate_tol) {
+module assembly_tool(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, plate_diam, plate_tol) {
     
     union() {
     
@@ -165,7 +165,7 @@ module assembly_tool(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_r
         
        translate([0,0,1]) {
            mirror([0,0,-1]) {
-               body_blank_full(U, oml_filename, oml_scale, oml_offset_x, oml_reversed);
+               body_blank_full(U, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed);
            }
        }
         
@@ -180,24 +180,24 @@ module assembly_tool(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_r
 
 
 
-module body_blank_full(U, oml_filename, oml_scale, oml_offset_x, oml_reversed) {
+module body_blank_full(U, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed) {
     
     pitch_angle = 90-(oml_reversed?180:0);
     
     rotate([0,pitch_angle,0]) {
-        scale([U/oml_scale,U/oml_scale,U/oml_scale]) {
-            translate([oml_offset_x,0,0]) {
+        scale([U/oml_scale_m_per_mm,U/oml_scale_m_per_mm,U/oml_scale_m_per_mm]) {
+            translate([oml_offset_x_m,0,0]) {
             import(oml_filename);
             }
         }
     }
 }
 
-module body_blank_full_upper(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len) {
+module body_blank_full_upper(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len) {
     
     intersection() {
 
-        body_blank_full(U, oml_filename, oml_scale,  oml_offset_x, oml_reversed);
+        body_blank_full(U, oml_filename, oml_scale_m_per_mm,  oml_offset_x_m, oml_reversed);
 
         translate([0,0,-cut_len]) {
 
@@ -213,13 +213,13 @@ module body_blank_full_upper(U, unit_width, oml_filename, oml_scale, oml_offset_
     }  
 }
 
-module body_blank_full_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len) {
+module body_blank_full_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len) {
     
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
     
     intersection() {
 
-        body_blank_full(U, oml_filename, oml_scale,  oml_offset_x, oml_reversed);
+        body_blank_full(U, oml_filename, oml_scale_m_per_mm,  oml_offset_x_m, oml_reversed);
 
         translate([0,0,-body_len]) {
 
@@ -236,13 +236,13 @@ module body_blank_full_lower(U, unit_width, oml_filename, oml_scale, oml_length,
 }
 
 
-module body_blank_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed) {
+module body_blank_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed) {
 
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
 
     intersection() {
         
-        body_blank_full(U, oml_filename, oml_scale, oml_offset_x, oml_reversed);
+        body_blank_full(U, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed);
 
         right_half_mask(unit_width, body_len);
 
@@ -251,13 +251,13 @@ module body_blank_half(U, unit_width, oml_filename, oml_scale, oml_length, oml_o
 
 
 
-module cowl_blank_full(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len) {
+module cowl_blank_full(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len) {
 
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
     
     intersection() {
 
-        body_blank_full(U, oml_filename, oml_scale, oml_offset_x, oml_reversed);
+        body_blank_full(U, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed);
 
         translate([0,0,-body_len]) {
 
@@ -273,26 +273,26 @@ module cowl_blank_full(U, unit_width, oml_filename, oml_scale, oml_length, oml_o
     }  
 }
 
-module body_blank_half_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len) {
+module body_blank_half_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len) {
 
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
 
     intersection() {
         
-        body_blank_full_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len);
+        body_blank_full_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
 
         right_half_mask(unit_width, body_len);
 
     }
 }
 
-module body_blank_octant_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len) {
+module body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len) {
     
-    body_len = U*oml_length/oml_scale;
+    body_len = U*oml_length_m/oml_scale_m_per_mm;
     
     intersection() {
 
-        body_blank_full_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len);
+        body_blank_full_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
 
         octant_mask(unit_width, body_len);
 

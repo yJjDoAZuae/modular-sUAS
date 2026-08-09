@@ -12,6 +12,15 @@ described from memory. Statements about *why* are marked as inference where they
 inference. Where intent could not be recovered there is an open question rather than a
 guess.
 
+**Updated 2026-08-09.** Five of the seven open questions were answered by the designer —
+CW1, CW2, CW3, CW4 and CW6 — and the answers are marked as resolutions rather than folded
+silently into the text, because four of them are *intent* that no reading of the code could
+have recovered. Two of those four inverted a conclusion this document had drawn from the
+code alone: `cone_angle` was not a violated printability limit but a deliberately aggressive
+one, and the notched rib was not a modelling shortfall but the mechanism that makes spiral
+vase printing possible. Where a resolution contradicts an earlier inference, the inference
+is left in place with the correction beside it, so the failure mode stays visible.
+
 **Millimetres and metres both appear here, deliberately.** The cowl is the one part of the
 system where the existing millimetre-throughout rule meets metre-valued data, and getting
 that boundary wrong is silent. Every quantity below is marked.
@@ -197,7 +206,7 @@ $$\mathbf{p}' = R_y(\theta)\,\big(s\,(\mathbf{p} + \mathbf{t})\big),
 
 with
 
-$$s = \frac{U}{\texttt{oml\_scale}}, \qquad
+$$s = \frac{U}{\texttt{oml\_scale\_m\_per\_mm}}, \qquad
 \theta = 90^\circ - 180^\circ\cdot[\![\texttt{oml\_reversed}]\!]
 \;\in\;\{+90^\circ,\,-90^\circ\}$$
 
@@ -209,8 +218,8 @@ R_y(-90^\circ):\;(x,y,z)\mapsto(-z,\,y,\,x)$$
 
 ### 2.1 Three consequences, each of which is a trap
 
-**(a) `oml_scale` is a divisor, and it encodes a convention rather than a fact.** With
-`oml_scale = 1e-3`, $s = 1000\,U$. This is the only metre→millimetre conversion anywhere in
+**(a) `oml_scale_m_per_mm` is a divisor, and it encodes a convention rather than a fact.** With
+`oml_scale_m_per_mm = 1e-3`, $s = 1000\,U$. This is the only metre→millimetre conversion anywhere in
 the OpenSCAD path, and it is written as a division by a small number rather than a
 multiplication by 1000 — so it does not look like a unit conversion at the call site.
 
@@ -222,7 +231,7 @@ multiplication by 1000 — so it does not look like a unit conversion at the cal
 >
 > The convention this project uses is **1 model unit = 1 metre**, and the airframe is what
 > fixes it: the OML's rounded-rectangle sections are 0.1 × 0.1 model units and must equal
-> `unit_width` = 100 mm at U = 1 (§1.1). `oml_scale = 1e-3` *is* that convention, written
+> `unit_width` = 100 mm at U = 1 (§1.1). `oml_scale_m_per_mm = 1e-3` *is* that convention, written
 > as a reciprocal.
 >
 > **Consequence for the STEP path.** The exporter must write some unit into the file
@@ -241,7 +250,7 @@ multiplication by 1000 — so it does not look like a unit conversion at the cal
 > that loads cleanly, carries valid surfaces, passes every structural check, and is
 > silently wrong by a constant factor.
 
-**(b) `oml_offset_x` is applied _before_ scaling, so it is in _mesh_ units — metres.** The
+**(b) `oml_offset_x_m` is applied _before_ scaling, so it is in _mesh_ units — metres.** The
 tail's `offset_x = -0.25` is **−0.25 m**, i.e. −250 mm at U = 1. It selects which OML
 station lands on the model origin. Reading it as millimetres understates it by a factor of
 1000, and the result still renders.
@@ -258,15 +267,19 @@ sits at negative z, which is the corroborating evidence.
 
 The axial extent of interest is
 
-$$\texttt{body\_len} = \frac{U\cdot\texttt{oml\_length}}{\texttt{oml\_scale}} = s\cdot\texttt{oml\_length}\ \ \text{[mm]}$$
+$$\texttt{body\_len} = \frac{U\cdot\texttt{oml\_length\_m}}{\texttt{oml\_scale\_m\_per\_mm}} = s\cdot\texttt{oml\_length\_m}\ \ \text{[mm]}$$
 
-— the same scale factor applied to a length expressed in mesh units. `oml_length` is
+— the same scale factor applied to a length expressed in mesh units. `oml_length_m` is
 therefore **metres** as well: 0.050 m for the nose (→ 50·U mm), 0.1 m for the tail
 (→ 100·U mm).
 
-*Inference:* naming these `oml_length` and `oml_offset_x` without a unit suffix, in a
+*Inference:* naming these `oml_length_m` and `oml_offset_x_m` without a unit suffix, in a
 codebase whose convention is millimetres, is the single most likely place for a 1000×
 error in the FreeCAD port. See [OQ-DES-CW1](#open-questions).
+
+**Fixed 2026-08-09.** The three are now `oml_length_m_m`, `oml_offset_x_m_m` and
+`oml_scale_m_per_mm_m_per_mm`, in the SCAD signatures, the `OmlParameters` dataclass and both cowl
+JSON files. Verified geometry-identical by `verify_sweep_change.py`.
 
 ---
 
@@ -319,8 +332,9 @@ single most important thing to understand about the cowl:
 
 1. The buttress cuts a channel into the outer surface, so the cowl's cross-section at that
    station is no longer a smooth closed curve — it has a re-entrant notch.
-2. The part is printed with **perimeters and zero infill**. The slicer walks a fixed number
-   of perimeters around whatever contour it is given.
+2. The part is printed with **perimeters and zero infill** — and in **spiral vase mode**,
+   which is a mode these cowls support and which is to be preserved, that number is one.
+   The slicer walks a fixed number of perimeters around whatever contour it is given.
 3. Following the notch inward and back out, those perimeters lay down a **double wall
    projecting into the interior** — a structural rib — where a smooth contour would have
    produced a single wall.
@@ -329,12 +343,23 @@ So a groove on the outside becomes a stiffener on the inside, for no added CAD c
 and no support material. **More buttress ⇒ more rib, not less material.** The naming is
 right after all; it was my reading of it that was wrong.
 
+**And in vase mode it is the only mechanism available** (OQ-DES-CW6, 2026-08-09). Vase mode
+spirals a single continuous contour up the part and admits no interior geometry whatsoever,
+so a modelled rib is not merely unnecessary there — it is impossible, and a cowl given one
+stops being vase-printable. Notching the exterior is how you get a rib inside a single-wall
+print. That reframes everything below: the rib's absence from the CAD is not a shortfall to
+be corrected, it is the consequence of a design choice worth keeping.
+
 Two consequences follow, and both matter for the port:
 
 - **The rib does not exist in the CAD model.** It is an emergent property of slicing a
   notched contour with a perimeter count. Any solid-model interior surface (§6.2) must
   reproduce it deliberately, because a naive inward offset of the *outer* surface will
-  reproduce the notch but not the double wall that fills it.
+  reproduce the notch but not the double wall that fills it. Its thickness is
+  `2·w·n_perimeters + t_cut` (§4.1, OQ-DES-CW3) — **0.85 mm in vase mode** at a 0.4 mm
+  extrusion width.
+- **That interior surface must not become the printing export** (§6.4). Adding it destroys
+  vase-mode printability, so the two representations stay separate.
 - **UC-8 structural analysis cannot use the outer surface alone.** The ribs are the
   stiffening structure, and they are invisible to any analysis that meshes the CAD solid as
   drawn.
@@ -393,8 +418,13 @@ $$\alpha = \arctan\!\left(\frac{r_1 - r_2}{L_c}\right) = \arctan(\cot\phi) = 90^
 
 So in the buttress profile $\phi$ is measured **from the radial direction**, and in the
 plate cone it appears as $\cot\phi$, i.e. measured **from the axis**. Same number, same
-name, complementary angles. One of the two call sites is using it against its natural
-sense, and nothing records which.
+name, complementary angles.
+
+**Both are right, and the complementarity is the point** (resolved 2026-08-09,
+[OQ-DES-CW2](#open-questions)). The radius lies in the bed plane and
+the axis is normal to it, so `35° from the radius` and `90° − 35° = 55° from the axis` are
+one face: **35° above the print bed**. `cone_angle` is the overhang angle, and the two call
+sites reach the same physical slope from perpendicular references.
 
 ### 4.3 Buttress placement
 
@@ -411,6 +441,13 @@ parameter tree and then never used, because the SCAD uses literals:
 
 The nose cowl uses exactly one side buttress at 0°, cut into the octant before tiling.
 
+**Every literal in that table is either an angle or a fraction of `W = unit_width`**, so the
+buttress pattern already scales with the cowl, which is what was intended
+([OQ-DES-CW4](#open-questions)). The one deliberate
+exception is `buttress.thickness`, which is a slicer tolerance rather than part geometry and
+is scale-independent for that reason. What is wrong here is not the scaling — it is that the
+numbers live in SCAD rather than in the JSON fields that already exist to hold them.
+
 ---
 
 ## 5. Parameter schema and the scaling rule
@@ -424,8 +461,8 @@ variation table's `parameter_filename` column. `derived_cowl_parameters()` expan
 
 ```python
 NOSE_UNSCALED = ("cone_angle", "tolerance", "flange_inset", "thickness",
-                 "active", "angle", "filename", "scale", "length",
-                 "offset_x", "reversed")
+                 "active", "angle", "filename", "scale_m_per_mm", "length_m",
+                 "offset_x_m", "reversed")
 ```
 
 So three different unit conventions coexist in one JSON file:
@@ -433,18 +470,27 @@ So three different unit conventions coexist in one JSON file:
 | Class | Fields | Units |
 | --- | --- | --- |
 | Scaled | `cut_len`, `z_offset`, `r_inset`, `r_start`, `r_end`, `z_end`, `z_start`, `depth`, `diameter` | fraction of `unit_width` (dimensionless) |
-| Unscaled, angular | `cone_angle`, `angle` | degrees |
+| Unscaled, angular | `cone_angle`, `angle` | degrees — and `cone_angle` is degrees **from the print bed** (§4.2) |
 | Unscaled, absolute | `thickness`, `tolerance`, `flange_inset` | **millimetres** |
-| Unscaled, OML | `length`, `offset_x`, `scale` | **metres** (§1) |
+| Unscaled, OML | `length_m`, `offset_x_m`, `scale_m_per_mm` | **metres** (§1) — now stated in the names |
 
 `buttress.thickness = 0.05` is therefore 0.05 **mm** — an absolute value that does not
 scale with the airframe — while `buttress.r_inset = 0.05` in the same object is 0.05 ×
 `unit_width`. Two identical numbers, two different meanings, one file.
 
 *Inference:* the unscaled-absolute group are printer-process quantities and correctly do not
-scale, consistent with the greeble tolerance and `longeron_tolerance` elsewhere. But
-`thickness = 0.05 mm` is one eighth of an extrusion width, which is implausible as a wall
-and suggests it is a cut *clearance* rather than a wall thickness. [OQ-DES-CW3](#open-questions).
+scale, consistent with the greeble tolerance and `longeron_tolerance` elsewhere.
+
+`buttress.thickness` is **the thickness of the cut into the OML**, not a wall — the cut is
+what produces the buttress, through slicing. The printed rib is far thicker than the cut,
+because the slicer walls both faces of it:
+
+$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}} + t_{\text{cut}}$$
+
+In spiral vase mode, which is the mode these cowls are printed in, `n_perimeters = 1`, so a
+0.05 mm parameter yields a **0.85 mm** rib at `extrusion_width = 0.4` and 1.25 mm at the
+sweep's 0.6. Resolved 2026-08-09, [OQ-DES-CW3](#open-questions) and
+[OQ-DES-CW6](#open-questions).
 
 ---
 
@@ -470,9 +516,16 @@ depends on nothing, and it is on the critical path for four use cases.
 ### 6.2 The cowl has no interior surface
 
 The cowl today is a **solid blank with channels cut into it**. It has no wall — the printed
-part gets its interior from the slicer, as a zero-infill operation with a perimeter count.
-That is sufficient for printing and insufficient for everything else: an open or solid blob
-has no meaningful mass, no wall to analyse, and cannot be assembled.
+part gets its interior from the slicer, as a zero-infill operation with a perimeter count,
+and **for cowls printed in spiral vase mode that count is one**. That is sufficient for
+printing and insufficient for everything else: an open or solid blob has no meaningful mass,
+no wall to analyse, and cannot be assembled.
+
+> **Constraint on everything in this section.** Cowls are printable in **spiral vase mode**,
+> and that capability is to be kept ([OQ-DES-CW6](#open-questions)). Vase mode requires one
+> closed contour per layer and no interior geometry whatsoever, so a cowl that has been given
+> a modelled wall **is no longer vase-mode printable**. The interior surface described below
+> therefore serves UC-2, UC-3, UC-4 and UC-8; it must not become what UC-1 exports. See §6.4.
 
 **The interior must be generated as a per-layer 2D inset, not a 3D shell offset.** Those are
 different surfaces, and the difference is not small.
@@ -504,11 +557,45 @@ this section states the requirement and the trap.
 ### 6.3 What the port should preserve
 
 - The **transform algebra of §1** is the interface to the OML and must survive verbatim,
-  including the fact that `offset_x` precedes the scale.
+  including the fact that `offset_x_m` precedes the scale -- it is metres in the mesh's
+  own frame, which is what the suffix is there to say.
 - The **hollowing-by-subtraction** structure of §3 maps cleanly onto `Part::` booleans. It
   does not map onto `PartDesign::` bodies, which is another data point for
   [OQ-ARCH-1](../architecture/freecad_migration.md#open-questions).
 - The **protected core** (pyramid ∪ cube) is the bulkhead interface and is load-bearing.
+- The **notched blank must remain exportable as it stands** — see §6.4.
+
+### 6.4 Two representations of one cowl, and why they cannot be merged
+
+*Added 2026-08-09, resolving [OQ-DES-CW6](#open-questions).*
+
+A cowl has to be two things at once, and the port cannot collapse them:
+
+| | **Print representation** | **Solid representation** |
+| --- | --- | --- |
+| What it is | The notched blank exactly as generated today — no wall, no modelled rib | The blank shelled by the §6.2 per-layer inset, with the rib modelled where each notch is |
+| Serves | UC-1 | UC-2, UC-3, UC-4, UC-7, UC-8 |
+| Wall comes from | The slicer, one contour per layer in vase mode | Geometry |
+| The rib | Emerges, as the wall follows the notch in and back out | Modelled, `2·w·n + t_cut` thick |
+
+**They cannot be merged, and the direction of the incompatibility is the important part.**
+Adding a wall to the print representation destroys vase-mode printability outright: vase mode
+spirals a single contour and admits no interior geometry, so the moment the cowl has a
+modelled inner surface the mode is unavailable. Meanwhile the print representation is useless
+for analysis, because the structure that carries the load is not in it.
+
+So the port produces **both from one parametric source**, and the invariant to hold is:
+**the UC-1 export path continues to come from the un-shelled notched blank.** Shelling is a
+downstream operation for the other use cases, never a replacement for the blank. A port that
+"improves" the cowl by giving it a proper wall and exports that for printing has silently
+removed a printing capability, and nothing in the geometry would flag it — the STL would look
+better and slice worse.
+
+**This also fixes the direction of the modelling work.** The rib is not something to be
+reverse-engineered from a slicer's output as a curiosity; it is the structure, and the notch
+is the *mechanism* that produces it under a mode that permits no other mechanism. The notch
+is not a workaround for the model's shortcomings. It is a design choice that buys ribs inside
+a single-wall print, and it is the reason the interior is worth modelling at all.
 
 ---
 
@@ -549,13 +636,14 @@ model (UC-8 tier 3) treats a cowl as weakest across planes normal to its axis �
 direction the cowl is loaded when the airframe is in tension, and the direction the buttress
 ribs of §4 do nothing to help, since they stiffen the section rather than the joint.
 
-**Does not settle [OQ-DES-CW2](#open-questions), but narrows it sharply.** With the build
-direction now known to be axial, the buttress chamfer's overhang is computable rather than
-speculative. The chamfer runs `dζ/dr = tan φ`, so its face sits at `90° − φ = 55°` from the
-build axis at `φ = 35°` — steeper than the usual 45° self-supporting limit, in whichever of
-the two chamfers forms a ceiling rather than a floor. Either `cone_angle` is measured from
-the axis rather than the radius at that call site, or the upper chamfer is accepting a
-short unsupported span. Measuring one rendered part settles it.
+**Settled [OQ-DES-CW2](#open-questions) — this section supplied the
+missing half.** With the build direction known to be axial, the buttress chamfer's overhang is
+computable rather than speculative. The chamfer runs `dζ/dr = tan φ`, so at `φ = 35°` its face
+sits 55° from the build axis and **35° above the bed** — and that is the whole meaning of
+`cone_angle`: the overhang angle, measured from the bed. The nose plate's cone reaches the
+same 35° by the complementary spelling. What looked like an inconsistency was one face
+described against two perpendicular references, and what looked like a violated 45° limit was
+a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 ---
 
@@ -563,24 +651,24 @@ short unsupported span. Measuring one rendered part settles it.
 
 | ID | Summary | Blocking |
 | --- | --- | --- |
-| OQ-DES-CW1 | Should the metre-valued OML fields carry unit suffixes? | Not blocking — advisory before IP-FC-12 |
-| OQ-DES-CW2 | What does `cone_angle` measure, and about which axis? | Not blocking — but IP-FC-12 will faithfully reproduce whichever call site is wrong |
-| OQ-DES-CW3 | Is `buttress.thickness` a wall or a cut clearance? | Not blocking |
-| OQ-DES-CW4 | Should buttress placement become parametric? | Not blocking |
+| OQ-DES-CW1 | Should the metre-valued OML fields carry unit suffixes? | ~~Resolved 2026-08-09~~ — yes; renamed and verified geometry-identical |
+| OQ-DES-CW2 | What does `cone_angle` measure, and about which axis? | ~~Resolved 2026-08-09~~ — the overhang angle, from the bed; both call sites correct |
+| OQ-DES-CW3 | Is `buttress.thickness` a wall or a cut clearance? | ~~Resolved 2026-08-09~~ — neither: it is the cut that *makes* the rib |
+| OQ-DES-CW4 | Should buttress placement become parametric? | ~~Resolved 2026-08-09~~ — scaling is intended and already correct; placement becomes a list at the port, general siting deferred |
 | OQ-DES-CW5 | Are the OML sections rounded rectangles? | ~~Resolved 2026-08-07~~ — yes, 10 of 16 stations |
-| OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | **Blocking** IP-FC-17, IP-FC-23 |
+| OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | ~~Resolved 2026-08-09~~ — modelled nominally; the notched blank stays the print export, because vase mode depends on it. **Unblocks IP-FC-17, IP-FC-23** |
 | OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
 
-### OQ-DES-CW1 — Unit suffixes on the OML fields
+### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
 **Problem.** The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
-parameters control that import: `oml_scale`, `oml_length` and `oml_offset_x`. All three are
+parameters control that import: `oml_scale_m_per_mm`, `oml_length_m` and `oml_offset_x_m`. All three are
 expressed in **metres**, while every other length in the OpenSCAD generator is in
 **millimetres**, and none of the three carries a unit suffix.
 
-Two of them are actively misleading. `oml_scale = 1e-3` is used as a *divisor* —
-`scale = U/oml_scale` — so it multiplies by 1000 while looking like it divides. And
-`oml_offset_x` is applied *before* the scale, so the tail's `-0.25` means −0.25 m (−250 mm
+Two of them are actively misleading. `oml_scale_m_per_mm = 1e-3` is used as a *divisor* —
+`scale = U/oml_scale_m_per_mm` — so it multiplies by 1000 while looking like it divides. And
+`oml_offset_x_m` is applied *before* the scale, so the tail's `-0.25` means −0.25 m (−250 mm
 at U = 1), not −0.25 mm; reading it as millimetres understates it a thousandfold, and the
 part still renders.
 
@@ -591,8 +679,8 @@ reproduce whatever convention it infers.
 
 **Alternatives**
 
-1. **Rename with unit suffixes** — `oml_scale_m_per_unit`, `oml_length_m`,
-   `oml_offset_x_m`.
+1. **Rename with unit suffixes** — `oml_scale_m_per_mm_m_per_unit`, `oml_length_m_m`,
+   `oml_offset_x_m_m`.
    *Benefits:* the trap disappears at the point of reading; matches the guideline; costs
    nothing at runtime.
    *Drawbacks:* touches the SCAD modules, both cowl JSON files, and
@@ -619,96 +707,152 @@ because the failure mode is a factor of 1000 rather than 20 %. The "do not renam
 code" rule exists to avoid churn for cosmetic gain; a name that states the wrong unit is not
 cosmetic. Verify with a geometric comparison, since the generated `.scad` text changes.
 
-### OQ-DES-CW2 — What `cone_angle` measures
+**RESOLVED 2026-08-09 — alternative 1, done.**
 
-**Problem.** `cone_angle` is a single parameter, set to 35° in both committed cowl files,
-used at two places that measure it against **different axes**.
+| Was | Now | Why the suffix reads that way |
+| --- | --- | --- |
+| `oml_length` | `oml_length_m` | Metres, in a codebase whose every other length is millimetres |
+| `oml_offset_x` | `oml_offset_x_m` | Metres, and applied *before* the scale, so it is metres in the mesh's own frame — the tail's −0.25 is −250 mm at U = 1 |
+| `oml_scale` | `oml_scale_m_per_mm` | A **divisor**: `scale = U/oml_scale_m_per_mm`. At 1e-3 it multiplies by 1000 while the bare name suggests it divides. The suffix names the ratio in the order the division takes it |
 
-In `buttress_shape()` it sets the slope of the two chamfers on the cutting profile:
-`dζ/dr = tan φ`, where `ζ` is the cowl axis and `r` the radius. The chamfer therefore makes
-angle φ with the *radial* direction.
+Renamed in all four places the value passes through: the SCAD module signatures
+(`cowl_geometry.scad`, `nose_cowl.scad`, `tail_cowl.scad`), the `OmlParameters` dataclass,
+and — because `derived_cowl_parameters()` copies OML fields by `fields()`, so the dataclass
+field names *are* the schema — the JSON keys in both cowl parameter files.
 
-In `nose()` it sets a conical relief for the nose plate:
-`r₁ = r₂ + L/tan(φ)`, whose half-angle from the *axis* is `90° − φ`.
+**`_m_per_mm` rather than the `_m_per_unit` originally proposed.** "Unit" is the most
+overloaded word in this project — `U`, `unit_width`, `unit_length` — and spending it here on
+"model unit" would have planted a fresh ambiguity in the middle of a rename whose whole
+purpose was removing one. `_m_per_mm` names both ends of the ratio and borrows nothing.
 
-So the same number means 35° from the radius in one place and 55° from the axis in the
-other — complementary angles under one name. The print direction is known (axial, large end
-down, §7), so the buttress chamfer is a 55°-from-vertical face wherever it forms a ceiling,
-which is steeper than the usual 45° self-supporting limit. Either one call site is using the
-parameter against its natural sense, or the upper chamfer accepts a short unsupported span.
+**Verified geometry-identical**, which was the stated requirement. This change alters SCAD
+module signatures, so the generated `.scad` text necessarily differs and `scad_snapshot.py`
+would report DIFF by construction — the case `verify_sweep_change.py` exists for. It re-ran
+the real sweeps and compared the resulting solids: nose cowl, tail, and non-cowl parts as
+controls, all identical.
 
-Nothing records which. IP-FC-12 will reproduce both call sites faithfully, preserving
-whichever is wrong.
+### ~~OQ-DES-CW2 — What `cone_angle` measures~~ — RESOLVED 2026-08-09
 
-**Alternatives**
+**`cone_angle` is the overhang angle for printing, measured from the print bed. Both call
+sites are correct, and the apparent inconsistency was an artefact of how this document posed
+the question.**
 
-1. **Measure a rendered part and infer the intent.**
-   *Benefits:* cheap; the geometry already exists; settles the printability question
-   directly rather than by argument.
-   *Drawbacks:* tells you what the code does, not what was intended — if the two differ,
-   you still have a decision.
-   *Prerequisites:* none.
+The two expressions are complementary because they are written against **perpendicular
+reference directions**, and the physical face they produce is the same. Working each through
+to the bed plane:
 
-2. **Split into two parameters** — a `buttress_chamfer_angle` and a `plate_cone_angle` —
-   each documented against a stated axis.
-   *Benefits:* removes the ambiguity permanently; the two are not obviously the same
-   quantity and nothing requires them to be equal.
-   *Drawbacks:* two numbers to keep in step if they *are* meant to be equal; changes the
-   JSON schema.
-   *Prerequisites:* alternative 1, to know whether they should differ.
+| Call site | As written | Face relative to the axis | **Face relative to the bed** |
+| --- | --- | --- | --- |
+| `buttress_shape()` | `dζ/dr = tan φ` — angle φ from the *radius* | 55° | **35°** |
+| `nose()` | `r₁ = r₂ + L/tan φ` — half-angle `90° − φ` from the *axis* | 55° | **35°** |
 
-3. **Keep one parameter, define its axis once, and correct whichever call site disagrees.**
-   *Benefits:* one number; forces the inconsistency to be resolved rather than documented
-   around.
-   *Drawbacks:* changes geometry at one of the two sites, so it is not behaviour-preserving
-   and needs a print to confirm the change is an improvement.
-   *Prerequisites:* alternative 1.
+The radius lies in the bed plane and the axis is normal to it (the part prints axially, large
+end down, §7), so "35° from the radius" and "55° from the axis" are two spellings of one
+face. `tan 35° = 0.700`, and a cone whose radius grows by `L/0.700 = 1.428·L` over height `L`
+stands at `atan(1.428) = 55°` from the axis — 35° above the bed. The parameter is used
+against its natural sense at both sites; only the documentation was missing.
 
-**Recommendation: alternative 1 first — this question cannot be answered from the code
-alone.** Measure the as-built chamfer against the bed and establish whether the upper
-buttress chamfer is self-supporting in practice. If it is, the parameter is being used
-correctly at both sites and only the documentation is missing; if it is not, prefer
-alternative 3. Do not resolve this by changing geometry before a part has been measured.
+**Why 35° and not 45°.** The 45° figure this document measured against is a rule of thumb,
+and a conservative one: modern printers do considerably better than 45° in PLA, and 35° from
+the bed is readily achievable. It is an aggressive value chosen deliberately, not a value
+that drifted past a limit. The earlier reading — "a 55°-from-vertical face, steeper than the
+usual 45° self-supporting limit, so something must be wrong" — inverted the conclusion: 55°
+from vertical *is* the achievable direction, and the design is spending the margin the rule
+of thumb leaves on the table. **Other materials may not hold 35°**, which makes this a
+material-dependent process limit rather than a shape parameter.
 
-### OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance?
+**Consequences for the port.**
 
-**Problem.** `buttress.thickness` is `0.05` in both cowl parameter files. It is in
-`NOSE_UNSCALED`, so it is **not** multiplied by `unit_width` — it is an absolute 0.05 mm at
-every airframe size.
+- **Do not split it.** Alternative 2 of the original question is wrong: the two sites are one
+  quantity, and forcing them apart would let them drift out of step for no reason. Nothing
+  needs correcting under alternative 3 either — there is no disagreeing call site.
+- **The name states a shape and hides a constraint.** `cone_angle` describes what the geometry
+  looks like at one of the two sites and nothing at all at the other; what it *is* is a
+  minimum printable angle. `overhang_angle_from_bed` names both the quantity and the reference
+  the ambiguity turned on — and the reference is exactly what OQ-DES-CW1 argues belongs in the
+  name. Note that it is a **floor, not a target**: shallower fails, steeper is free.
+- **It is a printer setting, not a cowl setting.** It is already in `NOSE_UNSCALED` and does
+  not scale, correctly — but it sits in the cowl JSON, where it reads as a property of the
+  shape. Being material-dependent, it belongs in `PrinterSettings` with `extrusion_width`,
+  `layer_height` and the `n_perimeters` that OQ-DES-CW6 needs (IP-FC-42): the four together
+  are the process, and a cowl designed for one material should not have to be re-authored for
+  another. Recorded as IP-FC-28.
+- **It is the only printability constraint expressed anywhere in this project's geometry**,
+  but that does not make it a single project-wide number. Every other self-supporting
+  decision — the greeble chamfers, the bulkhead flange chamfer, the corner's snap groove
+  cones — is a literal angle chosen to be printable, with nothing recording that printability
+  is what set it. The tempting fix is to derive them all from one value; it is the wrong fix,
+  because **the achievable angle depends on what is overhanging**:
 
-0.05 mm is one eighth of a 0.4 mm extrusion width. It cannot be a printed wall: nothing
-that thin can be produced by the process. It is used as `2·buttress_thickness` for the
-extrusion depth of a *cutting* prism, which suggests it is setting a kerf or clearance
-rather than a structure.
+  | What varies | Why it changes the achievable angle |
+  | --- | --- |
+  | Span | A 2 mm chamfer sags negligibly at an angle that would ruin a 40 mm one. Droop accumulates over the unsupported run, not per layer |
+  | Surface type | A cone is self-supporting in a way a flat ceiling is not — each layer is a closed loop laid on the one below, with no free end |
+  | Function | A cosmetic face tolerates droop; a mating surface — the plate relief, the snap groove — does not, and wants margin the cowl's exterior does not need |
+  | Cooling and orientation | The same face on the same printer behaves differently depending on what is around it |
 
-If it is a clearance, the name is wrong in the same way `nozzle_diameter` was wrong before
-IP-GEO-24 — and the consequence is worse than cosmetic, because a reader sizing a rib would
-reach for this parameter and get a cut width.
+  So the process value is a **baseline**, and individual features are entitled to be more
+  conservative where the span is long or the surface mates, or more aggressive where the span
+  is short. What is worth capturing is not one angle but the *fact* that a given chamfer is
+  set by printability and against which reference — so that changing material prompts a
+  review of each rather than a silent global substitution. Whether the baseline should
+  additionally carry per-feature overrides, and on what rule, is left open here; the cowl
+  needs one value and this question is about the cowl.
 
-**Alternatives**
+### ~~OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance?~~ — RESOLVED 2026-08-09
 
-1. **Rename to reflect that it is a cut dimension** — `buttress_cut_width` or similar.
-   *Benefits:* the name states what the value does; no geometry change.
-   *Drawbacks:* touches the JSON schema and the SCAD signatures.
-   *Prerequisites:* confirming it is in fact a cut dimension.
+**Neither, and the question was posed on a false dichotomy.** `buttress.thickness` is the
+thickness of **the cut into the OML that produces the buttress through slicing**. It is not
+a clearance around some other feature, and it is not the rib's thickness — it is the notch
+whose walls, once the slicer has laid perimeters down both faces of it, *are* the rib.
 
-2. **Leave it, and document the meaning here.**
-   *Benefits:* zero churn.
-   *Drawbacks:* the misleading name survives into the port.
-   *Prerequisites:* none.
+The thickness of the buttress measured on the interior of the cowl is therefore
 
-3. **Reconsider whether it should scale.** If it is a kerf it is process-driven and
-   correctly unscaled; if it is a structural dimension it should scale with `unit_width`.
-   *Benefits:* settles the scaling question at the same time.
-   *Drawbacks:* changes geometry at every size but U = 1 if the answer is "should scale".
-   *Prerequisites:* the answer to the wall-or-clearance question.
+$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}} + t_{\text{cut}}$$
 
-**Recommendation: establish which it is, then alternative 1.** The evidence strongly favours
-"cut clearance" — 0.05 mm is unprintable as a wall, and it is applied to a subtracted prism —
-but that inference has not been confirmed by whoever chose the value. If it is a clearance,
-the unscaled treatment is already correct and only the name needs fixing.
+These cowls print in **spiral vase mode** ([OQ-DES-CW6](#open-questions)), so `n_perimeters`
+is **1**: a 0.05 mm parameter yields a **0.85 mm** rib at `extrusion_width = 0.4`, 1.25 mm at
+the sweep's 0.6. The value looked implausible because it was being read as the whole rib when
+it is the smallest of the three terms that make it — and because a single-wall print was not
+in view, which is the case where a 0.85 mm rib is a substantial fraction of the structure.
 
-### OQ-DES-CW4 — Should buttress placement become parametric?
+**This settles the scaling question too, and the current treatment is right.**
+`buttress.thickness` **is a slicer tolerance, not a part geometry parameter**, and a slicer
+tolerance has no business tracking the airframe — so it does not scale, and `thickness`
+belongs in `NOSE_UNSCALED` exactly where it is. Alternative 3 of the original question is
+answered: it should not scale. The consequence follows and is intended
+([OQ-DES-CW4](#open-questions)): the buttress *pattern* — angles, offsets, extents — scales
+with the cowl, while the rib's thickness does not, because the first is design and the second
+is process.
+
+**What the name should be.** `thickness` is defensible now that its referent is known, but it
+reads as the rib's thickness at every call site, and a reader sizing a rib would take it and
+be wrong by a factor of thirty. `buttress_cut_thickness` states which of the two thicknesses
+it is. That is a rename across the JSON schema, `ButtressSet` and eight SCAD signatures, so
+it is deferred to the port rather than done twice — recorded as IP-FC-29.
+
+**One discrepancy to settle, flagged rather than fixed.** Every call site extrudes the cutting
+prism as
+
+```openscad
+linear_extrude(height=2*buttress_thickness, center=true, ...)
+```
+
+so the cut actually taken out of the blank is **0.1 mm, twice the parameter**, and the rib
+built on it is `2·w·n + 2·t`. Under the definition above the factor of two is either a
+half-thickness-per-side convention that the parameter name does not state, or an error. It
+is not resolvable by measurement — the two readings differ by 0.05 mm on a 1.65 mm rib — so
+it is a question of intent for whoever set the value. Until it is settled, **the port must
+reproduce the doubling**, because that is what the printed parts were made from.
+
+**The perimeter count is not a parameter anywhere in this project.** `PrinterSettings` carries
+`extrusion_width` and `layer_height` and nothing else; `n_perimeters` lives only in the slicer
+profile, which is not in the repository. The formula above therefore cannot be evaluated by
+the generator as it stands. That matters directly to OQ-DES-CW6 — a nominal rib cannot be
+modelled without it — and it is the same class of gap as the OML/`.vsp3` link that OQ-DES-CW7
+closed: a value the geometry depends on, held outside the system that depends on it.
+
+### ~~OQ-DES-CW4 — Should buttress placement become parametric?~~ — RESOLVED 2026-08-09
 
 **Problem.** `tail_cowl_half()` hard-codes every buttress angle and offset as a literal:
 side buttresses at 5°, 12.5° and 20°, top and bottom at 15° and 0°, diagonals at ±30°, with
@@ -753,6 +897,37 @@ effect. The full fix wants a list of buttress placements rather than a fixed set
 groups, and that is a natural thing to build in the port and an unnatural one to retrofit
 into the current SCAD.
 
+**Resolved 2026-08-09 — with the question split in two, because it was conflating them.**
+
+**Scaling: intended, and already correct.** The existing buttress design is meant to scale
+with the cowl, and it does — every hard-coded placement in §4.3 is either an angle
+(dimensionless) or a fraction of `unit_width`, and the `z` stations are taken from `tail_len`,
+which scales. Nothing here needs changing and **the port must preserve it**: a placement
+re-expressed in absolute millimetres would reproduce U = 1 exactly and be wrong everywhere
+else, which is the failure mode this project has hit before and the reason the sweep is
+checked at four values of U rather than one.
+
+The single exception is `buttress.thickness`, which is scale-independent **because it is a
+slicer tolerance rather than a part geometry parameter** — the same reasoning that resolved
+[OQ-DES-CW3](#open-questions). That also settles
+the question CW3 left hanging: the rib's thickness being constant across airframe sizes while
+its placement and extent scale is *deliberate*, not an oversight. A slicer tolerance has no
+business tracking the airframe.
+
+**Parametric placement: alternative 2 is rejected outright, alternative 3 stands, and its
+scope shrinks.** The unused fields stay — they are wanted, not dead. But note what the port
+is and is not being asked to do:
+
+- **In scope: making today's chosen placements data.** The angles and offsets of the existing
+  pattern move from SCAD literals into the buttress list, each entry scaled by `unit_width`
+  exactly as the literals are now. This is a transcription, verifiable against the current
+  geometry, and it makes the existing JSON fields live.
+- **Out of scope: choosing placements for a new OML.** There is no generalized algorithm for
+  siting buttresses on an arbitrary nose or tail, and none is claimed. That is a design
+  problem worth exploring later, and it is not a prerequisite for the port — a list of
+  placements is exactly the representation such an algorithm would eventually *write into*,
+  so building the list now is a step towards it rather than a detour around it.
+
 ### ~~OQ-DES-CW5 — Elliptical or rounded-rectangle sections?~~ — RESOLVED 2026-08-07
 
 **Rounded rectangles**, on 10 of the 16 stations — including every station where a cowl
@@ -765,7 +940,7 @@ the same shape derived from the same number, so they cannot drift — the same c
 guarantee the greeble gets from being cut with `corner_end()`. A port that re-derives the
 cowl section independently of `unit_width` would silently break it.
 
-### OQ-DES-CW6 — Representing the slicer-generated rib in a solid model
+### ~~OQ-DES-CW6 — Representing the slicer-generated rib in a solid model~~ — RESOLVED 2026-08-09
 
 **Problem.** The cowl's stiffening ribs do not exist in the CAD model. §4 establishes the
 mechanism: a buttress cuts a groove into the **outer** surface, and the slicer — walking a
@@ -782,6 +957,20 @@ the reason the buttresses exist.
 Affects UC-4 (assemblies), UC-8 (analysis) and any mass estimate. Does **not** affect UC-1,
 because the printed part is produced from the outer surface and is correct as it stands.
 
+**OQ-DES-CW3's resolution supplies the number this question was missing.** The rib's
+thickness is `2·w·n_perimeters + t_cut`, which is a closed form in two printer settings and
+one existing parameter — so alternative 2's "nominal thickness" no longer has to be invented,
+and alternative 1's slicer-specific geometry is a much smaller step than it looked. Its
+*depth* into the interior is still open: that is set by how far the slicer's contour walks
+into the notch before turning back, and it does not follow from the cut width alone.
+
+The catch is that `n_perimeters` **is not a parameter in this project** — `PrinterSettings`
+has only `extrusion_width` and `layer_height`, and the perimeter count lives in a slicer
+profile that is not in the repository. Modelling any rib at all therefore requires adopting
+it as a parameter first, which is the honest version of alternative 1's "the CAD would encode
+a process-specific result": the process value has to enter the model *somewhere*, and the
+choice is whether it does so explicitly or by a number written into the geometry code.
+
 **Alternatives**
 
 1. **Model the rib explicitly** — generate the double wall as geometry where the notch is.
@@ -797,7 +986,9 @@ because the printed part is produced from the outer surface and is correct as it
    robust to profile changes.
    *Drawbacks:* the model is then neither the CAD intent nor the printed reality; the
    discrepancy has to be stated wherever the model is used.
-   *Prerequisites:* a decision on what nominal thickness represents.
+   *Prerequisites:* ~~a decision on what nominal thickness represents~~ — supplied by
+   OQ-DES-CW3: `2·w·n_perimeters + t_cut`. Still needs `n_perimeters` adopted as a parameter,
+   and a rule for the rib's depth.
 
 3. **Model the interior without ribs and record the omission.**
    *Benefits:* simplest; the outer surface stays authoritative.
@@ -819,6 +1010,55 @@ problem is representational, not structural. A nominal rib gives UC-8 something 
 and UC-4 something to assemble, and the honest thing is to state in the model where it
 diverges from the print. Alternative 1's slicer-specific fidelity is more precision than
 the rest of the analysis chain can use.
+
+*Amended 2026-08-09.* With OQ-DES-CW3 resolved, alternatives 1 and 2 have largely converged
+on the thickness axis — the "nominal" thickness and the slicer-faithful one are the same
+formula, and both need `n_perimeters` in the model. What still separates them is the rib's
+**depth** and its end conditions, where alternative 1 would have to model what the slicer's
+contour actually does at the ends of a notch and alternative 2 would state a depth and move
+on. The recommendation stands, on the narrower grounds that depth is where slicer fidelity
+gets expensive and stiffness is least sensitive to it.
+
+---
+
+**RESOLVED 2026-08-09 — alternative 2, and alternative 4 is ruled out on a ground the
+question did not know about.**
+
+**The notched rib implementation is to be kept, because it is what makes cowls printable in
+spiral vase mode.** That is the fact this question was missing, and it inverts the framing.
+Vase mode spirals a single continuous contour up the part: one wall per layer, no infill, no
+top or bottom, and **no interior geometry permitted at all**. Under that constraint a
+modelled rib is not merely unnecessary, it is *impossible* — any interior feature makes the
+part un-vase-printable. Notching the exterior is therefore not a workaround for the model
+lacking ribs. It is **the only mechanism that can put a rib inside a single-wall print**, and
+the design gets its stiffening for free, with no support material, no second wall, and no
+loss of the fastest and strongest-per-gram mode the printer has.
+
+So:
+
+- **Alternative 4 is rejected, not deferred.** "Stop generating ribs by notching and model
+  them directly" would trade the vase-mode capability for representational tidiness. The
+  drawback listed against it — "discards a mechanism that gets ribs for free" — turns out to
+  understate the cost by a long way, because what is discarded is a whole printing mode.
+- **Alternative 3 is rejected.** Recording the omission is not enough now that the rib's
+  thickness has a closed form (OQ-DES-CW3) and the rib is known to be the primary stiffening
+  structure of a single-wall part.
+- **Alternative 2 is adopted**, with alternative 1 available where fidelity is later shown to
+  matter. The rib is modelled at `2·w·n_perimeters + t_cut`, with `n_perimeters = 1` in vase
+  mode — which is the case that matters, and conveniently the case where the formula is least
+  ambiguous.
+- **The representational split is now a stated invariant, not a compromise.** §6.4 records it:
+  the print export stays the un-shelled notched blank, and the shelled-and-ribbed solid is a
+  downstream product for the other use cases. Two representations, one parametric source.
+
+**This unblocks IP-FC-17 and IP-FC-23**, with a constraint attached that neither had: the
+interior-surface work must be additive to the existing blank rather than a replacement for
+it, and the sweep's printing output must be verifiable as unchanged by it.
+
+**What is still open, and it is small.** `n_perimeters` is not a parameter anywhere in the
+project (IP-FC-42), and the rib's *depth* into the interior — how far the contour walks into
+a notch before turning back — does not follow from the cut width. Neither blocks the port;
+both want one sliced cowl inspected in the slicer's preview to settle by observation.
 
 ### ~~OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step~~ — RESOLVED 2026-08-08
 
