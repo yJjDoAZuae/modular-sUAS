@@ -113,8 +113,9 @@ USER_SET = 3
 #
 #     1 OpenVSP model unit = 1 metre
 #
-# which is exactly what the OpenSCAD path applies as `scale = U / oml_scale` with
-# `oml_scale = 1e-3`. The airframe confirms it: the OML's rounded-rectangle sections are
+# which is exactly what the OpenSCAD path applies as
+# `scale = U / oml_scale_m_per_mm` with `oml_scale_m_per_mm = 1e-3` -- the suffix says
+# it (OQ-DES-CW1). The airframe confirms it: the OML's rounded-rectangle sections are
 # 0.1 x 0.1 model units and must equal `unit_width` = 100 mm at U = 1.
 #
 # A consumer reading the STEP therefore sees 0.1 FOOT (30.48 mm) where the convention

@@ -33,25 +33,25 @@ buttress_thickness = 0.05;
 // resolves it against the file containing the call. This is the same prefix
 // oml_ref() adds in fuselage_variants.py -- keep the two in step.
 oml_filename="../oml/vsp_nose.stl";
-oml_scale=1e-3;
-oml_length = 0.050;
-oml_offset_x=0;
+oml_scale_m_per_mm=1e-3;
+oml_length_m = 0.050;
+oml_offset_x_m=0;
 oml_reversed = false;
 
 
 //cowl_octant();
-//body_blank_octant_lower(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len);
-//body_blank_full_lower(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len);
+//body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
+//body_blank_full_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len);
 
-//nose(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle);
+//nose(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle);
 
 //mirror([0,0,-1]) {
 //nose_plate(plate_diam, plate_thickness, plate_flange_width, plate_flange_height, cone_angle);
 //}
 
-nose_cowl(U, unit_width, oml_filename, oml_scale, oml_length, oml_offset_x, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
+nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
 
-//assembly_tool(U, unit_width, oml_filename, oml_scale, oml_offset_x, oml_reversed, cut_len, plate_diam, plate_tol);
+//assembly_tool(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, plate_diam, plate_tol);
 
 
 

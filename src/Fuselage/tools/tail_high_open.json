@@ -63,10 +63,10 @@
     },
     "oml": {
         "filename": "vsp_tail.stl",
-        "length": 0.1,
-        "offset_x": -0.25,
+        "length_m": 0.1,
+        "offset_x_m": -0.25,
         "reversed": true,
-        "scale": 0.001
+        "scale_m_per_mm": 0.001
     },
     "plate": {
         "active": false,
