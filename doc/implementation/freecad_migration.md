@@ -14,6 +14,17 @@ unblocked IP-FC-16 and produced two new items, IP-FC-28 and IP-FC-29.
 
 ---
 
+> **The hand drivers are not a source of truth about parameters.** `fuselage_corner.scad` and
+> `fuselage_bulkhead.scad` each exercise one hand-written configuration, and their constants
+> disagree with what the sweep derives — `extrusion_width` 0.4 against 0.6, `panel_offset` 0
+> against 2.5, `panel_overlap` 4 against 4.7625. Several are not free at all: `panel.offset`
+> and `panel.overlap` are computed by `derived_parameters()`, so setting one and not the
+> others produces a combination the sweep would never generate, which renders without
+> complaint and is wrong. Read design questions against derived values, and render variants
+> with [`render_variant.py`](../../src/Fuselage/tools/render_variant.py) rather than `-D`
+> overrides. Comparisons in this plan that use driver values are valid as *port equivalence*
+> tests — identical inputs on both sides — and say nothing about design intent.
+
 ## Reading this plan
 
 Items are ordered by dependency, not by phase. The first six are **unblocked and can start
@@ -47,6 +58,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-37 | done | Resolved the OML STEP export scale. OpenVSP is **dimensionless** — the header's `FOOT` label is an exporter artifact, not adjustable via `CADLenUnit`. The project convention (1 model unit = 1 m) is applied on import as `STEP_IMPORT_SCALE = 3.28084` | — | [cowl.md §2.1](../design/cowl.md) |
 | IP-FC-5 | done | Prototyped the corner **both ways**. Both reproduce the OpenSCAD reference and each other; the greeble is the discriminator. See §IP-FC-5 findings below | — | [corner.md](../design/corner.md), [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md) |
 | IP-FC-38 | done | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
+| IP-FC-41 | todo | Seed the generated parameter sheets from `derived_parameters()`, not from the hand drivers. `corner_tree.py` currently defaults to `fuselage_corner.scad`'s constants — `extrusion_width = 0.4`, `panel_overlap = 4`, `panel_offset = 0` — which are one hand-written configuration, not design intent, and disagree with the swept values (`0.6`, `4.7625`, `2.5` for U=1 `end_bolt` 3/16 in). Harmless while the trees are only compared against isolators at matching inputs; wrong the moment the generator feeds the sweep | IP-FC-38 | [render_variant.py](../../src/Fuselage/tools/render_variant.py) |
 | IP-FC-40 | done | `_sketch()` raises unless `FullyConstrained`, and `check_tree.py` re-asserts it at every size — not only the one the sketch was authored at. An under-constrained sketch deforms silently under a parameter change and still yields a valid solid | IP-FC-38 | §IP-FC-38 |
 | IP-FC-39 | done | Write the user guide for the FreeCAD workflows — [doc/guide/freecad_workflows.md](../guide/freecad_workflows.md). Covers the derived-part workflow, linking, the four quiet failure modes, and which workflow serves which use case. Written ahead of the implementation deliberately: the design was chosen to serve these workflows, so they are the acceptance criteria. **Revisit as each capability lands** — the output table names the item that delivers each row | IP-FC-38 | [freecad_workflows.md](../guide/freecad_workflows.md) |
 | IP-FC-32 | todo | Measure whether identical parameters yield byte-identical BREP serialization; if so, build a BREP-compare tier beside the parameter snapshot | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
@@ -544,13 +556,21 @@ by coincidence and the result looks right. The effect is a diagonal web 25% thic
 flange thickness intends, in a load path — and it would change shape for no visible reason
 the first time layer height or extrusion width moved.
 
-**Fixed 2026-08-08.** The measured effect is narrower than it first looked: at U=0.5 and U=1
-the module's material is entirely absorbed by its neighbours, so those bulkheads are
-bit-identical whether the call is corrected, left alone, or removed outright — no part
-printed at those sizes was ever affected. Only at U=4, where the bolt sits 32 mm out and the
-diagonal web is no longer covered, does the module carry material (1584.75 mm³), and there
-the correction moves about 0.1% of the part. That is also why the defect survived: every
-size small enough to print and fly easily was immune to it.
+**Fixed 2026-08-08.** The measured effect is narrower than it first looked: the module's
+material is entirely absorbed by its neighbours at the smaller sizes, so those bulkheads are
+bit-identical whether the call is corrected, left alone, or removed outright — confirmed at a
+real swept variant (U=1.0 `end_bolt` 3/16 in, 6922.5048968 mm³, 29000 triangles, unchanged)
+as well as at the driver's values. No part printed at U=1 was ever affected. Only at U=4,
+where the bolt sits 32 mm out and the diagonal web is no longer covered, does the module
+carry material (1584.75 mm³), and there the correction moves about 0.1% of the part.
+
+**A correction to the first analysis: the hand drivers are not authoritative about
+parameters.** `fuselage_bulkhead.scad` uses `extrusion_width = 0.4`, which makes
+`flange_thickness` and `plate_thickness` both 0.8 and left one of the three rotated arguments
+accidentally correct. The sweep derives `extrusion_width = 0.6` through
+`derived_parameters()`, giving 1.2 and 0.8, and there **all three were wrong**. Every design
+question must be read against derived values; a driver exercises one hand-written
+configuration and its constants are not design intent.
 
 Since one call had drifted, the rest were checked rather than assumed:
 [`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) parses every module
