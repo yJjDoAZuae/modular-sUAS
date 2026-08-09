@@ -737,20 +737,34 @@ the accident. The call is corrected to
 [`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) now reports zero
 positional mismatches across `src/Fuselage/scad`.
 
-**Measured effect — smaller than the analysis below suggested.** The module's own output does
-change, but at the two smaller sizes its material is *entirely absorbed* by the surrounding
-flange, web and bolt flange, so the assembled part is bit-identical:
+**How wrong the arguments were depends on which parameters you feed it — and the hand driver
+is not the authority.** `fuselage_bulkhead.scad` sets `extrusion_width = 0.4`, which makes
+`flange_thickness = 0.8` equal to `plate_thickness = 0.8`, so one of the three slots landed
+correctly there and the defect was partly self-cancelling. **The sweep uses
+`extrusion_width = 0.6`**, giving `flange_thickness = 1.2`, and at those values *all three*
+arguments were wrong:
 
-| Size | Module alone, old → fixed | Assembled bulkhead |
+| Parameter | Received (sweep) | Intended (sweep) |
 | --- | --- | --- |
-| U=0.5, bt=4 | — | **unchanged**, 1994.8939143 mm³ |
-| U=1, bt=6 | 44.8017 → 41.8603 | **unchanged**, 5733.5689982 mm³, 32816 triangles |
-| U=4, bt=16 | 405.4760 → 348.4585 | changes — the module contributes 1584.75 mm³ here |
+| `plate_thickness` | 1.2 | 0.8 |
+| `flange_thickness` | 1.0 | 1.2 |
+| `flange_chamfer` | 0.8 | 1.0 |
 
-Verified by removing the call entirely: at U=0.5 and U=1 the bulkhead is bit-identical
-without it, so **no part printed at those sizes was ever affected**. At U=4 the bolt sits
-32 mm out and the diagonal web is no longer covered by its neighbours, so the module does
-carry material and the correction changes the geometry by roughly 0.1% of the part.
+**Measured effect — still smaller than the analysis below suggested.** The module's own
+output changes, but its material is *entirely absorbed* by the surrounding flange, web and
+bolt flange at the smaller sizes, so the assembled part is bit-identical. Checked by removing
+the call outright, at the driver's values *and* at a real swept variant:
+
+| Case | Assembled bulkhead, with vs without the module |
+| --- | --- |
+| U=1.0 `end_bolt` 3/16 in, derived (`ew=0.6`) | **unchanged**, 6922.5048968 mm³, 29000 triangles |
+| U=0.5, hand driver | **unchanged**, 1994.8939143 mm³ |
+| U=1, hand driver | **unchanged**, 5733.5689982 mm³ |
+| U=4, hand driver | changes — the module contributes 1584.75 mm³ |
+
+So **no part printed at U=1 was affected**, at the swept parameters as well as the driver's.
+At U=4 the bolt sits 32 mm out and the diagonal web is no longer covered by its neighbours,
+so the module does carry material and the correction moves roughly 0.1% of the part.
 
 So `greeble_bolt_web` is not dead code — it is dormant at small sizes and load-bearing at
 large ones, which is also why the defect survived: every part small enough to print and fly
@@ -779,11 +793,13 @@ So inside the module, at the driver's values:
 | `flange_thickness` | `flange_chamfer` | **1.0** | 0.8 |
 | `flange_chamfer` | `plate_thickness` | **0.8** | 1.0 |
 
+**The table above is at the hand driver's values, which are not authoritative.**
+`fuselage_bulkhead.scad` sets `extrusion_width = 0.4`, making
 `plate_thickness = 4 * layer_height = 0.8` and `flange_thickness = 2 * extrusion_width = 0.8`
-are equal at these settings, which is why one of the three lands correctly and the error is
-invisible in the result. **It would stop being invisible the moment layer height or
-extrusion width changed** — a 0.3 mm nozzle or a 0.15 mm layer separates them, and the part
-would shift shape for no reason the parameters explain.
+equal, so one slot lands correctly there. The sweep derives its parameters through
+`derived_parameters()` at `extrusion_width = 0.6`, where they are 0.8 and 1.2 and **nothing
+cancels**. Design questions must be read against the derived values, not against a driver
+written to exercise one configuration by hand.
 
 **What it changes.** The diagonal web joining the greeble to the bolt flange:
 
