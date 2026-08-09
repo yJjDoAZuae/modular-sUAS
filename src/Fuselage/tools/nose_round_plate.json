@@ -63,10 +63,10 @@
     },
     "oml": {
         "filename": "vsp_nose.stl",
-        "length": 0.05,
-        "offset_x": 0,
+        "length_m": 0.05,
+        "offset_x_m": 0,
         "reversed": false,
-        "scale": 0.001
+        "scale_m_per_mm": 0.001
     },
     "plate": {
         "active": true,

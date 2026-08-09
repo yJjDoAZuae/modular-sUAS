@@ -252,10 +252,10 @@ The source model **is** version-controlled — `src/Fuselage/cad/modular_sUAS_no
 meshes, and no check that the committed meshes were exported from the committed model.
 
 **The OML import is a third unit boundary, and the only metre-to-millimetre conversion in
-the OpenSCAD path.** `body_blank_full()` applies `scale([U/oml_scale, …])` with
-`oml_scale = 1e-3`, so the factor is `1000·U`: the exported mesh is in **meters** and the
+the OpenSCAD path.** `body_blank_full()` applies `scale([U/oml_scale_m_per_mm, …])` with
+`oml_scale_m_per_mm = 1e-3`, so the factor is `1000·U`: the exported mesh is in **meters** and the
 model is in millimeters. The companion values in the cowl JSON are metres too —
-`oml_length = 0.050` for the nose, `0.1` for the tail. Worth stating plainly, because it
+`oml_length_m = 0.050` for the nose, `0.1` for the tail. Worth stating plainly, because it
 is the one place the existing millimeter-throughout rule already meets SI data, and the
 port has to keep the conversion rather than discover it.
 
@@ -964,7 +964,9 @@ near-horizontal surfaces where a horizontal inset leaves none.
    assembly clearance.
    *Drawbacks:* diverges from the printed part in a way that matters for UC-8; interacts
    with OQ-DES-CW6, where the ribs have the same problem.
-   *Prerequisites:* agreement on what the model is *for*.
+   *Prerequisites:* ~~agreement on what the model is *for*~~ — settled by OQ-DES-CW6
+   (2026-08-09): the solid model is for everything except printing, and the print keeps its
+   own representation.
 
 **Recommendation: alternative 2.** It keeps the mechanism that makes the result correct —
 horizontal insets, matching the slicer — while avoiding a per-layer loft that no downstream
@@ -1015,6 +1017,17 @@ convergence criterion to state.
 
 The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
 layers — remains the main undecided item inside IP-FC-16.
+
+**Amended 2026-08-09 by OQ-DES-CW6: this surface is not what gets printed.** Cowls are
+printable in **spiral vase mode**, which permits one contour per layer and no interior
+geometry at all, so a cowl carrying this interior surface is no longer vase-printable. The
+interior therefore serves UC-2, UC-3, UC-4, UC-7 and UC-8, and the UC-1 export continues to
+come from the un-shelled notched blank — two representations from one parametric source, as
+[cowl.md §6.4](../design/cowl.md) records. Two consequences here. First, alternative 4's
+"diverges from the printed part" drawback is no longer a drawback to be weighed: divergence
+is the *design*, and the thing to guard is that the two paths stay separate. Second, the
+interior's fidelity requirements above are unchanged but their justification narrows — they
+matter because analysis and assembly need them, not because a printer will follow them.
 
 ### ~~OQ-ARCH-6 — How are assembly joints defined and stored?~~ — DECIDED 2026-08-07: Assembly joints
 

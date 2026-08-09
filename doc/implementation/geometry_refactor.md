@@ -458,7 +458,7 @@ provably altered no geometry.
 
 Two hazards this removed, both invisible positionally:
 
-- `nose` takes **no** `oml_length`, while `nose_cowl` and `tail_cowl` both do — so the
+- `nose` takes **no** `oml_length_m`, while `nose_cowl` and `tail_cowl` both do — so the
   same conceptual argument list is off by one between neighbouring calls in the same
   function, with every surrounding argument the same type.
 - `tail_cowl` carries eighteen buttress floats in four groups distinguished only by

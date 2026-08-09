@@ -362,10 +362,26 @@ def null_cowl_flange_parameters():
 
 @dataclass(slots=True)
 class OmlParameters:
+    """The OpenVSP import transform. Three of these are in METRES, not millimetres.
+
+    The suffixes are load-bearing (OQ-DES-CW1, resolved 2026-08-09). Everything else
+    in this generator is millimetres, so an unsuffixed `length` reads as 0.05 mm when
+    it means 0.05 m -- a factor of 1000, and the part still renders. `offset_x_m` is
+    worse than that, because it is applied *before* the scale, so it is metres in the
+    mesh's own frame; the tail's -0.25 is -250 mm at U = 1.
+
+    `scale_m_per_mm` is a divisor, not a multiplier: `scale = U/scale_m_per_mm`. At
+    1e-3 that multiplies by 1000, converting metres to millimetres, which is the one
+    reading the bare name `scale` did not suggest. The suffix states the ratio in the
+    order the division takes it -- metres of real airframe per millimetre of model.
+
+    These field names are also the JSON keys: derived_cowl_parameters() copies them by
+    `fields()`, so renaming here renames the schema, and both cowl files move with it.
+    """
     filename: str = ""
-    scale: float = 0
-    length: float = 0
-    offset_x: float = 0
+    scale_m_per_mm: float = 0
+    length_m: float = 0
+    offset_x_m: float = 0
     reversed: bool = False
 
 
@@ -627,11 +643,16 @@ def read_param_json(file_path):
 #     nose.flange_inset   0.5    -> nose_flange_inset  = 0.5    (unscaled)
 #     plate.tolerance     0.1    -> plate_tol          = 0.1    (unscaled)
 #     buttress.thickness  0.05   -> buttress_thickness = 0.05   (unscaled)
-#     oml.length          0.05   -> oml_length         = 0.050  (unscaled)
+#     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METRES)
 #     cone_angle          35     -> cone_angle         = 35     (unscaled)
+#
+# Two of the unscaled names are not merely "not multiplied by unit_width" but are in
+# different units entirely: the oml.*_m fields are metres (see OmlParameters), and
+# cone_angle is degrees from the print bed (OQ-DES-CW2). Being in this tuple means
+# only that unit_width does not touch them.
 NOSE_UNSCALED = ("cone_angle", "tolerance", "flange_inset", "thickness",
-                 "active", "angle", "filename", "scale", "length",
-                 "offset_x", "reversed")
+                 "active", "angle", "filename", "scale_m_per_mm", "length_m",
+                 "offset_x_m", "reversed")
 
 
 def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
@@ -1827,9 +1848,9 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     buttress_r_end = dp.buttress.top.r_end
 
     oml_filename = oml_ref(dp.oml.filename)
-    oml_scale = dp.oml.scale
-    oml_length = dp.oml.length
-    oml_offset_x = dp.oml.offset_x
+    oml_scale_m_per_mm = dp.oml.scale_m_per_mm
+    oml_length_m = dp.oml.length_m
+    oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
 
     if is_nose_cowl:
@@ -1837,9 +1858,9 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             U=U,
             unit_width=unit_width,
             oml_filename=oml_filename,
-            oml_scale=oml_scale,
-            oml_length=oml_length,
-            oml_offset_x=oml_offset_x,
+            oml_scale_m_per_mm=oml_scale_m_per_mm,
+            oml_length_m=oml_length_m,
+            oml_offset_x_m=oml_offset_x_m,
             oml_reversed=oml_reversed,
             cut_len=cut_len,
             buttress_thickness=buttress_thickness,
@@ -1849,15 +1870,15 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             buttress_r_inset=buttress_r_inset,
             cone_angle=cone_angle)
     elif is_nose_nose:
-        # Note this one takes no oml_length -- the nose is cut to the plate rather
+        # Note this one takes no oml_length_m -- the nose is cut to the plate rather
         # than to a length. Easy to miss positionally, since every neighbouring
         # argument is the same type.
         scadobj = cgeom.nose(
             U=U,
             unit_width=unit_width,
             oml_filename=oml_filename,
-            oml_scale=oml_scale,
-            oml_offset_x=oml_offset_x,
+            oml_scale_m_per_mm=oml_scale_m_per_mm,
+            oml_offset_x_m=oml_offset_x_m,
             oml_reversed=oml_reversed,
             cut_len=cut_len,
             nose_flange_height=nose_flange_height,
@@ -1919,9 +1940,9 @@ def tail_render(U, dp, output_dir, filename):
     bottom_buttress_r_end = b.bottom.r_end
 
     oml_filename = oml_ref(dp.oml.filename)
-    oml_scale = dp.oml.scale
-    oml_length = dp.oml.length
-    oml_offset_x = dp.oml.offset_x
+    oml_scale_m_per_mm = dp.oml.scale_m_per_mm
+    oml_length_m = dp.oml.length_m
+    oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
 
     # Twenty-three arguments, of which eighteen are floats describing buttresses in
@@ -1931,9 +1952,9 @@ def tail_render(U, dp, output_dir, filename):
         U=U,
         unit_width=unit_width,
         oml_filename=oml_filename,
-        oml_scale=oml_scale,
-        oml_length=oml_length,
-        oml_offset_x=oml_offset_x,
+        oml_scale_m_per_mm=oml_scale_m_per_mm,
+        oml_length_m=oml_length_m,
+        oml_offset_x_m=oml_offset_x_m,
         oml_reversed=oml_reversed,
         cut_len=cut_len,
         buttress_thickness=buttress_thickness,
