@@ -29,6 +29,9 @@ from enum import Enum
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mesh_stats
 import stl_preview
+# Aliased: `freecad_render` is also the name of the render function below, and the module is
+# what the backend switch consults for which kinds are ported.
+import freecad_render as freecad_render_backend
 
 # Every path below is anchored to this file, not to the working directory, so
 # the sweeps produce the same result whether they are run from the Fuselage
@@ -1316,6 +1319,40 @@ def set_render_queue(queue):
     return previous
 
 
+# Which geometry engine renders a part. IP-FC-10: the sweep drives either, and the choice
+# is a run-time setting rather than a fork of the driver, so the two can be compared on the
+# same command with one flag changed -- which is what IP-FC-13's equivalence check needs.
+# OpenSCAD stays the default until that check passes.
+_BACKEND = 'openscad'
+
+
+def set_backend(name):
+    """Select 'openscad' or 'freecad'. Returns the previous value.
+
+    Only the corner and the bulkhead have FreeCAD generators. The other three sweeps fall
+    back to OpenSCAD per part rather than failing the run -- see `_backend_for`, where that
+    decision is made explicit rather than left to whichever call site notices first.
+    """
+    global _BACKEND
+    if name not in ('openscad', 'freecad'):
+        raise ValueError('unknown backend %r' % name)
+    previous, _BACKEND = _BACKEND, name
+    return previous
+
+
+def _backend_for(kind):
+    """The backend that will actually render `kind`, which is not always the one selected.
+
+    A part with no FreeCAD generator yet renders in OpenSCAD even under --backend freecad.
+    Silently, and deliberately: the alternative is a sweep that cannot run at all until every
+    part is ported, which would make the backend flag useless for exactly the period it is
+    most needed. `main()` prints which parts this applies to, so it is not invisible.
+    """
+    if _BACKEND == 'freecad' and kind in freecad_render_backend.KINDS:
+        return 'freecad'
+    return 'openscad'
+
+
 # Resume state. Off by default so a plain run reproduces every part, which is what
 # you want when geometry or parameters have changed; a resume trusts what is on disk.
 _RESUME = False
@@ -1545,45 +1582,47 @@ def default_render_workers():
     return render_worker_budget()[0]
 
 
-def solid_render(scad_obj, output_dir, filename):
+def render_definition(write_definition, definition_suffix, make_command,
+                      output_dir, filename):
+    """Render one part, whatever built its definition.
 
-    user_path = os.environ.get('OPENSCADPATH')
+    IP-FC-10 split this out of `solid_render`. Everything here is engine-independent and had
+    to stay that way for a second backend to be a setting rather than a fork: the resume
+    comparison, the atomic write, the preview, the queue submission. Only two things differ
+    between OpenSCAD and FreeCAD, and both arrive as arguments --
 
-    solid2.set_global_fn(0)
-#    solid2.set_global_fa(5)
-#    solid2.set_global_fs(0.5)
-    solid2.set_global_fa(1)
-    solid2.set_global_fs(0.05)
+        write_definition(path)          put the file that *defines* this part at `path`
+        make_command(definition, stl)   the argv (or command string) that renders it
 
-    # print(filename)
+    -- so a third backend would need nothing here at all.
 
+    Returns (definition_path, stl_path, png_path).
+    """
     file_dir = os.path.dirname(filename)
     file_name = os.path.basename(filename)
-    (head, tail) = os.path.split(filename)
 
     full_output_dir = os.path.join(output_dir, file_dir)
-    
-    # Ensure output directory exists
     Path(full_output_dir).mkdir(parents=True, exist_ok=True)
-    
-    scad_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".stl.scad").name)
-    stl_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".stl").name)
-    png_filepath = os.path.join(full_output_dir, Path(file_name).with_suffix(".png").name)
 
-    # Generate the .scad to a temporary path first, so a resume can compare it
-    # against what is already on disk. Generating is cheap next to rendering, and
-    # it is what makes --resume trustworthy: a resumed run that skipped purely on
-    # "the STL exists" would silently keep stale parts after a .scad module or a
-    # parameter CSV changed. Same code path for both sides of the comparison, so
-    # they are guaranteed comparable.
-    partial_scad = os.path.join(
-        full_output_dir, Path(file_name).with_suffix('.partial.scad').name)
-    solid2.scad_render_to_file(scad_obj, partial_scad)
-    relativize_scad_references(partial_scad)     # same directory, so same result
+    def beside(suffix):
+        return os.path.join(full_output_dir,
+                            Path(file_name).with_suffix(suffix).name)
+
+    definition_filepath = beside(definition_suffix)
+    stl_filepath = beside('.stl')
+    png_filepath = beside('.png')
+
+    # Write the definition to a temporary path first, so a resume can compare it against
+    # what is already on disk. Writing it is cheap next to rendering, and it is what makes
+    # --resume trustworthy: a resumed run that skipped purely on "the STL exists" would
+    # silently keep stale parts after a geometry module or a parameter CSV changed. Same
+    # code path for both sides of the comparison, so they are guaranteed comparable.
+    partial_definition = beside('.partial' + definition_suffix)
+    write_definition(partial_definition)
 
     definition_unchanged = (
-        os.path.isfile(scad_filepath)
-        and filecmp.cmp(partial_scad, scad_filepath, shallow=False)
+        os.path.isfile(definition_filepath)
+        and filecmp.cmp(partial_definition, definition_filepath, shallow=False)
     )
 
     # Resume: skip a part whose definition is unchanged and whose STL is already a
@@ -1592,7 +1631,7 @@ def solid_render(scad_obj, output_dir, filename):
     # treated as finished. Combined with the atomic write below, a present .stl now
     # genuinely means a finished render of the definition sitting beside it.
     if _RESUME and definition_unchanged and mesh_stats.is_complete(stl_filepath):
-        os.remove(partial_scad)
+        os.remove(partial_definition)
         _RESUME_COUNTS['skipped'] += 1
         if _RESUME_COUNTS['skipped'] % 50 == 0:
             sys.stderr.write('    ...%d already rendered\n'
@@ -1605,36 +1644,48 @@ def solid_render(scad_obj, output_dir, filename):
         # every core sat idle. sweep_session renders the backlog across a pool.
         if _PREVIEWS and not os.path.isfile(png_filepath):
             _PREVIEW_BACKLOG.append(stl_filepath)
-        return (scad_filepath, stl_filepath, png_filepath)
+        return (definition_filepath, stl_filepath, png_filepath)
 
-    if _RESUME and not definition_unchanged and os.path.isfile(scad_filepath):
+    if _RESUME and not definition_unchanged and os.path.isfile(definition_filepath):
         _RESUME_COUNTS['changed'] += 1
 
-    os.replace(partial_scad, scad_filepath)
+    os.replace(partial_definition, definition_filepath)
 
-    # Render to a temporary path and move it into place only on success. OpenSCAD
-    # writes its output progressively, so without this an interrupted run leaves a
+    # Render to a temporary path and move it into place only on success. Both engines
+    # write their output progressively, so without this an interrupted run leaves a
     # convincing partial .stl at the real path -- which a resume would then skip,
     # permanently baking in a truncated part. os.replace is atomic within a volume.
     #
     # The temporary name must still end in .stl: OpenSCAD picks its export format
     # from the extension, so `-o foo.stl.partial` fails outright with exit 1. Tools
     # that scan the tree for parts filter '*.partial.stl' back out.
-    partial_filepath = os.path.join(
-        full_output_dir, Path(file_name).with_suffix('.partial.stl').name)
-    cmd = solid2.config.config.openscad_stl_command.format(scadfile=scad_filepath, stlfile=partial_filepath)
+    partial_filepath = beside('.partial.stl')
 
     def _finalize(src=partial_filepath, dst=stl_filepath, png=png_filepath):
+        # The render "succeeded" -- meaning it exited zero -- so if there is no mesh here,
+        # the exit code lied. **freecadcmd's does, routinely.** It exits 0 on an uncaught
+        # exception in the script it was handed, printing "Exception while processing file"
+        # and nothing else, and its code for an explicit `sys.exit(n)` is not even stable
+        # between runs: the same sys.exit(3) was observed returning 3 once and 1 the next
+        # time. So the artifact is the success criterion, not the status. Checking it here
+        # rather than letting os.replace raise turns "cannot find the file specified",
+        # which reads like a disk problem, into a sentence naming the part that failed.
+        if not os.path.isfile(src):
+            raise RenderFailed(
+                '%s exited without error but wrote no mesh -- look for a traceback from '
+                'the renderer above (freecadcmd reports script failures on stderr and '
+                'still exits 0)' % os.path.basename(dst))
         os.replace(src, dst)
         if _PREVIEWS:
             _write_preview(dst, png)
 
-    # Submitted rather than run directly. With a serial queue -- the default --
-    # this executes immediately and behaves exactly as the direct call did; with a
-    # parallel queue installed by main() it is deferred and overlapped. The .scad
-    # on disk is complete either way, so nothing downstream is affected by the
-    # STL arriving later; none of the five call sites use the returned STL path.
-    _RENDER_QUEUE.submit(os.path.join(user_path, cmd), on_success=_finalize)
+    # Submitted rather than run directly. With a serial queue -- the default -- this
+    # executes immediately and behaves exactly as the direct call did; with a parallel
+    # queue installed by main() it is deferred and overlapped. The definition on disk is
+    # complete either way, so nothing downstream is affected by the STL arriving later;
+    # none of the five call sites use the returned STL path.
+    _RENDER_QUEUE.submit(make_command(definition_filepath, partial_filepath),
+                         on_success=_finalize)
 
     # The preview PNG is rendered by _finalize above, from the finished STL, as
     # soon as that STL is in place. OpenSCAD used to produce it with a second
@@ -1646,7 +1697,49 @@ def solid_render(scad_obj, output_dir, filename):
     # geometry -- after a camera or shading change, say -- use --previews-only:
     #     uv run python src/Fuselage/tools/fuselage_variants.py --previews-only --force
     # The path is returned either way so callers know where the preview belongs.
-    return (scad_filepath, stl_filepath, png_filepath)
+    return (definition_filepath, stl_filepath, png_filepath)
+
+
+def solid_render(scad_obj, output_dir, filename):
+    """Render a part with OpenSCAD, from a solid2 object."""
+    solid2.set_global_fn(0)
+    solid2.set_global_fa(1)
+    solid2.set_global_fs(0.05)
+
+    user_path = os.environ.get('OPENSCADPATH')
+
+    def write_scad(path):
+        solid2.scad_render_to_file(scad_obj, path)
+        relativize_scad_references(path)         # same directory, so same result
+
+    def make_command(scad_path, stl_path):
+        cmd = solid2.config.config.openscad_stl_command.format(
+            scadfile=scad_path, stlfile=stl_path)
+        return os.path.join(user_path, cmd)
+
+    return render_definition(write_scad, '.stl.scad', make_command,
+                             output_dir, filename)
+
+
+def freecad_render(kind, params, output_dir, filename, variant=None):
+    """Render a part with FreeCAD, from the parameter set that defines it.
+
+    The parameters play the role the generated `.scad` plays on the other path -- they are
+    what the part *is*, and they go to disk beside it for the same reason: so a resume can
+    tell a stale part from a current one, and so the STL is not the only record of what
+    produced it. The definition is a `.stl.json` rather than a bare `.json` so it sorts and
+    globs beside its `.stl.scad` counterpart, and so a tree can hold both.
+    """
+    def write_params(path):
+        with open(path, 'w') as f:
+            f.write(freecad_render_backend.definition_text(kind, params, variant))
+
+    def make_command(params_path, stl_path):
+        return freecad_render_backend.build_command(kind, params_path, stl_path)
+
+    return render_definition(write_params, '.stl.json', make_command,
+                             output_dir, filename)
+
 
 def lookup_anchor_diameter(bolt_diameter):
 
@@ -1713,7 +1806,48 @@ def encode_bulkhead_type(is_end, is_interconnect, is_cowling, is_boom):
 
     return bulkhead_type
 
+def corner_parameters(dp):
+    """The corner's parameters, by name, as both backends need them.
+
+    Extracted from the `fuselage_corner` call below so the two engines are driven from one
+    mapping rather than two. A parameter added here reaches both; a parameter added to only
+    one of two copies is precisely the divergence a port is most likely to introduce and
+    least likely to notice, because both sides keep rendering.
+
+    `unit_length` and `greeble_tolerance` are the corner's alone -- a bulkhead has no bay
+    length (OQ-DES-C3), and the fit clearance lives entirely in the corner's bore because
+    split across both halves the joint would take it twice.
+    """
+    return {
+        'U': dp.bulkhead.U,
+        'unit_length': dp.corner.length,
+        'bulkhead_thickness': dp.bulkhead.thickness,
+        'corner_radius': dp.corner.radius,
+        'panel_thickness': dp.panel.thickness,
+        'panel_offset': dp.panel.offset,
+        'panel_overlap': dp.panel.overlap,
+        'panel_tolerance': dp.panel.tolerance,
+        'longeron_radius': dp.longeron.radius,
+        'longeron_tolerance': dp.longeron.tolerance,
+        'greeble_thickness': dp.greeble.thickness,
+        'greeble_nub_thickness': dp.greeble.nub_thickness,
+        'greeble_tolerance': dp.greeble.tolerance,
+        'extrusion_width': dp.printer.extrusion_width,
+    }
+
+
+def _variant_note(dp):
+    """Which combination a definition file belongs to, for a human reading it later."""
+    return {'U': dp.bulkhead.U, 'panel_name': dp.panel.type_name,
+            'is_metric': bool(dp.panel.is_metric)}
+
+
 def corner_render(dp, output_dir, filename):
+
+    if _backend_for('corner') == 'freecad':
+        freecad_render('corner', corner_parameters(dp), output_dir, filename,
+                       _variant_note(dp))
+        return
 
     fgeom = scad_module('fuselage_corner_geometry.scad')
 
@@ -1721,67 +1855,68 @@ def corner_render(dp, output_dir, filename):
     # module's own signature and emits the same named parameters it always did, so
     # the generated geometry is unchanged -- but a transposition here is now a
     # TypeError rather than a part that renders cleanly and is silently wrong.
-    scadobj = fgeom.fuselage_corner(
-        U=dp.bulkhead.U,
-        unit_length=dp.corner.length,
-        bulkhead_thickness=dp.bulkhead.thickness,
-        corner_radius=dp.corner.radius,
-        panel_thickness=dp.panel.thickness,
-        panel_offset=dp.panel.offset,
-        panel_overlap=dp.panel.overlap,
-        panel_tolerance=dp.panel.tolerance,
-        longeron_radius=dp.longeron.radius,
-        longeron_tolerance=dp.longeron.tolerance,
-        greeble_thickness=dp.greeble.thickness,
-        greeble_nub_thickness=dp.greeble.nub_thickness,
-        greeble_tolerance=dp.greeble.tolerance,
-        extrusion_width=dp.printer.extrusion_width)
+    scadobj = fgeom.fuselage_corner(**corner_parameters(dp))
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
     
     
-def bulkhead_render(dp, output_dir, filename):
+def bulkhead_parameters(dp):
+    """The bulkhead's parameters, by name, as both backends need them.
 
-    # import math
-    
-    fgeom = scad_module('fuselage_bulkhead_geometry.scad')
-
-    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
-    
-    scadobj = fgeom.bulkhead_section_full(
-        is_interconnect=is_interconnect,
-        is_cowling=is_cowling,
-        unit_width=dp.bulkhead.width,
+    The type flags are not here: they are booleans selecting *which* features exist rather
+    than dimensions, and the FreeCAD generator carries them as its own structure. See
+    `bulkhead_render`, which adds them for the OpenSCAD call.
+    """
+    return {
+        'unit_width': dp.bulkhead.width,
         # No unit_length: a bulkhead is independent of bay length, which is why one
         # bulkhead design serves every FX and why the bulkhead sweep carries no FX
         # axis at all. It used to be passed and ignored. See OQ-DES-C3.
-        bulkhead_thickness=dp.bulkhead.thickness,
-        corner_radius=dp.corner.radius,
-        panel_thickness=dp.panel.thickness,
-        panel_offset=dp.panel.offset,
-        panel_overlap=dp.panel.overlap,
-        panel_tolerance=dp.panel.tolerance,
-        longeron_radius=dp.longeron.radius,
-        longeron_tolerance=dp.longeron.tolerance,
-        bolt_hole_radius=dp.bolt.radius,
-        bolt_thickness=dp.bolt.thickness,
-        bolt_offset=dp.bolt.offset,
-        greeble_opening_angle=dp.greeble.opening_angle,
-        greeble_thickness=dp.greeble.thickness,
-        greeble_nub_thickness=dp.greeble.nub_thickness,
+        'bulkhead_thickness': dp.bulkhead.thickness,
+        'corner_radius': dp.corner.radius,
+        'panel_thickness': dp.panel.thickness,
+        'panel_offset': dp.panel.offset,
+        'panel_overlap': dp.panel.overlap,
+        'panel_tolerance': dp.panel.tolerance,
+        'longeron_radius': dp.longeron.radius,
+        'longeron_tolerance': dp.longeron.tolerance,
+        'bolt_hole_radius': dp.bolt.radius,
+        'bolt_thickness': dp.bolt.thickness,
+        'bolt_offset': dp.bolt.offset,
+        'greeble_opening_angle': dp.greeble.opening_angle,
+        'greeble_thickness': dp.greeble.thickness,
+        'greeble_nub_thickness': dp.greeble.nub_thickness,
         # No greeble_tolerance: the bulkhead's greeble post is nominal by
         # construction, so bulkhead_section_full does not take one. The clearance
         # is on the corner -- see corner_render above.
-        plate_thickness=dp.plate.thickness,
-        web_fillet_radius=dp.web.fillet_radius,
-        web_width=dp.web.width,
-        flange_fillet_radius=dp.bulkhead_flange.fillet_radius,
-        flange_thickness=dp.bulkhead_flange.thickness,
-        flange_chamfer=dp.bulkhead_flange.chamfer,
-        cowl_flange_height=dp.cowl_flange.height,
-        cowl_flange_tolerance=dp.cowl_flange.tolerance,
-        extrusion_width=dp.printer.extrusion_width)
-    
+        'plate_thickness': dp.plate.thickness,
+        'web_fillet_radius': dp.web.fillet_radius,
+        'web_width': dp.web.width,
+        'flange_fillet_radius': dp.bulkhead_flange.fillet_radius,
+        'flange_thickness': dp.bulkhead_flange.thickness,
+        'flange_chamfer': dp.bulkhead_flange.chamfer,
+        'cowl_flange_height': dp.cowl_flange.height,
+        'cowl_flange_tolerance': dp.cowl_flange.tolerance,
+        'extrusion_width': dp.printer.extrusion_width,
+    }
+
+
+def bulkhead_render(dp, output_dir, filename):
+
+    if _backend_for('bulkhead') == 'freecad':
+        freecad_render('bulkhead', bulkhead_parameters(dp), output_dir, filename,
+                       _variant_note(dp))
+        return
+
+    fgeom = scad_module('fuselage_bulkhead_geometry.scad')
+
+    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
+
+    scadobj = fgeom.bulkhead_section_full(
+        is_interconnect=is_interconnect,
+        is_cowling=is_cowling,
+        **bulkhead_parameters(dp))
+
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
@@ -2030,7 +2165,7 @@ def sweep_session(workers=None, resume=False, previews=True):
                   % len(failures), flush=True)
 
 
-def main(workers=None, resume=False, previews=True):
+def main(workers=None, resume=False, previews=True, backend='openscad'):
     """Run all five sweeps, writing an STL and a preview PNG for every part.
 
     `workers` is the number of concurrent OpenSCAD renders; None picks a default
@@ -2044,18 +2179,42 @@ def main(workers=None, resume=False, previews=True):
 
     `previews` renders each part's PNG from its finished STL, on the worker thread,
     as soon as the STL lands. One command produces the parts and the images.
+
+    `backend` is 'openscad' or 'freecad' (IP-FC-10). Only the corner and the bulkhead have
+    FreeCAD generators; the rest of the sweep renders in OpenSCAD either way, and which is
+    which is printed rather than left to be inferred from the output.
     """
     workers = default_render_workers() if workers is None else max(1, int(workers))
     budget, why = render_worker_budget()
+    previous_backend = set_backend(backend)
     print('render workers: %d  (%s)' % (workers, why if workers == budget else 'explicit'),
           flush=True)
+    if backend == 'freecad':
+        print('backend: FreeCAD for %s; OpenSCAD for everything else, which has no '
+              'FreeCAD generator yet' % ', '.join(sorted(freecad_render_backend.KINDS)),
+              flush=True)
+        print('  %s' % freecad_render_backend.freecadcmd_path(), flush=True)
+    else:
+        print('backend: OpenSCAD', flush=True)
     print('previews: %s' % ('on, rendered from each STL' if previews else 'off'),
           flush=True)
     if resume:
         print('resume: skipping parts whose STL is already complete', flush=True)
+    if resume and backend == 'freecad':
+        # Said out loud because the failure is silent and looks like success. The FreeCAD
+        # definition file is the *parameters*, and those do not change when a generator
+        # module does -- where a generated .scad contained the geometry itself. So a resume
+        # here will happily skip every part affected by an edit to the geometry code, which
+        # is the exact thing --resume was built to prevent. IP-FC-11 closes it.
+        print('  WARNING: --resume cannot see edits to the FreeCAD geometry modules -- the '
+              'definition file holds parameters, not geometry. Use --force after changing '
+              'anything under freecad/ (IP-FC-11)', flush=True)
 
-    with sweep_session(workers=workers, resume=resume, previews=previews):
-        _run_all_sweeps()
+    try:
+        with sweep_session(workers=workers, resume=resume, previews=previews):
+            _run_all_sweeps()
+    finally:
+        set_backend(previous_backend)
 
 
 def _run_all_sweeps():
@@ -2098,6 +2257,13 @@ if __name__ == "__main__":
     _parser.add_argument('--no-previews', action='store_true',
                          help='skip the preview PNGs (they are generated by '
                               'default, from each finished STL)')
+    _parser.add_argument('--backend', choices=('openscad', 'freecad'),
+                         default='openscad',
+                         help='which geometry engine renders each part (IP-FC-10). '
+                              'freecad applies to the corner and the bulkhead, the two '
+                              'parts that have been ported; the rest of the sweep uses '
+                              'OpenSCAD either way. Point FREECADCMD at freecadcmd if it '
+                              'is not on PATH')
     _parser.add_argument('--previews-only', action='store_true',
                          help='render no geometry; regenerate previews for the '
                               'STLs already in variant_output. Use after a look '
@@ -2108,5 +2274,5 @@ if __name__ == "__main__":
         _failures = rebuild_previews(workers=_args.workers, force=_args.force)
         raise SystemExit(1 if _failures else 0)
     main(workers=_args.workers, resume=_args.resume and not _args.force,
-         previews=not _args.no_previews)
+         previews=not _args.no_previews, backend=_args.backend)
 

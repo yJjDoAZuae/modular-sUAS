@@ -14,6 +14,22 @@ Scripts are run by `freecadcmd`, which takes the script as its first argument:
 freecadcmd part_corner.py
 ```
 
+Scripts that take arguments need `--pass` before **each** one, with the value joined by `=`:
+
+```
+freecadcmd build_part.py --pass --kind=bulkhead --pass --params=p.json --pass --out=p.stl
+```
+
+`freecadcmd` parses the command line before the script runs. An unrecognised `--flag` makes
+it print its own usage and stop without ever calling the script; a bare positional it tries
+to **open as a document**, which on a `.json` fails inside the FEM mesh importer with
+`invalid literal for int() with base 10: 'U'` -- an error naming neither FreeCAD nor anything
+actually wrong with the file.
+
+**And its exit code cannot be trusted.** An uncaught exception prints `Exception while
+processing file: ...` and exits **0**; an explicit `sys.exit(n)` is not stable between runs.
+Anything driving these scripts must check that the output file appeared, not the status.
+
 `freecadcmd` **imports** the script as a module named after the file, so `__name__` is
 `part_corner`, never `__main__`. Use `corner_common.is_entry_point(__name__)` for the
 entry-point guard — the usual idiom silently suppresses the whole script.
@@ -26,6 +42,7 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 
 | File | Contents |
 | --- | --- |
+| `build_part.py` | **The sweep's entry point** (IP-FC-10). One process, one part, one parameter file in, one STL out -- shaped like a single `openscad -o` call so the sweep's queue could take it unchanged. Reads either definition shape: the two-table *variant* `export_parameters.py` writes, or the flat one-kind *part* the sweep writes. Every argument must go behind freecadcmd's `--pass` |
 | `corner_common.py` | `Params`, the shared 2D section every axial slice extrudes, and the sheet machinery — `build_sheet` (seeded from the authority), `merge_params` (refuses an alias defined two ways) and `check_seed` (the finished sheet must reproduce `derived_parameters()`) |
 
 | `part_middle.py` | `corner_middle` — the constant-section run |
