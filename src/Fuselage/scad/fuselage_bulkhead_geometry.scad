@@ -594,7 +594,17 @@ module bulkhead_flange_positive(make_web, is_interconnect, is_cowling, unit_widt
         
         if (!is_interconnect) {
             
-            greeble_bolt_web(bulkhead_thickness, bolt_offset, flange_thickness, flange_chamfer, plate_thickness);
+            // Until 2026-08-08 the last three arguments were passed rotated --
+            // (flange_thickness, flange_chamfer, plate_thickness) into
+            // (plate_thickness, flange_thickness, flange_chamfer). OpenSCAD matches
+            // positionally and says nothing, and plate_thickness and flange_thickness are
+            // both 0.8 at the driver's settings, so one of the three landed correctly by
+            // coincidence and the part looked right. The diagonal web was built 25%
+            // thicker than flange_thickness intends, and would have changed shape for no
+            // apparent reason the first time layer height or extrusion width moved.
+            // The names are the interface; the old alignment was the accident.
+            // See OQ-DES-B10 in doc/design/bulkhead.md.
+            greeble_bolt_web(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer);
             
             greeble_to_web_fillet(bulkhead_thickness, panel_offset, panel_overlap, panel_tolerance, bolt_offset, plate_thickness, flange_fillet_radius, flange_thickness, flange_chamfer);
             

@@ -58,6 +58,48 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | `bulkhead_tree.py` | The bulkhead's greeble-forming tool: `corner_end` re-evaluated at greeble tolerance **0** and `bulkhead_thickness + 2*eps`. Shows what "reuse the corner's end section" actually means — a second evaluation of the same builders against a second set of spreadsheet rows, never a reference to the corner's built shape, which carries the fit clearance |
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
 
+## Rendering a variant — never by `-D` on a driver
+
+To render a part the sweep would actually produce, use
+[`tools/render_variant.py`](../tools/render_variant.py), which drives
+`derived_parameters()`:
+
+```
+.venv/Scripts/python render_variant.py                     # list combinations + validity
+.venv/Scripts/python render_variant.py 1.0 end_bolt 3/16in
+```
+
+**`panel.offset` is derived, not free.** It comes from `panel.overlap`, `panel.thickness`,
+the greeble clearance and the extrusion width — 0 mm panel gives 5.5, 3/16 in gives 2.5, and
+`fuselage_bulkhead.scad` hard-codes 0. The sweep also uses `extrusion_width = 0.6` where the
+driver uses 0.4. Overriding some of these on the command line and leaving the rest produces a
+combination the sweep would never generate: it renders without complaint and the geometry is
+wrong. A 0 mm panel rendered with the driver's `panel_offset = 0` **loses the greeble posts
+entirely**, because that offset is exactly the clearance holding the panel's inner corner off
+the greeble perimeter.
+
+The `ref_*.scad` files here are module *isolators* at the hand driver's values, for comparing
+one module against its FreeCAD port at identical inputs. They are deliberately not variants
+and must not be read as one.
+
+## Looking at the parts
+
+`preview.py` exports a generated shape to a mesh and renders it through
+[`stl_preview`](../tools/stl_preview.py) — the same software rasterizer the OpenSCAD sweep
+uses, at the same camera. So a FreeCAD part and its OpenSCAD reference are drawn identically
+and can be compared directly rather than impressionistically.
+
+```
+freecadcmd preview.py            # corner, three views, plus the OpenSCAD reference
+```
+
+Volume agreement says two solids enclose the same space; it does not say the shape is right.
+That judgement needs eyes on the part, and this is how to get them without a GUI.
+
+Output lands in `preview/` and is regenerable — delete it freely. `ref_corner.stl` beside
+this script is the OpenSCAD comparison mesh; it is a build artifact too, kept only so the
+side-by-side works without a re-render.
+
 ## Verification
 
 | File | Checks |

@@ -729,6 +729,108 @@ geometry here is sometimes arrived at by experiment rather than derivation — t
 opening angle was exactly that. So whether the web profile was tuned needs answering before
 the change, not after.
 
+### ~~OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order~~ — FIXED 2026-08-08
+
+**Decision.** The matching names are the correct interface association; the old alignment was
+the accident. The call is corrected to
+`(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer)`.
+[`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) now reports zero
+positional mismatches across `src/Fuselage/scad`.
+
+**Measured effect — smaller than the analysis below suggested.** The module's own output does
+change, but at the two smaller sizes its material is *entirely absorbed* by the surrounding
+flange, web and bolt flange, so the assembled part is bit-identical:
+
+| Size | Module alone, old → fixed | Assembled bulkhead |
+| --- | --- | --- |
+| U=0.5, bt=4 | — | **unchanged**, 1994.8939143 mm³ |
+| U=1, bt=6 | 44.8017 → 41.8603 | **unchanged**, 5733.5689982 mm³, 32816 triangles |
+| U=4, bt=16 | 405.4760 → 348.4585 | changes — the module contributes 1584.75 mm³ here |
+
+Verified by removing the call entirely: at U=0.5 and U=1 the bulkhead is bit-identical
+without it, so **no part printed at those sizes was ever affected**. At U=4 the bolt sits
+32 mm out and the diagonal web is no longer covered by its neighbours, so the module does
+carry material and the correction changes the geometry by roughly 0.1% of the part.
+
+So `greeble_bolt_web` is not dead code — it is dormant at small sizes and load-bearing at
+large ones, which is also why the defect survived: every part small enough to print and fly
+easily was immune to it.
+
+---
+
+**Original analysis, kept because it is what the decision was made against.**
+
+### OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order
+
+**Problem.** Found 2026-08-08 while porting. There is one call site and its last three
+positional arguments are rotated against the signature:
+
+```scad
+module greeble_bolt_web(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer)
+
+greeble_bolt_web(bulkhead_thickness, bolt_offset, flange_thickness, flange_chamfer, plate_thickness);
+```
+
+So inside the module, at the driver's values:
+
+| Parameter | Receives | Value | Intended |
+| --- | --- | --- | --- |
+| `plate_thickness` | `flange_thickness` | 0.8 | 0.8 — correct **by coincidence** |
+| `flange_thickness` | `flange_chamfer` | **1.0** | 0.8 |
+| `flange_chamfer` | `plate_thickness` | **0.8** | 1.0 |
+
+`plate_thickness = 4 * layer_height = 0.8` and `flange_thickness = 2 * extrusion_width = 0.8`
+are equal at these settings, which is why one of the three lands correctly and the error is
+invisible in the result. **It would stop being invisible the moment layer height or
+extrusion width changed** — a 0.3 mm nozzle or a 0.15 mm layer separates them, and the part
+would shift shape for no reason the parameters explain.
+
+**What it changes.** The diagonal web joining the greeble to the bolt flange:
+
+- its width comes from `flange_thickness/(2*sqrt(2))`, so **0.3536 instead of 0.2828** — the
+  web is 25% thicker than the flange thickness intends;
+- its chamfered rib section is
+  `[[0,0], [pt+fc,0], [pt+fc,-ft/2], [pt,-ft/2-fc], [0,-ft/2-fc]]`, built as
+  `[[0,0], [1.6,0], [1.6,-0.5], [0.8,-1.3], [0,-1.3]]` where the intent is
+  `[[0,0], [1.8,0], [1.8,-0.4], [0.8,-1.4], [0,-1.4]]`.
+
+Both are small, and both are in a load path — this web is what carries load from the
+longeron corner to the bolted joint.
+
+**This is a question, not a defect report, because the parts have been printed and flown
+with this geometry.** A thicker web is not obviously wrong; it may even be why the part
+works. What is certainly wrong is that the geometry does not follow from the parameters,
+so nobody could tune it deliberately.
+
+**Alternatives**
+
+1. **Fix the call, port the corrected geometry.**
+   *Benefits:* the part follows its parameters again; changing extrusion width or layer
+   height does what it says; the port has one description, not one plus an accident.
+   *Drawbacks:* the printed part changes in a load path, so it wants a print and a fit check
+   before it is trusted.
+   *Prerequisites:* none.
+
+2. **Fix the call and re-tune the constants** so the built geometry is unchanged — i.e.
+   decide the current dimensions were right and express them deliberately.
+   *Benefits:* keeps a flown geometry exactly while making it explicit and parametric.
+   *Drawbacks:* needs a judgement about which of the current dimensions were wanted.
+   *Prerequisites:* none.
+
+3. **Port it faithfully, bug included**, and defer.
+   *Benefits:* the port stays a pure translation and IP-FC-13 can compare strictly.
+   *Drawbacks:* carries an accident into a new codebase where it will be much harder to
+   notice, since the FreeCAD version has no positional call to misread.
+   *Prerequisites:* none.
+
+**Recommendation: alternative 2 if the current web dimensions are wanted, otherwise 1.**
+Either way the call is fixed — alternative 3 preserves a defect precisely where it is
+hardest to find later. The real question is only whether the *current* dimensions should be
+kept, and that is a judgement about a flown part rather than about the code.
+
+**Porting in the meantime follows alternative 3**, so the port continues and matches the
+existing reference; switching later is a change to two constants.
+
 ## See also
 
 - [corner.md](corner.md) — the mating half; the greeble; where the fit clearance lives.
