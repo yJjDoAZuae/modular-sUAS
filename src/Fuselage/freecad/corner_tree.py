@@ -166,6 +166,28 @@ def _sheet(doc, extra=(), seed=None):
     return build_sheet(doc, PARAMS, seed, extra)
 
 
+def _degenerate(doc, *aliases):
+    """True when any of these sheet values is zero, so a tool built from them has no extent.
+
+    **This is a real swept configuration, not a guard against nonsense.** The `0mm` panel
+    row is the no-panel variant -- thickness, tolerance and overlap all zero -- and it is
+    valid by `bulkhead_validity_check`, which admits `panel.thickness == 0` explicitly.
+
+    The two toolchains disagree about what to do with it. OpenSCAD renders `cube([0,0,h])`
+    as the empty set and `difference()` with the empty set is a no-op, so the part simply
+    comes out with no panel slot, which is what "no panel" should mean. `Part::Box` will not
+    build a zero-length box: it warns `Length of box too small`, yields a **null shape**, and
+    a null tool nulls the entire cut chain downstream of it. The part does not come out
+    wrong, it comes out as nothing, and the first thing that touches it raises
+    `Standard_NullObject BRepCheck_Analyzer::Init() - NULL shape` from six features away.
+
+    Reading the sheet rather than the seed keeps this agreeing with the expressions that
+    build the tool -- one place decides what the slot's extent is.
+    """
+    sheet = doc.getObject('Params')
+    return any(abs(float(sheet.get(alias))) < 1e-12 for alias in aliases)
+
+
 def _box(doc, name, length, width, height, x, y, z, angle=None):
     box = _owned(doc, 'Part::Box', name)
     for prop, expr in (('Length', length), ('Width', width), ('Height', height)):
@@ -265,9 +287,16 @@ def _section(doc, tag, z0, h):
     node = _cut(doc, tag + 'CutBore', body,
                 _cyl(doc, tag + 'Bore',
                      P + 'longeron_radius + ' + P + 'longeron_tolerance', ch, cz))
-    node = _cut(doc, tag + 'CutSlot', node,
-                _box(doc, tag + 'PanelSlot', P + 'slot_w', P + 'slot_d', ch,
-                     P + 'slot_x', P + 'slot_y', cz))
+    # No panel, no slot -- see _degenerate(). The feature is omitted rather than built at
+    # zero size, because FreeCAD cannot build it at zero size. The cost is that raising
+    # panel_thickness on a document generated at 0mm finds no slot feature to grow; that is
+    # the one edit this variant does not support, and it is one the sweep would refuse
+    # anyway, since panel_offset and panel_overlap are derived from the thickness and would
+    # no longer agree (which is what render_variant.py exists for).
+    if not _degenerate(doc, 'slot_w', 'slot_d'):
+        node = _cut(doc, tag + 'CutSlot', node,
+                    _box(doc, tag + 'PanelSlot', P + 'slot_w', P + 'slot_d', ch,
+                         P + 'slot_x', P + 'slot_y', cz))
     node = _cut(doc, tag + 'CutFlatX', node,
                 _box(doc, tag + 'FlatX', P + 'mask_reach', P + 'mask_reach * 2', ch,
                      P + 'flat_x - ' + P + 'mask_reach', '-' + P + 'mask_reach', cz))

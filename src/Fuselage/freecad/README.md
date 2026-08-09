@@ -34,6 +34,49 @@ Anything driving these scripts must check that the output file appeared, not the
 `part_corner`, never `__main__`. Use `corner_common.is_entry_point(__name__)` for the
 entry-point guard — the usual idiom silently suppresses the whole script.
 
+**Editing anything here invalidates the sweep's output, and `--resume` now knows that**
+(IP-FC-11). `tools/geometry_version.py` hashes the transitive import closure of each kind's
+builder — `build_part.py` plus `corner_tree.py` or `bulkhead_full.py`, followed through
+their sibling imports — and stamps the digest into the definition file the sweep compares.
+So a resumed run re-renders the parts an edit here affects, without needing `--force`. The
+closure is followed automatically: adding an import extends it. Files outside it (`spike_*`,
+`check_*`, `measure.py`, the superseded `part_*`/`pd_*` path) are correctly ignored.
+
+One consequence worth knowing: the digest is over **file bytes**, so editing a comment
+re-renders parts whose geometry did not move — the safe direction, chosen deliberately.
+
+`part_kinds.py` is what lets the driver walk the right closure. It states which module
+builds each kind, and **nothing in it may import FreeCAD, or anything that imports FreeCAD**
+— that is the only reason it is a separate file. `build_part.py` imports it normally;
+`tools/freecad_render.py`, which runs in the project virtualenv where `import FreeCAD` fails,
+loads it by file path. A second copy of that table naming the wrong module would produce the
+digest of the wrong closure: a staleness key that looks like it works and tracks the wrong
+files.
+
+**An expression row needs its inputs in the seed.** `seeded()` replaces *literal* rows only,
+so a row stated as a relationship — `corner_radius` is `=U * 10`, `unit_length` is
+`=U * FX * 100` — keeps its expression and evaluates from whatever the sheet holds. That is
+the point of stating it as a relationship, and it is why `merge_params` prefers one over a
+constant. But if the seed does not supply everything the expression reads, the row computes a
+plausible number from the module's own literal while the correct value sits unused in the
+parameter file. There is no geometric symptom: the part is valid, single-solid and the wrong
+size. `U` and `FX` were both missing, so every swept corner was built at FX=1.0 and every
+swept bulkhead at U=1.0 (IP-FC-48). `build_part.build()` now runs `check_seed` on every
+build, which is what names it:
+
+```text
+build_part: bulkhead: the sheet disagrees with the parameter file on corner_radius
+  corner_radius          sheet 10   authority 25
+```
+
+**Zero is a real parameter value here.** The `0mm` panel row is the no-panel variant, so
+`panel_thickness`, `panel_tolerance` and `panel_overlap` are all zero and the panel slot has
+no extent. OpenSCAD treats a zero-size `cube()` as the empty set and the `difference()`
+becomes a no-op; `Part::Box` yields a **null shape** that nulls everything downstream, and
+the error surfaces several features away as `BRepCheck_Analyzer::Init() - NULL shape`.
+`corner_tree._degenerate()` omits such a feature. New geometry built from a parameter that
+can reach zero needs the same treatment — see IP-FC-46.
+
 The OpenSCAD references are rendered with `openscad -o out.stl ref_*.scad`, with parameters
 supplied by `-D`. `measure.py` reads an STL and reports triangle count, volume by the
 divergence theorem, and bounding box; run it with a real Python, not `freecadcmd`.
@@ -43,6 +86,7 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 | File | Contents |
 | --- | --- |
 | `build_part.py` | **The sweep's entry point** (IP-FC-10). One process, one part, one parameter file in, one STL out -- shaped like a single `openscad -o` call so the sweep's queue could take it unchanged. Reads either definition shape: the two-table *variant* `export_parameters.py` writes, or the flat one-kind *part* the sweep writes. Every argument must go behind freecadcmd's `--pass` |
+| `part_kinds.py` | Which module builds which kind, and the roots the IP-FC-11 digest walks from. **Imports nothing that imports FreeCAD** — that is the point of it: `tools/freecad_render.py` has to read it from the project virtualenv, where `import FreeCAD` fails |
 | `corner_common.py` | `Params`, the shared 2D section every axial slice extrudes, and the sheet machinery — `build_sheet` (seeded from the authority), `merge_params` (refuses an alias defined two ways) and `check_seed` (the finished sheet must reproduce `derived_parameters()`) |
 
 | `part_middle.py` | `corner_middle` — the constant-section run |

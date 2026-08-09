@@ -27,6 +27,7 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import geometry_version
 import mesh_stats
 import stl_preview
 # Aliased: `freecad_render` is also the name of the render function below, and the module is
@@ -1340,15 +1341,23 @@ def set_backend(name):
     return previous
 
 
-def _backend_for(kind):
+def _backend_for(kind, supported=True):
     """The backend that will actually render `kind`, which is not always the one selected.
 
     A part with no FreeCAD generator yet renders in OpenSCAD even under --backend freecad.
     Silently, and deliberately: the alternative is a sweep that cannot run at all until every
     part is ported, which would make the backend flag useless for exactly the period it is
     most needed. `main()` prints which parts this applies to, so it is not invisible.
+
+    `supported` extends that per *variant*, not just per kind, and it exists because the
+    coarser test was wrong. `bulkhead` is ported, but only its plain end type: the FreeCAD
+    `bulkhead_full.emit()` takes no `is_cowling` or `is_interconnect`, where the OpenSCAD
+    call site passes both. So `--backend freecad` rendered all five swept types as the end
+    type -- three of five silently wrong, under the right filename, with a plausible volume.
+    A part that falls back is a part still rendered correctly; a part built from the wrong
+    branch is a part nobody has reason to re-examine.
     """
-    if _BACKEND == 'freecad' and kind in freecad_render_backend.KINDS:
+    if _BACKEND == 'freecad' and kind in freecad_render_backend.KINDS and supported:
         return 'freecad'
     return 'openscad'
 
@@ -1362,13 +1371,21 @@ _RESUME_COUNTS = {'skipped': 0, 'changed': 0}
 def set_resume(enabled):
     """Skip parts that are already rendered and unchanged. Returns the previous value.
 
-    Safe to leave on: a part is skipped only when the .scad it would generate now
-    is byte-identical to the one on disk *and* the STL beside it is a whole mesh.
-    Edit a geometry module or a parameter CSV and the affected parts re-render on
-    their own, because their generated .scad no longer matches.
+    Safe to leave on: a part is skipped only when the definition file it would write
+    now is byte-identical to the one on disk *and* the STL beside it is a whole mesh.
+    Edit a parameter CSV and the affected parts re-render on their own, because the
+    parameters in that file move.
 
-    Use --force to re-render regardless, e.g. after changing something the .scad
-    text cannot see -- an OpenSCAD version bump, or an OML mesh replaced in place.
+    Since IP-FC-11 that holds for the *geometry sources* too, which it did not before.
+    The definition file is a call, not the geometry -- a `use <>` line and a parameter
+    list on the OpenSCAD side, a parameter table on the FreeCAD side -- so editing
+    fuselage_bulkhead_geometry.scad or bulkhead_full.py left every definition
+    byte-identical and a resumed run skipped exactly the parts the edit invalidated.
+    Both now carry a digest of their geometry sources, so the existing comparison sees
+    them. See tools/geometry_version.py.
+
+    Use --force to re-render regardless, e.g. after changing something no source file
+    records -- an OpenSCAD or FreeCAD version bump, or an OML mesh replaced in place.
     """
     global _RESUME
     previous, _RESUME = _RESUME, bool(enabled)
@@ -1700,6 +1717,28 @@ def render_definition(write_definition, definition_suffix, make_command,
     return (definition_filepath, stl_filepath, png_filepath)
 
 
+def stamp_geometry_version(scad_path):
+    """Record which geometry sources this generated file calls into, as a comment.
+
+    IP-FC-11. Without it `--resume` cannot see a change to the .scad modules at all: the
+    generated file is a `use <>` line and a call with the parameters substituted in, so
+    editing fuselage_bulkhead_geometry.scad leaves it byte for byte identical and every
+    part built from it is skipped as "already rendered". The comparison this stamp feeds
+    is the same one that already catches parameter changes -- the definition file grows a
+    line, and nothing else in the resume path has to know.
+
+    A comment because the generated file has to stay a file OpenSCAD will render and a
+    person can run by hand. The module names ride along beside the digest so a re-render
+    everywhere is self-explaining rather than mysterious.
+    """
+    version, modules = geometry_version.scad_version(scad_path)
+    header = '// geometry-version: %s  [%s]\n' % (version, ', '.join(modules))
+    with open(scad_path, encoding='utf-8') as f:
+        body = f.read()
+    with open(scad_path, 'w', encoding='utf-8', newline='') as f:
+        f.write(header + body)
+
+
 def solid_render(scad_obj, output_dir, filename):
     """Render a part with OpenSCAD, from a solid2 object."""
     solid2.set_global_fn(0)
@@ -1711,6 +1750,7 @@ def solid_render(scad_obj, output_dir, filename):
     def write_scad(path):
         solid2.scad_render_to_file(scad_obj, path)
         relativize_scad_references(path)         # same directory, so same result
+        stamp_geometry_version(path)             # after relativize: it reads the refs
 
     def make_command(scad_path, stl_path):
         cmd = solid2.config.config.openscad_stl_command.format(
@@ -1837,16 +1877,34 @@ def corner_parameters(dp):
 
 
 def _variant_note(dp):
-    """Which combination a definition file belongs to, for a human reading it later."""
+    """Which combination a definition file belongs to, for a human reading it later.
+
+    `type_name` is here because the parameter table does not distinguish the bulkhead types
+    -- `end_bolt` and `interconnect` produce the same 24 numbers and differ only in which
+    branch consumes them. Two definition files that describe different parts must not read
+    identically, whether a person or `--resume` is doing the comparing.
+    """
     return {'U': dp.bulkhead.U, 'panel_name': dp.panel.type_name,
-            'is_metric': bool(dp.panel.is_metric)}
+            'is_metric': bool(dp.panel.is_metric),
+            'type_name': dp.bulkhead.type_name}
 
 
 def corner_render(dp, output_dir, filename):
 
     if _backend_for('corner') == 'freecad':
-        freecad_render('corner', corner_parameters(dp), output_dir, filename,
-                       _variant_note(dp))
+        # FX on top of the shared mapping, and only here. `fuselage_corner` in OpenSCAD has
+        # no FX parameter -- it takes the finished `unit_length` -- so adding it to
+        # `corner_parameters` would make the solid2 call a TypeError.
+        #
+        # FreeCAD needs it because `corner_tree` keeps `unit_length` as the *relationship*
+        # `=U * FX * 100` rather than a number, which is deliberate: it is what lets someone
+        # change U on a generated document and have the part follow. `seeded()` only
+        # replaces literal rows, so an expression row survives seeding and is evaluated from
+        # whatever U and FX the sheet holds. Without FX in the seed it stayed at its literal
+        # 1.0, and every corner in the sweep was built at FX=1.0 -- correct at FX=1.0, and
+        # silently the wrong length everywhere else (IP-FC-48).
+        params = dict(corner_parameters(dp), FX=dp.corner.FX)
+        freecad_render('corner', params, output_dir, filename, _variant_note(dp))
         return
 
     fgeom = scad_module('fuselage_corner_geometry.scad')
@@ -1864,8 +1922,13 @@ def bulkhead_parameters(dp):
     """The bulkhead's parameters, by name, as both backends need them.
 
     The type flags are not here: they are booleans selecting *which* features exist rather
-    than dimensions, and the FreeCAD generator carries them as its own structure. See
-    `bulkhead_render`, which adds them for the OpenSCAD call.
+    than dimensions. `bulkhead_render` adds them to the OpenSCAD call.
+
+    The FreeCAD generator does not take them at all -- `bulkhead_full.emit()` implements the
+    end type and nothing else -- which is why `bulkhead_render` routes the other three types
+    to OpenSCAD instead of handing them a table that describes them correctly and a builder
+    that would ignore the distinction. Two types producing the same 24 numbers is also why
+    `_variant_note` carries `type_name`.
     """
     return {
         'unit_width': dp.bulkhead.width,
@@ -1903,14 +1966,26 @@ def bulkhead_parameters(dp):
 
 def bulkhead_render(dp, output_dir, filename):
 
-    if _backend_for('bulkhead') == 'freecad':
-        freecad_render('bulkhead', bulkhead_parameters(dp), output_dir, filename,
-                       _variant_note(dp))
+    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
+
+    # Only the plain end type is ported (IP-FC-9). `bulkhead_full.emit()` takes no
+    # is_cowling and no is_interconnect, so routing those types here would render them as
+    # end bulkheads -- wrong geometry under the right filename. They fall back to OpenSCAD,
+    # which is the same treatment every unported kind already gets. IP-FC-12 ports them.
+    if _backend_for('bulkhead', supported=is_end) == 'freecad':
+        # U on top of the shared mapping, for the reason FX is added in `corner_render`:
+        # the bulkhead sheet merges `corner_tree.PARAMS`, where `corner_radius` and
+        # `longeron_radius` are the relationships `=U * 10` and `=U * 2`. `bulkhead_
+        # section_full` in OpenSCAD takes neither U nor those relationships -- it is handed
+        # the finished radii -- so U cannot go in the shared mapping.
+        #
+        # Without it the sheet's U stayed at its literal 1.0 and every bulkhead was built
+        # with a 10 mm corner radius and a 2 mm longeron bore whatever its size (IP-FC-48).
+        params = dict(bulkhead_parameters(dp), U=dp.bulkhead.U)
+        freecad_render('bulkhead', params, output_dir, filename, _variant_note(dp))
         return
 
     fgeom = scad_module('fuselage_bulkhead_geometry.scad')
-
-    (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
 
     scadobj = fgeom.bulkhead_section_full(
         is_interconnect=is_interconnect,
@@ -2193,22 +2268,19 @@ def main(workers=None, resume=False, previews=True, backend='openscad'):
         print('backend: FreeCAD for %s; OpenSCAD for everything else, which has no '
               'FreeCAD generator yet' % ', '.join(sorted(freecad_render_backend.KINDS)),
               flush=True)
+        # Stated because "bulkhead is ported" is true of the kind and false of three of its
+        # five types, and a run that silently rendered those in OpenSCAD would look like a
+        # run that rendered them in FreeCAD.
+        print('  bulkhead: end types only -- cowling and interconnect fall back to '
+              'OpenSCAD until IP-FC-12', flush=True)
         print('  %s' % freecad_render_backend.freecadcmd_path(), flush=True)
     else:
         print('backend: OpenSCAD', flush=True)
     print('previews: %s' % ('on, rendered from each STL' if previews else 'off'),
           flush=True)
     if resume:
-        print('resume: skipping parts whose STL is already complete', flush=True)
-    if resume and backend == 'freecad':
-        # Said out loud because the failure is silent and looks like success. The FreeCAD
-        # definition file is the *parameters*, and those do not change when a generator
-        # module does -- where a generated .scad contained the geometry itself. So a resume
-        # here will happily skip every part affected by an edit to the geometry code, which
-        # is the exact thing --resume was built to prevent. IP-FC-11 closes it.
-        print('  WARNING: --resume cannot see edits to the FreeCAD geometry modules -- the '
-              'definition file holds parameters, not geometry. Use --force after changing '
-              'anything under freecad/ (IP-FC-11)', flush=True)
+        print('resume: skipping parts whose STL is already complete and whose definition '
+              'and geometry sources are unchanged', flush=True)
 
     try:
         with sweep_session(workers=workers, resume=resume, previews=previews):
@@ -2246,8 +2318,9 @@ if __name__ == "__main__":
     _mode = _parser.add_mutually_exclusive_group()
     _mode.add_argument('--resume', action='store_true',
                        help='skip parts that are already rendered and whose '
-                            'generated .scad is unchanged; parts affected by a '
-                            'geometry or parameter edit re-render on their own')
+                            'definition is unchanged; parts affected by a parameter '
+                            'edit, or by an edit to the geometry sources they are '
+                            'built from, re-render on their own (IP-FC-11)')
     _mode.add_argument('--force', action='store_true',
                        help='re-render every part regardless of what is on disk '
                             '(the default; state it explicitly to be unambiguous, '
