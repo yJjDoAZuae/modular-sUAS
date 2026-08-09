@@ -38,7 +38,7 @@ import fillets
 import flange_base
 import flange_boss
 import greeble_web
-from corner_common import is_entry_point
+from corner_common import build_sheet, is_entry_point, merge_params
 
 REF = 982.5042986
 EXPECT_BBOX = (-40.0, -9.5625, 0.0, 0.0, 5.1375, 6.0)
@@ -48,40 +48,18 @@ EXPECT_BBOX = (-40.0, -9.5625, 0.0, 0.0, 5.1375, 6.0)
 SOURCES = [flange_base, greeble_web, fillets, flange_boss]
 
 
-def merged_params():
-    """The union of the constituents' alias tables, with conflicting definitions refused."""
-    merged, owner = [], {}
-    for mod in SOURCES:
-        for alias, value in mod.PARAMS:
-            if alias in owner:
-                prev_mod, prev_value = owner[alias]
-                if prev_value != value:
-                    raise RuntimeError(
-                        'alias %r means two different things: %r in %s, %r in %s -- rename '
-                        'one before they share a sheet'
-                        % (alias, prev_value, prev_mod.__name__, value, mod.__name__))
-                continue
-            owner[alias] = (mod, value)
-            merged.append((alias, value))
-    return merged
+def sheet(doc, seed=None):
+    return build_sheet(doc, merge_params(SOURCES, seed), seed)
 
 
-def sheet(doc):
-    fresh = doc.getObject('Params') is None
-    sh = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
-    if fresh:
-        for row, (alias, value) in enumerate(merged_params(), start=1):
-            sh.set('A%d' % row, alias)
-            sh.setAlias('B%d' % row, alias)
-            sh.set('B%d' % row, value)
-        doc.recompute()
-    return sh
-
-
-def emit(doc):
+def emit(doc, seed=None):
     C._SEEN.clear()
-    sheet(doc)
+    sheet(doc, seed)
+    return flange_positive(doc)
 
+
+def flange_positive(doc):
+    """Geometry only, against whatever sheet the document already has."""
     parts = [flange_base.flange_base(doc),
              fillets.flange_chamfer(doc),
              flange_boss.flange_boss(doc),

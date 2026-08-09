@@ -26,10 +26,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import is_entry_point
+from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
-REF_VOL = None            # measured below by the caller
+REF_VOL = 55.4365498      # ref_greeble_web.scad
+EXPECT_BBOX = (-9.1314, -8.0, 0.0, 0.0, 1.1314, 6.0)
 
 PARAMS = [
     ('bulkhead_thickness', '6'),
@@ -56,16 +57,8 @@ PARAMS = [
 ]
 
 
-def sheet(doc):
-    fresh = doc.getObject('Params') is None
-    sh = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
-    if fresh:
-        for row, (alias, value) in enumerate(PARAMS, start=1):
-            sh.set('A%d' % row, alias)
-            sh.setAlias('B%d' % row, alias)
-            sh.set('B%d' % row, value)
-        doc.recompute()
-    return sh
+def sheet(doc, seed=None):
+    return build_sheet(doc, PARAMS, seed)
 
 
 def greeble_bolt_web(doc):
@@ -105,23 +98,36 @@ def emit(doc):
 
 
 def main():
-    ref = float(sys.argv[-1]) if sys.argv[-1].replace('.', '').isdigit() else None
     doc = App.newDocument('greeble_web')
     tip = emit(doc)
     s = tip.Shape
     bb = s.BoundBox
+    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
+    d = s.Volume - REF_VOL
 
     print('PART:: CSG tree -- greeble_bolt_web')
     print('  volume  = %.7f' % s.Volume)
-    if ref:
-        d = s.Volume - ref
-        print('  ref     = %.7f  (OpenSCAD)' % ref)
-        print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / ref))
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+    print('  ref     = %.7f  (OpenSCAD, ref_greeble_web.scad)' % REF_VOL)
+    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / REF_VOL))
+    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
+    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
     print('  valid   = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
+    fail = []
+    if not s.isValid():
+        fail.append('invalid shape')
+    if len(s.Solids) != 1:
+        fail.append('%d solids' % len(s.Solids))
+    if abs(d) / REF_VOL > 1e-3:
+        fail.append('volume off by more than 0.1%')
+    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
+        fail.append('bounding box moved')
+    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
+    return 1 if fail else 0
+
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

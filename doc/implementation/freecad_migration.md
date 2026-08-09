@@ -58,7 +58,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-37 | done | Resolved the OML STEP export scale. OpenVSP is **dimensionless** — the header's `FOOT` label is an exporter artifact, not adjustable via `CADLenUnit`. The project convention (1 model unit = 1 m) is applied on import as `STEP_IMPORT_SCALE = 3.28084` | — | [cowl.md §2.1](../design/cowl.md) |
 | IP-FC-5 | done | Prototyped the corner **both ways**. Both reproduce the OpenSCAD reference and each other; the greeble is the discriminator. See §IP-FC-5 findings below | — | [corner.md](../design/corner.md), [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md) |
 | IP-FC-38 | done | Re-emit the corner as a **parametric `Part::` CSG document tree** — document objects with expressions over a `Spreadsheet::Sheet`, not static shapes. Verify against the same OpenSCAD references and the same regenerate sweep the static port passed, then confirm the saved `.FCStd` is still editable after reload. Also settle the **downstream-edit workflow**: whether hand work lives in a separate document referencing the generated one (`App::Link` / `SubShapeBinder`) rather than editing it in place, since the sweep overwrites what it emits. This is what makes UC-2 real; the static `part_*.py` port stays as the verified reference | IP-FC-5 | [freecad_migration.md §OQ-ARCH-1](../architecture/freecad_migration.md), §IP-FC-5 findings |
-| IP-FC-41 | active | **Sheet merge done** — one sheet per assembly, asserting no alias is defined two different ways; found two collisions across 96 aliases on first run. **Data hop done** — `derived_parameters()` now reaches FreeCAD as JSON, and all seven checked bulkhead modules' literals verify against it, with `corner_tree`'s six disagreements enumerated (§IP-FC-41). **Still to do:** convert the generators to seed their sheets from `rows()` instead of literals, starting with `corner_tree`. `corner_tree.py` currently defaults to `fuselage_corner.scad`'s constants — `extrusion_width = 0.4`, `panel_overlap = 4`, `panel_offset = 0` — which are one hand-written configuration, not design intent, and disagree with the swept values (`0.6`, `4.7625`, `2.5` for U=1 `end_bolt` 3/16 in). Harmless while the trees are only compared against isolators at matching inputs; wrong the moment the generator feeds the sweep | IP-FC-38 | [render_variant.py](../../src/Fuselage/tools/render_variant.py) |
+| IP-FC-41 | active | **Sheet merge done** — one sheet per assembly, asserting no alias is defined two different ways; found two collisions across 96 aliases on first run. **Data hop done** — `derived_parameters()` now reaches FreeCAD as JSON, and all seven checked bulkhead modules' literals verify against it, with `corner_tree`'s six disagreements enumerated (§IP-FC-41). **Seeding done** — `build_sheet(doc, params, seed)` replaces every literal row from the authority and leaves the `=` rows, so a generator feeding the sweep no longer carries `fuselage_corner.scad`'s constants; run standalone with no seed it still reproduces its isolated reference. Where a module states a relationship (`corner_radius = U * 10`) against another's literal, the relationship wins and `check_seed` verifies it reproduces the authority's number. Reference `.scad` values are checked against the authority too | IP-FC-38 | [render_variant.py](../../src/Fuselage/tools/render_variant.py) |
 | IP-FC-40 | done | `_sketch()` raises unless `FullyConstrained`, and `check_tree.py` re-asserts it at every size — not only the one the sketch was authored at. An under-constrained sketch deforms silently under a parameter change and still yields a valid solid | IP-FC-38 | §IP-FC-38 |
 | IP-FC-39 | done | Write the user guide for the FreeCAD workflows — [doc/guide/freecad_workflows.md](../guide/freecad_workflows.md). Covers the derived-part workflow, linking, the four quiet failure modes, and which workflow serves which use case. Written ahead of the implementation deliberately: the design was chosen to serve these workflows, so they are the acceptance criteria. **Revisit as each capability lands** — the output table names the item that delivers each row | IP-FC-38 | [freecad_workflows.md](../guide/freecad_workflows.md) |
 | IP-FC-32 | todo | Measure whether identical parameters yield byte-identical BREP serialization; if so, build a BREP-compare tier beside the parameter snapshot | — | [freecad_migration.md §OQ-ARCH-2](../architecture/freecad_migration.md) |
@@ -66,7 +66,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-6 | todo | Survey permissively-licensed tooling for non-uniform printed-material analysis; record the finding either way | — | [freecad_migration.md §OQ-ARCH-8](../architecture/freecad_migration.md) |
 | IP-FC-7 | done | Write [`doc/design/cowl.md`](../design/cowl.md) — the cowl had no design authority, and it is the subject of the most blocking work in this plan | — | [cowl.md](../design/cowl.md) |
 | IP-FC-8 | todo | Write the SI↔mm conversion layer as one named module; verify by the bounding-box-÷1000 test | — | [general.md §Units](../guidelines/general.md) |
-| IP-FC-9 | active | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The greeble-forming tool and the whole of `bulkhead_flange_positive` are done and verified** — eleven modules, then assembled against the real module at +0.00028% (§IP-FC-9 progress). What remains is the cut side: opening wedge, outer-face cleanup, longeron and bolt holes, octant mask, and the `octant_to_full` tiling | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
+| IP-FC-9 | active | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. What remains is the `octant_to_full` tiling | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | blocked (IP-FC-1, IP-FC-9) | Swap the render call in the sweep driver, keeping the queue, worker budget, atomic writes and previews | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | blocked (IP-FC-10) | Replace `--resume`'s staleness key: hash the parameter object plus a geometry-code version, since no generated text exists to compare | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
@@ -601,6 +601,10 @@ Built at the **derived** parameters for U=1.0 `end_bolt` 3/16 in, read off the `
 | flange boss quadrant | 352.482196 | 352.464253 | +0.0051% |
 | **`bulkhead_flange_positive` assembled** | **982.5070699** | **982.5042986** | **+0.00028%** |
 | the five cut tools, union'd | 49813.5377750 | 49813.5203117 | +0.00004% |
+| greeble tool, at the **swept** values | 733.0315637 | 733.0190085 | +0.0017% |
+| **`bulkhead_section` assembled** | **865.7700557** | **865.7690714** | **+0.00011%** |
+| **`bulkhead_section_full` — the whole part** | **6922.5127750** | **6922.5048968** | **+0.00011%** |
+| **`fuselage_corner` at the swept values** | **14146.8943305** | **14146.8357350** | **+0.00041%** |
 
 The fillets read **smaller** than OpenSCAD, which is the correct sign and worth noting:
 they are a block minus a cylinder, so FreeCAD's true circle removes more material than
@@ -675,8 +679,8 @@ collisions across 96 aliases, both a name reused for a different quantity — `b
 boss radius vs flange outer radius) and `flange_x` (the far end of the flange run vs the
 flange's inner face). Both were renamed. The check is kept permanently rather than run once,
 because the failure mode is silent: FreeCAD would take whichever definition landed in the row
-and the geometry would quietly follow the wrong one. What remains of IP-FC-41 is seeding the
-merged sheet from `derived_parameters()` instead of literals.
+and the geometry would quietly follow the wrong one. Seeding the merged sheet from
+`derived_parameters()` rather than from literals is covered below.
 
 ### The cut side — and the last word on sketches
 
@@ -696,24 +700,93 @@ not a sketch: being convex it is a covering box clipped by three half-planes, tw
 take their rotation from expressions. The chord's clip is a fixed −45°, because the chord is
 normal to the diagonal whatever the opening angle is.
 
-**So the entire bulkhead ports with no sketches at all.** Sixteen modules, every profile a
-decomposition into boxes, cylinders and cones. The corner needed two sketches; the bulkhead
-needs none. Worth stating plainly because it was not the expected outcome — the working
-assumption at IP-FC-38 was that arbitrary polygons would force sketches, and instead the
-half-plane decomposition has absorbed every one of them, including a five-vertex polygon with
-a degenerate vertex and a triangle with no axis-aligned edge at all.
+**So the entire bulkhead ports with no sketches of its own.** Sixteen modules, every profile
+a decomposition into boxes, cylinders and cones. Worth stating plainly because it was not the
+expected outcome — the working assumption at IP-FC-38 was that arbitrary polygons would force
+sketches, and instead the half-plane decomposition has absorbed every one of them, including a
+five-vertex polygon with a degenerate vertex and a triangle with no axis-aligned edge at all.
+
+The assembled section does contain one sketch, and the exception is instructive rather than
+awkward: the greeble tool *is* `corner_end`, and `corner_end`'s wedge is one of the corner's
+two genuinely non-convex profiles. Reusing the corner's description brings the corner's sketch
+with it. That is the design working as intended — one description, two mating halves — and it
+is the only sketch in the part.
+
+### `bulkhead_section` assembled — and the reading error it caught
+
+The whole octant now matches the real module at **+0.00011%**, one valid solid, bounding box
+exact ([`bulkhead_section.py`](../../src/Fuselage/freecad/bulkhead_section.py)). That binds
+the `ref_bulkhead_cuts.scad` transcription the same way the positive assembly bound
+`ref_flange_boss.scad`.
+
+**It did not pass first time, and what it caught is the reason to build it.** The port carried
+5.87 mm³ of extra material standing in the first quadrant. The cause: in `bulkhead_section`,
+the plate, the longeron flange and the flange's chamfer are inside `if (is_cowling)`. The
+brace opens forty lines above them, past two `intersection()` blocks, and nothing in their
+immediate surroundings says so — an ordinary bulkhead has no longeron flange at all.
+
+Comparing `simple_positives.py` against its own reference could never have found this:
+[`ref_simple_positives.scad`](../../src/Fuselage/freecad/ref_simple_positives.scad)
+transcribes the same three inline blocks and inherited the same misreading, so the two agreed
+with each other while both were wrong. **An isolated reference checks a port against a reading
+of the source; only the assembled one checks the reading.** The module now builds the six in
+two groups — `bolt_positives` and `cowl_positives` — so the assembly takes only the three an
+ordinary bulkhead is entitled to, and the reference still renders all six deliberately.
+
+Localising it was worth recording as a technique. The failing bounding box said the excess sat
+at x > 0; intersecting both the port and the OpenSCAD render with the same probe box narrowed
+it to 5.87 mm³ between the 80° wedge ray and the nub radius; then measuring *each* positive
+and *each* negative against the same box showed every cut tool agreeing to five decimals while
+the positives filled the box on both sides. Since the source's result there was empty, the
+error had to be a positive that should not exist — which pointed straight at the condition.
+
+### The tiling, and the whole part
+
+`octant_to_full()` is `mirror_x(mirror_y(mirror_xy(...)))` — three nested doublings about the
+fuselage centre, which port as seven `Part::Mirroring` document objects and seven fuses. The
+tiling stays in the parametric tree; nothing is rebuilt, so nothing can fall out of sync with a
+downstream edit ([`bulkhead_full.py`](../../src/Fuselage/freecad/bulkhead_full.py)).
+
+**The full part is not eight times the octant**, which is what makes this a real check rather
+than an arithmetic one. `octant_mask` is shifted by `eps`, so adjacent octants overlap by a
+sliver the union reclaims: 6922.50 against 8 × 865.77 = 6926.15, a 3.65 mm³ difference. A
+mirror about the wrong plane would still give eight copies and a plausible volume — but not
+this volume, and not one solid.
+
+**`bulkhead_render()` calls `bulkhead_section_full` and nothing else, so this is the whole
+part.** Running [`render_variant.py`](../../src/Fuselage/tools/render_variant.py) at
+`1.0 end_bolt 3/16in` — which resolves the variant through `derived_parameters()` rather than
+through any hand-typed `.scad` — gives **6922.5048968**, identical to the digit to
+`ref_bulkhead_full.scad`. The reference chain is not merely internally consistent; it agrees
+with what the sweep actually produces. The FreeCAD port matches it at **+0.00011%**, one valid
+solid, bounding box exact.
+
+### The corner, at the parameters it will actually be built at
+
+`corner_render()` calls `fuselage_corner` and nothing else, and `corner_tree.py`'s tip already
+*is* `fuselage_corner` — it mirrors the half-length run about mid-span internally. So the
+corner needed no assembly module. What it did need was checking at the **swept** parameters,
+which it had never had: every corner reference in the directory is at `fuselage_corner.scad`'s
+hand-driver values. Seeded from the export it matches at **+0.00041%**, one valid solid,
+bounding box exact. `corner_tree.py` now runs either way — with a `params.json` for the swept
+set, without one for the driver's.
+
+**The corner and the bulkhead are separate variants, and they disagree on purpose.**
+`derived_parameters()` branches on `is_bulkhead`, and `greeble.tolerance` is 0.05 for the
+corner and 0 for the bulkhead. That is the joint's defining asymmetry — the corner's bore
+carries the whole fit clearance and the bulkhead's post is nominal, because split across both
+halves the joint would take it twice. The first version of the export read the corner's
+parameters off a *bulkhead* variant and got `greeble_tolerance = 0`, which would have built
+the bore with no clearance at all and turned the snap into an interference fit. It now
+resolves both and emits two tables, with the shared names — ten of them — checked to agree
+and only `greeble_tolerance` exempt. `unit_length` is the other corner-only name, and for the
+opposite reason: a bulkhead has no bay length, which is why one bulkhead design serves every
+FX (OQ-DES-C3).
 
 ### Remaining
 
-The assembled `bulkhead_section`, which is the binding check for both transcriptions
-(`ref_flange_boss.scad` and `ref_bulkhead_cuts.scad`); then the `octant_to_full` tiling; then
-the whole part against a reference from
-[`render_variant.py`](../../src/Fuselage/tools/render_variant.py).
-
-**The assembly is gated on finishing IP-FC-41**, because it has to merge sheets across
-`corner_tree` as well, whose aliases carry the hand driver's values against the swept values
-the bulkhead modules use. The merge assertion will refuse that, correctly: the two disagree
-on what the parameters *are*, not just on what they are called.
+Both parts are done and verified against what the sweep produces. Next is IP-FC-10, the
+driver swap.
 
 ### IP-FC-41 — the parameter set now crosses as data
 
@@ -754,9 +827,42 @@ listed:
 | `panel_thickness` | 4.77 | 4.7625 |
 
 The greeble pair matters more than it looks: `greeble_thickness` sets the wall of the snap
-post, so the hand driver builds it at two thirds the thickness the sweep does. What remains
-of IP-FC-41 is converting the generators to seed their sheets from `rows()` instead of
-literals, starting with `corner_tree`.
+post, so the hand driver builds it at two thirds the thickness the sweep does. Merging those
+sheets by name would have silently built the post at two thirds thickness — which is exactly
+why the merge assertion refuses rather than picks.
+
+**The sheets are now seeded rather than merged.** `corner_common.build_sheet(doc, params,
+seed)` replaces every *literal* row with the authority's value and leaves the `=` rows alone.
+The split is the whole point: literal rows are one variant's configuration and belong to
+`derived_parameters()`; `=` rows are the relationships the OpenSCAD source defines, which no
+parameter set can supply and which still have to agree between modules. A module run on its
+own passes no seed and behaves exactly as before, which is what keeps its isolated reference
+meaningful.
+
+Three things fell out of doing it:
+
+**Where one module states a relationship and another states this variant's value, the
+relationship wins.** `corner_radius` is `=U * 10` in `corner_tree` and `10.0` in the bulkhead
+modules. Both are true, but only one survives the user changing `U`, and a sheet whose
+`corner_radius` stops tracking `U` is a worse deliverable than one with a redundant row.
+
+**That turns the seed into a check on the derivations, not just the constants.**
+`check_seed` confirms every seeded alias on the finished sheet reproduces the authority's
+number — so an expression kept in preference to a literal is now measured against
+`derived_parameters()`. All of them agree.
+
+**One more genuine name collision, and this one was load-bearing.** `far` meant `unit_width`
+in six bulkhead modules and `mask_reach(corner_radius)` in `corner_tree` — two "big enough"
+distances under one name. The trap was not `far` itself but `diag_len`, `diag_wid` and
+`diag_base`, which are written `=far * 2` on *both* sides: textually identical, so they merge
+without complaint while silently taking whichever `far` won. `corner_tree`'s rows are now
+`mask_reach` and `mask_diag_*`, named for the function in `shape_modifier_utils.scad` that
+defines them.
+
+The reference `.scad` files are checked against the authority too. They are hand-typed, and a
+mistyped value there is the worst kind of error to have: the port is compared against the
+wrong shape, so it either fails for no reason or — if the same typo reached both sides —
+agrees while both are wrong. Nine references, every assignment verified.
 
 ---
 

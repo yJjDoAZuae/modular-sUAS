@@ -5,6 +5,13 @@
 // Derived parameters for U=1.0 end_bolt 3/16in, from the .scad that render_variant.py emits.
 // The three named modules are called; the three built inline in bulkhead_section are
 // transcribed, and that transcription is checked when the whole module is compared.
+//
+// WHICH IS WHAT HAPPENED. The plate and the longeron flange and chamfer below are inside
+// `if (is_cowling)` in bulkhead_section, and an ordinary bulkhead gets none of them. This
+// file is left rendering all six deliberately -- it is the isolated check for the six
+// shapes, and simple_positives.py builds them in two groups so the assembly can take only
+// the three it is entitled to. Do not read a shape's presence here as evidence that a
+// bulkhead has it; the condition lives in bulkhead_section, not in the shape.
 $fa=1;
 $fs=0.05;
 
