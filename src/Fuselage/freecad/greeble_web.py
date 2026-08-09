@@ -68,11 +68,10 @@ def sheet(doc):
     return sh
 
 
-def emit(doc):
+def greeble_bolt_web(doc):
+    """Geometry only, against whatever sheet the document already has -- the assembly in
+    bulkhead_positive.py supplies one merged sheet for every constituent."""
     P = 'Params.'
-    C._SEEN.clear()
-    sheet(doc)
-
     # the parallelogram strip, as one rotated box
     strip = C._box(doc, 'WebStrip', P + 'web_diag', P + 'web_half',
                    P + 'bulkhead_thickness',
@@ -94,6 +93,13 @@ def emit(doc):
     node = C._fuse(doc, 'GreebleBoltWeb', strip, rib)
     tip = C._owned(doc, 'Part::Refine', 'GreebleBoltWebTip')
     tip.Source = node
+    return tip
+
+
+def emit(doc):
+    C._SEEN.clear()
+    sheet(doc)
+    tip = greeble_bolt_web(doc)
     doc.recompute()
     return tip
 

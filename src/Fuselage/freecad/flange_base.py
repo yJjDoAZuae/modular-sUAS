@@ -45,7 +45,7 @@ PARAMS = [
 
     ('flange_y_top', '=corner_radius - panel_thickness - panel_tolerance'),
     ('flange_y_bot', '=flange_y_top - flange_thickness'),
-    ('flange_x', '=-(unit_width / 2 - corner_radius)'),
+    ('flange_end_x', '=-(unit_width / 2 - corner_radius)'),
     ('x_start', '=-panel_tolerance - panel_offset - panel_overlap - flange_thickness'),
     ('y_start', '=max(x_start, -bolt_offset)'),
     ('far', '=unit_width'),
@@ -73,14 +73,13 @@ def sheet(doc):
     return sh
 
 
-def emit(doc):
+def flange_base(doc):
+    """Geometry only, against whatever sheet the document already has -- the assembly in
+    bulkhead_positive.py supplies one merged sheet for every constituent."""
     P = 'Params.'
-    C._SEEN.clear()
-    sheet(doc)
-
     strip = C._box(doc, 'FlangeStrip',
-                   '-' + P + 'flange_x', P + 'flange_thickness', P + 'bulkhead_thickness',
-                   P + 'flange_x', P + 'flange_y_bot', '0')
+                   '-' + P + 'flange_end_x', P + 'flange_thickness', P + 'bulkhead_thickness',
+                   P + 'flange_end_x', P + 'flange_y_bot', '0')
     pad = C._box(doc, 'FlangePad',
                  '-' + P + 'x_start', P + 'flange_y_bot - ' + P + 'y_start',
                  P + 'bulkhead_thickness',
@@ -95,6 +94,13 @@ def emit(doc):
 
     tip = C._owned(doc, 'Part::Refine', 'FlangeTip')
     tip.Source = cut
+    return tip
+
+
+def emit(doc):
+    C._SEEN.clear()
+    sheet(doc)
+    tip = flange_base(doc)
     doc.recompute()
     return tip
 
