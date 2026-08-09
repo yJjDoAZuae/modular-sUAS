@@ -29,14 +29,16 @@ sys.path.insert(0, HERE)
 
 import FreeCAD as App
 
+import corner_common
 import parameters
+import part_kinds
 from corner_common import is_entry_point
 
-# kind -> (module, which of the export's two tables it is seeded from)
-KINDS = {
-    'corner': ('corner_tree', parameters.CORNER),
-    'bulkhead': ('bulkhead_full', parameters.BULKHEAD),
-}
+# kind -> (module, which of the export's two tables it is seeded from). The pairing lives in
+# part_kinds, which the driver side can also read -- see IP-FC-45. The table is named there
+# and resolved here, because part_kinds must not import anything that imports FreeCAD.
+KINDS = {kind: (module, getattr(parameters, table))
+         for kind, (module, table) in part_kinds.KINDS.items()}
 
 # Tessellation for the exported mesh. Chosen by measurement, not by taking the finest
 # available: on `bulkhead_section_full` at U=1, against a B-rep volume of 6922.5127750 mm3,
@@ -94,10 +96,42 @@ def load_seed(params_path, kind):
 
 
 def build(doc, kind, params_path):
-    """The part's tip node, seeded from the exported parameter set."""
+    """The part's tip node, seeded from the exported parameter set.
+
+    The finished sheet is checked against the seed, which is not a formality. Seeding
+    replaces *literal* rows only: a row the port states as a relationship -- `unit_length` is
+    `=U * FX * 100` in `corner_tree`, on purpose, so a generated document still follows a
+    changed U -- keeps its expression and evaluates from whatever the sheet holds. If the
+    seed does not supply everything that expression reads, the row quietly computes the
+    wrong number from the module's own literals while the *correct* value sits unused in the
+    parameter file two lines away.
+
+    That is not hypothetical. `FX` was missing from the corner's seed, so `unit_length`
+    evaluated at FX=1.0 and every corner in the sweep was built one bay length long,
+    matching OpenSCAD exactly at FX=1.0 and by up to 115% elsewhere (IP-FC-48). `check_seed`
+    is what makes the difference between a port that agrees with the authority and one that
+    merely reads the same file, so it runs on every build rather than in a check script.
+    """
     seed = load_seed(params_path, kind)
     module = __import__(KINDS[kind][0])
-    return module.emit(doc, seed)
+    tip = module.emit(doc, seed)
+
+    bad = corner_common.check_seed(doc.getObject('Params'), seed)
+    if bad:
+        # Written to stderr and flushed, not raised as SystemExit(message). freecadcmd
+        # discards the message either way -- a SystemExit carrying this text produced no
+        # output at all, just a missing mesh -- and a refusal nobody can read is only
+        # marginally better than the wrong part it prevented.
+        sys.stderr.write(
+            'build_part: %s: the sheet disagrees with the parameter file on %s\n%s\n'
+            'An expression row is computing from values the seed did not supply. The part '
+            'would be built to the wrong dimensions with nothing else to show for it.\n'
+            % (kind, ', '.join(alias for alias, _, _ in bad),
+               '\n'.join('  %-22s sheet %.9g   authority %.9g' % (a, got, want)
+                         for a, got, want in bad)))
+        sys.stderr.flush()
+        raise SystemExit(1)
+    return tip
 
 
 def write_mesh(shape, out_path):

@@ -69,8 +69,8 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-7 | done | Write [`doc/design/cowl.md`](../design/cowl.md) — the cowl had no design authority, and it is the subject of the most blocking work in this plan | — | [cowl.md](../design/cowl.md) |
 | IP-FC-8 | todo | Write the SI↔mm conversion layer as one named module; verify by the bounding-box-÷1000 test | — | [general.md §Units](../guidelines/general.md) |
 | IP-FC-9 | done | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. The `octant_to_full` tiling is done too -- `bulkhead_full.py` at +0.00011%, and the corner checked at the **swept** values for the first time at +0.00041% | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
-| IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-11 | todo | Add a geometry-code version to `--resume`'s staleness key. Half of it already works: IP-FC-10 writes the parameters as the definition file, and a resume correctly re-renders a part whose `corner_radius` moved by 0.001 mm while skipping its neighbour. The missing half is that a parameter file cannot see a change to `bulkhead_full.py`, where a generated `.scad` contained the geometry itself. **Until then `--backend freecad` wants `--force`** | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
+| IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical. **That verification was one part per kind, and two defects survived it** — IP-FC-46 and IP-FC-47, both found later by enumerating the swept space | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
+| IP-FC-11 | done | Geometry-code version added to `--resume`'s staleness key, **on both backends**. Found while checking the FreeCAD side: the generated `.stl.scad` is a `use <>` line and a call, so the OpenSCAD path had the same blind spot since `--resume` was written — an edit to `fuselage_bulkhead_geometry.scad` left every definition byte-identical. `tools/geometry_version.py` walks the `use`/`include` closure of the generated file and the import closure of the builder, and stamps a digest into the definition both backends already compare. Verified in both directions on three backend/kind pairs | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
 | IP-FC-13 | blocked (IP-FC-12) | Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
@@ -84,10 +84,15 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-29 | todo | OQ-DES-CW3 resolved 2026-08-09: `buttress.thickness` is the **cut** that produces the rib through slicing; the printed rib is `2·w·n_perimeters + t_cut`. Unscaled treatment confirmed correct. What is left here is the rename to `buttress_cut_thickness` — JSON schema, `ButtressSet`, eight SCAD signatures — deferred to the port so it is not done twice | IP-FC-12 | [cowl.md §OQ-DES-CW3](../design/cowl.md) |
 | IP-FC-42 | todo | Adopt `n_perimeters` into `PrinterSettings`. The cowl rib's thickness depends on it and it exists only in a slicer profile outside the repository — the same class of gap OQ-DES-CW7 closed for the OML. Prerequisite of any modelled rib | — | [cowl.md §OQ-DES-CW6](../design/cowl.md) |
 | IP-FC-43 | todo | Settle the buttress cut's factor of two: every call site extrudes `height = 2*buttress_thickness`, so the cut is 0.1 mm where the parameter says 0.05. Half-thickness-per-side convention or error — a question of intent, not measurable. **The port reproduces the doubling until it is settled** | IP-FC-29 | [cowl.md §OQ-DES-CW3](../design/cowl.md) |
+| IP-FC-45 | done | The kind→module table was briefly in two places — `build_part.KINDS` and the driver's copy for the IP-FC-11 digest — because `build_part.py` imports `FreeCAD` at module scope and cannot be read from the project virtualenv. `freecad/part_kinds.py` now states it once and imports nothing that imports FreeCAD; `build_part.py` imports it normally, `freecad_render.py` loads it by file path rather than putting `freecad/` on `sys.path`, where `parameters.py` would shadow. A copy that names the wrong module would give the digest of the wrong closure — a staleness key that looks like it works and tracks the wrong files | IP-FC-11 | — |
+| IP-FC-46 | done | **Degenerate tools at zero-size parameters.** The `0mm` panel row is the no-panel variant — thickness, tolerance and overlap all zero — and it is valid by `bulkhead_validity_check`. OpenSCAD renders the zero-extent slot as the empty set and the difference is a no-op; `Part::Box` yields a **null shape** and nulls the whole cut chain, surfacing six features away as `BRepCheck_Analyzer::Init() - NULL shape`. `corner_tree._degenerate()` now omits the feature, which is what "no panel" means. Found by IP-FC-11's end-to-end test, which rendered the sweep's *first valid combination* rather than the one part IP-FC-10 was measured on | IP-FC-10 | [freecad_migration.md §IP-FC-46](../implementation/freecad_migration.md) |
+| IP-FC-47 | done | **The FreeCAD backend dropped the bulkhead type flags.** `bulkhead_render`'s OpenSCAD call passes `is_interconnect` and `is_cowling`; the FreeCAD branch passed neither, and `bulkhead_full.emit()` takes neither — only the end type is ported. So `--backend freecad` rendered all five swept types as end bulkheads: 60 of 148 wrong, under the right filename, with a plausible volume. `_backend_for(kind, supported=)` now routes the unported types to OpenSCAD, the same fallback every unported kind already gets, and `_variant_note` carries `type_name` so two types cannot produce identical definition files | IP-FC-10 | [freecad_migration.md §IP-FC-47](../implementation/freecad_migration.md) |
+| IP-FC-48 | done | **The seed did not supply everything the expression rows read, and nothing checked.** `seeded()` replaces literal rows only, so a row the port states as a relationship — `corner_radius` = `=U * 10`, `longeron_radius` = `=U * 2`, `unit_length` = `=U * FX * 100` — keeps its expression and evaluates from whatever the sheet holds. Neither `U` (bulkhead) nor `FX` (corner) was in the seed, so both stayed at their literal 1.0: **every FreeCAD corner was built at FX=1.0 and every FreeCAD bulkhead at U=1.0**, with the authority's correct values sitting unused in the parameter file. Exact at U=1/FX=1 — the one part IP-FC-10 measured — and wrong by up to 115% elsewhere. Both are now seeded, and `build_part.build()` runs `check_seed` on every build instead of leaving it to a check script nobody ran | IP-FC-10 | [freecad_migration.md §IP-FC-48](../implementation/freecad_migration.md) |
+| IP-FC-49 | **blocked (OQ-ARCH-9)** | The FreeCAD bulkhead cannot be tiled at U ≥ 2.5 — every valid panel fails, every panel at U ≤ 2.0 builds, so it is a clean threshold in U and nothing to do with the panel. **Cause identified:** `eps` is an absolute 0.01 mm and does not scale, and it is what makes the octant overlap its own mirror so the fuse has something to work with. At U=2.5 the part is 250 mm across and the sliver is 4e-5 of it, below what the OCCT boolean resolves; the octant and the mirror are both valid and only their fuse is not. Raising eps to 0.05 makes it valid again at every U tested. Not fixed, because every available fix trades something — see OQ-ARCH-9 | IP-FC-48 | [freecad_migration.md §IP-FC-49](../implementation/freecad_migration.md) |
 | IP-FC-17 | blocked (IP-FC-16) | Implement cowl interior surfaces. **OQ-DES-CW6 resolved 2026-08-09 and no longer blocks this** — but it attaches a constraint: the interior is *additive*, and the UC-1 print export must keep coming from the un-shelled notched blank, because cowls print in spiral vase mode and a modelled wall destroys that. Model the rib at `2·w·n_perimeters + t_cut`. The sweep's printing output must be verifiable as unchanged by this work | IP-FC-16, IP-FC-14, IP-FC-42 | *(IP-FC-16 output)*, [cowl.md §6.4](../design/cowl.md) |
 | IP-FC-18 | blocked (IP-FC-14) | Model the non-printed components — longeron, panel, threaded insert, bolt — derived from the clearances that already receive them | IP-FC-14 | [freecad_migration.md §UC-8](../architecture/freecad_migration.md) |
 | IP-FC-19 | blocked (IP-FC-17) | UC-4 — assemblies with FreeCAD Assembly joints for unit, nose, tail and full fuselage. Includes asserting each solved placement against the placement constructed from parameters | IP-FC-17, IP-FC-18, IP-FC-35 | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
-| IP-FC-35 | todo | Confirm the Assembly workbench scripts under `freecadcmd` — create an assembly, add joints, solve, and read back placements, all headless. Prerequisite of IP-FC-19, no longer a gate on the decision | — | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
+| IP-FC-35 | done | The Assembly workbench drives headless. `freecad/spike_assembly.py` creates an `Assembly::AssemblyObject`, grounds one part, adds a Fixed joint with no task dialog, solves, and reads the placement back — a displaced box lands with its mated face **0.000000000 mm** from its target. Three API details are not optional and none are documented for scripting: joints must be created *inside* the assembly, both references go in through `setJointConnectors` (assigning them directly leaves the JCS at identity and the solve mates the part origins), and the sub list needs two entries, not one | — | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
 | IP-FC-20 | blocked (IP-FC-18) | UC-8 tier 1 — mass properties: densities per component, mass, CG, inertia tensor | IP-FC-18 | [freecad_migration.md §UC-8 is a ladder](../architecture/freecad_migration.md) |
 | IP-FC-21 | blocked (IP-FC-14) | UC-7a — part drawings as a **family drawing**: lettered dimension callouts plus a per-variant value table. Dimensions are named expressions over parameters, bound to topological references; interface dimensions are the required floor | IP-FC-14, IP-FC-36 | [freecad_migration.md §OQ-ARCH-7](../architecture/freecad_migration.md) |
 | IP-FC-36 | todo | Define the dimension scheme: enumerate the interface expressions (starting from those already derived in the design documents), state the completeness test, and decide whether internal structure is dimensioned or shown as reference | — | [freecad_migration.md §OQ-ARCH-7](../architecture/freecad_migration.md), [bulkhead.md](../design/bulkhead.md), [cowl.md §4.1](../design/cowl.md) |
@@ -103,13 +108,16 @@ Three things are worth noticing about the shape of the plan:
 > pool of threads waiting on subprocesses is the right shape whichever binary the
 > subprocess is, and that is why the swap touched none of it.
 
-> **IP-FC-11 is now the sharp edge, not a tidy-up.** `--resume` compares the definition
-> file it would write against the one on disk, and under the FreeCAD backend that file is
-> the *parameters*, which do not change when a generator module does. A generated `.scad`
-> contains the geometry; a parameter JSON does not. So `--backend freecad --resume` after
-> editing `bulkhead_full.py` will skip every part it should re-render -- the exact failure
-> `--resume` was designed to prevent, reintroduced by the backend swap. Use `--force` with
-> the FreeCAD backend until IP-FC-11 adds the geometry-code version to the key.
+> **IP-FC-11 correction, 2026-08-09.** This note previously said the hole was a FreeCAD
+> regression -- that a parameter JSON does not contain the geometry where a generated
+> `.scad` does. **The second half of that was wrong, and it was wrong about the older
+> path.** A generated `.stl.scad` is one `use <>` line and one call with the parameters
+> substituted in; it contains no geometry either. So `--resume` had been unable to see an
+> edit to any `.scad` module since the day it was written, and the FreeCAD backend did not
+> introduce the failure, it made it visible by prompting the question. Both paths are
+> stamped now, by the same module, and the correction is left here rather than edited away
+> because the reasoning that produced it -- inferring a file's contents from its extension
+> instead of opening one -- is the kind worth being able to recognise again.
 
 > **IP-FC-12 blocked reason:** The cowls additionally need the OML as a surface (IP-FC-4)
 > and a design document (IP-FC-7). Porting them against a tessellated mesh would produce
@@ -843,12 +851,21 @@ The parameters play the role the generated `.scad` played. Self-tested in both d
 as IP-FC-2 was: with nothing changed, both parts skip in 0.1 s; with `corner_radius`
 perturbed by 0.001 mm, the corner re-renders and the bulkhead beside it still skips.
 
-**But the key is now incomplete, and this is a real hazard rather than a loose end.** A
-generated `.scad` *contains the geometry*; a parameter file does not. Edit `bulkhead_full.py`
-and every parameter file is still byte-identical, so `--backend freecad --resume` will skip
-every part it ought to re-render — reintroducing exactly the failure `--resume` was built to
-prevent. Use `--force` with the FreeCAD backend until IP-FC-11 adds a geometry-code version
-to the key.
+**The key was incomplete, and not only on the new path.** The obvious next thought was that
+a parameter file cannot see an edit to `bulkhead_full.py` where a generated `.scad` contains
+its geometry — so `--backend freecad --resume` would skip parts it ought to re-render. The
+first half is right. The second half was an assumption, and opening one generated file
+refuted it:
+
+```openscad
+use <../../../../../../scad/fuselage_bulkhead_geometry.scad>;
+bulkhead_section_full(bolt_hole_radius = 2.0, bolt_offset = 8.0, ...);
+```
+
+That is a call, not geometry. Editing `fuselage_bulkhead_geometry.scad` leaves it byte for
+byte identical, so **`--resume` had been blind to every change to the OpenSCAD geometry
+modules since it was written**, and the FreeCAD backend did not introduce the failure — it
+prompted the question that found it. Both paths are fixed together in IP-FC-11 below.
 
 ### Two findings about `freecadcmd` worth having written down
 
@@ -892,6 +909,312 @@ comparing geometry rather than mesh density.
 0.55 mm³ below what the same file measures at, twenty times the real tessellation error. Read
 naively it says the fine mesh is the bad one, inverting the conclusion. Measure the written
 STL in float64, which `measure.py` does.
+
+## IP-FC-11 — what a definition file has to contain to be a staleness key
+
+`--resume` skips a part when the definition file it would write now is byte-identical to the
+one on disk and the STL beside it is a whole mesh. That is a complete test only if the
+definition determines the part. It did not: on both backends the definition records the
+**input** to a build and says nothing about the code that consumes it.
+
+| | Definition | Sees a parameter change | Saw a geometry change |
+| --- | --- | --- | --- |
+| OpenSCAD | `use <>` line + call | yes | **no** |
+| FreeCAD | parameter table | yes | **no** |
+
+The fix goes where the existing comparison already looks, so nothing in `render_definition`
+changes and neither backend gains a special case. [`tools/geometry_version.py`](../../src/Fuselage/tools/geometry_version.py)
+walks a transitive closure and hashes it:
+
+- **OpenSCAD** — roots taken from the generated file's own `use`/`include` lines, then
+  followed through the sources. The bulkhead closes over three files
+  (`fuselage_bulkhead_geometry` → `fuselage_corner_geometry` → `shape_modifier_utils`), the
+  corner over two. Reading the roots out of the generated file rather than the call site is
+  what makes this cover **every** part the sweep produces — cowls, tails, plates, booms —
+  instead of only the kinds someone remembered to annotate. The digest lands as a comment
+  line, so the file stays renderable and hand-runnable.
+- **FreeCAD** — roots are the kind's top module and `build_part.py`, followed through
+  sibling imports. `build_part.py` is a root because `LINEAR_DEFLECTION` lives in it, and the
+  tessellation setting changes the exported mesh as surely as a sketch does. The digest and
+  the module list land in the JSON.
+
+**Deliberately over-sensitive.** The hash is over file bytes, so editing a docstring
+re-renders parts whose geometry did not move. A false re-render costs minutes of CPU; a false
+skip ships a part that does not match its own source and stays invisible until someone
+measures it. Normalising — stripping comments, comparing ASTs — would trade a real guarantee
+for a fragile one.
+
+**The self-test found a bug the digest alone would have hidden.** OpenSCAD does not require a
+semicolon after `use <x.scad>`, and not one hand-written module in `scad/` writes one. The
+first regex required it, so the walk stopped at the first file and the bulkhead's closure came
+back as one module instead of three — an edit to `fuselage_corner_geometry.scad`, which the
+bulkhead includes, still looked like no change at all. A digest that changes when you edit the
+obvious file looks correct from the outside; only walking a real dependency chain and editing
+something two levels down exposed it. (`fuselage_variants._SCAD_REF_RE` can keep requiring the
+semicolon — it only ever sees solid2's generated files, which emit it.)
+
+Verified in both directions, 16/16 on the closure: an edit anywhere in a part's closure moves
+its digest, an edit to a sibling outside it does not, and the digest is stable across repeats
+(which `--resume` needs, since it compares byte for byte).
+
+The end-to-end half — render, resume, edit, resume again — is what found IP-FC-46 below, so
+its result is recorded there.
+
+**The first `--resume` after this change re-renders everything**, on both backends. The
+definition format gained a line, so nothing on disk matches what would be written now. That
+is the mechanism working, not a fault, and it happens once.
+
+The digest is also independent of *how* a source was reached. A generated file whose `use <>`
+line is a relative path and one whose line is an absolute UNC path — which happens when the
+output tree and `scad/` are on different shares, since `relativize_scad_references` leaves
+those alone rather than mangling them — produce the same `674c5d02f681e02b`. Files are
+identified by basename, so the digest is a property of the sources rather than of the machine
+that ran the sweep, and two checkouts compare equal.
+
+**Still outside the key:** assets referenced by value at render time rather than by source
+text — today, the OML meshes a cowl imports. The filename is in the definition, the content is
+not, so replacing `oml/nose_round.stl` in place remains invisible to a resume and `--force`
+remains the answer for it. Narrower than the hole this closes, and recorded rather than left
+implied.
+
+## IP-FC-46 — a variant where the two toolchains disagree about nothing
+
+IP-FC-11's end-to-end test renders a real part, resumes, edits a geometry module, resumes
+again. It picked its part the way the sweep does — the **first valid combination** — rather
+than the one IP-FC-10 was measured on, and it never got as far as testing resume:
+
+```text
+GTPanelSlot: Length of box too small          (×10, one per section)
+Exception while processing file: build_part.py
+  [class Standard_NullObject BRepCheck_Analyzer::Init() - NULL shape]
+```
+
+The `0mm` panel row is the **no-panel** variant: thickness, tolerance and overlap all zero.
+It is not an edge case slipped past a filter — `bulkhead_validity_check` admits
+`panel.thickness == 0` explicitly, and 40 of the swept bulkheads are built from it. So
+`slot_w` and `slot_d` are both zero, and the two engines disagree about what a tool with no
+extent means:
+
+| | zero-extent tool | result |
+| --- | --- | --- |
+| OpenSCAD | `cube([0,0,h])` is the empty set | `difference()` is a no-op — no slot, which is correct |
+| FreeCAD | `Part::Box` refuses to build | **null shape**, and a null tool nulls the whole cut chain |
+
+The failure mode is worth noting on its own: the part does not come out wrong, it comes out
+as *nothing*, and the error names `BRepCheck_Analyzer` six features downstream of the box
+that actually failed. The `Length of box too small` warning that does name it goes to stderr
+among the FreeCAD banner, and — per the finding above — the process still exits 0.
+
+`corner_tree._degenerate()` reads the extents off the parameter sheet and omits the feature
+when either is zero, which is exactly what OpenSCAD's empty set does. Reading the sheet
+rather than the seed keeps the decision agreeing with the expressions that build the tool.
+
+The cost is stated where it lands: a document generated at `0mm` has no slot feature to grow
+if someone raises `panel_thickness` in the GUI. That is the one edit this variant does not
+support, and it is one the sweep would refuse anyway — `panel_offset` and `panel_overlap` are
+derived from the thickness and would no longer agree, which is what `render_variant.py`
+exists for.
+
+Zero is reachable by six swept parameters, not one. Enumerating the space rather than fixing
+the case in hand:
+
+| Parameter | Zero in | Of |
+| --- | --- | --- |
+| `panel_thickness`, `panel_tolerance`, `panel_overlap` | 88 | 412 |
+| `panel_offset` | 16 | 412 |
+| `cowl_flange_height`, `cowl_flange_tolerance` | 132 | 148 |
+
+The `panel_*` group is this defect. `panel_offset` reaches zero only where `panel_overlap`
+does not, so the extents it feeds stay non-zero. The `cowl_flange_*` pair is zero on every
+non-cowling bulkhead, which is the majority — and the flange is already conditional, so it
+does not bite. **New geometry built from a parameter that can reach zero needs the same
+treatment**, and the table above is where to check that.
+
+## IP-FC-47 — the backend rendered three bulkhead types as a fourth
+
+Found by the same enumeration, one step further along. `bulkhead_render`'s OpenSCAD call
+passes two flags that the FreeCAD branch does not:
+
+```python
+scadobj = fgeom.bulkhead_section_full(
+    is_interconnect=is_interconnect, is_cowling=is_cowling, **bulkhead_parameters(dp))
+```
+
+`bulkhead_full.emit(doc, seed)` takes neither, because IP-FC-9 ported the **end** type and
+only the end type. The parameter table cannot carry the difference either: `end_bolt` and
+`interconnect` produce the same 24 numbers and differ only in which branch consumes them. So
+under `--backend freecad` all five swept types were built as end bulkheads — 60 of 148 parts
+wrong, each under the correct filename, each with a plausible volume and a valid single
+solid. Nothing in the run would have looked unusual.
+
+| Type | Parts | Routed to |
+| --- | --- | --- |
+| `end_bolt`, `end_anchor` | 88 | FreeCAD |
+| `interconnect` | 44 | OpenSCAD (was: built as an end bulkhead) |
+| `cowling_bolt`, `cowling_anchor` | 16 | OpenSCAD (was: built as an end bulkhead) |
+
+`_backend_for(kind, supported=)` extends the fallback that already exists for unported
+*kinds* down to unported *variants* of a ported kind. A part that falls back is still
+rendered correctly; a part built from the wrong branch is one nobody has reason to
+re-examine. `_variant_note` now carries `type_name` as well, so two types can no longer
+produce byte-identical definition files — which `--resume` compares.
+
+**What both findings say about the IP-FC-10 verification.** Two parts measured at +0.00035%
+and +0.00121% established that the backends agree *where both produce the intended part*.
+They could not establish that the backend produces the intended part across the swept space,
+and it did not — once by failing loudly, once by succeeding quietly. Neither was visible from
+a single part, and the quiet one would not have been visible from a hundred parts of the same
+type. That is IP-FC-13's job, and the two classes to look for now have names: parameters that
+reach zero, and branch flags the port has not taken.
+
+## IP-FC-48 — the parameter file was right and the part was not
+
+The IP-FC-46 fix made the no-panel bulkhead build, so the comparison could finally run across
+a slice of the sweep instead of one part. It did not come back clean:
+
+| Part | OpenSCAD mm³ | FreeCAD mm³ | Delta |
+| --- | --- | --- | --- |
+| `U_1.0 corner FX_1.0` | 16665.638272 | 16665.803569 | +0.00099% |
+| `U_1.0 corner FX_0.5` | 8140.018855 | 16665.803569 | **+104.7%** |
+| `U_1.0 corner FX_3.0` | 50768.115994 | 16665.803569 | **−67.2%** |
+| `U_1.0 bulkhead 0mm` | 7122.082083 | 7122.102422 | +0.00029% |
+| `U_0.5 bulkhead 0mm` | 2085.656423 | 2115.263149 | **+1.42%** |
+
+Every corner produced **the same volume regardless of FX** — the FX=1.0 volume. The
+definition files were not at fault; they carried `unit_length` of 25.0, 50.0 and 150.0
+correctly. The value was being read and thrown away.
+
+`seeded()` replaces **literal** rows only. That is deliberate and it is the right rule: a row
+the port states as a *relationship* is what lets a generated document still follow a changed
+U, and `merge_params` explicitly prefers the relationship over a constant for exactly that
+reason. `corner_tree.PARAMS` states three of them —
+
+```python
+('corner_radius',   '=U * 10'),
+('longeron_radius', '=U * 2'),
+('unit_length',     '=U * FX * 100'),
+```
+
+— and an expression row survives seeding and evaluates from whatever `U` and `FX` the sheet
+holds. `corner_parameters` supplies `U` but not `FX`; `bulkhead_parameters` supplies neither.
+So `FX` and `U` stayed at their literal `1.0`, and:
+
+- every FreeCAD **corner** was built one bay long, whatever FX said;
+- every FreeCAD **bulkhead** was built with a 10 mm corner radius and a 2 mm longeron bore,
+  whatever U said.
+
+Both are exactly right at U=1, FX=1. That is the single combination IP-FC-10 measured.
+
+Neither parameter can go in the shared mapping: `fuselage_corner` takes no `FX` and
+`bulkhead_section_full` takes no `U` — both are handed the finished dimensions — so passing
+them through `corner_parameters` would make the solid2 call a `TypeError`. They are added at
+the FreeCAD branch of each render function, where the reason is written down.
+
+**The fix that matters is the second one.** `check_seed` already existed, and its docstring
+already described this case: *"the expression rows kept in preference to a literal: this is
+where a derivation the port transcribed from the OpenSCAD source is measured against what
+`derived_parameters()` computes."* It was called by the check scripts in `freecad/` and never
+by `build_part.py`, so the sweep — the one path that builds parts anybody keeps — was the one
+path that did not run it. It now runs on **every** build:
+
+```text
+build_part: bulkhead: the sheet disagrees with the parameter file on corner_radius, longeron_radius
+  corner_radius          sheet 10   authority 25
+  longeron_radius        sheet 2    authority 5
+```
+
+That is the diagnosis that was missing for the entire life of the backend. Written to stderr
+and flushed, not raised as `SystemExit(message)` — freecadcmd discards the message either
+way, and the first version of this guard refused silently, leaving nothing but a missing
+mesh.
+
+With `U` and `FX` seeded, the corner agrees with OpenSCAD across the whole FX axis:
+
+| FX | 0.5 | 1.0 | 1.5 | 2.0 | 2.5 | 3.0 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Delta | +0.00058% | +0.00028% | +0.00019% | +0.00015% | +0.00023% | +0.00019% |
+
+and the no-panel bulkhead across U: −0.00081% at 0.5, −0.00031% at 0.75, +0.00023% at 1.0.
+
+**The generalisable part.** An expression row is a claim that the port reproduces a
+derivation. A seeded literal is a claim that it does not need to. Both are fine; what is not
+fine is an expression row whose inputs the seed does not supply, because it then computes a
+plausible number from the module's own defaults while the correct number sits in the file
+two lines away. There is no geometric symptom — the part is valid, single-solid, and the
+right shape — and the only reason this was found is that the comparison finally covered more
+than one point in the space.
+
+## IP-FC-35 — the Assembly workbench runs headless
+
+IP-FC-19 wants assemblies built from parameters, solved, and then *checked* — each solved
+placement asserted against the placement the parameters predict. That is only worth planning
+if the whole loop runs without a window, because the sweep is a batch process.
+
+It does. [`freecad/spike_assembly.py`](../../src/Fuselage/freecad/spike_assembly.py) creates
+an `Assembly::AssemblyObject` under `freecadcmd`, grounds one box, adds a Fixed joint with no
+task dialog, and solves. A box displaced to `(40, 25, −7)` and rotated 30° lands with its
+mated face **0.000000000 mm** from the face it was joined to, and the placement reads back
+from the document as data. The workbench imports fine headless despite living in `Mod/` and
+pulling in coin and Qt.
+
+Three API details are required and none of them are documented for scripting — the workbench
+is written for the GUI, which happens to satisfy all three by construction:
+
+- **Joints must be created inside the assembly**, via `assembly.newObject`, not added
+  afterwards. `Joint.__init__` ends by calling `setJointConnectors`, which walks up to the
+  owning assembly; created loose, that walk returns `None` and the constructor dies on
+  `'NoneType' object has no attribute 'Type'`, naming neither the joint nor the assembly.
+- **Both references go in through `setJointConnectors(joint, [ref1, ref2])`.** Assigning
+  `Reference1`/`Reference2` directly appears to work — they read back correctly — but
+  `Placement1` and `Placement2`, which are what the solver actually constrains, stay at the
+  identity. The solve then converges immediately having been asked for nothing, and mates the
+  two *part origins*: a wrong answer that reports success. Calling `setJointConnectors(joint,
+  [])` afterwards to refresh the placements makes it worse, because the empty-list form is
+  how the constructor *clears* the references.
+- **The sub list needs two entries**, `['Face2', 'Face2']`, not one. `findPlacement` reads
+  `ref[1][0]` as the element and `ref[1][1]` as the point on it — the GUI's click. With one
+  entry the second read is empty, the function falls through to its whole-part branch and
+  returns the identity, which is the same silent failure as above. Naming the face twice
+  selects its centre of gravity, which is what a scripted assembly wants, having no click.
+
+Referencing as `(part, [...])` rather than `(assembly, ['BoxA.Face2', ...])` also matters: the
+path form assigns and reads back, but it makes a joint inside the assembly depend on the
+assembly — `The graph must be a DAG`, and the joint stays touched after every recompute. The
+path form is for reaching into a nested sub-assembly.
+
+The pattern in all three: **the failure is a successful solve of the wrong constraint.** None
+of them raise, and a spike that only asserted "the solver moved something" would have passed
+on every one. The spike asserts the mated faces are coincident on the solved shapes instead,
+which is a claim about the geometry rather than about the API having been called.
+
+## IP-FC-49 — the tiling fuse stops working when the part gets big
+
+With IP-FC-48 fixed, the bulkhead was built across the whole (U, panel) grid. The result is
+a clean threshold:
+
+| U | 0mm | 1/32in | 1/16in | 1/8in | 3/16in | 1/4in | 1mm | 3mm | 6mm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.5 – 2.0 | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| 2.5 – 4.0 | **FAIL** | — | — | **FAIL** | **FAIL** | **FAIL** | — | **FAIL** | **FAIL** |
+
+(`—` is a combination `bulkhead_validity_check` rejects.) Every valid panel fails at U ≥ 2.5
+and every one builds at U ≤ 2.0, so the panel has nothing to do with it. The corner is
+unaffected across U = 1.0 … 4.0 at every FX.
+
+The octant is valid. Its mirror is valid. **Only their fuse is invalid** — `TileXy`, and then
+everything downstream of it. That points straight at the one thing the fuse depends on: the
+`eps` overlap that `bulkhead_full` deliberately introduces so the two halves interpenetrate
+rather than meet exactly. `eps` is an absolute 0.01 mm and does not scale, so on a 250 mm
+part the sliver is 4 × 10⁻⁵ of the geometry and falls under what OCCT's boolean resolves.
+Confirmed by raising it: at U=2.5, `eps` = 0.01 fails and 0.05, 0.1, 0.25 and 0.5 all
+produce a valid single solid.
+
+**Left unfixed on purpose.** Raising `eps` is a one-line change and it is not obviously the
+right one: `eps` also sets how far cuts overshoot, so it moves the finished volume by about
+0.01% at these sizes — an order of magnitude above the agreement the port has been held to.
+The alternatives trade against OpenSCAD parity, the live parametric tree, or fidelity to the
+construction being ported, which makes it a decision rather than a fix. Recorded as
+[OQ-ARCH-10](../architecture/freecad_migration.md).
 
 ### One duplication removed on the way
 

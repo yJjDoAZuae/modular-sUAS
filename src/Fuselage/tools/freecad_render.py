@@ -12,9 +12,10 @@ things -- what file *defines* a part, and what command turns that file into an S
 Keeping the definition on disk in both cases is what keeps `--resume` honest. A resume that
 skipped on "the STL exists" would bake in stale parts after a parameter change; comparing the
 definition it *would* write now against the one sitting there catches exactly the changes that
-matter. The JSON plays the role the generated `.scad` played, and IP-FC-11 is what adds the
-part the JSON cannot see -- a version of the geometry code itself, since unlike a `.scad` the
-JSON does not contain the geometry.
+matter. The JSON plays the role the generated `.scad` played -- including, since IP-FC-11, a
+digest of the geometry code, which neither file contains: the generated `.scad` turned out to
+be a `use <>` line and a call, so the OpenSCAD path had the same blind spot all along and
+both are stamped by the same module now.
 
 FreeCAD is invoked per part, not per sweep. IP-FC-1 measured `freecadcmd` startup at 0.24 s
 against a part that builds in about 0.5 s, so a process per part costs a few minutes across
@@ -23,9 +24,12 @@ down its interpreter takes nothing else with it.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
+
+import geometry_version
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FREECAD_DIR = os.path.normpath(os.path.join(HERE, '..', 'freecad'))
@@ -40,9 +44,29 @@ _DEFAULT_PATHS = [
     '/usr/local/bin/freecadcmd',
 ]
 
+def _load_part_kinds():
+    """`freecad/part_kinds.py`, loaded by path rather than by import.
+
+    It sits in the FreeCAD directory because that is what it describes, and it is
+    deliberately free of any FreeCAD import so this side can read it (IP-FC-45). Loaded by
+    file location rather than by putting `freecad/` on `sys.path`: the sweep imports this
+    module, and a path entry added here would let `freecad/parameters.py` shadow anything of
+    the same name elsewhere in the project for the rest of the process.
+    """
+    spec = importlib.util.spec_from_file_location(
+        'part_kinds', os.path.join(FREECAD_DIR, 'part_kinds.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_PART_KINDS = _load_part_kinds()
+
 # Sweep part kind -> the kind build_part.py knows. Only the two ported parts appear here;
 # a kind absent from this table has no FreeCAD generator yet and must keep using OpenSCAD.
-KINDS = ('corner', 'bulkhead')
+# Note this is per *kind*: the bulkhead is here, but only its end type is ported, which
+# `bulkhead_render` handles through `_backend_for(kind, supported=)` -- see IP-FC-47.
+KINDS = tuple(sorted(_PART_KINDS.KINDS))
 
 
 class FreeCADNotFound(RuntimeError):
@@ -79,12 +103,21 @@ def definition_text(kind, params, variant=None):
     `kind` is inside the document rather than only in the filename: the corner and the
     bulkhead of one variant are two parts of the same parameter set, and a definition that
     did not say which would compare equal between them.
+
+    `geometry` is IP-FC-11, and it is what makes the parameters sufficient. Parameters alone
+    describe the *input* to a build; without a fingerprint of the code that consumes them, a
+    resumed sweep after an edit to bulkhead_full.py finds every definition unchanged and
+    skips every part that edit invalidated. The module list is written out beside the digest
+    so a sweep that suddenly re-renders everything says why.
     """
+    version, modules = geometry_version.freecad_version(
+        _PART_KINDS.geometry_roots(kind), FREECAD_DIR)
     doc = {
         'kind': kind,
         'variant': variant or {},
         'units': 'mm and degrees, as the OpenSCAD path uses them',
         'source': 'derived_parameters() via fuselage_variants.py -- do not hand-edit',
+        'geometry': {'version': version, 'modules': modules},
         'parameters': {k: float(v) for k, v in sorted(params.items())},
     }
     return json.dumps(doc, indent=2, sort_keys=False) + '\n'
