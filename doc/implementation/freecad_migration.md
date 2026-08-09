@@ -591,6 +591,7 @@ Built at the **derived** parameters for U=1.0 `end_bolt` 3/16 in, read off the `
 | greeble-forming tool | 557.758041 | 557.746362 | +0.0021% |
 | flange base profile | 709.2890625 | 709.2890625 | **exact** |
 | simple positives | 1090.6890692 | 1090.6367096 | +0.0048% |
+| `bulkhead_web` | 223.8867259 | 223.8866978 | +0.0000% |
 
 The flange base is exact because it is entirely planar — no tessellation bias to absorb. The
 other two carry curved surfaces and show the usual inscribed-polygon bias.
@@ -605,12 +606,25 @@ builds only that one.
 The simple positives — bolt boss, its web and chamfer, the plate, the longeron flange and its
 chamfer — are all cylinders, cones and boxes.
 
+**Three profiles in a row have decomposed the same way**, and the pattern is worth naming:
+these polygons are axis-aligned except for one closing edge along `y = x`, so each is a small
+stack of boxes minus the half-plane `x > y`. It has held for the corner's section, the flange
+base and the web. `bulkhead_web`'s profile also carries a deliberate step, which exists so the
+fillet cylinder has material to round.
+
+**OQ-DES-B9 turns out not to bear on the frame bulkhead at all.** `fillet_inner` is called
+once in `fuselage_bulkhead_geometry.scad`, and the only path reaching it is the *boom*
+bulkhead. `bulkhead_web` — which the end, interconnect and cowling bulkheads do use — already
+makes a true fillet by subtracting a cylinder. So the decision governs the plate family, and
+the frame bulkhead ports without it.
+
 ### Remaining
 
-`bulkhead_flange_chamfer`, `bulkhead_web`, the quadrant-intersection block in
-`bulkhead_flange_positive`, and the four fillet modules, which are where OQ-DES-B9's real
-fillets apply. Then the cuts other than the greeble tool — opening wedge, outer-face cleanup,
-longeron and bolt holes, octant mask — and the `octant_to_full` tiling.
+`bulkhead_flange_chamfer`, the quadrant-intersection block in `bulkhead_flange_positive`, and
+the four fillet modules (`outer_corner_fillet`, `greeble_bolt_web`, `greeble_to_web_fillet`,
+`web_to_bolt_fillet`, `bulkhead_bolt_flange_fillet`). Then the cuts other than the greeble
+tool — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask — and the
+`octant_to_full` tiling.
 
 ---
 
