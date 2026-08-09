@@ -581,10 +581,36 @@ the first draft reported 14 of those and was refined until the signal was clean.
 
 **Result: exactly one, across all of `src/Fuselage/scad`.** B10 is isolated, not a pattern.
 
+### Ported so far
+
+Built at the **derived** parameters for U=1.0 `end_bolt` 3/16 in, read off the `.scad` that
+`render_variant.py` emits — not the hand driver's constants.
+
+| Piece | Tree mm³ | OpenSCAD mm³ | Delta |
+| --- | --- | --- | --- |
+| greeble-forming tool | 557.758041 | 557.746362 | +0.0021% |
+| flange base profile | 709.2890625 | 709.2890625 | **exact** |
+| simple positives | 1090.6890692 | 1090.6367096 | +0.0048% |
+
+The flange base is exact because it is entirely planar — no tessellation bias to absorb. The
+other two carry curved surfaces and show the usual inscribed-polygon bias.
+
+**The flange profile needs no sketch.** Its larger polygon,
+`(0,0) (0,5.1375) (-40,5.1375) (-40,3.9375) (-8.5625,3.9375) (-8.5625,-8) (-8,-8)`, has
+exactly one non-axis-aligned edge — the closing one, along `y = x`. So it is two boxes minus
+the half-plane `x > y`. The second polygon is the flange strip again and lies wholly inside
+the first; it is not redundant in the source, because a cowling bulkhead skips the first and
+builds only that one.
+
+The simple positives — bolt boss, its web and chamfer, the plate, the longeron flange and its
+chamfer — are all cylinders, cones and boxes.
+
 ### Remaining
 
-`bulkhead_flange_positive`, `bulkhead_web`, `bolt_flange_positive`, and the four fillet
-modules, now with real fillets throughout and the erosion still done by `Part::Offset2D`.
+`bulkhead_flange_chamfer`, `bulkhead_web`, the quadrant-intersection block in
+`bulkhead_flange_positive`, and the four fillet modules, which are where OQ-DES-B9's real
+fillets apply. Then the cuts other than the greeble tool — opening wedge, outer-face cleanup,
+longeron and bolt holes, octant mask — and the `octant_to_full` tiling.
 
 ---
 
