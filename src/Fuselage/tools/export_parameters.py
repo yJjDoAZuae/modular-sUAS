@@ -156,6 +156,20 @@ def main(argv):
     corner = corner_parameters(dp_corner)
     check_agreement(bulkhead, corner)
 
+    # U and FX on top, exactly as the sweep's FreeCAD branches add them, and after
+    # check_names -- neither is a parameter of the OpenSCAD modules, which take the finished
+    # dimensions, so check_names would rightly refuse them.
+    #
+    # The FreeCAD sheets need them because the port states `corner_radius`,
+    # `longeron_radius` and `unit_length` as relationships in U and FX rather than as
+    # numbers. Without them those rows evaluate at U=1, FX=1 and the part is built to the
+    # wrong size with the right parameter file sitting beside it (IP-FC-48). `check_seed`
+    # in build_part.py refuses that now, so an export missing these does not silently
+    # produce a wrong part -- it produces no part, which is why this belongs here and not
+    # only in the sweep.
+    bulkhead = dict(bulkhead, U=dp.bulkhead.U)
+    corner = dict(corner, FX=dp_corner.corner.FX)
+
     doc = {
         'variant': {'U': p['U'], 'bulkhead_type_name': p['bulkhead_type_name'],
                     'panel_name': p['panel_name']},

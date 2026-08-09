@@ -678,6 +678,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-6 | ~~decided~~ 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
 | ARCH-7 | ~~decided~~ 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
 | ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
+| ARCH-10 | **open** 2026-08-09 | `eps` is an absolute 0.01 mm, and the octant-and-mirror tiling needs that overlap to stay resolvable at part scale. It does not, at U ≥ 2.5. What replaces it? **Blocks IP-FC-49** |
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
@@ -1284,6 +1285,63 @@ Two notes worth carrying forward:
 under a license the table does not mention. Suggested wording: *acceptable as a separate
 tool or an imported module; obligations attach only on redistribution; note the §4.B
 indemnity.*
+
+### OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big? — OPEN 2026-08-09
+
+`geometry_eps()` is `0.01` mm, a constant of the OpenSCAD source, carried into the port
+verbatim. Two jobs rest on it: making cuts overshoot the material they pass through, and
+making the octant overlap its own mirror so the tiling fuse has something to work with.
+`bulkhead_full`'s own docstring records the second — *"`octant_mask` is shifted by `eps`, so
+adjacent octants overlap by a sliver and the union reclaims it"*.
+
+That works in OpenSCAD, whose CGAL kernel is exact. It does not work in OCCT, whose booleans
+work to a tolerance that scales with the shape. At U=2.5 the bulkhead is 250 mm across and
+the sliver is 4 × 10⁻⁵ of it:
+
+| U | Octant | Mirror | **Their fuse** |
+| --- | --- | --- | --- |
+| ≤ 2.0 | valid | valid | valid |
+| ≥ 2.5 | valid | valid | **invalid** |
+
+Only the fuse fails, and it fails for every panel — so it is a threshold in U and nothing
+else. Raising `eps` at U=2.5 makes it valid again at 0.05 and every value above. The corner
+is unaffected at every U up to 4.0, because the octant-and-mirror tiling is `bulkhead_full`'s
+construction alone.
+
+**`eps` is not free, which is what makes this a decision rather than a constant to raise.**
+It changes the finished volume, because it is not purely internal — it also sets how far
+cuts overshoot:
+
+| U=2.0, `eps` | 0.01 | 0.05 | 0.1 | 0.25 | 0.5 |
+| --- | --- | --- | --- | --- | --- |
+| Volume mm³ | 39413.1119 | 39416.2807 | 39420.1978 | 39431.6900 | 39450.1504 |
+
+**Alternatives**
+
+1. **Scale `eps` with U.** One line, and it matches what the value is *for* — a sliver that
+   has to stay resolvable relative to the part.
+   *Drawbacks:* the port stops agreeing with `geometry_eps()`, so FreeCAD and OpenSCAD
+   produce different volumes at every U ≠ 1, by roughly 0.01% at the sizes measured. That is
+   above the tolerance IP-FC-13 has been holding the port to (0.0006%), so IP-FC-13 would
+   need a stated exemption for it rather than a threshold that quietly absorbs it.
+   *Prerequisite:* deciding whether OpenSCAD scales too, which changes the shipped parts.
+
+2. **Give the boolean a fuzzy tolerance instead of moving geometry.** Tells OCCT to treat
+   the faces as coincident, leaving the model dimensionally identical to OpenSCAD's.
+   *Drawbacks:* `Part::Cut`/`Part::Fuse` document objects expose no fuzzy value —
+   `Shape.fuse(other, tolerance)` does, but that returns a computed shape, not a feature, so
+   the tiling would stop being a live parametric tree. That is the one property the port
+   exists to preserve.
+
+3. **Do not create the coincident seam.** Build the full section directly rather than an
+   octant plus seven mirrors, so no boolean is ever asked about two faces on the same plane.
+   *Drawbacks:* discards the construction the port is transcribing, and with it the check
+   that makes the tiling verifiable — the eps overlap is why the full part is *not* eight
+   times the octant, which is what proves the mirrors are about the right planes.
+
+**Not decided here.** Each alternative trades against something already recorded as intent:
+OpenSCAD parity, the live parametric tree, or fidelity to the construction being ported.
+IP-FC-49 is blocked on this.
 
 ---
 
