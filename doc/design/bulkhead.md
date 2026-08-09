@@ -653,6 +653,16 @@ anything later.
 capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
 it to hundredths of a millimetre**.
 
+**Scope, established 2026-08-09 while porting: this affects the boom bulkhead only.**
+`fillet_inner` is called exactly once in `fuselage_bulkhead_geometry.scad`, inside
+`bulkhead_web_inner_shape_octant`, and the only caller of the shape that reaches it is
+`fuselage_boom_bulkhead_geometry.scad`. The frame bulkheads — end, interconnect, cowling —
+never execute it. `bulkhead_web`, which they do use, already makes a **true fillet** by
+subtracting a cylinder of `web_fillet_radius` at the re-entrant corner; the little step out
+to `x = boss_x - web_fillet_radius` in its profile is exactly the material that cylinder
+rounds. So the frame bulkhead ports with no fillet decision at all, and this question governs
+the plate family.
+
 This settles more than the web. It applies to all four fillet modules — `greeble_to_web_
 fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet` and `outer_corner_fillet` — and
 to any other geometry where OpenSCAD approximates a feature it cannot express directly.
