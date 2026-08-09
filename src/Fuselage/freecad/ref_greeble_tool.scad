@@ -11,6 +11,12 @@
 // The whole shape is then shifted down by eps to clean up the bottom of the cutout. So
 // "reuse the corner's end section" means re-evaluating the description at different
 // arguments -- not referencing the corner's built shape, which carries the clearance.
+//
+// NOTE: these are the *hand driver's* values, matching fuselage_corner.scad, and they are
+// deliberately not a sweep variant. This file exists to isolate one module so the FreeCAD
+// port can be compared against it at identical inputs. To render a variant the sweep would
+// actually produce, use tools/render_variant.py -- never -D overrides on a driver, because
+// panel.offset and panel.overlap are derived and will not agree.
 $fa=1;
 $fs=0.1;
 

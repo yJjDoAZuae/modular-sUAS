@@ -534,6 +534,33 @@ Fillet targets are therefore selected by a **geometric predicate** at emit time 
 hand-picked index — so re-running the generator re-derives them and a topology change is
 repaired by regeneration rather than by hand.
 
+### A positional-argument defect, and an audit for others
+
+Porting means reading every call site against its signature, which is how OQ-DES-B10
+surfaced: `greeble_bolt_web`'s single call passes its last three arguments in rotated order.
+OpenSCAD matches positionally and reports nothing, and `plate_thickness` and
+`flange_thickness` are both 0.8 at the driver's settings, so one of the three lands correctly
+by coincidence and the result looks right. The effect is a diagonal web 25% thicker than the
+flange thickness intends, in a load path — and it would change shape for no visible reason
+the first time layer height or extrusion width moved.
+
+**Fixed 2026-08-08.** The measured effect is narrower than it first looked: at U=0.5 and U=1
+the module's material is entirely absorbed by its neighbours, so those bulkheads are
+bit-identical whether the call is corrected, left alone, or removed outright — no part
+printed at those sizes was ever affected. Only at U=4, where the bolt sits 32 mm out and the
+diagonal web is no longer covered, does the module carry material (1584.75 mm³), and there
+the correction moves about 0.1% of the part. That is also why the defect survived: every
+size small enough to print and fly easily was immune to it.
+
+Since one call had drifted, the rest were checked rather than assumed:
+[`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) parses every module
+signature and call site and flags **permutations** — a passed identifier that is itself one
+of the callee's parameters, but not the one at that position. Callers using a more specific
+name for a generic parameter (`web_fillet_radius` → `radius`) are normal and not flagged;
+the first draft reported 14 of those and was refined until the signal was clean.
+
+**Result: exactly one, across all of `src/Fuselage/scad`.** B10 is isolated, not a pattern.
+
 ### Remaining
 
 `bulkhead_flange_positive`, `bulkhead_web`, `bolt_flange_positive`, and the four fillet
@@ -587,6 +614,13 @@ This is input to OQ-ARCH-1's final call, not the call itself.
 OQ-ARCH-3 and OQ-ARCH-8 withdrawn as work items rather than decisions. OQ-DES-B9, raised and
 decided 2026-08-08, briefly blocked IP-FC-9: **real fillets, closely resembling the OpenSCAD
 version but not required to match it to hundredths of a millimetre.**
+
+**OQ-DES-B10** was raised and fixed on 2026-08-08: the single call to `greeble_bolt_web`
+passed its last three arguments rotated, and the matching names are the correct association.
+Measured afterwards, the module's material is entirely absorbed at U=0.5 and U=1 — those
+bulkheads are bit-identical with the call corrected, or removed altogether — and only at
+U=4 does it carry material, where the fix moves about 0.1% of the part. The audit now reports
+zero mismatches tree-wide.
 
 Two questions want answers that cannot be read out of the code, and block nothing:
 
