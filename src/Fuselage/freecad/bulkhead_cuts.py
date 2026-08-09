@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import is_entry_point
+from corner_common import build_sheet, is_entry_point
 
 REF = 49813.5203117
 EXPECT_BBOX = (-59.99, -60.0, -9.0, 20.0, 20.0, 9.0)
@@ -87,16 +87,8 @@ PARAMS = [
 ]
 
 
-def sheet(doc):
-    fresh = doc.getObject('Params') is None
-    sh = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
-    if fresh:
-        for row, (alias, value) in enumerate(PARAMS, start=1):
-            sh.set('A%d' % row, alias)
-            sh.setAlias('B%d' % row, alias)
-            sh.set('B%d' % row, value)
-        doc.recompute()
-    return sh
+def sheet(doc, seed=None):
+    return build_sheet(doc, PARAMS, seed)
 
 
 def _through_box(doc, name, length, width, x, y, angle=None):
@@ -168,9 +160,14 @@ def octant_mask(doc):
                              angle=135, size=P + 'mask_span'))
 
 
-def emit(doc):
+def emit(doc, seed=None):
     C._SEEN.clear()
-    sheet(doc)
+    sheet(doc, seed)
+    return cuts(doc)
+
+
+def cuts(doc):
+    """Geometry only, against whatever sheet the document already has."""
     P = 'Params.'
 
     tools = [

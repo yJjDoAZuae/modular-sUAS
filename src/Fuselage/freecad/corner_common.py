@@ -86,6 +86,120 @@ def is_entry_point(name):
     return False
 
 
+def is_literal(value):
+    """True when a PARAMS row carries a plain number rather than an expression.
+
+    The distinction is the whole of IP-FC-41: literal rows are *configuration* -- one
+    variant's parameter values -- and belong to `derived_parameters()`. '=' rows are the
+    *port*: the relationships the OpenSCAD source defines between those values, which no
+    parameter set can supply and which have to agree between modules.
+    """
+    text = str(value).strip()
+    if text.startswith('='):
+        return False
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def seeded(params, seed=None):
+    """`params` with its literal rows replaced by the exported parameter set.
+
+    A row is only replaced when the authority actually defines it. `eps`, `U` and `FX` are
+    literals no variant carries -- geometry_eps() is a constant of the source, not a
+    parameter -- so they stay as written rather than silently becoming zero.
+    """
+    if not seed:
+        return list(params)
+    out = []
+    for alias, value in params:
+        if is_literal(value) and alias in seed:
+            out.append((alias, repr(float(seed[alias]))))
+        else:
+            out.append((alias, value))
+    return out
+
+
+def build_sheet(doc, params, seed=None, extra=()):
+    """The parameter sheet, seeded from `derived_parameters()` when `seed` is given.
+
+    Left alone if the document already has one: the assembly builds a single merged sheet
+    and then calls each constituent's geometry against it.
+    """
+    sheet = doc.getObject('Params')
+    if sheet is not None:
+        return sheet
+    sheet = doc.addObject('Spreadsheet::Sheet', 'Params')
+    for row, (alias, value) in enumerate(seeded(list(params) + list(extra), seed), start=1):
+        sheet.set('A%d' % row, alias)
+        sheet.setAlias('B%d' % row, alias)
+        sheet.set('B%d' % row, value)
+    doc.recompute()
+    return sheet
+
+
+def merge_params(sources, seed=None):
+    """The union of several modules' alias tables, with conflicting definitions refused.
+
+    Kept as a permanent assertion rather than a one-off audit, because the failure is
+    silent: FreeCAD would take whichever definition landed in the row and the geometry
+    would quietly follow the wrong one.
+
+    A seed exempts the rows it supplies. Two modules disagreeing on what `panel_offset` is
+    stops meaning anything once both take it from the same authority -- but disagreeing on
+    a '=' row still does, and so does disagreeing on a literal the authority never defines.
+
+    Where one module states a relationship and another states this variant's value --
+    `corner_radius` is `=U * 10` in corner_tree and 10.0 in the bulkhead modules -- the
+    RELATIONSHIP wins. Both are true, but only one of them survives the user changing U,
+    and a sheet whose corner_radius stops tracking U is a worse deliverable than one whose
+    rows are redundant. `check_seed` then confirms the expression reproduces the authority's
+    number, which is a stronger check than either row on its own: it tests the port's
+    derivations against `derived_parameters()`, not just its constants.
+    """
+    merged, at, owner = [], {}, {}
+    for mod in sources:
+        for alias, value in mod.PARAMS:
+            if alias not in owner:
+                owner[alias], at[alias] = (mod, value), len(merged)
+                merged.append((alias, value))
+                continue
+            prev_mod, prev_value = owner[alias]
+            if prev_value == value:
+                continue
+            if seed and alias in seed:
+                if is_literal(prev_value) and not is_literal(value):
+                    owner[alias] = (mod, value)
+                    merged[at[alias]] = (alias, value)
+                if is_literal(prev_value) != is_literal(value) or is_literal(value):
+                    continue
+            raise RuntimeError(
+                'alias %r means two different things: %r in %s, %r in %s -- rename one '
+                'before they share a sheet'
+                % (alias, prev_value, prev_mod.__name__, value, mod.__name__))
+    return merged
+
+
+def check_seed(sheet, seed):
+    """Every seeded alias the sheet carries, against the value the authority gave.
+
+    Rows the seed replaced are trivially equal. The ones that matter are the expression
+    rows kept in preference to a literal: this is where a derivation the port transcribed
+    from the OpenSCAD source is measured against what `derived_parameters()` computes.
+    """
+    bad = []
+    for alias in sorted(seed):
+        try:
+            got = float(sheet.get(alias))
+        except Exception:
+            continue                      # not an alias any module on this sheet declares
+        if abs(got - float(seed[alias])) > 1e-9:
+            bad.append((alias, got, float(seed[alias])))
+    return bad
+
+
 def prism(points, z0, h):
     """A polygon extruded through `h` starting at `z0`."""
     pts = [App.Vector(x, y, z0) for x, y in points]

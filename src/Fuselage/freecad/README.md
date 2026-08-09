@@ -26,7 +26,8 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 
 | File | Contents |
 | --- | --- |
-| `corner_common.py` | `Params`, and the shared 2D section every axial slice extrudes |
+| `corner_common.py` | `Params`, the shared 2D section every axial slice extrudes, and the sheet machinery — `build_sheet` (seeded from the authority), `merge_params` (refuses an alias defined two ways) and `check_seed` (the finished sheet must reproduce `derived_parameters()`) |
+
 | `part_middle.py` | `corner_middle` — the constant-section run |
 | `part_end.py` | `corner_end` — the greeble socket, with the interrupted snap groove |
 | `part_transition.py` | `corner_transition` — socket bore down to longeron bore |
@@ -51,20 +52,26 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 
 | File | Contents |
 | --- | --- |
-| `corner_tree.py` | The whole corner as a live CSG tree — 82 nodes, 2 sketches. Every polygon mask in the section profile is a union of half-planes and the snap groove is a stack of cylinders and cones, so only two polygons in the part need sketches |
+| `corner_tree.py` | The whole corner as a live CSG tree — 82 nodes, 2 sketches. Every polygon mask in the section profile is a union of half-planes and the snap groove is a stack of cylinders and cones, so only two polygons in the part need sketches. Its tip *is* `fuselage_corner`: the half-length run and its mirror about mid-span, which is all `corner_render()` calls. Run it with a `params.json` for the swept parameters, without one for `fuselage_corner.scad`'s |
 | `check_tree.py` | The tree against OpenSCAD at four sizes, by editing the parameter sheet rather than re-running; then reload, a tolerance edit, and a parameter-bound user feature. Also re-asserts every sketch is fully constrained *at each size* |
 | `spike_offset2d.py` | Whether `Part::Offset2D` reproduces OpenSCAD's `offset(r=)` and `fillet_inner()`. A single offset matches to 0.01%; the chained morphological fillet diverges by 19% once the intermediate shape fragments. Settled by OQ-DES-B9 — the port uses real fillets, and keeps `Offset2D` for the erosion |
 | `spike_fillet.py` | Whether `Part::Fillet` survives a parameter change. It does for dimension-only changes, and fails *visibly* when the topology shifts — but its `Shape` goes stale rather than null, so `State` must be checked, not `isValid()` |
 | `flange_base.py` | `bulkhead_flange_positive`'s base profile. Two boxes minus the half-plane `x > y` — the only non-axis-aligned edge in the polygon is its closing one, so no sketch is needed. Matches **exactly**, being entirely planar |
-| `simple_positives.py` | The six plain positives of `bulkhead_section` — bolt boss, its web and chamfer, the plate, the longeron flange and its chamfer. All cylinders, cones and boxes |
+| `simple_positives.py` | The six plain positives of `bulkhead_section` — bolt boss, its web and chamfer, the plate, the longeron flange and its chamfer. All cylinders, cones and boxes. **Only the bolt three are unconditional**: the other three are inside `if (is_cowling)`, forty lines below the brace that opens it, so an ordinary bulkhead has no longeron flange at all. Built in two groups for that reason — the assembly takes only what it is entitled to |
+
 | `fillets.py` | All five true fillets and chamfers — `outer_corner_fillet`, `bulkhead_flange_chamfer`, `greeble_to_web_fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet`. Each is a block minus a stepped cylinder/cone/cylinder stack, where the step *is* the chamfer. The last two clip their block with a half-plane whose **rotation comes from an expression**, `atan2(dy; dx)`, because the bolt-centre-to-fillet-centre edge lies at no fixed angle |
 | `flange_boss.py` | The quadrant ring around the longeron bore, flared into the plate by a chamfer cone. The source builds this inline rather than as a module, so its isolated reference is a transcription — see the note in `ref_flange_boss.scad` |
 | `bulkhead_positive.py` | `bulkhead_flange_positive` assembled from all eight positives, checked against the **real module** — which is what makes the `flange_boss` transcription trustworthy. Also merges the per-module parameter sheets into one and asserts no alias is defined two different ways (IP-FC-41) |
-| `parameters.py` | Reads the JSON [`tools/export_parameters.py`](../tools/export_parameters.py) writes from `derived_parameters()`, and checks every module's literals against it. The parameter set crosses from the project virtualenv as **data**, because FreeCAD's Python has no `solid2` and so cannot call the authority directly (IP-FC-41) |
+| `parameters.py` | Reads the JSON [`tools/export_parameters.py`](../tools/export_parameters.py) writes from `derived_parameters()`. The parameter set crosses from the project virtualenv as **data**, because FreeCAD's Python has no `solid2` and cannot call the authority directly. `seed()` feeds `corner_common.build_sheet`; `check_literals` and `check_refs` verify the modules and the hand-typed reference `.scad` files against the same authority (IP-FC-41) |
+
 | `bulkhead_cuts.py` | The five cut tools — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask. The octant mask turns out to be the `x > y` half-plane shifted by `eps`; the wedge is the one shape with arbitrary angles, and is a covering box clipped by three half-planes rather than a sketch |
 | `greeble_web.py` | `greeble_bolt_web`. Its plan view is a parallelogram — a strip laid along the corner-to-bolt diagonal — so one rotated box, plus a rib prism placed by composed rotation |
 | `web.py` | `bulkhead_web`. Three stacked boxes minus the `x > y` half-plane, then a cylinder subtracted at the re-entrant corner — which is already a **true** fillet, not the morphological `fillet_inner` that OQ-DES-B9 concerns |
-| `bulkhead_tree.py` | The bulkhead's greeble-forming tool: `corner_end` re-evaluated at greeble tolerance **0** and `bulkhead_thickness + 2*eps`. Shows what "reuse the corner's end section" actually means — a second evaluation of the same builders against a second set of spreadsheet rows, never a reference to the corner's built shape, which carries the fit clearance |
+| `bulkhead_tree.py` | The bulkhead's greeble-forming tool: `corner_end` re-evaluated at greeble tolerance **0** and `bulkhead_thickness + 2*eps`. Shows what "reuse the corner's end section" actually means — a second evaluation of the same builders against a second set of spreadsheet rows, never a reference to the corner's built shape, which carries the fit clearance. It is also the one sketch in the assembled section, inherited from `corner_end`'s wedge |
+| `bulkhead_section.py` | The whole octant, assembled from every ported constituent and checked against the **real module** — the binding check for the `bulkhead_cuts` transcription, and what caught the `is_cowling` misreading above. Needs a seed: without one the merge is comparing two configurations and refuses |
+| `bulkhead_full.py` | `bulkhead_section_full` — the octant translated to its corner and tiled eight ways, as seven `Part::Mirroring` objects and seven fuses. `bulkhead_render()` calls this and nothing else, so it is the whole part. Not eight times the octant: `octant_mask`'s `eps` makes neighbours overlap by a sliver the union reclaims |
+
+
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
 
 ## Rendering a variant — never by `-D` on a driver
@@ -87,9 +94,22 @@ wrong. A 0 mm panel rendered with the driver's `panel_offset = 0` **loses the gr
 entirely**, because that offset is exactly the clearance holding the panel's inner corner off
 the greeble perimeter.
 
-The `ref_*.scad` files here are module *isolators* at the hand driver's values, for comparing
-one module against its FreeCAD port at identical inputs. They are deliberately not variants
-and must not be read as one.
+The `ref_*.scad` files here are module *isolators*, for comparing one module against its
+FreeCAD port at identical inputs. They are deliberately not variants and must not be read as
+one. The corner's references (`ref_end.scad`, `ref_middle.scad`, `ref_transition.scad`,
+`ref_greeble_tool.scad`, `ref_regenerate.scad`) are at the hand driver's values; the bulkhead's
+are at the swept set, and `parameters.py` checks every one of their assignments against
+`derived_parameters()` — they are hand-typed, and a mistyped value there compares the port
+against the wrong shape.
+
+**An isolator can only check the port against a reading of the source.** Where a module builds
+geometry inline rather than calling a named module, the reference has to transcribe it, and
+port and reference then share whatever the transcription got wrong.
+`ref_flange_positive.scad` and `ref_bulkhead_section.scad` go through the real modules and are
+what make the transcriptions trustworthy — `ref_bulkhead_section.scad` is what caught the
+`is_cowling` misreading in `simple_positives`. `ref_greeble_tool_swept.scad` is the same
+isolator as `ref_greeble_tool.scad` at the sweep's values, because a port that agrees at one
+configuration and not another is exactly what seeding from the authority is meant to expose.
 
 ## Looking at the parts
 

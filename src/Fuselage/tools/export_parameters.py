@@ -36,7 +36,7 @@ import fuselage_variants as fv
 from render_variant import combinations, settings
 
 
-def flat_parameters(dp):
+def bulkhead_parameters(dp):
     """The same mapping bulkhead_render() applies when it calls bulkhead_section_full."""
     return {
         'unit_width': dp.bulkhead.width,
@@ -66,6 +66,57 @@ def flat_parameters(dp):
     }
 
 
+def corner_parameters(dp):
+    """The same mapping corner_render() applies when it calls fuselage_corner.
+
+    Two of these are the corner's alone. `unit_length` is bay length, which the bulkhead
+    genuinely does not have -- one bulkhead design serves every FX, see OQ-DES-C3. And
+    `greeble_tolerance` is the fit clearance, which the corner carries in its bore and the
+    bulkhead's post is built without, because split across both halves the joint would take
+    it twice. Neither is a name the bulkhead export forgot; both are asymmetries of the
+    design, so the corner needs its own mapping rather than a wider one.
+    """
+    return {
+        'U': dp.bulkhead.U,
+        'unit_length': dp.corner.length,
+        'bulkhead_thickness': dp.bulkhead.thickness,
+        'corner_radius': dp.corner.radius,
+        'panel_thickness': dp.panel.thickness,
+        'panel_offset': dp.panel.offset,
+        'panel_overlap': dp.panel.overlap,
+        'panel_tolerance': dp.panel.tolerance,
+        'longeron_radius': dp.longeron.radius,
+        'longeron_tolerance': dp.longeron.tolerance,
+        'greeble_thickness': dp.greeble.thickness,
+        'greeble_nub_thickness': dp.greeble.nub_thickness,
+        'greeble_tolerance': dp.greeble.tolerance,
+        'extrusion_width': dp.printer.extrusion_width,
+    }
+
+
+# Names both parts take. They describe the same joint from its two sides and must agree
+# on every one of them -- except `greeble_tolerance`, which is the asymmetry the joint is
+# built on: the corner carries the whole fit clearance in its bore and the bulkhead's post
+# is nominal, because split across both halves the joint would take it twice.
+ASYMMETRIC = {'greeble_tolerance'}
+
+
+def check_agreement(bulkhead, corner):
+    """Refuse a variant where the two halves disagree on a shared parameter.
+
+    They are resolved separately -- `derived_parameters(..., is_bulkhead)` branches on that
+    flag -- so this is a real check, not an identity. It is what caught the first attempt at
+    this export reading the corner's parameters off a bulkhead variant, where
+    `greeble.tolerance` is 0 and the corner's bore would have come out with no clearance at
+    all.
+    """
+    for name in sorted(set(bulkhead) & set(corner) - ASYMMETRIC):
+        if abs(float(bulkhead[name]) - float(corner[name])) > 1e-12:
+            raise RuntimeError(
+                '%s is %r for the bulkhead and %r for the corner -- the two halves of the '
+                'joint disagree' % (name, bulkhead[name], corner[name]))
+
+
 def scad_module_parameters(scad_name, module_name):
     """The parameter names of an OpenSCAD module, read from the source.
 
@@ -88,32 +139,48 @@ def scad_module_parameters(scad_name, module_name):
     return set(names)
 
 
-def check_names(flat):
-    """Assert the flat names are exactly bulkhead_section_full's, minus the flags the
+# module -> (file, its own mapping, the flags the generators carry themselves)
+CHECKED_MODULES = [
+    ('bulkhead_section_full', 'fuselage_bulkhead_geometry.scad', 'bulkhead_parameters',
+     {'is_interconnect', 'is_cowling', 'make_web'}),
+    ('fuselage_corner', 'fuselage_corner_geometry.scad', 'corner_parameters', set()),
+]
+
+
+def check_names(dp, dp_corner):
+    """Assert each mapping is exactly its module's parameter list, minus the flags the
     generators carry themselves. A silent mismatch here would put a stale alias into every
     generated sheet."""
-    accepted = scad_module_parameters('fuselage_bulkhead_geometry.scad',
-                                      'bulkhead_section_full')
-    ours = set(flat)
-    unknown = ours - accepted
-    if unknown:
-        raise RuntimeError('not parameters of bulkhead_section_full: %s'
-                           % ', '.join(sorted(unknown)))
-    missing = accepted - ours - {'is_interconnect', 'is_cowling', 'make_web'}
-    if missing:
-        raise RuntimeError('bulkhead_section_full takes parameters this export does not '
-                           'carry: %s' % ', '.join(sorted(missing)))
+    for module, scad, mapping, flags in CHECKED_MODULES:
+        accepted = scad_module_parameters(scad, module)
+        ours = set(globals()[mapping](dp_corner if mapping == 'corner_parameters'
+                                      else dp))
+        unknown = ours - accepted
+        if unknown:
+            raise RuntimeError('not parameters of %s: %s'
+                               % (module, ', '.join(sorted(unknown))))
+        missing = accepted - ours - flags
+        if missing:
+            raise RuntimeError('%s takes parameters this export does not carry: %s'
+                               % (module, ', '.join(sorted(missing))))
 
 
 def resolve(want_u, want_type, want_panel):
+    """The variant's bulkhead and corner parameter objects, from one combination.
+
+    Both come from the same row of the parameter space, resolved twice -- exactly as the two
+    sweeps do it, and as fuselage_splode.py does when it needs a matched pair.
+    """
     printer, FX = settings()
     for p in combinations():
         if (float(p['U']) != want_u or p['bulkhead_type_name'] != want_type
                 or p['panel_name'] != want_panel):
             continue
+        p = dict(p, FX=FX)
         dp = fv.derived_parameters(p['U'], FX, p, printer, True)
-        return p, dp, fv.bulkhead_validity_check(dp)
-    return None, None, None
+        dp_corner = fv.derived_parameters(p['U'], FX, p, printer, False)
+        return p, dp, dp_corner, fv.bulkhead_validity_check(dp)
+    return None, None, None, None
 
 
 def main(argv):
@@ -127,13 +194,15 @@ def main(argv):
     want_u, want_type, want_panel = float(args[0]), args[1], args[2]
     out = args[3] if len(args) > 3 else None
 
-    p, dp, valid = resolve(want_u, want_type, want_panel)
+    p, dp, dp_corner, valid = resolve(want_u, want_type, want_panel)
     if p is None:
         print('no such combination -- run render_variant.py to list them')
         return 1
 
-    flat = flat_parameters(dp)
-    check_names(flat)
+    check_names(dp, dp_corner)
+    bulkhead = bulkhead_parameters(dp)
+    corner = corner_parameters(dp_corner)
+    check_agreement(bulkhead, corner)
 
     doc = {
         'variant': {'U': p['U'], 'bulkhead_type_name': p['bulkhead_type_name'],
@@ -141,7 +210,8 @@ def main(argv):
         'valid': bool(valid),
         'units': 'mm and degrees, as the OpenSCAD path uses them',
         'source': 'derived_parameters() via export_parameters.py -- do not hand-edit',
-        'parameters': {k: float(v) for k, v in sorted(flat.items())},
+        'parameters': {k: float(v) for k, v in sorted(bulkhead.items())},
+        'corner_parameters': {k: float(v) for k, v in sorted(corner.items())},
     }
 
     text = json.dumps(doc, indent=2, sort_keys=False)

@@ -4,6 +4,18 @@ The bolt boss with its web and chamfer, the plate, and the longeron flange with 
 Every one is a cylinder, a cone or a box, so the whole group is primitives with no sketches
 and no booleans beyond the union.
 
+**Only three of the six are unconditional.** The plate, the longeron flange and the flange's
+chamfer sit inside `if (is_cowling)` in bulkhead_section -- the brace opens forty lines
+above them, past two intersection() blocks, and nothing in their immediate surroundings
+says so. An ordinary bulkhead has no longeron flange at all.
+
+That was not caught by comparing this module against its own reference, because the
+reference transcribes the same three inline blocks and inherited the same misreading. It
+was caught by assembling bulkhead_section, where the r = longeron_radius + bolt_thickness
+flange left 5.87 mm3 of material standing in the first quadrant that the real module does
+not have. An isolated reference can only ever check a port against a reading of the source;
+the assembled one checks the reading.
+
 Derived parameters for U=1.0 end_bolt 3/16in -- not the hand driver's constants. See
 IP-FC-41.
 """
@@ -15,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import is_entry_point
+from corner_common import build_sheet, is_entry_point
 
 REF_VOL = 1090.6367096
 
@@ -40,16 +52,8 @@ PARAMS = [
 ]
 
 
-def sheet(doc):
-    fresh = doc.getObject('Params') is None
-    sh = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
-    if fresh:
-        for row, (alias, value) in enumerate(PARAMS, start=1):
-            sh.set('A%d' % row, alias)
-            sh.setAlias('B%d' % row, alias)
-            sh.set('B%d' % row, value)
-        doc.recompute()
-    return sh
+def sheet(doc, seed=None):
+    return build_sheet(doc, PARAMS, seed)
 
 
 def _at(obj, x_expr, y_expr):
@@ -59,10 +63,19 @@ def _at(obj, x_expr, y_expr):
     return obj
 
 
-def emit(doc):
-    P = 'Params.'
+def emit(doc, seed=None):
     C._SEEN.clear()
-    sheet(doc)
+    sheet(doc, seed)
+    return positives(doc)
+
+
+def bolt_positives(doc):
+    """The boss, its chamfer and its web -- the three an ordinary bulkhead carries.
+
+    Guarded by `if (!is_interconnect)` in the source, so an interconnect drops all three;
+    it bolts to its neighbour rather than carrying a bolt of its own.
+    """
+    P = 'Params.'
     bx, by = P + 'bolt_x', P + 'bolt_x'
 
     boss = _at(C._cyl(doc, 'BoltBoss', P + 'bolt_boss_r', P + 'bulkhead_thickness', '0'),
@@ -73,21 +86,34 @@ def emit(doc):
               bx, by)
 
     node = C._fuse(doc, 'BoltA', boss, fillet)
-    node = C._fuse(doc, 'BoltB', node, web)
+    return C._fuse(doc, 'BoltB', node, web)
 
+
+def cowl_positives(doc, base):
+    """The plate, the longeron flange and the flange's chamfer, fused onto `base`.
+
+    These are the `if (is_cowling)` three. See the module docstring: an ordinary bulkhead
+    has none of them, and building them unconditionally is the error the assembled
+    reference caught.
+    """
+    P = 'Params.'
     plate = C._box(doc, 'Plate', P + 'panel_overlap', P + 'corner_radius',
                    P + 'plate_thickness', '-' + P + 'panel_overlap', '0', '0')
-    node = C._fuse(doc, 'PlateFuse', node, plate)
+    node = C._fuse(doc, 'PlateFuse', base, plate)
 
     long_flange = C._cyl(doc, 'LongeronFlange', P + 'long_r', P + 'bulkhead_thickness', '0')
     node = C._fuse(doc, 'LongeronA', node, long_flange)
 
     long_chamfer = C._cone(doc, 'LongeronChamfer', P + 'long_chamfer_r', P + 'long_r',
                            P + 'flange_chamfer', P + 'plate_thickness')
-    node = C._fuse(doc, 'SimplePositives', node, long_chamfer)
+    return C._fuse(doc, 'SimplePositives', node, long_chamfer)
 
+
+def positives(doc):
+    """All six, which is what ref_simple_positives.scad renders. Only the assembly knows
+    which of them a given bulkhead actually gets -- see bulkhead_section.py."""
     tip = C._owned(doc, 'Part::Refine', 'PositivesTip')
-    tip.Source = node
+    tip.Source = cowl_positives(doc, bolt_positives(doc))
     doc.recompute()
     return tip
 
