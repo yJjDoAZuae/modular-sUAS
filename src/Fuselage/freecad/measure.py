@@ -1,4 +1,5 @@
 """Volume and bounding box of a binary or ASCII STL, by the divergence theorem."""
+import os
 import struct
 import sys
 
@@ -45,7 +46,11 @@ def measure(path):
 
 
 def main():
-    for path in sys.argv[1:]:
+    # argv[1] under freecadcmd is this script, not an STL. Dropping .py arguments is what
+    # makes `freecadcmd measure.py foo.stl` and `python measure.py foo.stl` do the same
+    # thing -- without it the first one tries to parse measure.py as a mesh and fails with
+    # "unpack requires a buffer of 50 bytes", which reads like a corrupt STL.
+    for path in [a for a in sys.argv[1:] if not a.endswith('.py')]:
         n, vol, lo, hi = measure(path)
         print('%s' % path)
         print('  triangles = %d' % n)
@@ -54,7 +59,9 @@ def main():
               % (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
 
 
-# Only when run directly. Importing this under freecadcmd must not touch sys.argv, where
-# argv[1] is the *script* path, not an STL.
-if __name__ == '__main__':
+# Only when run directly -- importing this from a check script must not consume its argv.
+# freecadcmd names the script it is handed after the file rather than '__main__', so the
+# plain test is not enough on its own. Not imported from corner_common: this file is also
+# run under the project virtualenv, which has no FreeCAD to import.
+if __name__ == '__main__' or 'measure.py' in [os.path.basename(a) for a in sys.argv]:
     main()

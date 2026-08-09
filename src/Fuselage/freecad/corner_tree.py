@@ -10,8 +10,9 @@ Most of the corner reduces to primitives, which is not obvious from the source.
 **The section profile is all half-planes.** Each polygon mask in corner_middle_shape is a
 union of half-planes, so every one is a box:
 
-  * the longeron chamfer, [(0,0), (-far,0), (-far,-far), (0,-far)], is the third quadrant;
-  * the mirror-line mask, [(-far,-far), (far,far), (far,-far)], is the half-plane y < x;
+  * the longeron chamfer, [(0,0), (-r,0), (-r,-r), (0,-r)], is the third quadrant;
+  * the mirror-line mask, [(-r,-r), (r,r), (r,-r)], is the half-plane y < x -- where r is
+    mask_reach(corner_radius), the alias these rows are named for;
   * the bulkhead boundary is an 8-gon whose vertices (-4, 1.55), (-2.45, 0), (0, -2.45) and
     (1.55, -4) are COLLINEAR on x + y = flat_offset -- so it is three half-planes.
 
@@ -36,7 +37,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import is_entry_point
+from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +65,11 @@ PARAMS = [
     ('unit_length', '=U * FX * 100'),
     ('eps', '0.01'),
     ('longeron_chamfer', '=extrusion_width'),
-    ('far', '=corner_radius * 2'),
+    # mask_reach() from shape_modifier_utils.scad -- how far a masking half-plane has to
+    # extend to cover the profile. Named `far` until it had to share a sheet with the
+    # bulkhead, where `far` is unit_width: two "big enough" distances, one name, and the
+    # rows built on it (mask_diag_*) would have silently taken the wrong one.
+    ('mask_reach', '=2 * corner_radius'),
     ('through_cut', '=bulkhead_thickness * 3'),
 
     # flat_offset takes the chamfer as a floor, so the flat face clears the bore and its
@@ -92,11 +97,11 @@ PARAMS = [
     # A half-plane is a box rotated onto the cut line. For a box rotated by t about z,
     # local +x advances (x+y) by sqrt(2) per unit at +45 and (y-x) by -sqrt(2) at -45, so
     # the base corner is placed by solving for the sum and difference of its coordinates.
-    ('diag_base', '=-far'),                                   # mirror line, y < x, at -45
-    ('diag_len', '=far * 2'),
-    ('diag_wid', '=far * 2 * sqrt(2)'),
-    ('flatd_x', '=flat_offset / 2 + far * (1 - sqrt(2))'),    # x + y < flat_offset, at +45
-    ('flatd_y', '=flat_offset / 2 - far * (1 + sqrt(2))'),
+    ('mask_diag_base', '=-mask_reach'),               # mirror line, y < x, at -45
+    ('mask_diag_len', '=mask_reach * 2'),
+    ('mask_diag_wid', '=mask_reach * 2 * sqrt(2)'),
+    ('flatd_x', '=flat_offset / 2 + mask_reach * (1 - sqrt(2))'),   # x+y < flat_offset, +45
+    ('flatd_y', '=flat_offset / 2 - mask_reach * (1 + sqrt(2))'),
 
     # the greeble socket
     ('greeble_radius', '=longeron_radius + longeron_tolerance + greeble_thickness '
@@ -148,18 +153,17 @@ def _owned(doc, typename, name):
     return obj
 
 
-def _sheet(doc, extra=()):
+def _sheet(doc, extra=(), seed=None):
     """The parameter sheet. `extra` appends rows for a part that re-evaluates these
-    descriptions at different arguments -- see bulkhead_tree.py."""
-    fresh = doc.getObject('Params') is None
-    sheet = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
-    if fresh:
-        for row, (alias, value) in enumerate(list(PARAMS) + list(extra), start=1):
-            sheet.set('A%d' % row, alias)
-            sheet.setAlias('B%d' % row, alias)
-            sheet.set('B%d' % row, value)
-        doc.recompute()
-    return sheet
+    descriptions at different arguments -- see bulkhead_tree.py.
+
+    Without a `seed` the literal rows below are `fuselage_corner.scad`'s hand driver
+    values, which is what the isolated references in this directory are rendered at. A
+    seed replaces them with the swept parameter set -- see parameters.py. The driver is
+    not a source of truth about design intent, so anything assembling this alongside the
+    bulkhead must seed it.
+    """
+    return build_sheet(doc, PARAMS, seed, extra)
 
 
 def _box(doc, name, length, width, height, x, y, z, angle=None):
@@ -265,20 +269,20 @@ def _section(doc, tag, z0, h):
                 _box(doc, tag + 'PanelSlot', P + 'slot_w', P + 'slot_d', ch,
                      P + 'slot_x', P + 'slot_y', cz))
     node = _cut(doc, tag + 'CutFlatX', node,
-                _box(doc, tag + 'FlatX', P + 'far', P + 'far * 2', ch,
-                     P + 'flat_x - ' + P + 'far', '-' + P + 'far', cz))
+                _box(doc, tag + 'FlatX', P + 'mask_reach', P + 'mask_reach * 2', ch,
+                     P + 'flat_x - ' + P + 'mask_reach', '-' + P + 'mask_reach', cz))
     node = _cut(doc, tag + 'CutFlatY', node,
-                _box(doc, tag + 'FlatY', P + 'far * 2', P + 'far', ch,
-                     '-' + P + 'far', P + 'flat_x - ' + P + 'far', cz))
+                _box(doc, tag + 'FlatY', P + 'mask_reach * 2', P + 'mask_reach', ch,
+                     '-' + P + 'mask_reach', P + 'flat_x - ' + P + 'mask_reach', cz))
     node = _cut(doc, tag + 'CutFlatD', node,
-                _box(doc, tag + 'FlatDiag', P + 'diag_len', P + 'diag_wid', ch,
+                _box(doc, tag + 'FlatDiag', P + 'mask_diag_len', P + 'mask_diag_wid', ch,
                      P + 'flatd_x', P + 'flatd_y', cz, angle=45))
     node = _cut(doc, tag + 'CutDiag', node,
-                _box(doc, tag + 'Diag', P + 'diag_len', P + 'diag_wid', ch,
-                     P + 'diag_base', P + 'diag_base', cz, angle=-45))
+                _box(doc, tag + 'Diag', P + 'mask_diag_len', P + 'mask_diag_wid', ch,
+                     P + 'mask_diag_base', P + 'mask_diag_base', cz, angle=-45))
     half = _cut(doc, tag + 'CutChamfer', node,
-                _box(doc, tag + 'Chamfer', P + 'far', P + 'far', ch,
-                     '-' + P + 'far', '-' + P + 'far', cz))
+                _box(doc, tag + 'Chamfer', P + 'mask_reach', P + 'mask_reach', ch,
+                     '-' + P + 'mask_reach', '-' + P + 'mask_reach', cz))
 
     mirror = _owned(doc, 'Part::Mirroring', tag + 'Mirror')
     mirror.Source = half
@@ -382,11 +386,15 @@ def _relief(doc):
     return prism
 
 
-def emit(doc):
-    """Create or update the whole corner as a live CSG tree. Returns the stable tip."""
+def emit(doc, seed=None, extra=()):
+    """Create or update the corner's half-length run as a live CSG tree.
+
+    Returns the stable tip. `fuselage_corner` is this mirrored about
+    z = unit_length/2 -- see corner_full.py.
+    """
     P = 'Params.'
     _SEEN.clear()
-    _sheet(doc)
+    _sheet(doc, extra, seed)
 
     # --- the end: section, bore, mouth, interrupted groove ---------------------
     # NB: the node names inside end_section() must not collide with _section()'s own --
@@ -426,21 +434,41 @@ def emit(doc):
     return tip
 
 
-def main():
-    REFS = [('EndSection', None), ('Tip', 10395.9608969)]
-    doc = App.newDocument('corner_tree')
-    tip = emit(doc)
+# The whole part, at the hand driver's values and at the sweep's. `corner_render()` calls
+# fuselage_corner and nothing else, so Tip is the deliverable in both cases; only the second
+# is a configuration the sweep would produce. The corner had never been checked at the swept
+# values until the bulkhead's assembly needed to share a sheet with it.
+DRIVER_REFS = [('EndCutGroove', 551.8157396), ('TransCutRelief', 607.6699024),
+               ('MidSection', 4041.5795009), ('Tip', 10395.9608969)]
+SWEPT_REFS = [('Tip', 14146.8357350)]            # ref_corner_full.scad
 
-    print('PART:: CSG tree -- fuselage_corner')
-    for name, ref in (('EndCutGroove', 551.8157396),
-                      ('TransCutRelief', 607.6699024),
-                      ('MidSection', 4041.5795009),
-                      ('Tip', 10395.9608969)):
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    seed = None
+    refs = DRIVER_REFS
+    if args:
+        import parameters
+        # The CORNER table, never the bulkhead's: they differ on greeble_tolerance, 0.05
+        # against 0, and that asymmetry is the joint. Seeding this from the bulkhead's would
+        # build the bore with no clearance and the snap would be an interference fit.
+        seed = parameters.seed(args[0], parameters.CORNER)
+        refs = SWEPT_REFS
+
+    doc = App.newDocument('corner_tree')
+    tip = emit(doc, seed)
+
+    print('PART:: CSG tree -- fuselage_corner  (%s)'
+          % ('swept parameters' if seed else 'hand driver parameters'))
+    fail = []
+    for name, ref in refs:
         obj = doc.getObject(name)
         v = obj.Shape.Volume
         d = v - ref
         print('  %-16s %13.6f  ref %13.6f  %+10.6f  %+8.4f%%'
               % (name, v, ref, d, 100 * d / ref))
+        if abs(d) / ref > 1e-3:
+            fail.append('%s off by more than 0.1%%' % name)
 
     s = tip.Shape
     print('  valid = %s  solids=%d faces=%d' % (s.isValid(), len(s.Solids),
@@ -450,10 +478,20 @@ def main():
              len([o for o in doc.Objects
                   if o.isDerivedFrom('Sketcher::SketchObject')])))
 
+    if not s.isValid():
+        fail.append('invalid shape')
+    if len(s.Solids) != 1:
+        fail.append('%d solids' % len(s.Solids))
+
     out = os.path.join(HERE, 'corner_tree.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
+    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
+    return 1 if fail else 0
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    # freecadcmd tears the interpreter down on SystemExit without flushing stdout.
+    sys.stdout.flush()
+    sys.exit(_code)
