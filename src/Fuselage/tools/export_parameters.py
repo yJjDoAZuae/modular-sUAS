@@ -36,62 +36,14 @@ import fuselage_variants as fv
 from render_variant import combinations, settings
 
 
-def bulkhead_parameters(dp):
-    """The same mapping bulkhead_render() applies when it calls bulkhead_section_full."""
-    return {
-        'unit_width': dp.bulkhead.width,
-        'bulkhead_thickness': dp.bulkhead.thickness,
-        'corner_radius': dp.corner.radius,
-        'panel_thickness': dp.panel.thickness,
-        'panel_offset': dp.panel.offset,
-        'panel_overlap': dp.panel.overlap,
-        'panel_tolerance': dp.panel.tolerance,
-        'longeron_radius': dp.longeron.radius,
-        'longeron_tolerance': dp.longeron.tolerance,
-        'bolt_hole_radius': dp.bolt.radius,
-        'bolt_thickness': dp.bolt.thickness,
-        'bolt_offset': dp.bolt.offset,
-        'greeble_opening_angle': dp.greeble.opening_angle,
-        'greeble_thickness': dp.greeble.thickness,
-        'greeble_nub_thickness': dp.greeble.nub_thickness,
-        'plate_thickness': dp.plate.thickness,
-        'web_fillet_radius': dp.web.fillet_radius,
-        'web_width': dp.web.width,
-        'flange_fillet_radius': dp.bulkhead_flange.fillet_radius,
-        'flange_thickness': dp.bulkhead_flange.thickness,
-        'flange_chamfer': dp.bulkhead_flange.chamfer,
-        'cowl_flange_height': dp.cowl_flange.height,
-        'cowl_flange_tolerance': dp.cowl_flange.tolerance,
-        'extrusion_width': dp.printer.extrusion_width,
-    }
-
-
-def corner_parameters(dp):
-    """The same mapping corner_render() applies when it calls fuselage_corner.
-
-    Two of these are the corner's alone. `unit_length` is bay length, which the bulkhead
-    genuinely does not have -- one bulkhead design serves every FX, see OQ-DES-C3. And
-    `greeble_tolerance` is the fit clearance, which the corner carries in its bore and the
-    bulkhead's post is built without, because split across both halves the joint would take
-    it twice. Neither is a name the bulkhead export forgot; both are asymmetries of the
-    design, so the corner needs its own mapping rather than a wider one.
-    """
-    return {
-        'U': dp.bulkhead.U,
-        'unit_length': dp.corner.length,
-        'bulkhead_thickness': dp.bulkhead.thickness,
-        'corner_radius': dp.corner.radius,
-        'panel_thickness': dp.panel.thickness,
-        'panel_offset': dp.panel.offset,
-        'panel_overlap': dp.panel.overlap,
-        'panel_tolerance': dp.panel.tolerance,
-        'longeron_radius': dp.longeron.radius,
-        'longeron_tolerance': dp.longeron.tolerance,
-        'greeble_thickness': dp.greeble.thickness,
-        'greeble_nub_thickness': dp.greeble.nub_thickness,
-        'greeble_tolerance': dp.greeble.tolerance,
-        'extrusion_width': dp.printer.extrusion_width,
-    }
+# The two mappings live in `fuselage_variants`, beside the render functions that use them,
+# and are re-exported here rather than restated. They were duplicated when this file was
+# written, which is exactly the divergence a port is most likely to introduce and least
+# likely to notice: both copies keep producing a part, and only the *values* drift.
+# IP-FC-10 made the sweep drive FreeCAD from these same mappings, so there is now one
+# definition feeding the OpenSCAD call, the FreeCAD build and this export.
+bulkhead_parameters = fv.bulkhead_parameters
+corner_parameters = fv.corner_parameters
 
 
 # Names both parts take. They describe the same joint from its two sides and must agree
