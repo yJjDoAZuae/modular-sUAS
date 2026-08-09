@@ -31,9 +31,9 @@ PARAMS = [
     ('panel_overlap', '4.7625'),
     ('longeron_radius', '2.0'),
 
-    ('boss_r', '=bolt_hole_radius + bolt_thickness'),
-    ('boss_web_r', '=boss_r + web_width'),
-    ('boss_chamfer_r', '=boss_r + flange_chamfer'),
+    ('bolt_boss_r', '=bolt_hole_radius + bolt_thickness'),
+    ('bolt_boss_web_r', '=bolt_boss_r + web_width'),
+    ('bolt_boss_chamfer_r', '=bolt_boss_r + flange_chamfer'),
     ('long_r', '=longeron_radius + bolt_thickness'),
     ('long_chamfer_r', '=long_r + flange_chamfer'),
     ('bolt_x', '=-bolt_offset'),
@@ -65,11 +65,11 @@ def emit(doc):
     sheet(doc)
     bx, by = P + 'bolt_x', P + 'bolt_x'
 
-    boss = _at(C._cyl(doc, 'BoltBoss', P + 'boss_r', P + 'bulkhead_thickness', '0'),
+    boss = _at(C._cyl(doc, 'BoltBoss', P + 'bolt_boss_r', P + 'bulkhead_thickness', '0'),
                bx, by)
-    fillet = _at(C._cone(doc, 'BoltChamfer', P + 'boss_chamfer_r', P + 'boss_r',
+    fillet = _at(C._cone(doc, 'BoltChamfer', P + 'bolt_boss_chamfer_r', P + 'bolt_boss_r',
                          P + 'flange_chamfer', P + 'plate_thickness'), bx, by)
-    web = _at(C._cyl(doc, 'BoltWeb', P + 'boss_web_r', P + 'plate_thickness', '0'),
+    web = _at(C._cyl(doc, 'BoltWeb', P + 'bolt_boss_web_r', P + 'plate_thickness', '0'),
               bx, by)
 
     node = C._fuse(doc, 'BoltA', boss, fillet)
