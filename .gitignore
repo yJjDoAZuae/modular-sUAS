@@ -248,3 +248,16 @@ scad_snapshot*.json
 Thumbs.db
 ehthumbs.db
 src/Fuselage/variant_output/
+
+# Everything the freecad/ scripts write. They used to save beside themselves, which put
+# .FCStd documents, .step exports, check meshes and a 14 MB preview/ tree in among the
+# geometry modules -- and got corner_tree.FCStd plus its rotating .FCStd1 backup committed,
+# 440 KB of binary rewritten on every check run. corner_common.out_path() and
+# render_variant.py's DEFAULT_OUT both point here now.
+src/Fuselage/freecad/out/
+
+# FreeCAD documents and their rotating backups, wherever they land. The same case as
+# *.blend1 above: .FCStd1 is the previous save, renamed on every write. The sweep's real
+# .FCStd deliverable (UC-2, IP-FC-14) goes to variant_output/, already ignored.
+*.FCStd
+*.FCStd[0-9]

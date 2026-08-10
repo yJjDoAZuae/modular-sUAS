@@ -19,11 +19,11 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'sketch_expr.FCStd')
+OUT = out_path('sketch_expr.FCStd')
 
 
 def main():

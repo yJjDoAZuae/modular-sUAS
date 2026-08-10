@@ -12,14 +12,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 REF_VOL = 551.8157396
 PART_VOL = 551.827595                       # the Part:: port, same parameters
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-doc = App.openDocument(os.path.join(HERE, 'pd_end.FCStd'))
+doc = App.openDocument(out_path('pd_end.FCStd'))
 body = doc.getObject('Body')
 
 touched = [o.Name for o in doc.Objects if 'Touched' in o.State]

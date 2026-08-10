@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import Params, is_entry_point, report
+from corner_common import Params, is_entry_point, out_path, report
 from part_end import build as build_end
 from part_middle import build as build_middle
 from part_transition import build as build_transition
@@ -31,7 +31,7 @@ def main():
     shape = build(Params())
     report('fuselage_corner', shape, REF_VOL)
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part_corner.step')
+    out = out_path('part_corner.step')
     shape.exportStep(out)
     print('  wrote   %s' % os.path.basename(out))
 

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import Params
+from corner_common import Params, out_path
 from measure import measure
 from part_corner import build
 from variants import TABLE, panel_overlap
@@ -39,7 +39,7 @@ for U, bt, pt in TABLE:
     shape = build(p)
     dt = time.time() - t0
 
-    _, ref, lo, hi = measure(os.path.join(HERE, 'regen_U%g.stl' % U))
+    _, ref, lo, hi = measure(out_path('regen_U%g.stl' % U))
 
     d = shape.Volume - ref
     bb = shape.BoundBox

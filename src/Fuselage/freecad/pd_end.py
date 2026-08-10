@@ -22,7 +22,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import Params, is_entry_point, through_cut
+from corner_common import Params, is_entry_point, out_path, through_cut
 from part_end import nub_profile, revolve, wedge
 from pd_middle import add_polygon, add_rect, origin_feature, pad, pocket, sketch_at
 
@@ -167,7 +167,7 @@ def main():
         print('  valid           = %s  solids=%d faces=%d'
               % (s.isValid(), len(s.Solids), len(s.Faces)))
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pd_end.FCStd')
+    out = out_path('pd_end.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
 
