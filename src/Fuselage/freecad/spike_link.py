@@ -12,12 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
-GEN = os.path.join(HERE, 'linked_generated.FCStd')
-USR = os.path.join(HERE, 'linked_user.FCStd')
+GEN = out_path('linked_generated.FCStd')
+USR = out_path('linked_user.FCStd')
 
 
 def main():

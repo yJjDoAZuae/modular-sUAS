@@ -33,7 +33,12 @@ os.chdir(HERE)                         # the CSV axes resolve relative to this d
 
 import fuselage_variants as fv
 
-DEFAULT_OUT = os.path.join(HERE, '..', 'freecad', 'preview')
+# Generated renders, so `freecad/out/`, not the source directory beside the scripts. This
+# used to be `freecad/preview/`, which put a 14 MB tree of meshes and PNGs in among the
+# geometry modules. `freecad/out/` is ignored as a whole, and it is the same directory
+# `corner_common.out_path()` hands the FreeCAD-side scripts, so both toolchains still write
+# their comparable renders to one place.
+DEFAULT_OUT = os.path.join(HERE, '..', 'freecad', 'out', 'preview')
 CSV_AXES = ('panel_variants.csv', 'bulkhead_type_variants.csv',
             'bulkhead_size_variants.csv')
 

@@ -19,11 +19,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'hand_edit.FCStd')
+OUT = out_path('hand_edit.FCStd')
 
 
 def generated(name='hand_edit'):

@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
-from corner_common import Params, is_entry_point, report, section, through_cut
+from corner_common import (Params, is_entry_point, out_path, report, section,
+                           through_cut)
 
 REF_VOL = 551.8157396
 
@@ -93,7 +94,7 @@ def main():
     shape = build(Params())
     report('corner_end', shape, REF_VOL)
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part_end.step')
+    out = out_path('part_end.step')
     shape.exportStep(out)
     print('  wrote   %s' % os.path.basename(out))
 

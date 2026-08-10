@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'csg_tree.FCStd')
+OUT = out_path('csg_tree.FCStd')
 
 
 def build():

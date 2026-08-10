@@ -37,7 +37,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import build_sheet, is_entry_point
+from corner_common import build_sheet, is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -512,7 +512,7 @@ def main():
     if len(s.Solids) != 1:
         fail.append('%d solids' % len(s.Solids))
 
-    out = os.path.join(HERE, 'corner_tree.FCStd')
+    out = out_path('corner_tree.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))

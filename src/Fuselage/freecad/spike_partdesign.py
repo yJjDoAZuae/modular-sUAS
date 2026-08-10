@@ -13,7 +13,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 
@@ -100,7 +100,7 @@ def main():
     print('  final tip: %s  volume=%.4f  faces=%d'
           % (body.Tip.Name, body.Shape.Volume, len(body.Shape.Faces)))
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'spike.FCStd')
+    out = out_path('spike.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
 

@@ -17,6 +17,28 @@ import sys
 import FreeCAD as App
 import Part
 
+# Everything these scripts write goes here, and nothing here is source. The scripts used to
+# save beside themselves, which put `.FCStd` documents, their rotating `.FCStd1` backups,
+# `.step` exports, check meshes and a whole `preview/` tree into the source directory --
+# and two of them into git, where a 440 KB binary was rewritten on every check run.
+#
+# One directory rather than a system temp dir, because several of these are a producer and a
+# consumer that have to agree: check_tree.py writes `regen_U*.stl` for check_regenerate.py,
+# pd_end.py writes the document verify_pd_end.py reloads. A path that vanishes between runs
+# would break those pairs, and being able to open the artifact after a failed check is most
+# of what makes these scripts useful.
+_OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
+
+
+def out_path(*parts):
+    """A path under `freecad/out/`, with the directory created. Never beside the source."""
+    path = os.path.join(_OUT_DIR, *parts)
+    parent = os.path.dirname(path)
+    if not os.path.isdir(parent):
+        os.makedirs(parent)
+    return path
+
+
 # Only unit_width, unit_length, corner_radius and longeron_radius scale with U; the
 # thicknesses, overlaps and tolerances are user parameters that do not. See
 # scaled_standard_values() in fuselage_variants.py and the "1.0U parameters" block in
