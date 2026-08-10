@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -167,7 +167,7 @@ def main():
 
     print('')
     print('3. Save, reload, edit again')
-    out = os.path.join(HERE, 'derived.FCStd')
+    out = out_path('derived.FCStd')
     doc.saveAs(out)
     App.closeDocument(doc.Name)
     doc = App.openDocument(out)

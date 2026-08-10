@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 
 # Angular and linear deviation for the display mesh. Fine enough that curvature reads as
 # curvature; nothing here is dimensional.
@@ -62,7 +62,7 @@ def export_png(shape, stem, outdir):
 
 
 def main():
-    outdir = os.path.join(HERE, 'preview')
+    outdir = out_path('preview')
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 

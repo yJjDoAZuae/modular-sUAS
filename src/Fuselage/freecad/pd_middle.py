@@ -21,7 +21,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import Params, half_shape, is_entry_point
+from corner_common import Params, half_shape, is_entry_point, out_path
 
 V = App.Vector
 
@@ -177,7 +177,7 @@ def main():
               % (mode, m.Volume, m.isValid(), len(m.Solids)))
     print('    Part:: full section = 4041.580837')
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pd_middle.FCStd')
+    out = out_path('pd_middle.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
 

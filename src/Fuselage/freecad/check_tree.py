@@ -15,13 +15,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, out_path
 from corner_tree import emit
 from measure import measure
 from variants import TABLE, panel_overlap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, 'corner_tree.FCStd')
+OUT = out_path('corner_tree.FCStd')
 
 
 def set_params(sheet, U, bt, pt):
@@ -42,7 +42,7 @@ def main():
 
     failures = []
     for U, bt, pt in TABLE:
-        stl = os.path.join(HERE, 'regen_U%g.stl' % U)
+        stl = out_path('regen_U%g.stl' % U)
         if not os.path.exists(stl):
             print('%5g  -- reference %s not rendered, skipped' % (U, os.path.basename(stl)))
             continue
