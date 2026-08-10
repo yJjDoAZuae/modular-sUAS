@@ -71,8 +71,8 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-9 | done | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. The `octant_to_full` tiling is done too -- `bulkhead_full.py` at +0.00011%, and the corner checked at the **swept** values for the first time at +0.00041% | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical. **That verification was one part per kind, and two defects survived it** — IP-FC-46 and IP-FC-47, both found later by enumerating the swept space | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | done | Geometry-code version added to `--resume`'s staleness key, **on both backends**. Found while checking the FreeCAD side: the generated `.stl.scad` is a `use <>` line and a call, so the OpenSCAD path had the same blind spot since `--resume` was written — an edit to `fuselage_bulkhead_geometry.scad` left every definition byte-identical. `tools/geometry_version.py` walks the `use`/`include` closure of the generated file and the import closure of the builder, and stamps a digest into the definition both backends already compare. Verified in both directions on three backend/kind pairs | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-12 | todo | **Unblocked 2026-08-10** — IP-FC-4 delivered the OML as real surfaces and IP-FC-10 the sweep integration. Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
-| IP-FC-13 | in progress | [`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same variants through both engines and compares measured geometry, with the two tiers below and a guard that refuses to count a part FreeCAD never built. Usable now for the corner and the bulkhead; still blocked on IP-FC-12 for whole-corpus coverage. Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
+| IP-FC-12 | blocked (OQ-DES-B11) | **Unblocked 2026-08-10** by IP-FC-4 and IP-FC-10, then **re-blocked the same day** on [OQ-DES-B11](../design/bulkhead.md), opened because the corrected `Part::Offset2D` measurement falsifies the premise OQ-DES-B9 was partly decided on. Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point. **The boom bulkhead is built almost entirely from 2D offsets** — `fillet_inner`, `fillet_outer` and plain `offset(r=±)` strokes — and three of its four `fillet_inner` uses wrap a whole compound region rather than a named corner, so the route is not the one the frame bulkhead's four true fillets settled. **Done pending that answer:** [`ref_boom_bulkhead.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead.scad) isolates the part and nine sub-shapes at swept parameters taken from `derived_parameters()` rather than typed, and the swept space is enumerated at 132 valid variants, none of them on the offset degeneracy (§IP-FC-12 progress) | IP-FC-10, IP-FC-4, OQ-DES-B11 | [bulkhead.md §OQ-DES-B11](../design/bulkhead.md), [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
+| IP-FC-13 | in progress | [`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same variants through both engines and compares measured geometry, with the two tiers below and a guard that refuses to count a part FreeCAD never built. Usable now for the corner and the bulkhead; still blocked on IP-FC-12 for whole-corpus coverage. Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet. **Which tier the boom bulkhead lands in is decided by [OQ-DES-B11](../design/bulkhead.md), not here** — alternative 1 there keeps it strict, the rest move it to the deviation tier | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md), [bulkhead.md §OQ-DES-B11](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
 | IP-FC-15 | blocked (IP-FC-13) | UC-3 — export `.step` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
@@ -121,7 +121,17 @@ Three things are worth noticing about the shape of the plan:
 
 > **IP-FC-12 blocked reason:** The cowls additionally need the OML as a surface (IP-FC-4)
 > and a design document (IP-FC-7). Porting them against a tessellated mesh would produce
-> parts that can never satisfy UC-2, UC-3, UC-4 or UC-7.
+> parts that can never satisfy UC-2, UC-3, UC-4 or UC-7. *Both of those cleared 2026-08-10.*
+>
+> The **boom bulkhead** half is now blocked on **OQ-DES-B11**, opened 2026-08-10. OQ-DES-B9
+> had chosen real fillets over reproducing OpenSCAD's morphological `fillet_inner`, and one of
+> its stated grounds was that `Part::Offset2D` could not reproduce it. It can, to 0.00456% —
+> the earlier 19% was read at a single parameter value where the test polygon is degenerate.
+> That decision may still stand on the grounds that do not depend on the measurement, but it
+> was argued over the frame bulkhead's four *named corners*, and the boom bulkhead instead
+> applies `fillet_inner` to whole compound regions, where the real-fillet route means
+> enumerating concave edges whose count moves with the parameters. A different trade than the
+> one that was decided, so it goes back to the design authority rather than being settled here.
 
 > **IP-FC-16 note:** OQ-ARCH-5 is decided — adaptive slice-and-fit. What remains is
 > writing the algorithm down: how layers are sliced, how each is inset, how the sections
@@ -501,9 +511,9 @@ cannot drift apart because both come from the same expressions. Referencing the 
 *built shape* — the natural `PartDesign::` idiom, a `SubShapeBinder` — would deliver the
 toleranced solid and silently apply the clearance twice.
 
-### `Part::Offset2D` matches a single offset and diverges on the fillet chain
+### `Part::Offset2D` reproduces the whole offset chain, including `fillet_inner`
 
-Measured next, because the bulkhead's web is built with `offset(r = -web_width)` and
+Measured because the bulkhead's web is built with `offset(r = -web_width)` and
 `fillet_inner(web_fillet_radius)`, and everything downstream depends on those porting
 faithfully. `fillet_inner` is itself a morphological construction:
 
@@ -511,37 +521,80 @@ faithfully. `fillet_inner` is itself a morphological construction:
 intersection() { offset(-r) offset(2r) offset(-r) children; children; }
 ```
 
-Isolated on a polygon with both convex and concave corners:
+**Corrected 2026-08-10.** This section previously reported a 15% divergence on the dilation
+and a 19% divergence on the full chain, and that reading was wrong — an artifact of reading
+one value of one parameter, on a polygon that happens to be degenerate at exactly that
+value. The measurement now sweeps it. Away from the degeneracy:
 
-| Step | OpenSCAD | `Part::Offset2D` | Delta |
-| --- | --- | --- | --- |
-| raw | 750.000000 | 750.000000 | 0 |
-| `offset(r=-3)` | 309.865500 | 309.862833 | −0.00086% |
-| then `offset(-2)` | 60.734761 | 60.730092 | −0.0077% |
-| then `offset(+4)` | **453.820893** | **384.092910** | **−15.4%** |
-| then `offset(-2)` | 244.711834 | 197.278760 | −19.4% |
+| shrink | `offset(-s)` | `offset(-r)` | `offset(+2r)` | `offset(-r)` | `fillet_inner(r)` |
+| --- | --- | --- | --- | --- | --- |
+| 2.0 | −0.00061% | −0.00375% | +0.00105% | −0.00122% | +0.00049% |
+| 2.5 | −0.00072% | −0.00456% | +0.00107% | −0.00007% | +0.00060% |
+| **3.0** | −0.00086% | −0.00769% | **−15.36%** | **−19.38%** | **−19.38%** |
+| 3.5 | −0.00107% | −0.00428% | −0.00102% | −0.00091% | −0.00049% |
+| 4.0 | −0.00143% | −0.00348% | +0.00201% | +0.00216% | +0.00243% |
 
-**A single offset is faithful.** Both the erosion steps match to under 0.01%, and the
-bounding boxes agree exactly — [5,35] × [5,15] eroded, [1,39] × [1,19] dilated — so the
-offset *distance* is right and this is not a join-style or units problem.
+Worst |delta| off the degenerate row is **0.00456%**, inside the 0.0060% faceting floor that
+[§Cross-engine equivalence](#ip-fc-13-progress--the-two-backends-measured-against-each-other)
+uses. `Part::Offset2D` with `Join='Arc'` *is* OpenSCAD's `offset(r=)`, and the chain of four
+of them *is* `fillet_inner`.
 
-**The divergence appears once the intermediate shape fragments.** The erosion leaves two
-disjoint islands, and the dilation of those islands differs: FreeCAD's total is 69.73 mm²
-short. Every `Join` and `Fill` combination was tried — `Tangent` fails outright with
-"offset result has no wires", `Intersection` gets closest at 397.83 and is still 12% short.
-Offsetting each island in isolation and fusing gives byte-identical areas (127.0465,
-257.0465), so FreeCAD is not clipping them against each other; its dilations are simply
-smaller. Matching bounding boxes with smaller area means the two disagree about the shape's
-interior, not its extent.
+**Why the shrink = 3 row misleads.** The test polygon's bottom bar is exactly 10 wide, so
+there the chained erosion of `shrink + fillet` is exactly half of it and the erosion of that
+bar is a **hairline**: zero area, 20 mm long. The following `offset(+2r)` paints a hairline
+into a band 8 mm wide, so a feature contributing no area at all beforehand contributes a
+great deal afterwards, and whether it survives is a question about arithmetic rather than
+about geometry. CGAL's exact rationals keep it; a floating-point offset does not.
 
-**This was not a defect to fix but a semantic difference to decide about**, and it is
-decided: OpenSCAD's `fillet_inner` is an *approximation* of a fillet, built from offsets
-because OpenSCAD has no fillet operation. FreeCAD has one, so the port uses **real fillets**
-that closely resemble the OpenSCAD version without matching it to hundredths of a
-millimetre. See [OQ-DES-B9](../design/bulkhead.md).
+OpenSCAD's own answer at that step is not stable enough to be a reference value:
 
-The single offset stays — `Part::Offset2D` reproduces `offset(r = -web_width)` to 0.01%, so
-only the morphological *fillet* chain is replaced, not the erosion that precedes it.
+| shrink | 2.980 | 2.999 | **3.000** | 3.001 | 3.020 |
+| --- | --- | --- | --- | --- | --- |
+| `offset(+2r)` | 576.845761 | 573.972886 | **453.820893** | 381.036874 | 367.480890 |
+
+A 33% move across 0.002 mm, against a few units per 0.02 everywhere else — and 453.82 is
+neither limit but a value in between. FreeCAD's 384.09 is essentially the limit from above.
+Neither engine is wrong; the question has no stable answer there.
+
+A raster settles it independently of both. Rasterising the exact signed distance to the
+polygon, thresholding for each erosion and running a Euclidean distance transform for each
+dilation reproduces the morphological definition with no CAD kernel in the loop; validated
+on a disk and a square against `A + Pr + πr²` to −0.02%. It agrees with OpenSCAD to within
+0.03–0.23% at every shrink off the degeneracy, and at shrink = 3 it does not converge at all
+— 367.3, 382.7, 372.6, 376.2 as the cell size halves — which is what a hairline looks like
+from a third direction.
+
+**The general lesson is not about offsets.** A parameter value where a limb is exactly twice
+the offset radius is a knife edge in *any* engine, and `fillet_inner(r)` applied where a limb
+is exactly `2r` wide sits on one by construction. Sweeping caught it here for the same reason
+sweeping caught IP-FC-46 through IP-FC-49: a single sample of a parameter is not a
+measurement of a function of it.
+
+**The boom bulkhead is structurally off that knife edge, at every `U`.** Its two offset
+radii both scale with `U` and their ratio never moves:
+
+| Derived | Value | Source |
+| --- | --- | --- |
+| `web.fillet_radius` | `2·U` | `derived_parameters` |
+| `web.width` (boom) | `6·U` | `derived_parameters`, the `is_boom` branch |
+| `web_width / (2 · web_fillet_radius)` | **1.5, always** | — |
+
+So the stroke `offset(r = web_width/2)` lays down a limb `6·U` wide and `fillet_inner(2·U)`
+erodes `4·U` of it, leaving `2·U`. The degenerate case is `1.0` and the sweep sits at `1.5`
+with no parameter able to move it, because the two quantities are not independently
+specified. This is a property of the parameter relationships, not of the values tried.
+
+It does *not* clear the whole part: the region-wide `fillet_inner` in `boom_bulkhead` closes
+gaps between features whose spacing does depend on panel thickness and boom position, and
+any of those landing on `4·U` is the same knife edge. Those cannot be excluded by algebra,
+which is what `compare_backends.py` across the boom sweep is for.
+
+**What this changes.** Nothing already built — `fillet_inner` is reached only by
+`bulkhead_web_inner_shape_octant`, which the non-interconnect path never calls, so the ported
+bulkhead does not touch it. It changes what is available to IP-FC-12, whose boom bulkhead is
+built almost entirely from offsets: the morphological route is now known to be both faithful
+and fully parametric. See [OQ-DES-B9](../design/bulkhead.md), whose stated premise this
+falsifies.
 
 ### `Part::Fillet` is safe for dimension changes and fails loudly on topology changes
 
@@ -1437,6 +1490,55 @@ The reference `.scad` files are checked against the authority too. They are hand
 mistyped value there is the worst kind of error to have: the port is compared against the
 wrong shape, so it either fails for no reason or — if the same typo reached both sides —
 agrees while both are wrong. Nine references, every assignment verified.
+
+---
+
+## IP-FC-12 progress — the boom bulkhead is a different kind of part
+
+Started 2026-08-10. The frame bulkhead and the corner are both **octant-and-mirror solids**:
+an octant built from boxes, cylinders and cones, tiled by `octant_to_full`. The boom bulkhead
+is a **flat profile extruded once**, and its profile is built almost entirely from
+morphological offsets — `fillet_inner`/`fillet_outer` four times and plain `offset(r=)` five
+more. Nothing ported so far uses either.
+
+`ref_boom_bulkhead.scad` isolates the part and its sub-shapes, at the derived parameters for
+U=1.0 `offset_single` 3 mm — one of the 132 valid swept variants, not the hand driver's
+values, and taken from `derived_parameters()` directly rather than typed. The 2D shapes are
+extruded 1 mm so the volume reads as the area:
+
+| Mode | Shape | Area / volume | Bounding box |
+| --- | --- | --- | --- |
+| 0 | `upper_boom_support_centerline_shape` | 556.0000000 | [0, 25] × [40, 43.9] |
+| 1 | `mirror_x` of it | 1112.0000000 | [−40, 25] × [40, 43.9] |
+| 2 | `offset(+web_width/2)` — the stroke | 1668.0908114 | [−43, 22.0004] × [43, 46.9] |
+| 3 | `offset(−web_width/2)` — the erosion | 616.9927776 | [−36.6573, 28.0709] × [36.6573, 40.9] |
+| 4 | `boom_key_shape` | 166.8612332 | [−7.1999, 17.8001] × [7.1999, 34.2] |
+| 5 | `offset(+boom_key_web_width)` of it | 567.3115081 | [−13.1999, 11.8001] × [13.1999, 40.2] |
+| 6 | `boom_web_outer_shape` | 1899.6666524 | [−43, 11.8001] × [43, 46.9] |
+| 7 | `boom_web_inner_shape` | 411.5189533 | [−33.8288, 30.952] × [33.8286, 40.9] |
+| 8 | `bulkhead_oml_shape` | 8856.3094939 | [−50, −50] × [50, 50] |
+| 9 | `boom_bulkhead` | **7433.4805464** | [−50, −50, 0] × [50, 50, 2] |
+
+**The offset degeneracy cannot arise from the web.** `ref_offset2d.scad` documents a knife
+edge where a limb is exactly twice the offset radius. Across all 132 valid variants
+`web_width = 6U` and `web_fillet_radius = 2U`, so `web_width / (2 · web_fillet_radius)` is a
+constant **1.5** — eight distinct parameter groups, none at 1.0. `boom_key_web_width` tracks
+`web_width` exactly and `boom_key_radius` is `max(U/2, 1/2)`. The two quantities scale
+together by construction, so this is a property of the parameter derivation rather than of
+the values that happen to be swept.
+
+**What is not settled is which construction the profile should use** — the morphological
+chain that now measures faithful, or real edge fillets. OQ-DES-B9 decided real fillets, but
+on a premise this work falsified, and the boom bulkhead's uses of `fillet_inner` are region-
+wide closings rather than the four named corners that question was argued over. That
+re-decision is now **[OQ-DES-B11](../design/bulkhead.md)**, opened 2026-08-10 with four
+alternatives, and it blocks the rest of this item. OQ-DES-B9 stays decided for what it
+actually governed: the frame bulkhead's four named fillets and its chamfer, none of which
+reach `fillet_inner`.
+
+The table above is what the port is verified against under any of the four, so it was worth
+building before the answer: the reference values do not depend on which construction the
+FreeCAD side uses to reach them.
 
 ---
 
