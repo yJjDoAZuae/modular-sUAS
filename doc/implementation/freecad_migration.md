@@ -88,7 +88,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-46 | done | **Degenerate tools at zero-size parameters.** The `0mm` panel row is the no-panel variant — thickness, tolerance and overlap all zero — and it is valid by `bulkhead_validity_check`. OpenSCAD renders the zero-extent slot as the empty set and the difference is a no-op; `Part::Box` yields a **null shape** and nulls the whole cut chain, surfacing six features away as `BRepCheck_Analyzer::Init() - NULL shape`. `corner_tree._degenerate()` now omits the feature, which is what "no panel" means. Found by IP-FC-11's end-to-end test, which rendered the sweep's *first valid combination* rather than the one part IP-FC-10 was measured on | IP-FC-10 | [freecad_migration.md §IP-FC-46](../implementation/freecad_migration.md) |
 | IP-FC-47 | done | **The FreeCAD backend dropped the bulkhead type flags.** `bulkhead_render`'s OpenSCAD call passes `is_interconnect` and `is_cowling`; the FreeCAD branch passed neither, and `bulkhead_full.emit()` takes neither — only the end type is ported. So `--backend freecad` rendered all five swept types as end bulkheads: 60 of 148 wrong, under the right filename, with a plausible volume. `_backend_for(kind, supported=)` now routes the unported types to OpenSCAD, the same fallback every unported kind already gets, and `_variant_note` carries `type_name` so two types cannot produce identical definition files | IP-FC-10 | [freecad_migration.md §IP-FC-47](../implementation/freecad_migration.md) |
 | IP-FC-48 | done | **The seed did not supply everything the expression rows read, and nothing checked.** `seeded()` replaces literal rows only, so a row the port states as a relationship — `corner_radius` = `=U * 10`, `longeron_radius` = `=U * 2`, `unit_length` = `=U * FX * 100` — keeps its expression and evaluates from whatever the sheet holds. Neither `U` (bulkhead) nor `FX` (corner) was in the seed, so both stayed at their literal 1.0: **every FreeCAD corner was built at FX=1.0 and every FreeCAD bulkhead at U=1.0**, with the authority's correct values sitting unused in the parameter file. Exact at U=1/FX=1 — the one part IP-FC-10 measured — and wrong by up to 115% elsewhere. Both are now seeded, and `build_part.build()` runs `check_seed` on every build instead of leaving it to a check script nobody ran | IP-FC-10 | [freecad_migration.md §IP-FC-48](../implementation/freecad_migration.md) |
-| IP-FC-49 | **blocked (OQ-ARCH-9)** | The FreeCAD bulkhead cannot be tiled at U ≥ 2.5 — every valid panel fails, every panel at U ≤ 2.0 builds, so it is a clean threshold in U and nothing to do with the panel. **Cause identified:** `eps` is an absolute 0.01 mm and does not scale, and it is what makes the octant overlap its own mirror so the fuse has something to work with. At U=2.5 the part is 250 mm across and the sliver is 4e-5 of it, below what the OCCT boolean resolves; the octant and the mirror are both valid and only their fuse is not. Raising eps to 0.05 makes it valid again at every U tested. Not fixed, because every available fix trades something — see OQ-ARCH-9 | IP-FC-48 | [freecad_migration.md §IP-FC-49](../implementation/freecad_migration.md) |
+| IP-FC-49 | done | The bulkhead could not be tiled at U ≥ 2.5: the octant and its mirror were each valid and only their **fuse** was not. Cause was the `eps` overlap that makes the octant interpenetrate its mirror — 0.01 mm absolute, 4e-5 of a 250 mm part, under what OCCT's booleans resolve. **The overlap exists for OpenSCAD's union and OCCT does not need it at all**: a solid fused with its own mirror about the touching plane is valid and volume-exact at 10, 100, 250 and 400 mm with no overlap. Now `mask_eps = 0`, separate from `eps` so cut overshoot is untouched. Every U from 0.5 to 4.0 tiles into one valid solid, the part is dimensionally unchanged, and `full == 8 × octant` becomes exact — a stronger tiling check than the one it replaces | IP-FC-48 | [freecad_migration.md §IP-FC-49](../implementation/freecad_migration.md) |
 | IP-FC-17 | blocked (IP-FC-16) | Implement cowl interior surfaces. **OQ-DES-CW6 resolved 2026-08-09 and no longer blocks this** — but it attaches a constraint: the interior is *additive*, and the UC-1 print export must keep coming from the un-shelled notched blank, because cowls print in spiral vase mode and a modelled wall destroys that. Model the rib at `2·w·n_perimeters + t_cut`. The sweep's printing output must be verifiable as unchanged by this work | IP-FC-16, IP-FC-14, IP-FC-42 | *(IP-FC-16 output)*, [cowl.md §6.4](../design/cowl.md) |
 | IP-FC-18 | blocked (IP-FC-14) | Model the non-printed components — longeron, panel, threaded insert, bolt — derived from the clearances that already receive them | IP-FC-14 | [freecad_migration.md §UC-8](../architecture/freecad_migration.md) |
 | IP-FC-19 | blocked (IP-FC-17) | UC-4 — assemblies with FreeCAD Assembly joints for unit, nose, tail and full fuselage. Includes asserting each solved placement against the placement constructed from parameters | IP-FC-17, IP-FC-18, IP-FC-35 | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
@@ -1209,12 +1209,77 @@ part the sliver is 4 × 10⁻⁵ of the geometry and falls under what OCCT's boo
 Confirmed by raising it: at U=2.5, `eps` = 0.01 fails and 0.05, 0.1, 0.25 and 0.5 all
 produce a valid single solid.
 
-**Left unfixed on purpose.** Raising `eps` is a one-line change and it is not obviously the
-right one: `eps` also sets how far cuts overshoot, so it moves the finished volume by about
-0.01% at these sizes — an order of magnitude above the agreement the port has been held to.
-The alternatives trade against OpenSCAD parity, the live parametric tree, or fidelity to the
-construction being ported, which makes it a decision rather than a fix. Recorded as
-[OQ-ARCH-10](../architecture/freecad_migration.md).
+### The overlap should not be scaled — it should not be there
+
+Raising `eps` was first recorded here as a decision with three costed alternatives
+([OQ-ARCH-10](../architecture/freecad_migration.md), now withdrawn), all of which took for
+granted that the fuse needs an overlap at all. **It does not.** The overlap was added so
+*OpenSCAD's* union would resolve a mirrored solid reliably; whether OCCT wants the same
+favour is a measurement, and it had not been made:
+
+| Fuse of a solid with its own mirror about the touching plane | 10 mm | 100 mm | 250 mm | 400 mm |
+| --- | --- | --- | --- | --- |
+| No overlap at all | valid, exact | valid, exact | valid, exact | valid, exact |
+
+So the mask's shift is now `mask_eps`, defaulting to `0`, and separate from `eps` — cut
+overshoot still needs its 0.01 mm and is untouched. The row is named rather than deleted
+because a bare `mask_lo` here would give a reader no way to know the OpenSCAD source says
+`mask_lo + eps` deliberately.
+
+| U | `mask_eps = 0` | `mask_eps = 0.01` |
+| --- | --- | --- |
+| 0.5 | valid, 2085.6395 | valid, 2085.6395 |
+| 1.0 | valid, 7122.0983 | valid, 7122.0983 |
+| 2.0 | valid, 39413.1120 | valid, 39413.1119 |
+| 2.5 | valid, 76221.3114 | **fails** |
+| 3.0 | valid, 129272.8964 | **fails** |
+| 4.0 | valid, 304571.8350 | **fails** |
+
+**Removing it does not move the part** — the full volume is identical to seven figures,
+because the sliver really was being reclaimed by the union. OpenSCAD parity is unchanged at
++0.00023%.
+
+What does change is the tiling check, and it gets stronger. `bulkhead_full`'s docstring used
+to argue that the full part being *less* than eight octants is what makes the tiling
+verifiable. With the overlap gone the relation is exact equality:
+
+| U | full − 8 × octant, `mask_eps = 0` | with the overlap |
+| --- | --- | --- |
+| 1.0 | −0.0000 | −3.6477 |
+| 2.0 | −0.0736 | −10.2960 |
+| 4.0 | −0.3429 | would not build |
+
+"Matches 6926.15" is a number with no independent meaning; "eight pieces tile with neither
+gap nor overlap" is a statement about the geometry, and a mirror about the wrong plane still
+fails it.
+
+The (U, panel) grid that found this is now `ok` in every cell — all 88 FreeCAD-routed
+bulkheads build, where U ≥ 2.5 was previously a total loss. The IP-FC-10 reference part is
+unmoved: 6922.5296302 mm³ against OpenSCAD's 6922.5048968, **+0.000357%**, versus the
++0.00035% recorded when IP-FC-10 was verified.
+
+**Three self-check constants moved, and the OpenSCAD numbers are no longer the right ones for
+two of them.** The intermediate stages legitimately differ now — OpenSCAD's octant is
+oversized by the sliver and FreeCAD's is exactly an eighth — while the finished part does
+not:
+
+| Module | Was (OpenSCAD) | Now (`mask_eps = 0`) | |
+| --- | --- | --- | --- |
+| `bulkhead_cuts` | 49813.5203117, bbox from −59.99 | 49811.7251270, bbox from −60.0 | tool, differs by construction |
+| `bulkhead_section` | 865.7690714 | 865.3140969 | octant, differs by construction |
+| `bulkhead_full` | 6922.5048968 | **unchanged** | the part, still +0.00011% |
+
+The `−59.99` in the old expected bounding box is the clearest sign of what had happened: an
+arbitrary-looking constant that is exactly `−60 + eps`, sitting in a check that was asserting
+the workaround rather than the geometry.
+
+**The generalisable part.** A constant carried across in a port is a claim about the *source*
+toolchain. `eps` encodes what CGAL wanted; nothing had checked what OCCT wants. The question
+worth asking of any such constant is not "what should its value be here" but "does it belong
+here at all" — and the first version of this section skipped straight past that to costing
+three ways of choosing a value. `eps` still has a second job, making cuts overshoot the
+material they pass through, and that job is real on both kernels — which is why `mask_eps` is
+a separate row rather than `eps` being set to zero.
 
 ### One duplication removed on the way
 
