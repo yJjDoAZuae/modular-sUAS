@@ -69,6 +69,15 @@ build_part: bulkhead: the sheet disagrees with the parameter file on corner_radi
   corner_radius          sheet 10   authority 25
 ```
 
+**A constant inherited from the OpenSCAD source is a claim about CGAL, not about OCCT.**
+`eps` (0.01 mm) has two jobs there: making cuts overshoot the material they pass through, and
+making the octant overlap its own mirror so the tiling union resolves. The first is real on
+both kernels. **The second is not** — OCCT fuses a solid with its own mirror about the exact
+touching plane cleanly at 10, 100, 250 and 400 mm, and the 0.01 mm sliver is small enough at
+U ≥ 2.5 to make the fuse *invalid* while the octant and mirror are each fine (IP-FC-49). The
+mask shift is now its own row, `mask_eps = 0`, leaving cut overshoot alone. Before adjusting
+any such constant, measure whether the target kernel wants it at all.
+
 **Zero is a real parameter value here.** The `0mm` panel row is the no-panel variant, so
 `panel_thickness`, `panel_tolerance` and `panel_overlap` are all zero and the panel slot has
 no extent. OpenSCAD treats a zero-size `cube()` as the empty set and the `difference()`

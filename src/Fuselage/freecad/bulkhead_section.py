@@ -59,8 +59,16 @@ import simple_positives
 import web
 from corner_common import build_sheet, check_seed, is_entry_point, merge_params
 
-REF = 865.7690714
-EXPECT_BBOX = (-40.0, -13.6618, 0.0, 0.0, 5.1375, 6.0)
+# The octant, at mask_eps = 0. **Deliberately not the OpenSCAD number**, which is 865.7690714
+# with the bounding box reaching y = -13.6618. OpenSCAD's octant is oversized by the mask
+# overlap its union wants; OCCT does not want it (IP-FC-49), so this one is exactly an eighth
+# and stops a hair short across the diagonal.
+#
+# That makes this constant more useful than it was, not less: 8 x REF is now the full part's
+# volume exactly, so bulkhead_full's tiling check reads as "the eight pieces tile with neither
+# gap nor overlap" rather than "matches a number 3.6 mm3 short of eight octants".
+REF = 865.3140969
+EXPECT_BBOX = (-40.0, -13.6569, 0.0, 0.0, 5.1375, 6.0)
 
 # corner_tree last: its '=' rows restate relationships the bulkhead modules also define, and
 # putting it first would make every conflict message point at it rather than at the module
