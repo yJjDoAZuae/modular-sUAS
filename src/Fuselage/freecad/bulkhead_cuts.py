@@ -38,8 +38,13 @@ import FreeCAD as App
 import corner_tree as C
 from corner_common import build_sheet, is_entry_point
 
-REF = 49813.5203117
-EXPECT_BBOX = (-59.99, -60.0, -9.0, 20.0, 20.0, 9.0)
+# The cut tool, at mask_eps = 0. **This is deliberately not the OpenSCAD number.** OpenSCAD's
+# is 49813.5203117 with the bounding box starting at x = -59.99; the 0.01 mm is the mask
+# overlap it needs and OCCT does not (IP-FC-49), so the tool here is that sliver smaller and
+# starts at a round -60.0. The difference is confined to this intermediate: the finished part
+# is unchanged and still agrees with OpenSCAD to +0.00011% -- see bulkhead_full.
+REF = 49811.7251270
+EXPECT_BBOX = (-60.0, -60.0, -9.0, 20.0, 20.0, 9.0)
 
 PARAMS = [
     ('unit_width', '100.0'),
@@ -55,6 +60,20 @@ PARAMS = [
     ('bolt_offset', '8.0'),
     ('greeble_opening_angle', '35'),
     ('eps', '0.01'),
+
+    # The octant mask's overlap, separate from `eps` and zero, because OCCT does not want
+    # it. In OpenSCAD the mask is grown by eps so adjacent octants interpenetrate and the
+    # union resolves reliably; CGAL is exact, but a union of two solids meeting on an exact
+    # shared plane is the case that wanted help. OCCT does not need the help and is actively
+    # harmed by it -- a 0.01 mm sliver is 4e-5 of a 250 mm part, below what its booleans
+    # resolve, so the tiling fuse went invalid at U >= 2.5 (IP-FC-49). Measured directly:
+    # a solid fused with its own mirror about the touching plane is valid and exact at 10,
+    # 100, 250 and 400 mm with no overlap at all.
+    #
+    # Kept as a named row rather than deleted, because the *reason* is the whole point: this
+    # is a kernel-specific workaround, and a reader who finds a bare `mask_lo` here would
+    # have no way to know the OpenSCAD source says `mask_lo + eps` on purpose.
+    ('mask_eps', '0.0'),
 
     # through_cut(extent) = 3 * extent, centred; mask_reach(extent) = 2 * extent
     ('through_h', '=3 * bulkhead_thickness'),
@@ -151,12 +170,19 @@ def outer_cleanup(doc):
 
 
 def octant_mask(doc):
+    """The eighth of the bulkhead that gets mirrored seven times.
+
+    Both shifts are `mask_eps`, which is 0 here and `eps` in the OpenSCAD source -- see the
+    row for why the kernels want opposite things. At `mask_eps = 0` the octant stops one
+    plane short of overlapping its neighbour and meets it exactly instead, which is also
+    what makes the tiled part exactly eight times the octant rather than slightly less.
+    """
     P = 'Params.'
     block = _through_box(doc, 'MaskBlock', P + 'mask_leg', P + 'mask_leg',
-                         P + 'mask_lo + ' + P + 'eps', P + 'mask_lo')
-    # keep y <= x - eps, so the complement is clipped away rather than the usual side
+                         P + 'mask_lo + ' + P + 'mask_eps', P + 'mask_lo')
+    # keep y <= x - mask_eps, so the complement is clipped away rather than the usual side
     return C._cut(doc, 'OctantMask', block,
-                  _halfplane(doc, 'MaskDiagBox', P + 'far + ' + P + 'eps', P + 'far',
+                  _halfplane(doc, 'MaskDiagBox', P + 'far + ' + P + 'mask_eps', P + 'far',
                              angle=135, size=P + 'mask_span'))
 
 

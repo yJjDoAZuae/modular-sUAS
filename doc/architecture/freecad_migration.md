@@ -678,7 +678,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-6 | ~~decided~~ 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
 | ARCH-7 | ~~decided~~ 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
 | ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
-| ARCH-10 | **open** 2026-08-09 | `eps` is an absolute 0.01 mm, and the octant-and-mirror tiling needs that overlap to stay resolvable at part scale. It does not, at U ≥ 2.5. What replaces it? **Blocks IP-FC-49** |
+| ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
@@ -1286,7 +1286,40 @@ under a license the table does not mention. Suggested wording: *acceptable as a 
 tool or an imported module; obligations attach only on redistribution; note the §4.B
 indemnity.*
 
-### OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big? — OPEN 2026-08-09
+### ~~OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big?~~ — WITHDRAWN 2026-08-09: not an open question
+
+**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions) and
+[OQ-ARCH-8](#open-questions), and for a more interesting reason than either.** Those two were
+*"we do not know the value of X"*. This one was *"we know X must exist, so how big should it
+be"* — and the premise was false. The overlap does not need to exist.
+
+The question as posed asked what should *replace* the 0.01 mm sliver, taking for granted that
+a union of two solids meeting on a shared plane needs help. That is true of OpenSCAD, which
+is why the overlap was added. It is not true of OCCT, and one measurement settles it:
+
+| Fuse of a solid with its own mirror about the touching plane | 10 mm | 100 mm | 250 mm | 400 mm |
+| --- | --- | --- | --- | --- |
+| No overlap at all | valid, exact | valid, exact | valid, exact | valid, exact |
+
+So the answer is not a scaled `eps`, a fuzzy tolerance, or a redesigned tiling — the three
+alternatives this section originally weighed. It is `mask_eps = 0`. Every U from 0.5 to 4.0
+tiles into one valid solid, the part is dimensionally unchanged (the sliver was being
+reclaimed, so the full volume is identical to seven figures either way), OpenSCAD parity is
+preserved at +0.00023%, and the `8 × octant` check gets stronger rather than weaker. Recorded
+in [IP-FC-49](../implementation/freecad_migration.md).
+
+**The generalisable mistake.** The earlier two work items failed the judgment-versus-
+observation test outright. This one *looked* like a judgment because it presented as a
+trade-off with three costed alternatives, and every one of those alternatives was real —
+they were just all answers to the wrong question. A constant inherited from a port is a claim
+about the *source* toolchain, and it needs re-measuring against the target before its size is
+debated. The question that should have been asked first is not "how big" but "at all".
+
+**Three of the ten questions in this document were not questions.** The test that separates
+them still holds; what this adds is that it has to be applied to the premise as well as to
+the question.
+
+### ~~OQ-ARCH-10 (as originally posed)~~ — retained for the alternatives, none of which was needed
 
 `geometry_eps()` is `0.01` mm, a constant of the OpenSCAD source, carried into the port
 verbatim. Two jobs rest on it: making cuts overshoot the material they pass through, and
@@ -1339,9 +1372,15 @@ cuts overshoot:
    that makes the tiling verifiable — the eps overlap is why the full part is *not* eight
    times the octant, which is what proves the mirrors are about the right planes.
 
-**Not decided here.** Each alternative trades against something already recorded as intent:
-OpenSCAD parity, the live parametric tree, or fidelity to the construction being ported.
-IP-FC-49 is blocked on this.
+**None of the three was needed.** Each trades against something recorded as intent —
+OpenSCAD parity, the live parametric tree, fidelity to the construction being ported — and
+all three are answers to a question whose premise did not hold. Alternative 3's stated
+drawback is the one to reread: it says the eps overlap *is* what proves the mirrors are about
+the right planes. That was the assumption doing the damage. Removing the overlap makes the
+full part exactly eight times the octant, which proves the same thing more directly.
+
+Kept because the alternatives were correctly costed and the reasoning is sound given its
+premise — which is exactly why it is worth being able to recognise this shape again.
 
 ---
 

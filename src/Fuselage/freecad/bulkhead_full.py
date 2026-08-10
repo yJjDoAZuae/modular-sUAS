@@ -9,11 +9,28 @@ The mirrors are about the ORIGIN, which is why the octant is translated to
 `(W/2 - R, W/2 - R)` first -- `bulkhead_section_octant` does exactly that, and this is the
 whole of its non-interconnect branch.
 
-**The full part is not eight times the octant.** `octant_mask` is shifted by `eps`, so
-adjacent octants overlap by a sliver and the union reclaims it: 6922.50 against 8 x 865.77 =
-6926.15, a 3.65 mm3 difference. That makes the tiling a real check rather than an arithmetic
-one -- a mirror about the wrong plane would still give eight copies and a plausible volume,
-but not this volume and not one solid.
+**The full part is exactly eight times the octant, and it did not used to be.** `octant_mask`
+was shifted by `eps` so adjacent octants overlapped by a sliver the union then reclaimed --
+6922.50 against 8 x 865.77 = 6926.15. That overlap was there for OpenSCAD, whose union wanted
+help resolving two solids that meet on an exact shared plane. **OCCT does not want the help
+and is harmed by it**: a 0.01 mm sliver is 4e-5 of a 250 mm part, under what its booleans
+resolve, and the tiling fuse went invalid at U >= 2.5 while the octant and its mirror were
+each still valid (IP-FC-49). The mask overlap is now `mask_eps = 0` and every U from 0.5 to
+4.0 tiles into one valid solid.
+
+Measured directly before changing it: a solid fused with its own mirror about the touching
+plane is valid and volume-exact at 10, 100, 250 and 400 mm with no overlap at all.
+
+**Removing it did not move the part.** The full volume is identical either way -- 7122.0983
+at U=1, 39413.112 at U=2 -- because the sliver really was being reclaimed. What changed is
+what `8 x octant` means, and it got *stronger* as a check: it was "matches 6926.15, a number
+with no independent meaning", and it is now exact equality, which says the eight pieces tile
+with neither gap nor overlap. A mirror about the wrong plane still fails it.
+
+    U      full            8 x octant      difference
+    1.0    7122.0983       7122.0983       -0.0000      (was -3.6477)
+    2.0    39413.1120      39413.1856      -0.0736      (was -10.2960)
+    4.0    304571.8350     304572.1779     -0.3429      (would not build)
 """
 import os
 import sys
@@ -96,8 +113,8 @@ def main():
     print('  volume  = %.7f' % s.Volume)
     print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
     print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-    print('  8x octant = %.7f  -- the eps overlap the union reclaims is %.4f'
-          % (8 * bulkhead_section.REF, 8 * bulkhead_section.REF - REF))
+    print('  8x octant = %.7f  -- gap/overlap in the tiling is %+.4f'
+          % (8 * bulkhead_section.REF, 8 * bulkhead_section.REF - s.Volume))
     print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
     print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
     print('  valid   = %s  solids=%d  faces=%d'
