@@ -71,8 +71,8 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-9 | done | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. The `octant_to_full` tiling is done too -- `bulkhead_full.py` at +0.00011%, and the corner checked at the **swept** values for the first time at +0.00041% | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical. **That verification was one part per kind, and two defects survived it** — IP-FC-46 and IP-FC-47, both found later by enumerating the swept space | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | done | Geometry-code version added to `--resume`'s staleness key, **on both backends**. Found while checking the FreeCAD side: the generated `.stl.scad` is a `use <>` line and a call, so the OpenSCAD path had the same blind spot since `--resume` was written — an edit to `fuselage_bulkhead_geometry.scad` left every definition byte-identical. `tools/geometry_version.py` walks the `use`/`include` closure of the generated file and the import closure of the builder, and stamps a digest into the definition both backends already compare. Verified in both directions on three backend/kind pairs | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-12 | blocked (IP-FC-10, IP-FC-4) | Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
-| IP-FC-13 | blocked (IP-FC-12) | Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
+| IP-FC-12 | todo | **Unblocked 2026-08-10** — IP-FC-4 delivered the OML as real surfaces and IP-FC-10 the sweep integration. Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point | IP-FC-10, IP-FC-4 | [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
+| IP-FC-13 | in progress | [`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same variants through both engines and compares measured geometry, with the two tiers below and a guard that refuses to count a part FreeCAD never built. Usable now for the corner and the bulkhead; still blocked on IP-FC-12 for whole-corpus coverage. Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
 | IP-FC-15 | blocked (IP-FC-13) | UC-3 — export `.step` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
@@ -1281,6 +1281,79 @@ three ways of choosing a value. `eps` still has a second job, making cuts oversh
 material they pass through, and that job is real on both kernels — which is why `mask_eps` is
 a separate row rather than `eps` being set to zero.
 
+## IP-FC-13 — the comparison's floor is OpenSCAD's circle, and it is computable
+
+[`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same
+variants through both engines and compares measured geometry. Two things it does that the
+three existing verification tools do not, both learned the hard way this session:
+
+- **It refuses to count a part FreeCAD never built.** The backend falls back silently for an
+  unported kind *or* an unported variant of a ported kind — an interconnect bulkhead, per
+  IP-FC-47. Comparing OpenSCAD against OpenSCAD passes while proving nothing, so the tool
+  checks for the `.stl.json` definition the FreeCAD path writes and reports fallbacks
+  separately rather than as passes.
+- **It samples from the real parameter derivation**, by running the sweeps with rendering
+  stubbed, so the selection comes from `derived_parameters()` and the validity checks rather
+  than from a guess about the space.
+
+Its first run failed a corner at **+0.00222%** against a 0.002% tolerance. The tolerance was
+wrong, not the geometry, and the reason is worth stating because it bounds every comparison
+this project will make:
+
+**This was already predicted; what was missing was the number.** [§Verification](#verification)
+below states that the OpenSCAD corpus is faceted, that its `cylinder()` is an inscribed
+prism, and that the difference is therefore systematic with a predictable sign. All true.
+But a prediction of the *sign* does not let you set a tolerance — that needs the magnitude,
+and the magnitude is computable rather than empirical.
+
+`$fa=1` caps a circle at 360 segments, and an inscribed regular n-gon under-measures its
+circle by `1 − (n/2π)·sin(2π/n)`:
+
+| Segments | Area deficit |
+| --- | --- |
+| **360** (the cap, and so the floor) | **+0.005077%** |
+| 720 | +0.001269% |
+| 1440 | +0.000317% |
+
+FreeCAD reads larger because its mesh is the more accurate one: the B-rep is exact, and
+MeshPart at 1e-3 linear deviation puts the STL within +0.00024% of it. The measured corner
+deltas sit under the floor and scale with how much of the part is round — +0.00121% at U=1,
++0.00222% at U=2.
+
+So a tolerance tighter than ~0.005% does not detect modelling error; it detects OpenSCAD's
+circle approximation. The tiers are now 0.006% for exactly-reproducible kinds and 0.010%
+where real fillets add surface-vs-facet error on top. Bounding boxes stay at 5e-4 mm
+absolute, which is the interface check standing in until IP-FC-36 enumerates the dimensions.
+
+First clean run, 2026-08-10, spread across U and both kinds:
+
+| Part | OpenSCAD mm³ | FreeCAD mm³ | Delta |
+| --- | --- | --- | --- |
+| `U_0.5 bulkhead_end_anchor 1/32in` | 2167.172203 | 2167.149964 | −0.00103% |
+| `U_0.5 corner_FX_0.5 1/32in` | 1202.621364 | 1202.641361 | +0.00166% |
+| `U_1.0 bulkhead_end_bolt 3mm` | 6781.365193 | 6781.380436 | +0.00022% |
+| `U_1.0 corner_FX_2.5 3mm` | 35887.460602 | 35887.829500 | +0.00103% |
+| `U_2.5 bulkhead_end_bolt 1/8in` | 74224.377841 | 74223.833140 | −0.00073% |
+| `U_2.5 corner_FX_1.5 1/8in` | 329651.979897 | 329658.511523 | +0.00198% |
+
+Two things in that table matter more than the pass.
+
+**The U=2.5 bulkhead is a part that could not be built at all four fixes ago** — IP-FC-49
+had the tiling fuse failing above U=2.0. It now agrees to −0.00073%.
+
+**The sign splits by kind, and that is the model working rather than noise.** Corners run
+positive, bulkheads negative. Faceting makes circular features smaller than the true circle,
+so an *additive* cylinder (the corner's outer radius) makes OpenSCAD read low — positive
+delta — while a *subtractive* one (the bulkhead's bores) removes less material and makes it
+read high. §Verification's claim that the sign is predictable per feature holds, and it is
+why a delta in the unexpected direction is worth investigating even when it is inside
+tolerance.
+
+**This also puts a ceiling on what IP-FC-34 can ever claim.** Retiring OpenSCAD on the
+grounds that FreeCAD reproduces it cannot be demonstrated below the faceting floor by volume
+comparison alone — past that, agreement has to be argued from the B-rep, or from section
+curves and mass properties (IP-FC-33), not from meshes.
+
 ### One duplication removed on the way
 
 `export_parameters.py` carried its own copies of the bulkhead and corner parameter mappings,
@@ -1458,6 +1531,7 @@ than discovered:
 | Exact and cheap | `scad_snapshot.py` — byte-compare generated `.scad` | **Gone.** No generated text exists. Replaced one layer up by IP-FC-2's parameter snapshot |
 | Geometric | `sweep_check.py` against a reference tree | Survives, minus triangle count — a tessellation setting, not a property |
 | Caller coverage | `verify_drivers.py` | Becomes "does the generator script run", plus the notebook keyword check |
+| **Cross-engine** | *(did not exist — nothing to compare against)* | `compare_backends.py` — renders the same variants through both engines and compares measured geometry, with a tessellation-derived tolerance and a guard against counting a part FreeCAD never built. This is IP-FC-13's instrument |
 
 **The equivalence tolerance has two components, and only one shrinks with finer
 tessellation.** The OpenSCAD corpus is *faceted* — its `cylinder()` is an inscribed prism —
@@ -1466,6 +1540,11 @@ noisily. See
 [freecad_migration.md §The reference corpus is faceted](../architecture/freecad_migration.md).
 The sign is predictable per feature, which makes a difference in the *unexpected* direction
 a genuine finding.
+
+Quantified 2026-08-10: at `$fa=1` the cap is 360 segments and the deficit is **+0.005077%**
+of a circular feature's area, which is the floor no volume comparison between the two engines
+can beat. That is where `compare_backends.py`'s tolerances come from — see
+[§IP-FC-13](#ip-fc-13--the-comparisons-floor-is-openscads-circle-and-it-is-computable).
 
 Once IP-FC-13 is signed off, this tolerance disappears: within-FreeCAD comparison is B-rep
 against B-rep, where volume is exact.
