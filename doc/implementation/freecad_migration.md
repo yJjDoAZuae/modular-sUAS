@@ -71,7 +71,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-9 | done | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. The `octant_to_full` tiling is done too -- `bulkhead_full.py` at +0.00011%, and the corner checked at the **swept** values for the first time at +0.00041% | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical. **That verification was one part per kind, and two defects survived it** — IP-FC-46 and IP-FC-47, both found later by enumerating the swept space | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | done | Geometry-code version added to `--resume`'s staleness key, **on both backends**. Found while checking the FreeCAD side: the generated `.stl.scad` is a `use <>` line and a call, so the OpenSCAD path had the same blind spot since `--resume` was written — an edit to `fuselage_bulkhead_geometry.scad` left every definition byte-identical. `tools/geometry_version.py` walks the `use`/`include` closure of the generated file and the import closure of the builder, and stamps a digest into the definition both backends already compare. Verified in both directions on three backend/kind pairs | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-12 | in progress | **Unblocked 2026-08-10** by IP-FC-4 and IP-FC-10, re-blocked the same day on [OQ-DES-B11](../design/bulkhead.md), and unblocked again when that was decided: **split by intent** — true fillets on the key, the morphological chain for the region-wide remainder. The key's direct construction landed in the OpenSCAD path first and is verified across all 24 distinct swept key geometries at a worst 0.00522% symmetric difference, with `boom_key_validity_check()` enforcing the domain. [`boom_key.py`](../../src/Fuselage/freecad/boom_key.py) then ports it — the first module built **in the plane**, which established that coplanar unions must be built from cuts rather than fuses or every offset downstream is wrong by hundreds of percent (§IP-FC-12 progress). Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point. **The boom bulkhead is built almost entirely from 2D offsets** — `fillet_inner`, `fillet_outer` and plain `offset(r=±)` strokes — and three of its four `fillet_inner` uses wrap a whole compound region rather than a named corner, so the route is not the one the frame bulkhead's four true fillets settled. **Done pending that answer:** [`ref_boom_bulkhead.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead.scad) isolates the part and twelve sub-shapes at swept parameters taken from `derived_parameters()` rather than typed, and the swept space is enumerated at 132 valid variants, none of them on the offset degeneracy (§IP-FC-12 progress). **The part itself is ported and agrees to 0.00039%** as of 2026-08-11 — [`boom_bulkhead.py`](../../src/Fuselage/freecad/boom_bulkhead.py), one profile and one `Part::Extrusion`. What remains is `boom_make_lower_web`, which needs `boom_webs` re-run against a second set of rows and covers one of the three boom types, and then the harness wiring | IP-FC-10, IP-FC-4, OQ-DES-B11 | [bulkhead.md §OQ-DES-B11](../design/bulkhead.md), [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
+| IP-FC-12 | in progress | **Unblocked 2026-08-10** by IP-FC-4 and IP-FC-10, re-blocked the same day on [OQ-DES-B11](../design/bulkhead.md), and unblocked again when that was decided: **split by intent** — true fillets on the key, the morphological chain for the region-wide remainder. The key's direct construction landed in the OpenSCAD path first and is verified across all 24 distinct swept key geometries at a worst 0.00522% symmetric difference, with `boom_key_validity_check()` enforcing the domain. [`boom_key.py`](../../src/Fuselage/freecad/boom_key.py) then ports it — the first module built **in the plane**, which established that coplanar unions must be built from cuts rather than fuses or every offset downstream is wrong by hundreds of percent (§IP-FC-12 progress). Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point. **The boom bulkhead is built almost entirely from 2D offsets** — `fillet_inner`, `fillet_outer` and plain `offset(r=±)` strokes — and three of its four `fillet_inner` uses wrap a whole compound region rather than a named corner, so the route is not the one the frame bulkhead's four true fillets settled. **Done pending that answer:** [`ref_boom_bulkhead.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead.scad) isolates the part and twelve sub-shapes at swept parameters taken from `derived_parameters()` rather than typed, and the swept space is enumerated at 132 valid variants, none of them on the offset degeneracy (§IP-FC-12 progress). **The part itself is ported and agrees to 0.00039%** as of 2026-08-11 — [`boom_bulkhead.py`](../../src/Fuselage/freecad/boom_bulkhead.py), one profile and one `Part::Extrusion`. `boom_make_lower_web` followed the same day, so all three swept boom types are covered — `center_single` is checked against its own reference at 0.00040%. What remains is the harness wiring | IP-FC-10, IP-FC-4, OQ-DES-B11 | [bulkhead.md §OQ-DES-B11](../design/bulkhead.md), [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
 | IP-FC-13 | in progress | [`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same variants through both engines and compares measured geometry, with the two tiers below and a guard that refuses to count a part FreeCAD never built. Usable now for the corner and the bulkhead; still blocked on IP-FC-12 for whole-corpus coverage. Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet. **The boom bulkhead lands in the strict tier**, settled by [OQ-DES-B11](../design/bulkhead.md): its one true-fillet feature is the key, and replacing the key's morphological rounding moved the whole part by 0.00008% — two orders inside the strict tolerance — so the split does not cost a tier | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md), [bulkhead.md §OQ-DES-B11](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
@@ -1910,14 +1910,59 @@ shape: `Access violation` and `No object linked` on stderr, after which a later 
 recomputes it correctly. The final numbers were right in both cases, so the only symptom was a
 line of stderr that is easy to read past. Build dependencies first.
 
-**Still to do on this item:** the lower web, then the harness. `boom_make_lower_web` adds a
-second pair of web shapes mirrored in y and evaluated at `−boom_z_position` and
-`180 − boom_key_angle` — a second run of `boom_webs` against a second set of rows, the
-`bulkhead_tree` pattern rather than a mirror of what is already built. One of the three boom
-types (`center_single`) sets it, so it is a third of the swept space. `boom_bulkhead.py` raises
-on that flag rather than dropping the web, because a boom bulkhead missing a web is a part that
-would pass a visual check. After that, wire the kind into `part_kinds.py` and
-`fuselage_variants.py` so `compare_backends.py` can sweep it. Then the cowls.
+### The lower web, and the second boom type
+
+`boom_make_lower_web` was ported the same day. It adds a second pair of web shapes evaluated at
+`−boom_z_position` and `180 − boom_key_angle` and mirrored in y, and **it is a second evaluation
+of the web builders, not a mirror of the first** — the `bulkhead_tree` pattern. The key is what
+makes the difference: at the reflected angle the tab faces the other way, so the pad the web
+grows around it is a different shape.
+
+That distinction is worth the space because a lower web built by mirroring the upper one lands
+close enough to look right. At `center_single` the upper web's outer shape is 2868.85 and the
+lower's is 2888.83 — 0.7% apart, on a term that is itself a fraction of the part. It would have
+shown up in the assembled volume as a few tenths of a percent and been easy to blame on
+faceting.
+
+Only two inputs change, and every derived row in `boom_key` and `boom_web` is independent of
+both — collet and tab dimensions, frame turning points, and a `key_reach` that takes an absolute
+value. So the second evaluation reads the same sheet rows and adds two of its own,
+`lw_boom_z_position` and `lw_boom_key_angle`. The builders gained a `tag` for node names and
+expressions for those two inputs; nothing else moved.
+
+[`ref_boom_bulkhead_center.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead_center.scad) is
+the second boom type, `center_single`, at `derived_parameters(1.0, 1.0, center_single, 3 mm)`.
+Exactly three assignments differ from `offset_single` — `boom_z_position` 25 → 0,
+`boom_make_vert_web` true → false, `boom_make_lower_web` false → true — and `boom_bulkhead.py`
+carries the same three as a variant overlay that replaces those rows' *definitions*, so
+everything derived from them follows rather than being restated. Its modes 16 and 17 are
+transcriptions rather than module calls, because the mirrored web is written inline inside
+`boom_bulkhead` and has no module of its own; they exist to localise a disagreement, and mode 9
+is what binds the port.
+
+| shape | FreeCAD | OpenSCAD | delta |
+| --- | --- | --- | --- |
+| `boom_bulkhead`, `offset_single` | 7433.4457899 | 7433.4744903 | −0.00039% |
+| `boom_bulkhead`, `center_single` | 8296.0889991 | 8296.1222588 | −0.00040% |
+| the lower web's outer shape | 2888.8591480 | 2888.8332161 | +0.00090% |
+| the lower web's inner shape | 1265.7250873 | 1265.7236228 | +0.00012% |
+
+`dual` shares `offset_single`'s flag settings, so all three swept boom types are now covered by
+one or other of the two references.
+
+**Still to do on this item:** wire the kind into `part_kinds.py` and `fuselage_variants.py` so
+`compare_backends.py` can sweep it across the 132 variants rather than the two checked here.
+Then the cowls.
+
+The geometry side of that wiring is ready: all 25 parameters of the `boom_bulkhead()` signature
+exist in the sheet as seedable literals under their OpenSCAD names, so the seed is a straight
+mapping and `emit(doc, seed)` already takes one. **The obstacle is upstream, in the export.**
+`render_variant.py` and `export_parameters.py` enumerate the *frame* bulkhead's axes — panel ×
+size × bulkhead type, giving `end_bolt`, `interconnect` and so on. The boom bulkhead is a
+different axis set (`boom_bulkhead_type_variants.csv`, via
+`run_boom_bulkhead_parametric_sweep`), and nothing currently exports it. So the wiring needs a
+third table in the export beside `parameters` and `corner_parameters`, and the boom axes added
+to the enumeration both of them share — not just a row in `part_kinds.KINDS`.
 
 ---
 
