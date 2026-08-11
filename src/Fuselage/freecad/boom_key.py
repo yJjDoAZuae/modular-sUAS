@@ -81,6 +81,13 @@ PARAMS = [
     # the convex cap: two arcs whose centres are one radius in from each tab side
     ('key_cap_half', '=key_a - boom_key_radius'),
     ('key_cap_base', '=key_y_top - 2 * boom_key_radius'),
+
+    # Half-width of the rectangle `_union` complements against. It has to strictly enclose
+    # everything being unioned, in the frame the union happens in, or the union silently
+    # truncates -- so it is built from every term that can push material outward and then
+    # doubled, the same way `mask_reach()` is in shape_modifier_utils.scad.
+    ('union_reach', '=2 * (abs(boom_y_position) + abs(boom_z_position) '
+                    '+ collet_radius + boom_key_height)'),
 ]
 
 
@@ -115,39 +122,43 @@ def _rect(doc, name, length, width, x, y):
 
 
 def _union(doc, name, pieces):
-    """Fuse coplanar faces.
+    """Union coplanar faces into ONE face, as `R - ((R - a) - b - ...)`.
 
-    **This does not yet produce a single face, and that is an open problem — see below.** The
-    area and the bounding box are right, so `boom_key_shape` verifies against OpenSCAD from
-    here; what does not work yet is feeding the result to `Part::Offset2D`, which the four
-    region-wide sites need.
+    **Do not use `Part::Fuse` or `Part::MultiFuse` for coplanar faces.** They return a
+    **Compound** of abutting faces rather than one face, and `Part::Offset2D` offsets each
+    member of a compound *separately*, interior shared edges included. Measured on this key at
+    `offset(r = 6)`, FreeCAD 1.1.1:
 
-    Measured 2026-08-10, in FreeCAD 1.1.1:
+        fuse chain (15 faces)  ->  2434.87 mm2   vs OpenSCAD 567.31   +329%
+        this route (1 face)    ->   567.34 mm2   vs OpenSCAD 567.31   +0.0054%
 
-    * A chain of binary `Part::Fuse` over coplanar faces returns a **Compound** of abutting
-      faces — 15 of them for this key — whose total area is correct to 0.005%.
-    * `Part::Refine` is `ShapeUpgrade_UnifySameDomain`, and it cannot unify across a
-      compound. Nor can `Part::MultiFuse` with `Refine = True`: still a compound, still 15.
-    * The **scripted** `shape.multiFuse(...)` returns a **Shell**, and `removeSplitter()` on
-      a shell collapses it to exactly one face. So the kernel can do it; the document objects
-      wrap the result in a compound before anything gets the chance.
+    and the +329% comes back as a closed, valid, plausible region with no warning. The fused
+    compound's own area is right to 0.005%, so a check on that node alone never sees it.
 
-    Why it matters, rather than being untidy: `Part::Offset2D` offsets **each fragment
-    separately**, interior shared edges included. On this key at `offset(r = 6)` that gives
-    2434.87 mm2 against OpenSCAD's 567.31 — **+329%**, returned as a closed, valid,
-    plausible region with no warning. Handed the properly unified single face instead, the
-    same offset gives 567.34, **+0.00541%**, inside the faceting floor. So the pipeline is
-    right and only the unification is missing.
+    Nothing else reaches one face. `Part::Refine` is `ShapeUpgrade_UnifySameDomain` and cannot
+    unify across a compound; `Part::MultiFuse` with `Refine = True` is still a compound;
+    `Part::FaceMakerBullseye`, `...Simple` and `...Cheese` all rebuild the 15 fragments,
+    because the union's outer boundary is itself split across several wires. Only the scripted
+    `shape.multiFuse(...).removeSplitter()` unifies -- it returns a Shell, which the document
+    objects never do -- and baking that into a `Part::Feature` would cost the parametric
+    editability the whole port exists to keep.
 
-    It is the 2D counterpart of the null-shape trap in `corner_tree._degenerate`: a kernel
-    behaviour that is silent until something several nodes away consumes it, and that a
-    volume check on this node alone would never catch.
+    `Part::Cut` does not fragment. So De Morgan gets there in stock document objects: cut every
+    piece out of a rectangle, then cut the result back out of the same rectangle. Two extra
+    nodes per union, and the tree stays live.
+
+    **The rectangle must strictly enclose every piece**, in the frame the union happens in. If
+    it does not, the union silently truncates to whatever the rectangle held -- measured at
+    -9.42% when a first attempt sized the rectangle for the placed key while the pieces were
+    still in local coordinates. `union_reach` is built from every term that can push material
+    outward, and `main()` asserts the result is clear of the rectangle's own edge.
     """
-    fused = C._owned(doc, 'Part::MultiFuse', name + 'Fuse')
-    fused.Shapes = list(pieces)
-    node = C._owned(doc, 'Part::Refine', name)
-    node.Source = fused
-    return node
+    R = P + 'union_reach'
+    rect = _rect(doc, name + 'Rect', '2 * ' + R, '2 * ' + R, '-' + R, '-' + R)
+    node = rect
+    for i, piece in enumerate(pieces):
+        node = C._cut(doc, '%sNeg%d' % (name, i), node, piece)
+    return C._cut(doc, name, rect, node)
 
 
 def junction_fillet(doc, tag, mirrored=False):
@@ -232,6 +243,17 @@ def main():
           % (bb.XMin, bb.YMin, bb.XMax, bb.YMax))
     print('  expect  = [%.4f, %.4f] x [%.4f, %.4f]' % EXPECT_BBOX)
     print('  valid   = %s  faces=%d wires=%d' % (s.isValid(), len(s.Faces), len(s.Wires)))
+
+    # One face, or Part::Offset2D will offset the fragments separately -- see _union.
+    if len(s.Faces) != 1:
+        print('  FRAGMENTED -- %d faces where 1 is required; any offset downstream of this '
+              'is wrong by hundreds of percent' % len(s.Faces))
+
+    # And clear of the rectangle _union complements against, or the union truncated.
+    reach = float(doc.getObject('Params').get('union_reach'))
+    margin = min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
+    print('  reach   = %.4f, nearest approach to its edge %.4f  %s'
+          % (reach, margin, 'ok' if margin > 1e-6 else 'TRUNCATED'))
 
 
 if is_entry_point(__name__):
