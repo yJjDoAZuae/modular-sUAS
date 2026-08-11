@@ -1846,7 +1846,26 @@ Seven of the reference table's ten rows are now ported and verified:
 | 6 | `boom_web_outer_shape` | +0.00067% | `boom_webs.py` |
 | 7 | `boom_web_inner_shape` | −0.00237% | `boom_webs.py` |
 | 8 | `bulkhead_oml_shape` | −0.00029% | `boom_oml.py` |
+| 10 | `bulkhead_web_inner_shape` | *not yet* — ref **5700.1741175**, bbox ±40.9 | — |
+| 11 | `bulkhead_oml_inner_shape` | *not yet* — ref **103.0474738**, bbox ±42.05 | — |
 | 9 | `boom_bulkhead` | *not yet* | — |
+
+Modes 10 and 11 were added to `ref_boom_bulkhead.scad` and rendered on 2026-08-11; they are the
+two constituents the assembly still needs and neither is ported yet. Mode 11 is trivial — four
+longeron bores and four bolt holes, and the area agrees with 4·π·2.05² + 4·π·2² to faceting.
+
+**Mode 10 is the interesting one, and it is not shaped like the other four `fillet_inner` sites.**
+Its octant is built in the corner-local frame out of three **region-wide** shapes — the whole
+outer outline, `fillet_inner(web_fillet_radius)` over `offset(−web_width)` of the whole OML, and a
+half-plane triangle — and only then tiled. So the `translate(−arm, −arm)` and the `octant_tiled`
+do **not** cancel: each octant is a different window onto one whole-outline erosion, not eight
+copies of a local computation. Building it as a local shape and tiling would give a plausible
+wrong answer, which is the failure mode this port keeps meeting.
+
+The assembly itself is
+`OML − fillet_inner(OML − MAT) − KEY`, where `MAT = (RIM ∪ WEBS) − BORES`, `RIM = OML − mode 10`,
+and `WEBS = mode 6 − mode 7 − mode 4` with a mirrored copy of each web term when
+`boom_make_lower_web` is set.
 
 Every one is inside the 0.0060% faceting floor, and every one satisfies both 2D invariants:
 no two faces sharing an edge, and clear of its own enclosing rectangle.
