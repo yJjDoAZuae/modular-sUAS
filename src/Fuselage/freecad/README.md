@@ -145,6 +145,23 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | `bulkhead_section.py` | The whole octant, assembled from every ported constituent and checked against the **real module** — the binding check for the `bulkhead_cuts` transcription, and what caught the `is_cowling` misreading above. Needs a seed: without one the merge is comparing two configurations and refuses |
 | `bulkhead_full.py` | `bulkhead_section_full` — the octant translated to its corner and tiled eight ways, as seven `Part::Mirroring` objects and seven fuses. `bulkhead_render()` calls this and nothing else, so it is the whole part. Now exactly eight times the octant, and it did not used to be — `octant_mask`'s `eps` made neighbours overlap by a sliver the union reclaimed, until IP-FC-49 measured that OCCT is harmed rather than helped by it |
 
+### The boom bulkhead (IP-FC-12)
+
+Unlike every other part here, this one is **flat**: the whole shape is worked out in the plane
+and a single `Part::Extrusion` at the top gives it thickness. That is forced rather than
+chosen — most of its geometry comes from morphological offsets, and `Part::Offset2D` operates
+on faces. Every module below builds 2D, and each is checked against its own mode of
+[`ref_boom_bulkhead.scad`](ref_boom_bulkhead.scad).
+
+| module | what it is |
+| --- | --- |
+| `plane2d.py` | The 2D primitives and the one union rule. **Never fuse coplanar faces**: `Part::Fuse` returns a compound of abutting patches, and `Part::Offset2D` then offsets each patch separately, interior shared edges included — measured at +329% on the boom key. The union here is `R − ((R − a) − b)` instead, and `fragmented()` is the standing check that no two faces share an edge |
+| `boom_key.py` | `boom_key_shape` — the keyed collet. The one site in this part that gets **real fillets**: a named corner round with a fixed count of four, which is what OQ-DES-B11 settled it on |
+| `boom_web.py` | The seven-vertex spine the boom's web is strokes of, and the mirror that doubles it |
+| `boom_webs.py` | `boom_web_outer_shape` and `boom_web_inner_shape` — the two region-wide roundings. `boom_make_vert_web` swaps an erode with a mirror, and **the two do not commute**: eroding each half first leaves the vertical web the flag is named for. Two of the three boom types set it |
+| `boom_oml.py` | The bulkhead outline, in three forms from one octant — before the bores, the bores alone, and the difference. Shared with the frame bulkhead, which reaches the same shapes as 3D octants through `bulkhead_cuts.py` |
+| `bulkhead_web.py` | `bulkhead_web_inner_shape` — the lightening pocket inside the frame. **Built region-wide although the source builds it as an octant**, because this is the one `*_octant` module whose two translates cancel: its contents are whole-region shapes evaluated in world coordinates, and the eight wedges only reassemble what a region-wide intersection already gives. Computing it locally and tiling would give a closed, plausible, wrong region |
+| `boom_bulkhead.py` | The part. `OML − fillet_inner(OML − MATERIAL) − KEY`, where the double negation is what rounds the lightening pockets and drops slivers instead of cutting them as knife edges. **The lower web is not ported** — `boom_make_lower_web` needs `boom_webs` re-run against a second set of rows, and the module refuses rather than dropping it silently |
 
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
 

@@ -153,8 +153,14 @@ def enclosed(doc, shape, reach_alias):
     return min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
 
 
-def report(doc, label, shape, ref, reach_alias, expect_bbox=None):
-    """One measured shape against its OpenSCAD reference, with the 2D invariants checked."""
+def report(doc, label, shape, ref, reach_alias, expect_bbox=None, tol=6.0e-5):
+    """One measured shape against its OpenSCAD reference, with the 2D invariants checked.
+
+    `tol` defaults to the faceting floor for a circle capped at 360 segments by `$fa = 1`,
+    which is what almost every shape here is limited by. A shape whose area is mostly small
+    circles is limited by `$fs = 0.1` instead and needs a looser floor -- see `boom_oml.REFS`.
+    Raise it only for that reason, and say which circles and at what radius.
+    """
     got = area(shape)
     d = got - ref
     bb = shape.BoundBox
@@ -164,7 +170,7 @@ def report(doc, label, shape, ref, reach_alias, expect_bbox=None):
                       % len(shape.Faces))
     if enclosed(doc, shape, reach_alias) <= 1e-9:
         checks.append('TRUNCATED -- %s does not enclose it' % reach_alias)
-    if abs(d) / ref > 6.0e-5:
+    if abs(d) / ref > tol:
         checks.append('OVER TOLERANCE')
     if expect_bbox is not None:
         want = expect_bbox
