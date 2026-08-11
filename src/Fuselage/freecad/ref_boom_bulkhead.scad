@@ -104,6 +104,20 @@ if (mode == 9) {
             bulkhead_oml_shape(unit_width, corner_radius, panel_thickness, panel_offset,
                 panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
                 bolt_hole_radius, bolt_offset);
+        } else if (mode == 10) {
+            // The frame web -- the fifth and last fillet_inner site, and the only one that
+            // reaches through the OML rather than the boom's own geometry. Its octant is
+            // built in the CORNER-LOCAL frame from three REGION-WIDE shapes, then tiled, so
+            // the translate and the octant_tiled do not cancel: each octant is a different
+            // window onto the same whole-outline erosion.
+            bulkhead_web_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset,
+                panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
+                bolt_hole_radius, bolt_offset, web_fillet_radius, web_width);
+        } else if (mode == 11) {
+            // the two bores, region-wide -- the last constituent the assembly needs
+            bulkhead_oml_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset,
+                panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
+                bolt_hole_radius, bolt_offset);
         }
     }
 }
