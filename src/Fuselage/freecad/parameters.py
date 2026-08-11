@@ -27,7 +27,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from corner_common import is_entry_point
+from corner_common import is_entry_point, script_args
 
 # The export carries two tables. The corner and the bulkhead are separate variants in the
 # sweep -- `derived_parameters()` branches on is_bulkhead -- and they differ on
@@ -141,7 +141,7 @@ def check_refs(refs, path):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    args = script_args()
     if not args:
         print('usage: freecadcmd parameters.py params.json')
         print('generate params.json with tools/export_parameters.py')

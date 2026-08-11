@@ -171,9 +171,12 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkh
         // OQ-DES-B6 in doc/design/bulkhead.md.
        U = unit_width/100;
        
-       translate([0,0,-eps]) { // note sneaky eps shift to clean up the bottom of the greeble cutout
-        corner_end(U, bulkhead_thickness+2*eps, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0, extrusion_width);
-       }
+       // The end section is used here as a CUT TOOL, so it asks for overshoot explicitly.
+       // It used to buy the same overshoot by passing bulkhead_thickness+2*eps and shifting
+       // the result down by eps -- which also inflated the snap rib, because corner_end
+       // sizes it from the thickness. See OQ-DES-B12. Same z extent as before; the rib is
+       // now nominal.
+       corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0, extrusion_width, eps);
         
         // Longeron opening cutout: the mouth the longeron snaps in through, which is
         // what makes the greeble a C rather than a closed ring. greeble_opening_angle is
