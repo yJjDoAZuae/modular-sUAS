@@ -277,8 +277,14 @@ def _prism(doc, name, sketch, length_expr):
 def _section(doc, tag, z0, h):
     """The mirrored profile every axial section extrudes, from z0 through h."""
     P = 'Params.'
-    cz = '%s - %seps' % (z0, P)
-    ch = '%s + %seps * 2' % (h, P)
+    # The cut tools span the body EXACTLY, not z0-eps through h+2*eps. OpenSCAD's overshoot
+    # is not needed here: a tool cap coplanar with the face it exits through cuts cleanly on
+    # OCCT, and a tool face tangent to a curved one leaves the curve intact rather than
+    # shaving a sliver -- both exact to machine precision at 10, 100, 250 and 400 mm, and
+    # both with FEWER faces than the padded version (IP-FC-50, spike_eps.py). Removing the
+    # pad cannot move the result either: the tool already passed through the whole body, so
+    # it removes the same material at 0 as at 0.01.
+    cz, ch = z0, h
 
     body = _fuse(doc, tag + 'Body',
                  _cyl(doc, tag + 'Outer', P + 'corner_radius', h, z0),
@@ -350,6 +356,17 @@ def greeble_socket(doc, tag='', pfx='', base_z='0'):
 
     # the wedge, seeded at the corner's parameters:
     #   (-3.71,-3.7) (3.71,-3.7) (3.71,0) (2.8,-0.8) (-2.9,-0.8) (-3.71,0)
+    # The eps on the flanks is NECESSARY, and is the one place in this module where that is
+    # true (IP-FC-50). Without it the flanks sit exactly on greeble_nub_radius, tangent to
+    # the nub cylinder they cut across. In exact arithmetic tangency changes nothing -- the
+    # tool still covers the whole chord -- but OCCT under-removes by 0.0199 mm^3, leaving
+    # EndCutGroove at 551.847453 instead of 551.827595.
+    #
+    # Note this is NOT contradicted by the tangent case in spike_eps.py, which is exact:
+    # there the tangent plane bounds nothing that gets removed, so no intersection curve has
+    # to be built. Here it bounds a cut region, so OCCT has to intersect a plane with a
+    # cylinder it only touches. Tangency is safe when it is incidental and unsafe when the
+    # boolean depends on it.
     gnr, eps, gr, gnt, lr, gt = 3.7, 0.01, 2.9, 0.8, 2.0, 0.8
     pts = [(-(gnr + eps), -gnr), (gnr + eps, -gnr), (gnr + eps, 0.0),
            (lr + gt, -gnt), (-gr, -gnt), (-(gnr + eps), 0.0)]
