@@ -61,7 +61,7 @@ PARAMS = [
     ('half_web', '=web_width / 2'),
 
     # enclosure for plane2d.union -- the stroke reaches half a web width beyond the spine
-    ('union_reach', '=2 * (unit_width / 2 + web_width)'),
+    ('web_reach', '=2 * (unit_width / 2 + web_width)'),
 ]
 
 
@@ -106,7 +106,7 @@ def mirror_x(doc, name, base):
     flip = C._owned(doc, 'Part::Mirroring', name + 'Mirror')
     flip.Source = base
     flip.Normal = V(1, 0, 0)
-    return plane2d.union(doc, name, [base, flip])
+    return plane2d.union(doc, name, [base, flip], P + 'web_reach')
 
 
 def emit(doc, seed=None):
@@ -132,7 +132,7 @@ def main():
     ok = True
     for name in ('centerline', 'mirrored', 'stroke', 'erosion'):
         ref, bbox = REFS[name]
-        ok &= plane2d.report(doc, name, tips[name].Shape, ref, bbox)
+        ok &= plane2d.report(doc, name, tips[name].Shape, ref, 'web_reach', bbox)
     print('')
     print('  %s' % ('all shapes agree' if ok else 'MISMATCH -- see checks above'))
     print('  spine vertices: %d (%s)'

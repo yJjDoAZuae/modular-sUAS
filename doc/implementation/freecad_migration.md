@@ -1684,11 +1684,39 @@ The polygon areas are exact rather than merely close because nothing in them is 
 faceting floor only applies where a circle is involved. Every shape is a single face and clear
 of its `union_reach` rectangle, both asserted after recompute.
 
-**Still to do on this item:** `boom_web_outer_shape`, `boom_web_inner_shape`,
-`bulkhead_oml_shape` and the assembled part — the remaining region-wide `fillet_inner` and
-`fillet_outer` sites, for which [`plane2d.py`](../../src/Fuselage/freecad/plane2d.py) already
-carries the operators — and then the cowls. The reference table above is what all of it is
-verified against.
+### The two region-wide web shapes, and an invariant that was too strong
+
+[`boom_webs.py`](../../src/Fuselage/freecad/boom_webs.py) ports the first two sites OQ-DES-B11
+kept morphological — `fillet_outer` and `fillet_inner` applied to whole compound regions rather
+than to named corners — as `Part::Offset2D` chains:
+
+| Shape | FreeCAD | OpenSCAD | Delta |
+| --- | --- | --- | --- |
+| `boom_web_outer_shape` | 1899.6781134 | 1899.6654770 | +0.00067% |
+| `boom_web_inner_shape` | 411.5121334 | 411.5218898 | −0.00237% |
+
+**`boom_make_vert_web` swaps an erode with a mirror, and the two do not commute.** The source
+builds the eroded web as `mirror_x(offset(−w/2)(spine))` when the flag is set and
+`offset(−w/2)(mirror_x(spine))` when it is not. Eroding *before* mirroring erodes each half
+against its own boundary, so material survives on the mirror line that eroding afterwards
+removes — which is the vertical web the flag is named for. `offset_single` and `dual` set it,
+`center_single` does not. Note that `ref_boom_bulkhead.scad` mode 3 is the **unset** ordering,
+so it is deliberately not the shape the inner web starts from; reading it as such would have
+produced a shape that verifies against the wrong reference.
+
+**The one-face invariant was wrong, and the inner web is what showed it.** `plane2d.report`
+flagged the inner web as fragmented at two faces. It is not fragmented — it is genuinely
+**disconnected**, one island either side of the key pad, and OpenSCAD's is too. `Part::Offset2D`
+handles disjoint islands correctly; what it gets wrong is *adjacency*, offsetting shared
+interior edges as though they were boundary. So the invariant is **"no two faces share an
+edge"**, not "exactly one face" — checked by comparing the faces' own edge totals against the
+shape's unique edge count, which differ exactly when some edge is shared. Re-tested on all three
+cases it has to separate: the fused compound of 15 abutting patches reports fragmented, the
+cut-built union does not, and two disjoint circles do not. A face count would have rejected a
+correct shape and taught the reader to expect the wrong thing.
+
+**Still to do on this item:** `bulkhead_oml_shape` and the assembled part, then the cowls. The
+reference table above is what all of it is verified against.
 
 ---
 
