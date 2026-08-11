@@ -118,6 +118,13 @@ if (mode == 9) {
             bulkhead_oml_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset,
                 panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
                 bolt_hole_radius, bolt_offset);
+        } else if (mode == 12) {
+            // the outline before the bores -- mode 8 unions this with mode 11. It has no
+            // call site of its own in the assembly, but mode 10 intersects against it, so
+            // the port needs it measured rather than inferred as mode 8 + mode 11.
+            bulkhead_oml_outer_shape(unit_width, corner_radius, panel_thickness, panel_offset,
+                panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
+                bolt_hole_radius, bolt_offset);
         }
     }
 }

@@ -67,9 +67,9 @@ def _vert_web(doc):
     return float(doc.getObject('Params').get('boom_make_vert_web')) >= 0.5
 
 
-def key_dilated(doc):
+def key_dilated(doc, key):
     """`offset(r = boom_key_web_width) { boom_key_shape(...) }` -- the web pad around the key."""
-    return plane2d.offset(doc, 'KeyPad', boom_key.key_shape(doc), P + 'boom_key_web_width')
+    return plane2d.offset(doc, 'KeyPad', key, P + 'boom_key_web_width')
 
 
 def eroded_web(doc, spine):
@@ -83,12 +83,17 @@ def eroded_web(doc, spine):
                           boom_web.mirror_x(doc, 'SpineMirrored', spine), half)
 
 
-def emit(doc, seed=None):
-    C._SEEN.clear()
-    sheet(doc, seed)
+def webs(doc):
+    """Geometry only, against whatever sheet the document already has.
 
+    Returns the key as well as the two webs. The assembly subtracts the key twice and this
+    module already builds it, so handing it back is what keeps `boom_key.key_shape` from being
+    called a second time -- which `_owned` refuses, and rightly: two key objects driven by the
+    same rows is two things to keep in step.
+    """
+    key = boom_key.key_shape(doc)
     spine = boom_web.centerline(doc)
-    pad = key_dilated(doc)
+    pad = key_dilated(doc, key)
 
     stroke = plane2d.offset(doc, 'Stroke',
                             boom_web.mirror_x(doc, 'StrokeMirrored', spine), P + 'half_web')
@@ -99,8 +104,15 @@ def emit(doc, seed=None):
                                  C._cut(doc, 'InnerRaw', eroded_web(doc, spine), pad),
                                  P + 'web_fillet_radius')
 
+    return {'outer': outer, 'inner': inner, 'key': key}
+
+
+def emit(doc, seed=None):
+    C._SEEN.clear()
+    sheet(doc, seed)
+    tips = webs(doc)
     doc.recompute()
-    return {'outer': outer, 'inner': inner}
+    return tips
 
 
 def main():
