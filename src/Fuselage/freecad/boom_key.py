@@ -114,46 +114,57 @@ def junction_fillet(doc, tag, mirrored=False):
                         sign + '(' + P + 'key_a + ' + P + 'boom_key_radius)', P + 'key_yc'))
 
 
-def key_profile(doc):
+def key_profile(doc, tag=''):
     """One keyed collet, in the key's own frame with the tab pointing +y.
 
     Every piece is additive, so they go into one `_union` rather than a fuse chain -- see
     there for why that distinction is not stylistic.
+
+    Nothing here depends on where the boom is or which way the key faces; that is all in the
+    placement. So the lower web's second evaluation reuses every row of this and differs only
+    in `tag` -- see `key_shape`.
     """
     cap_y = P + 'key_y_top - ' + P + 'boom_key_radius'
-    return union2(doc, 'KeyProfile', [
-        plane2d.disc(doc, 'KeyCollet', P + 'collet_radius'),
-        plane2d.rect(doc, 'KeyTab', P + 'boom_key_width',
+    return union2(doc, tag + 'KeyProfile', [
+        plane2d.disc(doc, tag + 'KeyCollet', P + 'collet_radius'),
+        plane2d.rect(doc, tag + 'KeyTab', P + 'boom_key_width',
               P + 'key_y_top - ' + P + 'boom_key_radius', '-' + P + 'key_a', '0'),
         # the cap: the hull of the two corner arcs, written out as the stadium it is
-        plane2d.rect(doc, 'KeyCapRect', '2 * ' + P + 'key_cap_half',
+        plane2d.rect(doc, tag + 'KeyCapRect', '2 * ' + P + 'key_cap_half',
               '2 * ' + P + 'boom_key_radius', '-' + P + 'key_cap_half', P + 'key_cap_base'),
-        plane2d.disc(doc, 'KeyCapArcR', P + 'boom_key_radius', P + 'key_cap_half', cap_y),
-        plane2d.disc(doc, 'KeyCapArcL', P + 'boom_key_radius', '-' + P + 'key_cap_half', cap_y),
-        junction_fillet(doc, 'GusR'),
-        junction_fillet(doc, 'GusL', mirrored=True),
+        plane2d.disc(doc, tag + 'KeyCapArcR', P + 'boom_key_radius', P + 'key_cap_half', cap_y),
+        plane2d.disc(doc, tag + 'KeyCapArcL', P + 'boom_key_radius',
+              '-' + P + 'key_cap_half', cap_y),
+        junction_fillet(doc, tag + 'GusR'),
+        junction_fillet(doc, tag + 'GusL', mirrored=True),
     ])
 
 
-def key_shape(doc):
+def key_shape(doc, tag='', z=P + 'boom_z_position', angle=P + 'boom_key_angle'):
     """`boom_key_shape` -- geometry only, against whatever sheet the document already has.
 
     The rotation and translation ride on the assembled profile rather than on each primitive,
     so `boom_key_angle` is carried properly rather than only working at the zero every swept
     variant sets today -- which is exactly the kind of thing that hides a defect.
+
+    `tag`, `z` and `angle` are what the lower web needs: the source evaluates the whole web at
+    `-boom_z_position` and `180 - boom_key_angle`, and those two are the ONLY inputs that
+    change. Every derived row here is independent of both -- `key_reach` takes the absolute
+    value, and the rest are collet and tab dimensions -- so the second evaluation reads the
+    same sheet rows and needs no second copy of them.
     """
-    profile = key_profile(doc)
-    placed = C._owned(doc, 'Part::Refine', 'KeyPlaced')
+    profile = key_profile(doc, tag)
+    placed = C._owned(doc, 'Part::Refine', tag + 'KeyPlaced')
     placed.Source = profile
     placed.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(0, 0, 1), 0))
-    placed.setExpression('Placement.Rotation.Angle', P + 'boom_key_angle')
+    placed.setExpression('Placement.Rotation.Angle', angle)
     placed.setExpression('Placement.Base.x', P + 'boom_y_position')
-    placed.setExpression('Placement.Base.y', P + 'boom_z_position')
+    placed.setExpression('Placement.Base.y', z)
 
-    mirrored = C._owned(doc, 'Part::Mirroring', 'KeyMirror')
+    mirrored = C._owned(doc, 'Part::Mirroring', tag + 'KeyMirror')
     mirrored.Source = placed
     mirrored.Normal = V(1, 0, 0)
-    return union2(doc, 'BoomKey', [placed, mirrored])
+    return union2(doc, tag + 'BoomKey', [placed, mirrored])
 
 
 def emit(doc, seed=None):

@@ -67,41 +67,48 @@ def _vert_web(doc):
     return float(doc.getObject('Params').get('boom_make_vert_web')) >= 0.5
 
 
-def key_dilated(doc, key):
+def key_dilated(doc, key, tag=''):
     """`offset(r = boom_key_web_width) { boom_key_shape(...) }` -- the web pad around the key."""
-    return plane2d.offset(doc, 'KeyPad', key, P + 'boom_key_web_width')
+    return plane2d.offset(doc, tag + 'KeyPad', key, P + 'boom_key_web_width')
 
 
-def eroded_web(doc, spine):
+def eroded_web(doc, spine, tag=''):
     """The web's inner region, at whichever of the two orderings the flag selects."""
     half = '-' + P + 'half_web'
     if _vert_web(doc):
         # erode each half against its own boundary, then mirror -- leaves the vertical web
-        return boom_web.mirror_x(doc, 'ErodedMirrored',
-                                 plane2d.offset(doc, 'ErodeHalf', spine, half))
-    return plane2d.offset(doc, 'ErodeWhole',
-                          boom_web.mirror_x(doc, 'SpineMirrored', spine), half)
+        return boom_web.mirror_x(doc, tag + 'ErodedMirrored',
+                                 plane2d.offset(doc, tag + 'ErodeHalf', spine, half))
+    return plane2d.offset(doc, tag + 'ErodeWhole',
+                          boom_web.mirror_x(doc, tag + 'SpineMirrored', spine), half)
 
 
-def webs(doc):
+def webs(doc, tag='', z=P + 'boom_z_position', angle=P + 'boom_key_angle'):
     """Geometry only, against whatever sheet the document already has.
 
     Returns the key as well as the two webs. The assembly subtracts the key twice and this
     module already builds it, so handing it back is what keeps `boom_key.key_shape` from being
     called a second time -- which `_owned` refuses, and rightly: two key objects driven by the
     same rows is two things to keep in step.
-    """
-    key = boom_key.key_shape(doc)
-    spine = boom_web.centerline(doc)
-    pad = key_dilated(doc, key)
 
-    stroke = plane2d.offset(doc, 'Stroke',
-                            boom_web.mirror_x(doc, 'StrokeMirrored', spine), P + 'half_web')
-    outer = plane2d.fillet_outer(doc, 'Outer', _union(doc, 'OuterRaw', [pad, stroke]),
+    `tag`, `z` and `angle` are the lower web's second evaluation. `boom_make_lower_web` runs
+    this whole builder again at `-boom_z_position` and `180 - boom_key_angle` and mirrors the
+    result in y, so the caller wants a second set of nodes rather than a mirror of the first.
+    """
+    key = boom_key.key_shape(doc, tag, z, angle)
+    spine = boom_web.centerline(doc, tag, z)
+    pad = key_dilated(doc, key, tag)
+
+    stroke = plane2d.offset(doc, tag + 'Stroke',
+                            boom_web.mirror_x(doc, tag + 'StrokeMirrored', spine),
+                            P + 'half_web')
+    outer = plane2d.fillet_outer(doc, tag + 'Outer',
+                                 _union(doc, tag + 'OuterRaw', [pad, stroke]),
                                  P + 'web_fillet_radius', P + 'webs_reach')
 
-    inner = plane2d.fillet_inner(doc, 'Inner',
-                                 C._cut(doc, 'InnerRaw', eroded_web(doc, spine), pad),
+    inner = plane2d.fillet_inner(doc, tag + 'Inner',
+                                 C._cut(doc, tag + 'InnerRaw',
+                                        eroded_web(doc, spine, tag), pad),
                                  P + 'web_fillet_radius')
 
     return {'outer': outer, 'inner': inner, 'key': key}
