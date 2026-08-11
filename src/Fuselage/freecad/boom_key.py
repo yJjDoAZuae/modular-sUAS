@@ -87,13 +87,17 @@ PARAMS = [
     # everything being unioned, in the frame the union happens in, or the union silently
     # truncates -- so it is built from every term that can push material outward and then
     # doubled, the same way `mask_reach()` is in shape_modifier_utils.scad.
-    ('union_reach', '=2 * (abs(boom_y_position) + abs(boom_z_position) '
-                    '+ collet_radius + boom_key_height)'),
+    ('key_reach', '=2 * (abs(boom_y_position) + abs(boom_z_position) '
+                  '+ collet_radius + boom_key_height)'),
 ]
 
 
 def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
+
+
+def union2(doc, name, pieces):
+    return plane2d.union(doc, name, pieces, P + 'key_reach')
 
 
 def junction_fillet(doc, tag, mirrored=False):
@@ -117,7 +121,7 @@ def key_profile(doc):
     there for why that distinction is not stylistic.
     """
     cap_y = P + 'key_y_top - ' + P + 'boom_key_radius'
-    return plane2d.union(doc, 'KeyProfile', [
+    return union2(doc, 'KeyProfile', [
         plane2d.disc(doc, 'KeyCollet', P + 'collet_radius'),
         plane2d.rect(doc, 'KeyTab', P + 'boom_key_width',
               P + 'key_y_top - ' + P + 'boom_key_radius', '-' + P + 'key_a', '0'),
@@ -131,16 +135,13 @@ def key_profile(doc):
     ])
 
 
-def emit(doc, seed=None):
-    """The key at its boom position, mirrored in x as the source does.
+def key_shape(doc):
+    """`boom_key_shape` -- geometry only, against whatever sheet the document already has.
 
     The rotation and translation ride on the assembled profile rather than on each primitive,
-    so `boom_key_angle` is carried properly rather than only working at zero -- every swept
-    variant sets it to zero today, which is exactly the kind of thing that hides a defect.
+    so `boom_key_angle` is carried properly rather than only working at the zero every swept
+    variant sets today -- which is exactly the kind of thing that hides a defect.
     """
-    C._SEEN.clear()
-    sheet(doc, seed)
-
     profile = key_profile(doc)
     placed = C._owned(doc, 'Part::Refine', 'KeyPlaced')
     placed.Source = profile
@@ -152,8 +153,13 @@ def emit(doc, seed=None):
     mirrored = C._owned(doc, 'Part::Mirroring', 'KeyMirror')
     mirrored.Source = placed
     mirrored.Normal = V(1, 0, 0)
+    return union2(doc, 'BoomKey', [placed, mirrored])
 
-    tip = plane2d.union(doc, 'BoomKey', [placed, mirrored])
+
+def emit(doc, seed=None):
+    C._SEEN.clear()
+    sheet(doc, seed)
+    tip = key_shape(doc)
     doc.recompute()
     return tip
 
@@ -181,7 +187,7 @@ def main():
               'is wrong by hundreds of percent' % len(s.Faces))
 
     # And clear of the rectangle _union complements against, or the union truncated.
-    reach = float(doc.getObject('Params').get('union_reach'))
+    reach = float(doc.getObject('Params').get('key_reach'))
     margin = min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
     print('  reach   = %.4f, nearest approach to its edge %.4f  %s'
           % (reach, margin, 'ok' if margin > 1e-6 else 'TRUNCATED'))

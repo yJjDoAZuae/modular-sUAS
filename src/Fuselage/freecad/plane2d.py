@@ -44,7 +44,7 @@ def rect(doc, name, length, width, x, y):
     return plane
 
 
-def union(doc, name, pieces, reach=P + 'union_reach'):
+def union(doc, name, pieces, reach):
     """Union coplanar faces into ONE face, as `R - ((R - a) - b - ...)`.
 
     **Do not use `Part::Fuse` or `Part::MultiFuse` for coplanar faces.** They return a
@@ -112,7 +112,7 @@ def fillet_inner(doc, tag, source, radius):
     return clip
 
 
-def fillet_outer(doc, tag, source, radius, reach=P + 'union_reach'):
+def fillet_outer(doc, tag, source, radius, reach):
     """`union() { offset(-r) offset(r) children; children; }`.
 
     A closing unioned with the input: it fills **concave** corners and bridges gaps narrower
@@ -123,11 +123,27 @@ def fillet_outer(doc, tag, source, radius, reach=P + 'union_reach'):
     return union(doc, tag + 'FilletOuter', [node, source], reach)
 
 
+def fragmented(shape):
+    """True when two faces share an edge -- one region stored as several abutting patches.
+
+    **Not the same as a disconnected region.** A shape can legitimately be several faces that
+    touch nowhere: `boom_web_inner_shape` is two islands, one either side of the key pad, and
+    OpenSCAD's is too. `Part::Offset2D` handles disjoint islands correctly -- it is adjacency
+    it gets wrong, offsetting the shared interior edges as though they were boundary. So the
+    invariant is "no shared edges", not "one face"; a face count would reject a correct shape
+    and, worse, teach the reader to expect the wrong thing.
+
+    Every edge appears once in `shape.Edges`, and once per face that uses it in the faces'
+    own lists, so the two totals differ exactly when some edge is shared.
+    """
+    return sum(len(f.Edges) for f in shape.Faces) > len(shape.Edges)
+
+
 def area(shape):
     return sum(f.Area for f in shape.Faces) if shape.Faces else float('nan')
 
 
-def enclosed(doc, shape, reach_alias='union_reach'):
+def enclosed(doc, shape, reach_alias):
     """Margin between the shape and the rectangle `union` complements against.
 
     Positive means the union was not truncated. Zero or negative means it was, silently.
@@ -137,17 +153,17 @@ def enclosed(doc, shape, reach_alias='union_reach'):
     return min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
 
 
-def report(doc, label, shape, ref, expect_bbox=None):
+def report(doc, label, shape, ref, reach_alias, expect_bbox=None):
     """One measured shape against its OpenSCAD reference, with the 2D invariants checked."""
     got = area(shape)
     d = got - ref
     bb = shape.BoundBox
     checks = []
-    if len(shape.Faces) != 1:
-        checks.append('FRAGMENTED faces=%d -- any offset downstream of this is wrong'
+    if fragmented(shape):
+        checks.append('FRAGMENTED faces=%d sharing edges -- any offset downstream is wrong'
                       % len(shape.Faces))
-    if enclosed(doc, shape) <= 1e-9:
-        checks.append('TRUNCATED -- union_reach does not enclose it')
+    if enclosed(doc, shape, reach_alias) <= 1e-9:
+        checks.append('TRUNCATED -- %s does not enclose it' % reach_alias)
     if abs(d) / ref > 6.0e-5:
         checks.append('OVER TOLERANCE')
     if expect_bbox is not None:
