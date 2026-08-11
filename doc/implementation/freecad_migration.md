@@ -1653,8 +1653,42 @@ The one thing worth carrying forward is the *convention*: **in 2D, union means c
 table's key rows: mode 4 at **+0.00516%** with an exact bounding box, and mode 5 — the same key
 dilated by `boom_key_web_width` — at **+0.00541%**.
 
-**Still to do on this item:** the four region-wide sites, as `Part::Offset2D` chains, and the
-cowls. The reference table above is what all of it is verified against.
+### The web spine — a sketch, and a vertex count that moves with the boom position
+
+[`boom_web.py`](../../src/Fuselage/freecad/boom_web.py) ports
+`upper_boom_support_centerline_shape` and the two shapes offset from it. The spine is a
+**centreline**, not an outline: the web is what you get by stroking it to `web_width`, the way
+a road is a centreline stroked to its width. So the port is one sketch and then offsets.
+
+**It has to be a sketch.** `Part::Polygon` takes its vertices as a plain list of vectors, and a
+list of vectors cannot carry expressions — every one of these seven vertices is a function of
+the sheet. A fully constrained `Sketcher::SketchObject` with each vertex pinned by an
+expression-driven `DistanceX`/`DistanceY` is the parametric equivalent, and `corner_tree._sketch`
+already had it.
+
+**Its first two vertices coincide whenever the boom sits on the centreline.** The source writes
+`[0, z]` then `[boom_y_position, z]`, a zero-length edge at `y = 0` — harmless in OpenSCAD, an
+unsolvable sketch here. Two of the three swept boom types (`offset_single`, `center_single`) sit
+at `y = 0` and `dual` does not, so the spine genuinely has **six edges for two types and seven
+for the third**. That is a topology change across the corpus, not a guard against nonsense, and
+both branches are measured rather than one:
+
+| Shape | `offset_single` (6 edges) | `dual` (7 edges) |
+| --- | --- | --- |
+| `centerline` | 556.0000000, **exact** | 756.0000000, **exact** |
+| `mirror_x` of it | 1112.0000000, **exact** | 1512.0000000, **exact** |
+| `offset(+web_width/2)` | +0.00035% | +0.00033% |
+| `offset(−web_width/2)` | +0.00014% | +0.00003% |
+
+The polygon areas are exact rather than merely close because nothing in them is curved — the
+faceting floor only applies where a circle is involved. Every shape is a single face and clear
+of its `union_reach` rectangle, both asserted after recompute.
+
+**Still to do on this item:** `boom_web_outer_shape`, `boom_web_inner_shape`,
+`bulkhead_oml_shape` and the assembled part — the remaining region-wide `fillet_inner` and
+`fillet_outer` sites, for which [`plane2d.py`](../../src/Fuselage/freecad/plane2d.py) already
+carries the operators — and then the cowls. The reference table above is what all of it is
+verified against.
 
 ---
 
