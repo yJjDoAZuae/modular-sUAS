@@ -26,9 +26,7 @@ greeble_thickness = 1.2;
 greeble_nub_thickness = 1.2;
 extrusion_width = 0.6;
 
-translate([0, 0, -eps]) {
-    corner_end(U, bulkhead_thickness + 2*eps, corner_radius, panel_thickness,
-               panel_offset, panel_overlap, panel_tolerance, longeron_radius,
-               longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0,
-               extrusion_width);
-}
+corner_end(U, bulkhead_thickness, corner_radius, panel_thickness,
+           panel_offset, panel_overlap, panel_tolerance, longeron_radius,
+           longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0,
+           extrusion_width, eps);

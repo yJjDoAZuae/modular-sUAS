@@ -89,6 +89,8 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-47 | done | **The FreeCAD backend dropped the bulkhead type flags.** `bulkhead_render`'s OpenSCAD call passes `is_interconnect` and `is_cowling`; the FreeCAD branch passed neither, and `bulkhead_full.emit()` takes neither — only the end type is ported. So `--backend freecad` rendered all five swept types as end bulkheads: 60 of 148 wrong, under the right filename, with a plausible volume. `_backend_for(kind, supported=)` now routes the unported types to OpenSCAD, the same fallback every unported kind already gets, and `_variant_note` carries `type_name` so two types cannot produce identical definition files | IP-FC-10 | [freecad_migration.md §IP-FC-47](../implementation/freecad_migration.md) |
 | IP-FC-48 | done | **The seed did not supply everything the expression rows read, and nothing checked.** `seeded()` replaces literal rows only, so a row the port states as a relationship — `corner_radius` = `=U * 10`, `longeron_radius` = `=U * 2`, `unit_length` = `=U * FX * 100` — keeps its expression and evaluates from whatever the sheet holds. Neither `U` (bulkhead) nor `FX` (corner) was in the seed, so both stayed at their literal 1.0: **every FreeCAD corner was built at FX=1.0 and every FreeCAD bulkhead at U=1.0**, with the authority's correct values sitting unused in the parameter file. Exact at U=1/FX=1 — the one part IP-FC-10 measured — and wrong by up to 115% elsewhere. Both are now seeded, and `build_part.build()` runs `check_seed` on every build instead of leaving it to a check script nobody ran | IP-FC-10 | [freecad_migration.md §IP-FC-48](../implementation/freecad_migration.md) |
 | IP-FC-49 | done | The bulkhead could not be tiled at U ≥ 2.5: the octant and its mirror were each valid and only their **fuse** was not. Cause was the `eps` overlap that makes the octant interpenetrate its mirror — 0.01 mm absolute, 4e-5 of a 250 mm part, under what OCCT's booleans resolve. **The overlap exists for OpenSCAD's union and OCCT does not need it at all**: a solid fused with its own mirror about the touching plane is valid and volume-exact at 10, 100, 250 and 400 mm with no overlap. Now `mask_eps = 0`, separate from `eps` so cut overshoot is untouched. Every U from 0.5 to 4.0 tiles into one valid solid, the part is dimensionally unchanged, and `full == 8 × octant` becomes exact — a stronger tiling check than the one it replaces | IP-FC-48 | [freecad_migration.md §IP-FC-49](../implementation/freecad_migration.md) |
+| IP-FC-50 | done | **Audited every `eps` in the port and measured what each one is for.** IP-FC-49 had zeroed the *union overlap*; this asks the same of the other two jobs the constant was doing. [`spike_eps.py`](../../src/Fuselage/freecad/spike_eps.py) measures flush-versus-padded cuts and abutting-versus-overlapped fuses at 10, 100, 250 and 400 mm. **Cut overshoot buys nothing** — a tool cap coplanar with the face it exits through is exact to machine precision and yields the same or *fewer* faces — so the ±eps pad on every section cut tool in `corner_tree._section` is gone, verified inert by the four section volumes and the 52-face count coming back byte-identical. `boom_oml` was still carrying the old mask overlap and now uses `mask_eps` like `bulkhead_cuts`. **The exception is tangency**: safe when incidental, but where a boolean *depends* on a tangent face OCCT under-removes — the greeble wedge's flanks lose 0.0199 mm³ without their eps, so that one stays. Forcing all corner `eps` to zero moves the assembled part by −9e-6% and drops 4 faces, but that near-cancellation hides two errors of opposite sign, which is why the audit is per-site rather than global. **Found OQ-DES-B12 on the way** | IP-FC-49 | [freecad_migration.md §IP-FC-50](../implementation/freecad_migration.md), [bulkhead.md §OQ-DES-B12](../design/bulkhead.md) |
+| IP-FC-51 | done | **The OQ-DES-B12 fix, decided and implemented 2026-08-11 as alternative 1.** `corner_end` now takes an explicit `overshoot` argument, defaulting to 0, that moves the extrusion and the greeble bore and sizes nothing; `bulkhead_section` calls it with the true thickness and an overshoot of `eps` instead of inflating the thickness. **The overshoot had to reach the bore, not just the extrusion** — the bore's z extent is dimensioned from the same argument, so extending only the extrusion would have silently un-overshot the post. The z extent of the tool is unchanged and only the rib moved: **2.00667 → 2.000, equal to the corner post's**, now asserted rather than printed. Regenerated: greeble tool 557.746362 → 557.804925, octant 865.3140969 → 865.2850690, part 6922.5048968 → 6922.2726731. Two checks say the fix landed the same way on both kernels: `ref_end` — the corner's own end section — is **bit-identical** across the change, and OpenSCAD and FreeCAD agree on the *size* of the octant's change (−0.0290279 against −0.0290299) to 2e-6 mm³. The part lost exactly 8× the octant's change, so the tiling is untouched. Found on the way: five scripts read freecadcmd's `--pass` token as their first argument, now filtered once in `corner_common.script_args()` | IP-FC-50, OQ-DES-B12 | [bulkhead.md §OQ-DES-B12](../design/bulkhead.md) |
 | IP-FC-17 | blocked (IP-FC-16) | Implement cowl interior surfaces. **OQ-DES-CW6 resolved 2026-08-09 and no longer blocks this** — but it attaches a constraint: the interior is *additive*, and the UC-1 print export must keep coming from the un-shelled notched blank, because cowls print in spiral vase mode and a modelled wall destroys that. Model the rib at `2·w·n_perimeters + t_cut`. The sweep's printing output must be verifiable as unchanged by this work | IP-FC-16, IP-FC-14, IP-FC-42 | *(IP-FC-16 output)*, [cowl.md §6.4](../design/cowl.md) |
 | IP-FC-18 | blocked (IP-FC-14) | Model the non-printed components — longeron, panel, threaded insert, bolt — derived from the clearances that already receive them | IP-FC-14 | [freecad_migration.md §UC-8](../architecture/freecad_migration.md) |
 | IP-FC-19 | blocked (IP-FC-17) | UC-4 — assemblies with FreeCAD Assembly joints for unit, nose, tail and full fuselage. Includes asserting each solved placement against the placement constructed from parameters | IP-FC-17, IP-FC-18, IP-FC-35 | [freecad_migration.md §OQ-ARCH-6](../architecture/freecad_migration.md) |
@@ -1322,6 +1324,10 @@ not:
 | `bulkhead_section` | 865.7690714 | 865.3140969 | octant, differs by construction |
 | `bulkhead_full` | 6922.5048968 | **unchanged** | the part, still +0.00011% |
 
+*(All three moved again on 2026-08-11, when IP-FC-51 made the greeble tool's snap rib nominal:
+the octant lost 0.0290279 and the part 0.2322237, exactly eight times it. The columns above are
+left at the values that made **this** change legible.)*
+
 The `−59.99` in the old expected bounding box is the clearest sign of what had happened: an
 arbitrary-looking constant that is exactly `−60 + eps`, sitting in a check that was asserting
 the workaround rather than the geometry.
@@ -1330,9 +1336,112 @@ the workaround rather than the geometry.
 toolchain. `eps` encodes what CGAL wanted; nothing had checked what OCCT wants. The question
 worth asking of any such constant is not "what should its value be here" but "does it belong
 here at all" — and the first version of this section skipped straight past that to costing
-three ways of choosing a value. `eps` still has a second job, making cuts overshoot the
+three ways of choosing a value. ⚠️ `eps` still has a second job, making cuts overshoot the
 material they pass through, and that job is real on both kernels — which is why `mask_eps` is
 a separate row rather than `eps` being set to zero.
+
+> ⚠️ **The last sentence is falsified.** Cut overshoot is *not* real on both kernels: IP-FC-50
+> measured it and OCCT does not need it either. The paragraph is left standing because its own
+> lesson is the reason — it asked "does this constant belong here at all" of the overlap, then
+> assumed the answer for the overshoot in the very next sentence without measuring it. The
+> generalisation was right and it was not applied one line later.
+
+## IP-FC-50 — asking the same question of the other two jobs
+
+IP-FC-49 established the principle and applied it once. `eps` was doing three different things
+under one name, and only one of them had been examined:
+
+  **A. Union overlap** — two solids that meet on an exact shared plane are made to
+  interpenetrate before being fused. Settled by IP-FC-49: OCCT does not want it.
+
+  **B. Cut overshoot** — a subtractive tool is made to poke out past the face it cuts through
+  rather than ending flush with it. Assumed real, never measured.
+
+  **C. A real dimension** — `eps` appears inside an expression that sizes material, so removing
+  it moves a surface. Not a robustness margin at all, and easy to mistake for one.
+
+[`spike_eps.py`](../../src/Fuselage/freecad/spike_eps.py) measures B directly: a bore cut clean
+through a slab and a notch cut in from a side, flush against padded, at 10, 100, 250 and 400 mm
+— because IP-FC-49's failures were scale-dependent and 0.01 mm is 1e-3 of a 10 mm part and 4e-5
+of a 250 mm one. **The pad buys nothing.** Identical volumes to machine precision, all valid,
+one solid, and the same face count. The abutting fuse is likewise clean, and the *padded* fuse
+carries two extra faces.
+
+So the ±eps pad on every cut tool in `corner_tree._section` is gone. It could not have changed
+the result — the tool already passed through the whole body, so it removes the same material at
+0 as at 0.01 — and the verification confirms it: all four section volumes and the 52-face count
+came back byte-identical. `boom_oml` was separately found still carrying IP-FC-49's mask overlap
+and now uses a `mask_eps` row like `bulkhead_cuts`; there the shift could not move the answer
+either way, since each octant's overhang past the mirror line lies inside its own mirror image.
+
+### The exception, and why a clean spike result was nearly the wrong lesson
+
+The spike also tests a tool face **tangent** to a curved one, since several sites size a
+straight-edged tool exactly to a radius. That came back exact at every scale. It would have
+been easy to stop there.
+
+`corner_tree`'s greeble wedge is the counterexample. Its flanks sit at
+`greeble_nub_radius + eps`, tangent-plus-a-hair to the nub cylinder they cut across. In exact
+arithmetic the eps is unnecessary — a tangent flank still leaves the tool covering the whole
+chord — so removing it should change nothing. **OCCT under-removes by 0.0199 mm³**, leaving
+`EndCutGroove` at 551.847453 instead of 551.827595.
+
+The difference is what the tangency is *doing*. In the spike the tangent plane bounds nothing
+that gets removed, so no intersection curve is ever constructed and the answer is trivially
+exact. In the wedge it bounds a cut region, so OCCT must intersect a plane with a cylinder it
+only touches. **Tangency is safe when it is incidental and unsafe when the boolean depends on
+it** — and a spike that measures only the incidental case will report that it is safe.
+
+### Why the audit is per-site and not a single switch
+
+Forcing every `eps` in `corner_tree` to zero moves the assembled part by −0.00094 mm³ on
+10396 — −9e-6% — and drops it from 52 faces to 48. That looks like a licence to delete the
+constant outright. It is not: the near-cancellation is two errors of opposite sign, the wedge's
+under-removal against genuine losses elsewhere. Per section the same run moves `EndCutGroove` by
+−0.17% and `MidSection` by −0.05%, because the three axial sections deliberately overlap
+(`end_h = bt + eps`, `mid_z0 = 2·bt − eps`) and, unlike the octant mask, that overlap is *not*
+free — where two cross-sections differ, sliding one by eps moves real material.
+
+That axial overlap remains in place. Removing it is defensible on IP-FC-49's precedent and would
+leave the finished part unchanged for practical purposes, but it turns two per-section references
+into "deliberately not the OpenSCAD number", and no failure currently forces the question.
+
+### Category C is where the real defect was
+
+Two sites turned out to be C rather than B, and one of them was a genuine defect. The
+greeble-forming tool calls `corner_end(U, bulkhead_thickness + 2*eps, …)` for overshoot — but
+`corner_end` derives `greeble_nub_height = bulkhead_thickness/3` from that same argument, so the
+overshoot inflates the snap rib to 2.00667 mm against the corner post's 2.00000. The `-eps`
+shift afterwards nearly cancels it, leaving the nub band centred and only 0.0067 mm too tall,
+which is why it had gone unnoticed. It is 3% of a layer height and no printed part is affected,
+but the design states all snap clearance is carried once on the corner's bore, and the code
+asserts exactly that for the bore while the rib quietly carried a second clearance.
+
+Written up as [OQ-DES-B12](../design/bulkhead.md), decided the same day as alternative 1, and
+implemented as IP-FC-51. **The fix lands in the OpenSCAD authority rather than the port**, even
+though IP-FC-50 shows the FreeCAD path needs no overshoot at all, because IP-FC-13 compares the
+two backends and correcting one alone leaves a standing divergence.
+
+One thing only showed up in the doing. The obvious reading of "extend the extrusion only" is
+wrong: `corner_end` dimensions the greeble **bore** from the same thickness argument, so an
+overshoot that moved the body and not the bore would have left the post's ends formed flush
+while appearing to preserve the old behaviour. The argument now reaches both and nothing else —
+the four nub vertices stay dimensioned from the thickness.
+
+Two independent checks say it landed correctly rather than merely plausibly. `ref_end`, the
+corner's own end section, is **bit-identical** across the change at 551.815740, which is what
+says the fix touched only the caller that was misusing the argument. And the two kernels agree
+on the *size* of the octant's change — −0.0290279 against −0.0290299, to 2e-6 mm³ — which is a
+stronger statement than either regenerated number on its own, because a regenerated reference
+can always be made to agree with whatever the code now does. The assembled part lost exactly
+eight times the octant's change, so the tiling was not disturbed.
+
+The rib equality is **asserted** now, not printed. It was printed before, on every run, reading
+`2` against `2.0066666666666664`, and that is how it survived.
+
+The second C site, `bulkhead_cuts.clean_r`, pulls a cut tool's radius *in* by eps and has not
+been measured. It may be an intended dimension or the same instinct to avoid a flush cut. It
+should not be assumed to be either.
 
 ## IP-FC-13 — the comparison's floor is OpenSCAD's circle, and it is computable
 
@@ -1826,6 +1935,17 @@ printing capability with no geometric signal that anything was wrong.
 Three new items fell out: **IP-FC-42** (adopt `n_perimeters` — the rib's thickness depends
 on a value held only in a slicer profile outside the repository), **IP-FC-43** (the buttress
 cut's factor of two), and **IP-FC-44** (CW1, done).
+
+**OQ-DES-B11** was raised and decided 2026-08-10 — split by intent, true fillets on the boom
+key and the morphological chain for the region-wide remainder — and briefly re-blocked
+IP-FC-12 in the process.
+
+**OQ-DES-B12** was raised and decided 2026-08-11, out of the IP-FC-50 audit: the greeble
+tool's overshoot argument was also driving the snap rib, giving the socket 0.0067 mm the
+design never asked for. Decided as alternative 1 — separate the two meanings in `corner_end`.
+The decision was to fix the **OpenSCAD authority** rather than the port, because IP-FC-13
+compares the two backends. Implemented the same day as IP-FC-51, with all three affected
+reference sets regenerated.
 
 OQ-DES-B3 and B8 remain open and block nothing.
 

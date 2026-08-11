@@ -5,12 +5,15 @@
 //   * greeble_tolerance is a literal 0 -- the post is nominal by construction and all of
 //     the fit clearance is taken on the corner's bore, because split across both halves the
 //     joint would carry it twice;
-//   * bulkhead_thickness is bt + 2*eps, so the rib height (bt/3) and the nub z levels are
-//     computed from 6.02 rather than 6.00.
+//   * overshoot is eps, so the tool passes cleanly through the material it forms rather
+//     than ending flush with it.
 //
-// The whole shape is then shifted down by eps to clean up the bottom of the cutout. So
-// "reuse the corner's end section" means re-evaluating the description at different
-// arguments -- not referencing the corner's built shape, which carries the clearance.
+// The overshoot used to be bought by passing bulkhead_thickness + 2*eps and shifting the
+// result down by eps, which also drove the rib height (bt/3) and the nub z levels from 6.02
+// rather than 6.00 -- OQ-DES-B12, fixed 2026-08-11. The z extent is unchanged; the rib is
+// now nominal. So "reuse the corner's end section" means re-evaluating the description at
+// different arguments -- not referencing the corner's built shape, which carries the
+// clearance.
 //
 // NOTE: these are the *hand driver's* values, matching fuselage_corner.scad, and they are
 // deliberately not a sweep variant. This file exists to isolate one module so the FreeCAD
@@ -36,9 +39,7 @@ greeble_thickness = 0.8;
 greeble_nub_thickness = greeble_thickness;
 extrusion_width = 0.4;
 
-translate([0, 0, -eps]) {
-    corner_end(U, bulkhead_thickness + 2*eps, corner_radius, panel_thickness,
-               panel_offset, panel_overlap, panel_tolerance, longeron_radius,
-               longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0,
-               extrusion_width);
-}
+corner_end(U, bulkhead_thickness, corner_radius, panel_thickness,
+           panel_offset, panel_overlap, panel_tolerance, longeron_radius,
+           longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0,
+           extrusion_width, eps);

@@ -57,17 +57,23 @@ import greeble_web
 import parameters
 import simple_positives
 import web
-from corner_common import build_sheet, check_seed, is_entry_point, merge_params
+from corner_common import build_sheet, check_seed, is_entry_point, merge_params, script_args
 
-# The octant, at mask_eps = 0. **Deliberately not the OpenSCAD number**, which is 865.7690714
+# The octant, at mask_eps = 0. **Deliberately not the OpenSCAD number**, which is 865.7400435
 # with the bounding box reaching y = -13.6618. OpenSCAD's octant is oversized by the mask
 # overlap its union wants; OCCT does not want it (IP-FC-49), so this one is exactly an eighth
-# and stops a hair short across the diagonal.
+# and stops a hair short across the diagonal. The offset between the two is the mask overlap
+# and nothing else, -0.4549745, and this constant is OpenSCAD's number less that.
 #
 # That makes this constant more useful than it was, not less: 8 x REF is now the full part's
 # volume exactly, so bulkhead_full's tiling check reads as "the eight pieces tile with neither
 # gap nor overlap" rather than "matches a number 3.6 mm3 short of eight octants".
-REF = 865.3140969
+#
+# Regenerated 2026-08-11 for the OQ-DES-B12 fix, which takes 0.029 mm3 out of the octant by
+# making the greeble tool's snap rib nominal. OpenSCAD moved by -0.0290279 and FreeCAD by
+# -0.0290299: the two kernels agreeing on the SIZE OF THE CHANGE to 2e-6 mm3 is what says the
+# fix did the same thing on both sides, and it is a stronger check than either number alone.
+REF = 865.2850690
 EXPECT_BBOX = (-40.0, -13.6569, 0.0, 0.0, 5.1375, 6.0)
 
 # corner_tree last: its '=' rows restate relationships the bulkhead modules also define, and
@@ -114,9 +120,13 @@ def emit(doc, seed, rows=None):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    # `--pass` is freecadcmd's escape for arguments meant for the script rather than for
+    # freecadcmd, and it forwards the token itself as well as the value -- so it has to be
+    # filtered here, exactly as build_part.py does. Without the filter the seed path is read
+    # as the literal string '--pass' and the run dies on a file-not-found that names a flag.
+    args = script_args()
     if not args:
-        print('usage: freecadcmd bulkhead_section.py params.json')
+        print('usage: freecadcmd bulkhead_section.py --pass params.json')
         print('generate params.json with tools/export_parameters.py')
         return 0
 

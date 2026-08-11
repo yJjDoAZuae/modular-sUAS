@@ -50,7 +50,11 @@ def main():
     # makes `freecadcmd measure.py foo.stl` and `python measure.py foo.stl` do the same
     # thing -- without it the first one tries to parse measure.py as a mesh and fails with
     # "unpack requires a buffer of 50 bytes", which reads like a corrupt STL.
-    for path in [a for a in sys.argv[1:] if not a.endswith('.py')]:
+    # corner_common.script_args() states this once for everything else, but importing it here
+    # would drag in FreeCAD, and this module deliberately runs under plain python so an STL
+    # can be measured without a kernel. `--pass` is dropped for the same reason as there:
+    # freecadcmd forwards the token as well as the value.
+    for path in [a for a in sys.argv[1:] if a != '--pass' and not a.endswith('.py')]:
         n, vol, lo, hi = measure(path)
         print('%s' % path)
         print('  triangles = %d' % n)

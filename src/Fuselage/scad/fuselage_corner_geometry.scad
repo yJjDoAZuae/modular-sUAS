@@ -54,7 +54,22 @@ module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_
 }
 
 
-module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
+// `overshoot` extends this section past both of its nominal faces, for callers that use it
+// as a CUT TOOL and need it to pass cleanly through the material it forms. It moves the
+// extrusion and the greeble bore only. It must never be folded into bulkhead_thickness.
+//
+// It used to be, and that was OQ-DES-B12: bulkhead_section() asked for overshoot by calling
+// this module with `bulkhead_thickness + 2*eps` and shifting the result down by eps. That
+// buys the overshoot, but bulkhead_thickness ALSO drives greeble_nub_height (= bt/3) and
+// every nub z level, so the socket's snap rib came out at 2.00667 mm against the corner
+// post's 2.00000 -- about 0.0033 mm of gap at each end of a snap the design requires to be
+// nominal. The design carries all greeble clearance once, on the corner's bore; this was a
+// second, unasked-for clearance, and it was invisible because the -eps shift re-centred the
+// nub band and left only its height wrong.
+//
+// So: one argument, one meaning. bulkhead_thickness is the thickness and sizes the rib.
+// overshoot is slop for the boolean and sizes nothing.
+module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, overshoot = 0) {
     
     eps = geometry_eps();
     
@@ -67,9 +82,11 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
                                                greeble_tolerance);
     
     difference() {
-        linear_extrude(height=bulkhead_thickness+eps,center=false,convexity=3,twist=0,slices=1) {
-            mirror_xy() {
-                corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
+        translate([0,0,-overshoot]) {
+            linear_extrude(height=bulkhead_thickness+eps+2*overshoot,center=false,convexity=3,twist=0,slices=1) {
+                mirror_xy() {
+                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
+                }
             }
         }
     
@@ -82,15 +99,17 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
         }
         difference() {
             rotate_extrude(angle = 360, convexity = 2) {
+                // the four nub vertices are dimensioned from bulkhead_thickness and must
+                // stay that way; only the two end pairs carry the overshoot
                 polygon(
-                    [[0,0], 
-                    [greeble_radius,0],
+                    [[0,-overshoot], 
+                    [greeble_radius,-overshoot],
                     [greeble_radius,bulkhead_thickness/2 - greeble_nub_height/2-greeble_nub_thickness],
                     [greeble_nub_radius,bulkhead_thickness/2 - greeble_nub_height/2],
                     [greeble_nub_radius,bulkhead_thickness/2 + greeble_nub_height/2],
                     [greeble_radius,bulkhead_thickness/2 + greeble_nub_height/2+greeble_nub_thickness],
-                    [greeble_radius,bulkhead_thickness,],
-                    [0,bulkhead_thickness]] 
+                    [greeble_radius,bulkhead_thickness+overshoot,],
+                    [0,bulkhead_thickness+overshoot]] 
                 );
             }
             rotate([0,0,-45]) {

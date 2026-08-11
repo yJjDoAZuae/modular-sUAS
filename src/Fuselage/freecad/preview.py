@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
 
 import FreeCAD as App
 
-from corner_common import is_entry_point, out_path
+from corner_common import is_entry_point, out_path, script_args
 
 # Angular and linear deviation for the display mesh. Fine enough that curvature reads as
 # curvature; nothing here is dimensional.
@@ -66,7 +66,7 @@ def main():
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
-    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    args = script_args()
     part = args[0] if args else 'corner'
 
     print('Preview renders -> %s' % outdir)

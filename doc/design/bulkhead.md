@@ -443,18 +443,17 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B6 | ~~resolved~~ 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
-| B12 | ~~resolved~~ 2026-08-11 — decided, fix not yet made | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
+| B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
 
 **Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that
 gets more expensive the longer it is deferred.
 
-**B12 is decided but not yet implemented**, and is the one resolved entry that still describes
-a live defect. `corner_end` is to gain an explicit overshoot argument so that its thickness
-argument stops driving the snap rib as a side effect. Until that lands, the bulkhead socket's
-rib is 2.00667 mm against the corner post's 2.00000 — unprintable at 3% of a layer height,
-but it leaves the "clearance carried once" invariant false for the rib while the code asserts
-it for the bore.
+**B12 was raised, decided and fixed on 2026-08-11.** `corner_end` now takes an explicit
+`overshoot` argument, so its thickness argument no longer drives the snap rib as a side
+effect. The socket's rib is 2.000 mm, equal to the corner post's, and the two are now
+asserted equal on every run rather than merely printed side by side — which is how the
+0.0067 mm survived in plain sight.
 
 B4 and B7 together mean the swept range is validated in hardware at **both** ends, U=0.5
 and U=4.
@@ -973,7 +972,7 @@ offset chain](../implementation/freecad_migration.md), and the two constructions
 against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
 which keeps the morphological form solely as the thing being compared to.
 
-### ~~OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib~~ — DECIDED 2026-08-11: fix the authority
+### ~~OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib~~ — DECIDED AND FIXED 2026-08-11: fix the authority
 
 **Decision. Alternative 1.** `corner_end` gains an explicit overshoot argument, defaulting to
 zero, which extends the extrusion only. `bulkhead_thickness` goes back to meaning the
@@ -1018,6 +1017,26 @@ only separating them fixes the cause rather than relocating the symptom.
 - Alternative 3 — dropping the overshoot entirely on both paths — remains available later,
   but only after measuring whether CGAL needs it here the way IP-FC-50 measured OCCT. That
   measurement does not exist, and this decision does not depend on it.
+
+**Implemented the same day (IP-FC-51).** One correction to the alternative as written above:
+"extends the extrusion only" is not sufficient. `corner_end` dimensions the greeble **bore**
+from the same thickness argument, so an overshoot that moved the body and not the bore would
+have quietly left the post's ends formed flush — preserving the appearance of the old
+behaviour while changing it. The argument reaches the extrusion and the bore, and nothing
+else; the four nub vertices stay dimensioned from the thickness.
+
+Outcome: socket rib 2.00667 → **2.000**, equal to the post's, and asserted equal on every run
+instead of printed beside it. The tool's z extent is unchanged. Regenerated references —
+greeble tool 557.746362 → 557.804925, octant 865.3140969 → 865.2850690, assembled part
+6922.5048968 → 6922.2726731.
+
+Two checks establish that the fix did what it claims rather than merely producing agreeable
+numbers. `ref_end` — the corner's own end section, the caller that was using the argument
+correctly — is **bit-identical** across the change at 551.815740. And OpenSCAD and FreeCAD
+agree on the *size* of the octant's change, −0.0290279 against −0.0290299, to 2e-6 mm³; that
+is the stronger evidence, because a regenerated reference can always be made to agree with
+whatever the code now does. The assembled part lost exactly eight times the octant's change,
+so the eight-way tiling was not disturbed.
 
 ## See also
 
