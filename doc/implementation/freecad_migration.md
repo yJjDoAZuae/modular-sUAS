@@ -71,7 +71,7 @@ Three things are worth noticing about the shape of the plan:
 | IP-FC-9 | done | Port the bulkhead, forming the greeble by cutting with the corner's end **section description re-evaluated at greeble tolerance 0** — never with the corner's built shape, which carries the fit clearance. **The whole octant is done and verified** — sixteen modules, then assembled as `bulkhead_section` against the real module at +0.00011% (§IP-FC-9 progress), which is what binds the two inline-geometry transcriptions. The assembly caught a reading error no isolated reference could: the plate and longeron flange sit inside `if (is_cowling)`. The `octant_to_full` tiling is done too -- `bulkhead_full.py` at +0.00011%, and the corner checked at the **swept** values for the first time at +0.00041% | IP-FC-5 | [bulkhead.md §The greeble is a positive post](../design/bulkhead.md) |
 | IP-FC-10 | done | `--backend freecad` renders the corner and the bulkhead through `freecad/build_part.py`, one `freecadcmd` per part. The queue, worker budget, atomic write, serial-retry recovery and previews were **not modified** -- `solid_render` split into `render_definition` plus two four-line backends. Verified against the sweep's own OpenSCAD output at +0.00035% (bulkhead) and +0.00121% (corner), bounding boxes identical. **That verification was one part per kind, and two defects survived it** — IP-FC-46 and IP-FC-47, both found later by enumerating the swept space | IP-FC-1, IP-FC-9 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
 | IP-FC-11 | done | Geometry-code version added to `--resume`'s staleness key, **on both backends**. Found while checking the FreeCAD side: the generated `.stl.scad` is a `use <>` line and a call, so the OpenSCAD path had the same blind spot since `--resume` was written — an edit to `fuselage_bulkhead_geometry.scad` left every definition byte-identical. `tools/geometry_version.py` walks the `use`/`include` closure of the generated file and the import closure of the builder, and stamps a digest into the definition both backends already compare. Verified in both directions on three backend/kind pairs | IP-FC-10 | [freecad_migration.md §What must be preserved](../architecture/freecad_migration.md) |
-| IP-FC-12 | in progress | **Unblocked 2026-08-10** by IP-FC-4 and IP-FC-10, re-blocked the same day on [OQ-DES-B11](../design/bulkhead.md), and unblocked again when that was decided: **split by intent** — true fillets on the key, the morphological chain for the region-wide remainder. The key's direct construction landed in the OpenSCAD path first and is verified across all 24 distinct swept key geometries at a worst 0.00522% symmetric difference, with `boom_key_validity_check()` enforcing the domain (§IP-FC-12 progress). Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point. **The boom bulkhead is built almost entirely from 2D offsets** — `fillet_inner`, `fillet_outer` and plain `offset(r=±)` strokes — and three of its four `fillet_inner` uses wrap a whole compound region rather than a named corner, so the route is not the one the frame bulkhead's four true fillets settled. **Done pending that answer:** [`ref_boom_bulkhead.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead.scad) isolates the part and nine sub-shapes at swept parameters taken from `derived_parameters()` rather than typed, and the swept space is enumerated at 132 valid variants, none of them on the offset degeneracy (§IP-FC-12 progress) | IP-FC-10, IP-FC-4, OQ-DES-B11 | [bulkhead.md §OQ-DES-B11](../design/bulkhead.md), [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
+| IP-FC-12 | in progress | **Unblocked 2026-08-10** by IP-FC-4 and IP-FC-10, re-blocked the same day on [OQ-DES-B11](../design/bulkhead.md), and unblocked again when that was decided: **split by intent** — true fillets on the key, the morphological chain for the region-wide remainder. The key's direct construction landed in the OpenSCAD path first and is verified across all 24 distinct swept key geometries at a worst 0.00522% symmetric difference, with `boom_key_validity_check()` enforcing the domain. [`boom_key.py`](../../src/Fuselage/freecad/boom_key.py) then ports it — the first module built **in the plane**, which established that coplanar unions must be built from cuts rather than fuses or every offset downstream is wrong by hundreds of percent (§IP-FC-12 progress). Port the boom bulkhead and the cowls. Preserve the OML transform algebra verbatim, including `offset_x_m` preceding the scale. Note what IP-FC-46 through IP-FC-49 cost the two kinds already ported: run `compare_backends.py` against each new kind across the swept space, not at one point. **The boom bulkhead is built almost entirely from 2D offsets** — `fillet_inner`, `fillet_outer` and plain `offset(r=±)` strokes — and three of its four `fillet_inner` uses wrap a whole compound region rather than a named corner, so the route is not the one the frame bulkhead's four true fillets settled. **Done pending that answer:** [`ref_boom_bulkhead.scad`](../../src/Fuselage/freecad/ref_boom_bulkhead.scad) isolates the part and nine sub-shapes at swept parameters taken from `derived_parameters()` rather than typed, and the swept space is enumerated at 132 valid variants, none of them on the offset degeneracy (§IP-FC-12 progress) | IP-FC-10, IP-FC-4, OQ-DES-B11 | [bulkhead.md §OQ-DES-B11](../design/bulkhead.md), [cowl.md §2](../design/cowl.md), [cowl.md §6.3](../design/cowl.md) |
 | IP-FC-13 | in progress | [`compare_backends.py`](../../src/Fuselage/tools/compare_backends.py) renders the same variants through both engines and compares measured geometry, with the two tiers below and a guard that refuses to count a part FreeCAD never built. Usable now for the corner and the bulkhead; still blocked on IP-FC-12 for whole-corpus coverage. Full-sweep equivalence against the OpenSCAD corpus by volume, bounding box and hole positions — **not** triangle count. **Two tiers, per OQ-DES-B9:** parts whose geometry is exactly reproducible (the corner) stay strict; parts carrying real fillets need a stated deviation tolerance and a comparison that measures deviation rather than volume equality. Interface dimensions are strict in both tiers — no interface is set by a fillet. **The boom bulkhead lands in the strict tier**, settled by [OQ-DES-B11](../design/bulkhead.md): its one true-fillet feature is the key, and replacing the key's morphological rounding moved the whole part by 0.00008% — two orders inside the strict tolerance — so the split does not cost a tier | IP-FC-12 | [freecad_migration.md §Equivalence between toolchains](../architecture/freecad_migration.md), [bulkhead.md §OQ-DES-B9](../design/bulkhead.md), [bulkhead.md §OQ-DES-B11](../design/bulkhead.md) |
 | IP-FC-34 | blocked (IP-FC-13) | Retire the OpenSCAD implementation. Re-check the three design documents against the code **before** removing it, then delete `scad/` and the OpenSCAD driver path — history retains it | IP-FC-13 | [freecad_migration.md §OQ-ARCH-4](../architecture/freecad_migration.md) |
 | IP-FC-14 | blocked (IP-FC-13) | UC-2 — export `.FCStd` per part from the sweep | IP-FC-13 | [freecad_migration.md §Use cases](../architecture/freecad_migration.md) |
@@ -1600,6 +1600,58 @@ One thing fell out that was not the point: `boom_key_shape`'s bounding box is no
 ±7.2000 where the morphological form gave ±7.1999. That is
 `boom_diameter/2 + collet_thickness + tolerance`, the surface that fits the boom tube, and the
 closing had been eroding it by 1e-4 mm.
+
+### Coplanar unions must be built from cuts, not fuses — and this is not an open question
+
+The boom bulkhead is the first part built **in the plane** rather than in space, because
+`Part::Offset2D` operates on faces. That turned out to expose a trap with the same shape as
+IP-FC-46's null tool: a kernel behaviour that is silent until something several nodes away
+consumes it.
+
+**`Part::Fuse` and `Part::MultiFuse` over coplanar faces return a `Compound` of abutting faces,
+not one face.** The key came out as 15 of them. Its total area was right to 0.005%, so every
+check applied to that node passed. `Part::Offset2D` then offsets **each member of a compound
+separately**, interior shared edges included:
+
+| `boom_key_shape`, then `offset(r = 6)` | Faces | Result | vs OpenSCAD 567.3077 |
+| --- | --- | --- | --- |
+| fuse chain | 15 | 2434.8653 | **+329%** |
+| this route | 1 | 567.3384 | **+0.0054%** |
+
+The +329% comes back as a closed, valid, plausible region with no warning of any kind.
+
+Nothing in the obvious set reaches one face. `Part::Refine` is `ShapeUpgrade_UnifySameDomain`
+and **cannot unify across a compound**; `Part::MultiFuse` with `Refine = True` is still a
+compound; `Part::FaceMakerBullseye`, `…Simple` and `…Cheese` each rebuild the 15 fragments,
+because the union's outer boundary is itself split across several wires — `Part::Face` on the
+longest wire gives one face of 148.51 mm², 11% short, since the longest wire is not the outer
+boundary. Only the **scripted** `shape.multiFuse(…)` unifies: it returns a `Shell`, which
+`removeSplitter()` collapses to exactly one face. The document objects never return a shell.
+
+Baking that shell into a `Part::Feature` would work and is the wrong answer — it costs the
+parametric editability the port exists to preserve, at nearly every union in the tree.
+
+**`Part::Cut` does not fragment.** So De Morgan gets there in stock document objects: cut every
+piece out of an enclosing rectangle, then cut that result back out of the same rectangle.
+`R − ((R − a) − b − …)`. Two extra nodes per union, the tree stays live, and the result is one
+face.
+
+**The rectangle must strictly enclose every piece, in the frame the union happens in.** If it
+does not, the union silently truncates to whatever the rectangle held — measured at −9.42% on a
+first attempt that sized the rectangle for the placed key while the pieces were still in local
+coordinates. `union_reach` is therefore built from every term that can push material outward and
+then doubled, exactly as `mask_reach()` does in `shape_modifier_utils.scad`, and `boom_key.py`
+asserts both invariants after recompute: one face, and clear of the rectangle's own edge.
+
+This is a measurement rather than a decision, in the same way as OQ-ARCH-3, OQ-ARCH-8 and
+OQ-ARCH-10. It was on its way to being written up as an open question about how to build 2D
+profiles at all — sketches, a scripted feature, a 3D round trip — and none of that is needed.
+The one thing worth carrying forward is the *convention*: **in 2D, union means cuts**, and any
+2D node that yields more than one face is a defect, not a cosmetic difference.
+
+`boom_key.py` is the first module built this way. It verifies against both of the reference
+table's key rows: mode 4 at **+0.00516%** with an exact bounding box, and mode 5 — the same key
+dilated by `boom_key_web_width` — at **+0.00541%**.
 
 **Still to do on this item:** the four region-wide sites, as `Part::Offset2D` chains, and the
 cowls. The reference table above is what all of it is verified against.
