@@ -16,6 +16,22 @@ corner_end() with two arguments that differ from the corner's own:
 
 The whole shape is then shifted down by eps to clean up the bottom of the cutout.
 
+**That second bullet is a defect, not a design choice -- see OQ-DES-B12, decided 2026-08-11
+and not yet implemented.** The `+ 2*eps` is
+meant as cut overshoot, but `corner_end` derives the snap rib from the same argument, so the
+socket's rib comes out 2.00667 mm against the post's 2.00000. The `-eps` shift nearly cancels
+the inflation, leaving the nub band centred and 0.00667 mm too tall -- about 0.0033 mm of gap
+at each end of a snap the design says must be nominal. It is 3% of a layer height and no
+printed part is affected, but it makes the invariant below false for the rib while the code
+asserts it for the bore. Do not "clean this up" locally: the fix has to land in the OpenSCAD
+authority or both backends stop agreeing. IP-FC-50 separately measured that OCCT needs no
+overshoot at all, so on this path the `+ 2*eps` buys nothing and costs the rib error.
+
+The decided fix is an explicit overshoot argument on `corner_end`, leaving its thickness
+argument to mean thickness. When it lands, `gt_bt` becomes `bulkhead_thickness` and the
+`-eps` shifts below go away with it -- and REF_TOOL, along with the bulkhead section and
+assembled bulkhead references, has to be regenerated against the corrected authority.
+
 So "reuse the corner's end section" means re-evaluating the DESCRIPTION at different
 arguments -- a second call to the same builder. It does not mean referencing the corner's
 built shape, which is oversize on the bore by design; cutting the bulkhead with that would
@@ -94,7 +110,7 @@ def main():
     print('  post tool bore       = %s   (tolerance %s)'
           % (sheet.get('gt_greeble_radius'), sheet.get('gt_tolerance')))
     print('  corner rib height    = %s' % sheet.get('greeble_nub_height'))
-    print('  post tool rib height = %s   (from bt + 2*eps)'
+    print('  post tool rib height = %s   (from bt + 2*eps -- OQ-DES-B12, should be nominal)'
           % sheet.get('gt_greeble_nub_height'))
     print('')
     print('  volume  = %.6f' % s.Volume)
