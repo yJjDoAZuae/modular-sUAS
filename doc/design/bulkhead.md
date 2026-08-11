@@ -443,10 +443,18 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B6 | ~~resolved~~ 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
+| B12 | ~~resolved~~ 2026-08-11 — decided, fix not yet made | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
 
 **Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that
 gets more expensive the longer it is deferred.
+
+**B12 is decided but not yet implemented**, and is the one resolved entry that still describes
+a live defect. `corner_end` is to gain an explicit overshoot argument so that its thickness
+argument stops driving the snap rib as a side effect. Until that lands, the bulkhead socket's
+rib is 2.00667 mm against the corner post's 2.00000 — unprintable at 3% of a layer height,
+but it leaves the "clearance carried once" invariant false for the rib while the code asserts
+it for the bore.
 
 B4 and B7 together mean the swept range is validated in hardware at **both** ends, U=0.5
 and U=4.
@@ -964,6 +972,52 @@ The reasoning is recorded in [freecad_migration.md §`Part::Offset2D` reproduces
 offset chain](../implementation/freecad_migration.md), and the two constructions are measured
 against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
 which keeps the morphological form solely as the thing being compared to.
+
+### ~~OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib~~ — DECIDED 2026-08-11: fix the authority
+
+**Decision. Alternative 1.** `corner_end` gains an explicit overshoot argument, defaulting to
+zero, which extends the extrusion only. `bulkhead_thickness` goes back to meaning the
+thickness and nothing else, and keeps driving the snap rib. The greeble-forming tool calls
+`corner_end` with the true thickness and an overshoot of `eps`, instead of inflating the
+thickness to buy the overshoot.
+
+**The defect.** The bulkhead does not model its greeble socket; it cuts it with a tool that is
+the corner's own end section re-evaluated at different arguments. One of those arguments was
+`bulkhead_thickness + 2*eps`, intended purely as cut overshoot. But `corner_end` also derives
+`greeble_nub_height = bulkhead_thickness / 3` and the four nub `z` levels from that same
+argument, so the overshoot silently inflated the snap rib as well — 2.00667 mm against the
+post's 2.00000 at U = 1.0. The `-eps` shift applied afterwards nearly cancelled the
+inflation, leaving the nub band centred on mid-thickness and only 0.00667 mm too tall, which
+is why it went unnoticed. The net effect was about 0.0033 mm of gap at each end of the snap.
+
+**Why it was worth fixing at 3% of a layer height.** Nothing printed is affected and nothing
+printed will change. What was wrong is that the design states all snap clearance is carried
+once, on the corner's bore, because splitting it across both halves applies it twice — and
+the code asserts exactly that for the bore while the rib quietly carried a second clearance.
+An invariant that is asserted in one place and false in another is worse than no invariant.
+
+**Why the authority and not the port.** IP-FC-50 measured that OCCT needs no cut overshoot at
+all: a tool cap coplanar with the face it exits through cuts exactly, at every scale tested,
+and yields fewer faces than the padded version. So the FreeCAD path could have been corrected
+on its own. It was not, because the two backends are compared against each other by IP-FC-13,
+and a permanent known divergence — however small, however well documented — is how a
+comparison harness stops being trusted. The conflation is one argument carrying two meanings;
+only separating them fixes the cause rather than relocating the symptom.
+
+**Constraints attached to the choice**
+
+- The signature change touches every `corner_end` call site. The corner's own calls pass the
+  default and are unaffected in behaviour.
+- Shipped geometry changes by 0.0067 mm on the rib, so the stored reference volumes for the
+  greeble tool, the bulkhead section and the assembled bulkhead must be regenerated. This is
+  mechanical — the values are produced by scripts already in the tree — but it is not free,
+  and until it is done the reference comparisons will show the change as a failure.
+- On the FreeCAD side, `gt_bt` becomes `bulkhead_thickness` and the `-eps` shifts in
+  `bulkhead_tree.GREEBLE_TOOL_PARAMS` go away with it. The port keeps agreeing with the
+  authority rather than diverging from it, which was the point.
+- Alternative 3 — dropping the overshoot entirely on both paths — remains available later,
+  but only after measuring whether CGAL needs it here the way IP-FC-50 measured OCCT. That
+  measurement does not exist, and this decision does not depend on it.
 
 ## See also
 
