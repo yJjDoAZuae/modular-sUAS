@@ -42,16 +42,21 @@ import FreeCAD as App
 import bulkhead_section
 import corner_tree as C
 import parameters
-from corner_common import is_entry_point
+from corner_common import is_entry_point, script_args
 
 V = App.Vector
 
 # ref_bulkhead_full.scad. `bulkhead_render()` calls bulkhead_section_full and nothing else,
-# so this is the whole part -- and `render_variant.py 1.0 end_bolt 3/16in`, which resolves
-# the variant through derived_parameters() rather than through a hand-typed .scad, gives
-# 6922.5048968 as well. Identical to the digit: the reference chain is not just internally
-# consistent, it agrees with what the sweep actually produces.
-REF = 6922.5048968
+# so this is the whole part -- and `render_variant.py 1.0 end_bolt 3/16in`, which resolves the
+# variant through derived_parameters() rather than through a hand-typed .scad, gave the
+# pre-B12 value 6922.5048968 identically. That cross-check says the reference chain is not
+# just internally consistent but agrees with what the sweep actually produces; it has NOT been
+# re-run since the fix, so treat it as evidence about the chain rather than about this number.
+#
+# Regenerated 2026-08-11 for OQ-DES-B12, by re-rendering ref_bulkhead_full.scad. The part lost
+# 0.2322237 mm3, which is 8 x the 0.0290279 the octant lost -- the eight corners each carrying
+# the same nominal-rib correction, and a check that the fix did not leak into the tiling.
+REF = 6922.2726731
 EXPECT_BBOX = (-45.1375, -45.1375, 0.0, 45.1375, 45.1375, 6.0)
 
 # mirror_xy, then mirror_y, then mirror_x -- the nesting order in octant_to_full(). Each
@@ -96,7 +101,7 @@ def emit(doc, seed):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    args = script_args()
     if not args:
         print('usage: freecadcmd bulkhead_full.py params.json')
         return 0

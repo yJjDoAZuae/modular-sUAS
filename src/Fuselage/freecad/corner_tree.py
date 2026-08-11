@@ -37,7 +37,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import build_sheet, is_entry_point, out_path
+from corner_common import build_sheet, is_entry_point, out_path, script_args
 
 V = App.Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -490,7 +490,7 @@ SWEPT_REFS = [('Tip', 14146.8357350)]            # ref_corner_full.scad
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.endswith('.py')]
+    args = script_args()
     seed = None
     refs = DRIVER_REFS
     if args:

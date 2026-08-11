@@ -108,6 +108,22 @@ def is_entry_point(name):
     return False
 
 
+def script_args():
+    """The arguments meant for the script, with freecadcmd's own tokens removed.
+
+    Two things have to come out of `sys.argv`. The script paths, because freecadcmd puts the
+    file it is running there. And `--pass`, which is freecadcmd's escape for arguments meant
+    for the script rather than for itself -- it forwards the token *as well as* the value, so
+    a script that filters only `.py` reads the flag as its first argument.
+
+    That failure is quiet in the worst way: the run dies on a file-not-found naming `--pass`,
+    which reads like a malformed command line rather than like the script ignoring a flag it
+    was handed. Six scripts had their own copy of this filter and five of them had this bug,
+    so it is stated once here.
+    """
+    return [a for a in sys.argv[1:] if a != '--pass' and not a.endswith('.py')]
+
+
 def is_literal(value):
     """True when a PARAMS row carries a plain number rather than an expression.
 
