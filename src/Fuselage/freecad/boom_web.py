@@ -74,10 +74,15 @@ def _on_centreline(doc):
     return abs(float(doc.getObject('Params').get('boom_y_position'))) < 1e-12
 
 
-def spine(doc):
-    """The seven-vertex centreline, fully constrained from the sheet."""
+def spine(doc, tag='', z=P + 'boom_z_position'):
+    """The seven-vertex centreline, fully constrained from the sheet.
+
+    `z` is the one input the lower web changes -- the source evaluates it at
+    `-boom_z_position`. The three `cl_*` turning values are frame dimensions and do not move
+    with the boom, so they are read straight from the sheet in both evaluations.
+    """
     flat = _on_centreline(doc)
-    z, y = P + 'boom_z_position', P + 'boom_y_position'
+    y = P + 'boom_y_position'
     # (seed x, seed y, x expression, y expression)
     verts = [(0.0, 25.0, '0', z)]
     if not flat:
@@ -94,11 +99,11 @@ def spine(doc):
     for i, (_, _, ex, ey) in enumerate(verts):
         dims.append((i, 'X', ex))
         dims.append((i, 'Y', ey))
-    return C._sketch(doc, 'Spine', pts, (), (), (), dims, 0, '0')
+    return C._sketch(doc, tag + 'Spine', pts, (), (), (), dims, 0, '0')
 
 
-def centerline(doc):
-    return plane2d.face(doc, 'Centerline', spine(doc))
+def centerline(doc, tag='', z=P + 'boom_z_position'):
+    return plane2d.face(doc, tag + 'Centerline', spine(doc, tag, z))
 
 
 def mirror_x(doc, name, base):
