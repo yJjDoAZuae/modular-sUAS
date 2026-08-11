@@ -443,13 +443,10 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B6 | ~~resolved~~ 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
-| B11 | **open** — blocks IP-FC-12 | How should the boom bulkhead's morphological rounding be built? |
 
-**Three open: B3, B8 and B11.** None is a defect — all three need a decision rather than an
-answer. B3's original intent is not recoverable; B8 is a forward-looking structural choice
-that gets more expensive the longer it is deferred; B11 exists because the measurement
-OQ-DES-B9 was partly decided on turned out to be wrong, and the boom bulkhead is the first
-part to depend on it.
+**Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
+B3's original intent is not recoverable; B8 is a forward-looking structural choice that
+gets more expensive the longer it is deferred.
 
 B4 and B7 together mean the swept range is validated in hardware at **both** ends, U=0.5
 and U=4.
@@ -686,8 +683,10 @@ inputs have changed:
 fillet_inner(r)` over a circle unioned with a square.
 
 **The re-decision is [OQ-DES-B11](#oq-des-b11--how-should-the-boom-bulkheads-morphological-rounding-be-built) below**,
-which is open and blocks IP-FC-12. This question stays decided for what it actually governed:
-the frame bulkhead's four named fillets and the chamfer, none of which reach `fillet_inner`.
+decided 2026-08-10 as a split: true fillets on the key, the morphological chain for the
+region-wide remainder. This question stays decided for what it actually governed — the frame
+bulkhead's four named fillets and the chamfer, none of which reach `fillet_inner` — and B11
+governs the boom bulkhead.
 
 **Scope, established 2026-08-09 while porting: this affects the boom bulkhead only.**
 `fillet_inner` is called exactly once in `fuselage_bulkhead_geometry.scad`, inside
@@ -900,164 +899,71 @@ kept, and that is a judgement about a flown part rather than about the code.
 **Porting in the meantime follows alternative 3**, so the port continues and matches the
 existing reference; switching later is a change to two constants.
 
-### OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built?
+### ~~OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built?~~ — DECIDED 2026-08-10: split by intent
 
-**Problem.** The *boom bulkhead* is the bulkhead type that carries a boom tube through the
-fuselage — a flat profile extruded to `boom_bulkhead_thickness`, with a collar and a
-rotational key gripping the tube, and webs carrying the tube's load out to the corners. All
-dimensions in this question are **millimetres**, because the geometry under discussion is the
-OpenSCAD path, which is exempt from the SI convention and stays in millimetres end to end.
+**Decision. Alternative 3.** True fillets on the key, and the morphological offset chain for
+the more complex remainder of the bulkhead.
 
-Unlike every part ported so far, its profile is built almost entirely from **2D morphological
-offsets** rather than from primitives. OpenSCAD's `offset(r = d)` returns the set of points
-within distance `d` of the shape when `d > 0` (a dilation), and the set of points at least
-`|d|` inside it when `d < 0` (an erosion). Two derived operators are built from that pair in
-`shape_modifier_utils.scad`:
+`boom_key_shape` is a named corner round — a circle unioned with a rectangular tab, four
+corners, a fixed count — and it gets real fillets. The other four sites (`boom_bulkhead`
+itself, `boom_web_outer_shape`, `boom_web_inner_shape` and `bulkhead_web_inner_shape_octant`)
+apply the operator to whole compound regions whose concave-corner set moves with the
+parameters, and they keep the morphological construction, which `Part::Offset2D` reproduces to
+0.00456%.
 
-```scad
-module fillet_inner(radius) {
-    intersection() {
-        offset(r = -radius) offset(r = 2*radius) offset(r = -radius) children();
-        children();
-    }
-}
-module fillet_outer(radius) {
-    union() {
-        offset(r = -radius) offset(r = radius) children();
-        children();
-    }
-}
-```
+**Constraint attached to the choice: the key's parameter domain is a design statement, and it
+is enforced.** Choices where the key width or depth is less than two fillet radii are invalid,
+as are extreme key widths approaching the diameter of **the hole the collet passes through** —
+`boom_diameter/2 + collet_thickness + tolerance` in radius, not the boom tube itself.
+`boom_key_validity_check()` in
+[`fuselage_variants.py`](../../src/Fuselage/tools/fuselage_variants.py) enforces all three:
 
-`fillet_inner` is a morphological *closing* clipped back to the input: it rounds re-entrant
-(concave) corners and removes concave features narrower than `2·radius`, anywhere in the
-region it is applied to. `fillet_outer` is the dual, rounding convex corners. Neither is a
-fillet in the CAD sense — neither takes an edge as an argument. OpenSCAD has no fillet
-operation, so these approximate one.
-
-Six such operators reach the boom bulkhead, at five sites:
-
-| Site | Operator | Operand |
+| Rule | Required | Tightest across the 132-variant corpus |
 | --- | --- | --- |
-| `boom_bulkhead` | `fillet_inner(web_fillet_radius)` | a compound difference spanning the whole profile |
-| `boom_web_outer_shape` | `fillet_outer(web_fillet_radius)` | union of the dilated key and the dilated web centreline |
-| `boom_web_inner_shape` | `fillet_inner(web_fillet_radius)` | eroded web centreline minus the dilated key |
-| `boom_key_shape` | `fillet_outer(boom_key_radius)` then `fillet_inner(boom_key_radius)` | a circle unioned with a rectangle |
-| `bulkhead_web_inner_shape_octant` | `fillet_inner(web_fillet_radius)` | `offset(r = -web_width)` of the OML profile |
+| `key_width >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
+| `key_height >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
+| `key_width < 2 * collet_radius` | ratio < 1 | **0.270** |
 
-Only the fourth is a *named corner round* — a fixed, small set of corners on a known shape.
-The other four apply the operator to a whole compound region, where its job is to close
-slivers and round whatever re-entrant corners happen to exist at those parameters. The count
-and identity of those corners move with the parameters.
+**None of the three is an arbitrary threshold; each is where the construction stops existing.**
+The width limit and the geometric singularity are one statement rather than two — the junction
+fillet centre sits at height `sqrt((cr + r)² − (w/2 + r)²)`, which goes imaginary at exactly
+`w = 2·cr`, where the tab spans the hole and the junctions being filleted no longer exist. The
+height rule is what holds the junction fillets clear of the cap fillets: the junction tangent
+point is at most `cr + r` and the cap starts at `cr + h − r`, and the first is below the second
+precisely when `h ≥ 2r`. Only the width-vs-radius rule is about the tab in isolation.
 
-**Why this is open now.** [OQ-DES-B9](#oq-des-b9--is-the-morphological-fillet-the-authority-or-is-a-true-fillet) decided
-2026-08-08 that the port uses real fillets rather than reproducing the morphological result.
-One of its two stated grounds was that reproduction was not available: *"`Part::Offset2D`
-demonstrably will not do it, so this means writing the offset chain by hand"*, with a measured
-19% divergence. **That measurement was wrong**, established 2026-08-10.
+It excludes nothing today — 132 valid variants before and after — because `key_width` and
+`key_height` are both `max(2·U, 2)` and `key_radius` is `max(U/2, 1/2)`, so width and depth are
+each exactly **four** fillet radii at every `U`. The guard states intent rather than filtering
+the current corpus.
 
-It was taken at one value of one parameter, on a test polygon that is degenerate at exactly
-that value: a limb exactly 10 mm wide with a chained erosion of exactly 5 mm, so the erosion
-of that limb is a zero-area **hairline** 20 mm long, which the following dilation paints into
-a band 8 mm wide. Exact rational arithmetic keeps such a segment; floating-point offsets do
-not. OpenSCAD's own answer there moves 573.97 → 453.82 → 381.04 mm² across 0.002 mm of the
-parameter, against a few mm² per 0.02 mm everywhere else. Swept across five values with the
-degenerate one excluded, `Part::Offset2D` with `Join='Arc'` matches OpenSCAD to a worst
-**0.00456%** at every step of the chain, including the full `fillet_inner` — inside the
-0.0060% faceting floor that bounds any cross-engine comparison. An independent raster of the
-morphological definition, validated against `A + P·r + π·r²` to −0.02%, agrees with both.
+**The OpenSCAD path was changed and verified first, before any porting.** Measured across all
+24 distinct swept key geometries, the direct construction and the morphological one agree to a
+worst **0.00522%** symmetric difference, inside the 0.0060% faceting floor. Both halves of the
+difference are measured separately, since equal amounts of added and removed material would
+cancel in a volume comparison. The relative error falls with `U` — 0.0052% at `U` = 0.5 down to
+0.0004% at `U` = 4 — which is fixed-angular tessellation on a growing part, not a construction
+error. The assembled part moves by **−0.00008%** and its bounding box does not move at all.
 
-So the alternative OQ-DES-B9 rejected is available, cheap, and exact. Two further facts bear
-on the choice:
+Two things came out of the change that were not the point of it:
 
-- **The boom bulkhead's own offsets are structurally off that knife edge.** `web_fillet_radius
-  = 2·U` and, on the `is_boom` branch, `web_width = 6·U`, so `web_width / (2·web_fillet_radius)
-  = 1.5` at every `U` — the degenerate ratio is 1.0, and no parameter can move it because the
-  two are not independently specified. The region-wide sites are not covered by that argument,
-  since the gaps they close depend on panel thickness and boom position.
-- **Nothing already built is affected.** `fillet_inner` is reached only through the boom
-  bulkhead; the end, interconnect and cowling bulkheads never execute it, and `bulkhead_web`,
-  which they do use, already makes a true fillet by subtracting a cylinder.
+- **The collet's fit surface is now exact.** `boom_key_shape`'s bounding box is ±7.2000 at
+  `U` = 1, where the morphological form gave ±7.1999. 7.2 is
+  `boom_diameter/2 + collet_thickness + tolerance`, the surface that fits the boom tube, and
+  the closing step had been eroding it by 1e-4 mm.
+- **The failure mode outside the domain got quieter, which is worse.** The morphological form
+  failed loudly: an opening removes any protrusion thinner than twice its radius, so a tab
+  below `2 * key_radius` did not round off, it *vanished* — measured at `U` = 1, the shape
+  collapses to the bare collet at 162.86 mm² against 166.86 mm² for a valid tab. The direct
+  construction instead returns a defined shape whose rounded cap is wider than the tab it
+  caps, because the two corner arcs cross over. That is a plausible-looking wrong part, which
+  is the one failure mode this migration most needs to avoid, and it is why the validity check
+  is load bearing rather than documentary.
 
-**What is affected.** The shape of every boom bulkhead the sweep produces — three types
-(`offset_single`, `center_single`, `dual`) across the `U` and panel axes — and whether
-IP-FC-13 can test the kind strictly by volume or must drop it to the deviation tier. Parts
-already printed change shape under any alternative but the first.
-
-**Alternatives**
-
-1. **`Part::Offset2D` chains throughout.** Port `fillet_inner` and `fillet_outer` as chains
-   of four and two `Part::Offset2D` document objects respectively, matching the SCAD
-   definitions operator for operator.
-   *Benefits:* reproduces the current geometry to 0.005%, so no printed part changes shape;
-   the boom bulkhead stays in IP-FC-13's **strict** tier alongside the corner rather than
-   needing a deviation tolerance; fully parametric with no edge references, so none of the
-   topological-naming exposure IP-FC-5 measured; one mechanism for all six sites.
-   *Drawbacks:* carries a morphological approximation into a kernel that has a real fillet
-   operation, which is what OQ-DES-B9 argued against on its merits; the approximation still
-   degrades where features are closer than `2·radius`.
-   *Prerequisites:* none.
-
-2. **Real `Part::Fillet` edges throughout.** Apply OQ-DES-B9 literally: identify the concave
-   and convex vertical edges of the extruded profile and fillet them.
-   *Benefits:* the operation the feature means, exact rather than approximate; a constant
-   radius is what a drawing would dimension; does not degrade where features crowd.
-   *Drawbacks:* four of the six sites take a whole compound region whose edge count and
-   identity move with the parameters, so the edge set must be found by geometric predicate at
-   every variant rather than named once — the failure mode is a fillet silently landing on the
-   wrong edge; the part changes shape, dropping the kind to IP-FC-13's deviation tier;
-   `Part::Fillet` failing on one variant of a 3-type × `U` × panel sweep is a build failure,
-   not a tolerance miss.
-   *Prerequisites:* a deviation tolerance for the boom bulkhead in IP-FC-13; a rule for
-   selecting edges that is stable across the swept space.
-
-3. **Split by intent.** Real fillets at `boom_key_shape`, whose corners are a fixed set on a
-   circle unioned with a rectangle; `Part::Offset2D` chains at the four region-wide sites.
-   *Benefits:* each site gets the construction that matches what it means; the topological
-   risk is confined to the one shape whose topology does not move.
-   *Drawbacks:* two mechanisms in one part, and a judgement call at each new site; the key's
-   geometry changes while the rest does not, so IP-FC-13 needs a per-feature rather than
-   per-part tier.
-   *Prerequisites:* confirmation that `boom_key_shape`'s corner count is in fact invariant
-   across the swept space, including `boom_key_angle` and the `dual` type.
-
-4. **Change the SCAD source so both paths agree.** Replace the `fillet_inner`/`fillet_outer`
-   calls in `fuselage_boom_bulkhead_geometry.scad` with constructions that are true fillets in
-   OpenSCAD too — subtracted cylinders at known corners, as `bulkhead_web` already does — then
-   port that.
-   *Benefits:* the two paths describe the same shape, so IP-FC-13 stays strict *and* the
-   geometry is a real fillet; removes the approximation at its source rather than carrying it;
-   `bulkhead_web` is precedent that it can be done.
-   *Drawbacks:* modifies the reference path mid-migration, which the migration explicitly
-   avoids; the region-wide sites have no fixed corner set to subtract cylinders at, so this may
-   only be achievable at `boom_key_shape` and would leave the others unsolved; changes the
-   printed part.
-   *Prerequisites:* establishing whether the region-wide sites *have* a stable corner set —
-   the same question alternative 2 must answer.
-
-**Recommendation: alternative 1, with alternative 3 as the principled middle if the key's
-corners are wanted as true fillets.**
-
-The argument that carried OQ-DES-B9 — that a fillet is what the feature means, and an
-approximation should not be carried forward because it is what the old tool could express —
-applies cleanly to four *named corners* on a bulkhead. It applies poorly to an operator whose
-argument is a whole region and whose purpose there includes removing slivers, which no fillet
-does. Those are different operations that happen to share a spelling in the SCAD source, and
-the case for replacing the first is not the case for replacing the second.
-
-Against that, alternative 1 buys two things that are not merely convenient. It keeps the boom
-bulkhead in the strict tier, which means the port is *verifiable* for this kind rather than
-verified to a tolerance chosen to accommodate it — and IP-FC-46 through IP-FC-49 were all
-found because a check was strict enough to fail. And it avoids resolving edge identity per
-variant on a part where the edge set genuinely moves, which is the one failure mode in this
-migration that produces a plausible-looking wrong part rather than an error.
-
-The honest cost is that alternative 1 leaves a morphological approximation in a kernel that
-could do better, at exactly the four sites where the approximation is least defensible as a
-*fillet*. If the region-wide sites are read as sliver-removal rather than as rounding — which
-is what they do — then that cost is small and alternative 1 is right. If they are read as
-rounding that OpenSCAD merely implemented badly, alternative 2 is right and the topological
-work is the price. **That reading is the decision, and it is not one the measurement settles.**
+The reasoning is recorded in [freecad_migration.md §`Part::Offset2D` reproduces the whole
+offset chain](../implementation/freecad_migration.md), and the two constructions are measured
+against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
+which keeps the morphological form solely as the thing being compared to.
 
 ## See also
 

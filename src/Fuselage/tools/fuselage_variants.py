@@ -969,6 +969,44 @@ def bulkhead_validity_check(dp):
     
     return is_valid
 
+def boom_key_validity_check(dp):
+    """
+    Tests the boom key parameters against the domain its fillet construction is defined on.
+
+    `boom_key_shape` builds its four corners as true fillets, decided in OQ-DES-B11. Two arcs
+    of key_radius have to fit across the tab and along its protrusion, and the tab has to stay
+    narrower than the hole it keys.
+
+    The hole is the one the collet passes through, not the boom itself: its radius is
+    diameter/2 + collet_thickness + tolerance. The width limit and the geometric singularity
+    are the same statement here rather than two -- the junction fillet centre sits at height
+    sqrt((cr + r)^2 - (w/2 + r)^2), which goes imaginary at exactly w = 2*cr, where the tab
+    spans the hole and the two junctions it is filleting no longer exist.
+
+    The other two rules are not independent either. key_height >= 2*key_radius is what keeps
+    the concave junction fillets clear of the convex cap fillets: the junction tangent point
+    is at most cr + key_radius, the cap starts at cr + key_height - key_radius, and the first
+    is below the second precisely when key_height >= 2*key_radius.
+
+    This check is load bearing in a way it would not have been before. The morphological form
+    it replaced failed LOUDLY outside the domain: an opening removes any protrusion thinner
+    than twice its radius, so a tab below 2*key_radius did not round off, it vanished, and the
+    part came out visibly wrong. The direct construction fails QUIETLY instead -- the two
+    corner arcs cross over and the cap comes out wider than the tab it caps, which is a
+    plausible-looking part. Trading a loud failure for a quiet one is only safe if the domain
+    is checked, so it is checked here.
+    """
+
+    b = dp.boom_bulkhead
+
+    collet_radius = b.diameter / 2 + b.collet_thickness + b.tolerance
+
+    is_valid = b.key_width >= 2 * b.key_radius
+    is_valid &= b.key_height >= 2 * b.key_radius
+    is_valid &= b.key_width < 2 * collet_radius
+
+    return is_valid
+
 def run_bulkhead_parametric_sweep(csv_files, output_dir):
     """
     Main function:
@@ -1035,6 +1073,7 @@ def run_boom_bulkhead_parametric_sweep(csv_files, output_dir):
         dp = derived_parameters(U,FX,params,printer_settings,True)
         
         is_valid = bulkhead_validity_check(dp)
+        is_valid &= boom_key_validity_check(dp)
 
         if is_valid:
 
