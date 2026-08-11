@@ -15,10 +15,11 @@ the port matches the copy. The binding check is the assembled `bulkhead_section`
 
 Two things worth recording:
 
-**The octant mask is the `x > y` half-plane again**, shifted by `eps`. Its three vertices
-look arbitrary until the deltas come out equal -- 2*corner_radius + unit_width/2 on both
-axes -- so the hypotenuse is the line `y = x - eps`. That makes it a box minus the same
-half-plane every other profile in this port has needed.
+**The octant mask is the `x > y` half-plane again**, shifted by `mask_eps`. Its three
+vertices look arbitrary until the deltas come out equal -- 2*corner_radius + unit_width/2 on
+both axes -- so the hypotenuse is the line `y = x - mask_eps`. That makes it a box minus the
+same half-plane every other profile in this port has needed. `mask_eps` is 0 here and `eps`
+in the OpenSCAD source; see its row for why.
 
 **The opening wedge is the one shape with genuinely arbitrary angles.** Its two edges run at
 45 +/- greeble_opening_angle from the origin and it closes on a chord. It is still not a
@@ -99,8 +100,7 @@ PARAMS = [
     ('clean_x0', '=-(panel_offset + panel_overlap)'),
     ('clean_r', '=corner_radius - (panel_thickness + panel_tolerance + eps)'),
 
-    # octant mask: hypotenuse is y = x - eps, both legs 2*corner_radius + unit_width/2
-    ('mask_hi', '=corner_radius + eps'),
+    # octant mask: hypotenuse is y = x - mask_eps, legs 2*corner_radius + unit_width/2
     ('mask_lo', '=-unit_width / 2 - corner_radius'),
     ('mask_leg', '=corner_radius - mask_lo'),
 ]
