@@ -48,6 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
+import plane2d
 from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
@@ -95,83 +96,17 @@ def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
 
 
-def _face(doc, name, *sources):
-    """Close one or more wires into a face. The 2D counterpart of taking a solid."""
-    face = C._owned(doc, 'Part::Face', name)
-    face.Sources = list(sources)
-    return face
-
-
-def _disc(doc, name, radius, x='0', y='0'):
-    """A filled circle, as a parametric edge closed by a face."""
-    circle = C._owned(doc, 'Part::Circle', name + 'Edge')
-    circle.setExpression('Radius', radius)
-    circle.setExpression('Placement.Base.x', x)
-    circle.setExpression('Placement.Base.y', y)
-    return _face(doc, name, circle)
-
-
-def _rect(doc, name, length, width, x, y):
-    """An axis-aligned rectangular face with its corner at (x, y)."""
-    plane = C._owned(doc, 'Part::Plane', name)
-    plane.setExpression('Length', length)
-    plane.setExpression('Width', width)
-    plane.setExpression('Placement.Base.x', x)
-    plane.setExpression('Placement.Base.y', y)
-    return plane
-
-
-def _union(doc, name, pieces):
-    """Union coplanar faces into ONE face, as `R - ((R - a) - b - ...)`.
-
-    **Do not use `Part::Fuse` or `Part::MultiFuse` for coplanar faces.** They return a
-    **Compound** of abutting faces rather than one face, and `Part::Offset2D` offsets each
-    member of a compound *separately*, interior shared edges included. Measured on this key at
-    `offset(r = 6)`, FreeCAD 1.1.1:
-
-        fuse chain (15 faces)  ->  2434.87 mm2   vs OpenSCAD 567.31   +329%
-        this route (1 face)    ->   567.34 mm2   vs OpenSCAD 567.31   +0.0054%
-
-    and the +329% comes back as a closed, valid, plausible region with no warning. The fused
-    compound's own area is right to 0.005%, so a check on that node alone never sees it.
-
-    Nothing else reaches one face. `Part::Refine` is `ShapeUpgrade_UnifySameDomain` and cannot
-    unify across a compound; `Part::MultiFuse` with `Refine = True` is still a compound;
-    `Part::FaceMakerBullseye`, `...Simple` and `...Cheese` all rebuild the 15 fragments,
-    because the union's outer boundary is itself split across several wires. Only the scripted
-    `shape.multiFuse(...).removeSplitter()` unifies -- it returns a Shell, which the document
-    objects never do -- and baking that into a `Part::Feature` would cost the parametric
-    editability the whole port exists to keep.
-
-    `Part::Cut` does not fragment. So De Morgan gets there in stock document objects: cut every
-    piece out of a rectangle, then cut the result back out of the same rectangle. Two extra
-    nodes per union, and the tree stays live.
-
-    **The rectangle must strictly enclose every piece**, in the frame the union happens in. If
-    it does not, the union silently truncates to whatever the rectangle held -- measured at
-    -9.42% when a first attempt sized the rectangle for the placed key while the pieces were
-    still in local coordinates. `union_reach` is built from every term that can push material
-    outward, and `main()` asserts the result is clear of the rectangle's own edge.
-    """
-    R = P + 'union_reach'
-    rect = _rect(doc, name + 'Rect', '2 * ' + R, '2 * ' + R, '-' + R, '-' + R)
-    node = rect
-    for i, piece in enumerate(pieces):
-        node = C._cut(doc, '%sNeg%d' % (name, i), node, piece)
-    return C._cut(doc, name, rect, node)
-
-
 def junction_fillet(doc, tag, mirrored=False):
     """The gusset at one tab-to-collet junction."""
     sign = '-' if mirrored else ''
     # the box is [a, a+r] going outboard, so mirrored it starts at -(a+r)
     x0 = ('-(' + P + 'key_a + ' + P + 'boom_key_radius)') if mirrored else (P + 'key_a')
     node = C._cut(doc, tag + 'CutCollet',
-                  _rect(doc, tag + 'Box', P + 'boom_key_radius',
+                  plane2d.rect(doc, tag + 'Box', P + 'boom_key_radius',
                         P + 'key_yc - ' + P + 'key_ty', x0, P + 'key_ty'),
-                  _disc(doc, tag + 'Collet', P + 'collet_radius'))
+                  plane2d.disc(doc, tag + 'Collet', P + 'collet_radius'))
     return C._cut(doc, tag + 'CutArc', node,
-                  _disc(doc, tag + 'Arc', P + 'boom_key_radius',
+                  plane2d.disc(doc, tag + 'Arc', P + 'boom_key_radius',
                         sign + '(' + P + 'key_a + ' + P + 'boom_key_radius)', P + 'key_yc'))
 
 
@@ -182,15 +117,15 @@ def key_profile(doc):
     there for why that distinction is not stylistic.
     """
     cap_y = P + 'key_y_top - ' + P + 'boom_key_radius'
-    return _union(doc, 'KeyProfile', [
-        _disc(doc, 'KeyCollet', P + 'collet_radius'),
-        _rect(doc, 'KeyTab', P + 'boom_key_width',
+    return plane2d.union(doc, 'KeyProfile', [
+        plane2d.disc(doc, 'KeyCollet', P + 'collet_radius'),
+        plane2d.rect(doc, 'KeyTab', P + 'boom_key_width',
               P + 'key_y_top - ' + P + 'boom_key_radius', '-' + P + 'key_a', '0'),
         # the cap: the hull of the two corner arcs, written out as the stadium it is
-        _rect(doc, 'KeyCapRect', '2 * ' + P + 'key_cap_half',
+        plane2d.rect(doc, 'KeyCapRect', '2 * ' + P + 'key_cap_half',
               '2 * ' + P + 'boom_key_radius', '-' + P + 'key_cap_half', P + 'key_cap_base'),
-        _disc(doc, 'KeyCapArcR', P + 'boom_key_radius', P + 'key_cap_half', cap_y),
-        _disc(doc, 'KeyCapArcL', P + 'boom_key_radius', '-' + P + 'key_cap_half', cap_y),
+        plane2d.disc(doc, 'KeyCapArcR', P + 'boom_key_radius', P + 'key_cap_half', cap_y),
+        plane2d.disc(doc, 'KeyCapArcL', P + 'boom_key_radius', '-' + P + 'key_cap_half', cap_y),
         junction_fillet(doc, 'GusR'),
         junction_fillet(doc, 'GusL', mirrored=True),
     ])
@@ -218,20 +153,16 @@ def emit(doc, seed=None):
     mirrored.Source = placed
     mirrored.Normal = V(1, 0, 0)
 
-    tip = _union(doc, 'BoomKey', [placed, mirrored])
+    tip = plane2d.union(doc, 'BoomKey', [placed, mirrored])
     doc.recompute()
     return tip
-
-
-def area(shape):
-    return sum(f.Area for f in shape.Faces) if shape.Faces else float('nan')
 
 
 def main():
     doc = App.newDocument('boom_key')
     tip = emit(doc)
     s = tip.Shape
-    got = area(s)
+    got = plane2d.area(s)
     d = got - REF_AREA
     bb = s.BoundBox
 
