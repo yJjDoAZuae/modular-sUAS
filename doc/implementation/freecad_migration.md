@@ -1715,8 +1715,38 @@ cases it has to separate: the fused compound of 15 abutting patches reports frag
 cut-built union does not, and two disjoint circles do not. A face count would have rejected a
 correct shape and taught the reader to expect the wrong thing.
 
-**Still to do on this item:** `bulkhead_oml_shape` and the assembled part, then the cowls. The
-reference table above is what all of it is verified against.
+### The OML outline, and where the port stands
+
+[`boom_oml.py`](../../src/Fuselage/freecad/boom_oml.py) ports `bulkhead_oml_shape` in the plane
+— the same outline the frame bulkhead reaches as a 3D octant through `bulkhead_cuts.py`, built
+the way the source builds it: one octant in a corner-local frame, moved out to its corner, then
+tiled by three nested mirror-unions. `mirror_xy` reflects across `y = x`, which is
+`Part::Mirroring` with a normal of (1, −1, 0) — the one of the three that is not an axis plane.
+It agrees at **−0.00029%** with an exact bounding box.
+
+Seven of the reference table's ten rows are now ported and verified:
+
+| Mode | Shape | Delta | Module |
+| --- | --- | --- | --- |
+| 0 | `upper_boom_support_centerline_shape` | **exact** | `boom_web.py` |
+| 1 | `mirror_x` of it | **exact** | `boom_web.py` |
+| 2 | `offset(+web_width/2)` — the stroke | +0.00035% | `boom_web.py` |
+| 3 | `offset(−web_width/2)` — the erosion | +0.00014% | `boom_web.py` |
+| 4 | `boom_key_shape` | +0.00516% | `boom_key.py` |
+| 5 | `offset(+boom_key_web_width)` of it | +0.00541% | `boom_key.py` |
+| 6 | `boom_web_outer_shape` | +0.00067% | `boom_webs.py` |
+| 7 | `boom_web_inner_shape` | −0.00237% | `boom_webs.py` |
+| 8 | `bulkhead_oml_shape` | −0.00029% | `boom_oml.py` |
+| 9 | `boom_bulkhead` | *not yet* | — |
+
+Every one is inside the 0.0060% faceting floor, and every one satisfies both 2D invariants:
+no two faces sharing an edge, and clear of its own enclosing rectangle.
+
+**Still to do on this item:** `bulkhead_web_inner_shape` — the fifth and last `fillet_inner`
+site, and the only one that reaches through `bulkhead_oml_shape` rather than the boom's own
+geometry — then the assembled `boom_bulkhead` (one `Part::Extrusion` over the finished profile),
+then wiring the kind into `part_kinds.py` and `fuselage_variants.py` so `compare_backends.py`
+can sweep it. Then the cowls.
 
 ---
 

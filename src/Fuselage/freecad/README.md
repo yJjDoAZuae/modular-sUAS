@@ -75,8 +75,11 @@ making the octant overlap its own mirror so the tiling union resolves. The first
 both kernels. **The second is not** — OCCT fuses a solid with its own mirror about the exact
 touching plane cleanly at 10, 100, 250 and 400 mm, and the 0.01 mm sliver is small enough at
 U ≥ 2.5 to make the fuse *invalid* while the octant and mirror are each fine (IP-FC-49). The
-mask shift is now its own row, `mask_eps = 0`, leaving cut overshoot alone. Before adjusting
-any such constant, measure whether the target kernel wants it at all.
+mask shift is now its own row, `mask_eps = 0`, leaving cut overshoot alone. The 2D port
+carries the same row in `boom_oml.py`, where the shift cannot move the answer either way —
+each octant's overhang past the mirror line lies inside its own mirror image, so the tiled
+union covers the same region at 0 as at 0.01. Zero is still the honest value there. Before
+adjusting any such constant, measure whether the target kernel wants it at all.
 
 **Zero is a real parameter value here.** The `0mm` panel row is the no-panel variant, so
 `panel_thickness`, `panel_tolerance` and `panel_overlap` are all zero and the panel slot has
@@ -134,12 +137,12 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | `bulkhead_positive.py` | `bulkhead_flange_positive` assembled from all eight positives, checked against the **real module** — which is what makes the `flange_boss` transcription trustworthy. Also merges the per-module parameter sheets into one and asserts no alias is defined two different ways (IP-FC-41) |
 | `parameters.py` | Reads the JSON [`tools/export_parameters.py`](../tools/export_parameters.py) writes from `derived_parameters()`. The parameter set crosses from the project virtualenv as **data**, because FreeCAD's Python has no `solid2` and cannot call the authority directly. `seed()` feeds `corner_common.build_sheet`; `check_literals` and `check_refs` verify the modules and the hand-typed reference `.scad` files against the same authority (IP-FC-41) |
 
-| `bulkhead_cuts.py` | The five cut tools — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask. The octant mask turns out to be the `x > y` half-plane shifted by `eps`; the wedge is the one shape with arbitrary angles, and is a covering box clipped by three half-planes rather than a sketch |
+| `bulkhead_cuts.py` | The five cut tools — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask. The octant mask turns out to be the `x > y` half-plane shifted by `mask_eps`; the wedge is the one shape with arbitrary angles, and is a covering box clipped by three half-planes rather than a sketch |
 | `greeble_web.py` | `greeble_bolt_web`. Its plan view is a parallelogram — a strip laid along the corner-to-bolt diagonal — so one rotated box, plus a rib prism placed by composed rotation |
 | `web.py` | `bulkhead_web`. Three stacked boxes minus the `x > y` half-plane, then a cylinder subtracted at the re-entrant corner — which is already a **true** fillet, not the morphological `fillet_inner` that OQ-DES-B9 concerns |
 | `bulkhead_tree.py` | The bulkhead's greeble-forming tool: `corner_end` re-evaluated at greeble tolerance **0** and `bulkhead_thickness + 2*eps`. Shows what "reuse the corner's end section" actually means — a second evaluation of the same builders against a second set of spreadsheet rows, never a reference to the corner's built shape, which carries the fit clearance. It is also the one sketch in the assembled section, inherited from `corner_end`'s wedge |
 | `bulkhead_section.py` | The whole octant, assembled from every ported constituent and checked against the **real module** — the binding check for the `bulkhead_cuts` transcription, and what caught the `is_cowling` misreading above. Needs a seed: without one the merge is comparing two configurations and refuses |
-| `bulkhead_full.py` | `bulkhead_section_full` — the octant translated to its corner and tiled eight ways, as seven `Part::Mirroring` objects and seven fuses. `bulkhead_render()` calls this and nothing else, so it is the whole part. Not eight times the octant: `octant_mask`'s `eps` makes neighbours overlap by a sliver the union reclaims |
+| `bulkhead_full.py` | `bulkhead_section_full` — the octant translated to its corner and tiled eight ways, as seven `Part::Mirroring` objects and seven fuses. `bulkhead_render()` calls this and nothing else, so it is the whole part. Now exactly eight times the octant, and it did not used to be — `octant_mask`'s `eps` made neighbours overlap by a sliver the union reclaimed, until IP-FC-49 measured that OCCT is harmed rather than helped by it |
 
 
 | `spike_sketch_expr.py` | Expression-driven sketch constraints, for the polygons that do not decompose. **A generated sketch must be fully constrained** — an under-constrained one deforms silently and still yields a valid solid |
