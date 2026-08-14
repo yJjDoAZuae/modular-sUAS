@@ -128,24 +128,74 @@ def offset(doc, name, source, value, join='Arc'):
     return node
 
 
-def fillet_inner(doc, tag, source, radius, reach):
+def erode_difference(doc, tag, positive, negatives, radius):
+    """`offset(-r)` of `positive - negatives[0] - ...`, without ever offsetting the difference.
+
+    The morphological identity
+
+        erosion(A - B, r)  ==  erosion(A, r) - dilation(B, r)
+
+    -- a disc of radius r fits inside `A - B` exactly when it fits inside `A` and misses `B`
+    -- extended to as many subtracted regions as the caller has. It is exact, and it is worth
+    having because the two sides are not equally computable. `Part::Offset2D` fails on shapes
+    that carry the history of the boolean that made them, and a difference is exactly such a
+    shape; the operands going into that difference are usually simple, and eroding or dilating
+    each one alone succeeds where eroding their difference does not.
+
+    Used twice so far, at both of the null offsets the IP-FC-12 sweep found. IP-FC-54: the
+    frame web's erosion of the OML with its bores cut. IP-FC-57: the lightening region, where
+    `erosion(OUTER, r) - dilation(BORES, r) - dilation(MATERIAL, r)` succeeds and the direct
+    erosion of the assembled difference is null at every distance down to 0.01 mm.
+
+    **The dilated operands are not merged**, and that is deliberate rather than an oversight of
+    the IP-FC-52 rule. They are only ever `Part::Cut` operands, which removes the union of an
+    overlapping compound correctly, and a merge is itself a boolean round trip -- the thing
+    whose output OCCT's offset cannot always consume. Adding one here would risk reintroducing
+    the failure this function exists to route around, to normalise a shape nothing offsets.
+    """
+    node = offset(doc, tag + 'ErodePos', positive, '-(' + radius + ')')
+    for i, negative in enumerate(negatives):
+        grown = offset(doc, '%sGrowNeg%d' % (tag, i), negative, radius)
+        node = C._cut(doc, '%sErodeCut%d' % (tag, i), node, grown)
+    return node
+
+
+def fillet_inner(doc, tag, source, radius, reach, eroded=None):
     """`intersection() { offset(-r) offset(2r) offset(-r) children; children; }`.
+
+    `eroded` replaces the leading `offset(-r)` when the caller can compute it a better way --
+    `erode_difference` above, when `source` is a difference OCCT will not offset. It must be
+    exactly `offset(-r)` of `source`; anything else silently changes the fillet.
 
     An opening followed by a closing, clipped to the input: it rounds **convex** corners and
     removes anything thinner than 2*radius. Never adds material.
 
-    The `2r` dilation is merged before it is eroded back. It is the step most exposed to the
-    multi-face overlap `offset` describes, and by construction rather than by accident: the
-    erosion before it exists precisely to pinch the shape apart at anything narrower than
+    **The `2r` dilation is done as two dilations of `r`, and that is not cosmetic.** The two
+    are the same operation -- dilating by a disc of radius r twice covers exactly the disc of
+    radius 2r -- and they produce the same shape here to every digit that can be measured:
+    area 7009.984015 mm2, 5 faces, 78 edges, either way. But only the split one can then be
+    eroded. `Part::Offset2D` returns a **null shape** for `offset(-r)` of the single `+2r`
+    dilation on the no-panel twin-boom bulkhead, and null at every distance tried down to
+    `r/4`, under all three `Join` settings, after `removeSplitter`, after rebuilding the face
+    from its own wires, and on the outer wire alone (IP-FC-57). Nothing about the *shape* is
+    wrong; OCCT's own offset leaves the wire in a state its own offset cannot consume, and
+    going round twice leaves it in one that can.
+
+    Each dilation is merged before the next step. That is the multi-face overlap `offset`
+    describes, and this chain is exposed to it by construction rather than by accident: the
+    erosion at the head exists precisely to pinch the shape apart at anything narrower than
     2*radius, so its output is multi-face whenever the fillet does anything at all, and the
-    dilation is then asked to grow those pieces back by twice what separated them. `reach`
-    sizes the rectangle the merge complements against and must strictly enclose the dilation
-    -- which reaches `radius` beyond the source, not `2 * radius`, the first erosion having
-    taken the other half.
+    dilations are then asked to grow those pieces back across the gap that separated them.
+    `reach` sizes the rectangle the merge complements against and must strictly enclose the
+    widest intermediate -- which reaches `radius` beyond the source, not `2 * radius`, the
+    first erosion having taken the other half.
     """
-    node = offset(doc, tag + 'ErodeA', source, '-(' + radius + ')')
-    node = offset(doc, tag + 'Dilate', node, '2 * (' + radius + ')')
-    node = merge(doc, tag + 'Merge', node, reach)
+    node = eroded if eroded is not None \
+        else offset(doc, tag + 'ErodeA', source, '-(' + radius + ')')
+    node = merge(doc, tag + 'MergeA',
+                 offset(doc, tag + 'DilateA', node, radius), reach)
+    node = merge(doc, tag + 'MergeB',
+                 offset(doc, tag + 'DilateB', node, radius), reach)
     node = offset(doc, tag + 'ErodeB', node, '-(' + radius + ')')
     clip = C._owned(doc, 'Part::MultiCommon', tag + 'FilletInner')
     clip.Shapes = [node, source]

@@ -115,9 +115,12 @@ def profile(doc):
     """The 2D profile, against whatever sheet the document already has."""
     lower = float(doc.getObject('Params').get('boom_make_lower_web')) >= 0.5
 
+    # `oml_outer` is built here rather than left to `bulkhead_web` because the lightening
+    # fillet needs it too -- see the `erode_difference` call below.
+    oml_outer = boom_oml.oml_outer_shape(doc)
     oml = boom_oml.oml_shape(doc)
     bores = boom_oml.oml_inner_shape(doc)
-    pocket = bulkhead_web.web_inner_shape(doc, bores=bores)
+    pocket = bulkhead_web.web_inner_shape(doc, bores=bores, outer=oml_outer)
     w = boom_webs.webs(doc)
     outer, inner = w['outer'], w['inner']
 
@@ -136,10 +139,20 @@ def profile(doc):
 
     material = C._cut(doc, 'Material', _union(doc, 'MaterialRaw', [rim, webs]), bores)
 
-    # The lightening region is inside the OML, so `oml_reach` encloses it and every dilation
-    # of it the fillet performs.
-    lighten = plane2d.fillet_inner(doc, 'Lighten', C._cut(doc, 'LightenRaw', oml, material),
-                                   P + 'web_fillet_radius', P + 'oml_reach')
+    # The lightening region, `OML - MATERIAL`, with its leading erosion routed around
+    # `Part::Offset2D` (IP-FC-57). `OML` is `oml_outer - bores`, so the region is
+    # `oml_outer - bores - material` and the identity in `erode_difference` applies to it
+    # directly: erode the outline, dilate the two subtracted regions, cut. Eroding the
+    # assembled difference is null at every distance down to 0.01 mm on the no-panel
+    # single-boom bulkhead, and every operand of it erodes or dilates without complaint.
+    #
+    # `oml_reach` encloses the OML, so it encloses this region and every dilation of it the
+    # rest of the fillet performs.
+    lighten_raw = C._cut(doc, 'LightenRaw', oml, material)
+    lighten = plane2d.fillet_inner(
+        doc, 'Lighten', lighten_raw, P + 'web_fillet_radius', P + 'oml_reach',
+        eroded=plane2d.erode_difference(doc, 'Lighten', oml_outer, [bores, material],
+                                        P + 'web_fillet_radius'))
     return C._cut(doc, 'BoomBulkheadProfile',
                   C._cut(doc, 'ProfileLightened', oml, lighten), w['key'])
 
