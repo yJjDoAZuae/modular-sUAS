@@ -1178,6 +1178,8 @@ IP-FC-59 working reference.
 
 ## See also
 
+- [corner_bulkhead_joint.md](corner_bulkhead_joint.md) — the joint drawn from the built
+  solids. This is where B13 was found: the drawings and the equations disagreed.
 - [corner.md](corner.md) — the mating half; the greeble; where the fit clearance lives.
 - [geometry_refactor.md](../implementation/geometry_refactor.md) — IP-GEO-6
   (`octant_tiled`), IP-GEO-8 (`geometry_eps`), IP-GEO-9 (`through_cut`, `mask_reach`),
