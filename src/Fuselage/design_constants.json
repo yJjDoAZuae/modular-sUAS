@@ -16,11 +16,18 @@
     "and cowl_flange_tolerance were found -- neither sits near the others in the source, and",
     "neither is named like a setting at its definition site.",
     "",
-    "What is deliberately NOT here: the coefficients inside derivation formulas -- the 4 in",
-    "max(panel_thickness, 4), the 3 in max(3*U, 3), the 2*U in the cowl flange height. Those",
-    "are scaling rules rather than parameters; the sweep never passes them to geometry as",
-    "values, it passes what they produce. Turning a rule into data is a different decision",
-    "and has not been made.",
+    "The coefficients inside the derivation formulas are here too, in 'standard' and",
+    "'scaling'. They do not reach geometry as values -- the sweep passes what they produce --",
+    "but they are design parameters all the same, and leaving them as bare numbers mid-",
+    "function is how the reciprocal pair in panel_offset (0.25 and 4) and eleven",
+    "nominal/floor pairs came to be written twice each with nothing tying them together.",
+    "",
+    "Naming did NOT restructure the arithmetic. Each literal was replaced in place, keeping",
+    "the operation order, because floating-point multiplication is not associative and",
+    "rewriting max(2*sqrt(U)*w, 2*w) as 2*w*max(sqrt(U),1) can move the last bit. The one",
+    "exception is the quantum, where q*ceil(x/q) replaces 0.25*ceil(4*x): both operands are",
+    "powers of two so the result is bit-identical, and it collapses a reciprocal pair that",
+    "silently rounds wrong if only one half is edited.",
     "",
     "Read by fuselage_variants.load_constants(). Every key below is required and no other key",
     "is accepted -- a typo is an error rather than a silently ignored row, and a value the",
@@ -82,6 +89,170 @@
     "boom_key_angle": {
       "value": 0,
       "why": "Rotation of the anti-rotation key around the boom tube, in degrees. The upper and lower webs mirror it as 180 - boom_key_angle, so 0 puts the key on the fuselage centerline. Never anything but 0 in the sweep; it exists because the key does not have to be there.",
+      "see": "doc/design/bulkhead.md"
+    }
+  },
+
+  "standard": {
+    "_about": "The parametric standard: what 1U means, in millimeters. scaled_standard_values() multiplies each by U (and unit_length by FX as well) and everything else is derived from the result. These are the numbers a fuselage IS. Refused if not strictly positive.",
+
+    "unit_width": {
+      "value": 100,
+      "why": "Across-flats width of the fuselage box at 1U. Also the datum the boom bulkhead's y and z positions are expressed as fractions of.",
+      "see": "src/Fuselage/docs/fuselage_folder_summary.md"
+    },
+
+    "unit_length": {
+      "value": 100,
+      "why": "Bay length at 1U and FX=1. The only standard value FX scales, because FX is the bay-length axis and nothing else responds to it.",
+      "see": "doc/design/corner.md OQ-DES-C3"
+    },
+
+    "corner_radius": {
+      "value": 10,
+      "why": "Radius of the rounded corner at 1U -- the mold line the panel's outer surface is flush with, and the outer radius of the corner extrusion.",
+      "see": "doc/design/corner.md"
+    },
+
+    "longeron_radius": {
+      "value": 2,
+      "why": "Radius of the longeron tube at 1U. The corner's bore is this plus longeron_tolerance.",
+      "see": "doc/design/corner.md"
+    },
+
+    "bolt_offset": {
+      "value": 8,
+      "why": "Distance from the corner arc center to the bolt axis at 1U.",
+      "see": "doc/design/bulkhead.md"
+    }
+  },
+
+  "scaling": {
+    "_about": "Coefficients inside the derivation formulas. Three units are mixed here and the suffix says which: _extrusions is a count of extrusion_width, _layers a count of layer_height, _per_u a multiple of U in millimeters, and a bare _mm is an absolute floor that does not scale. Where a formula floors a scaled value at its own coefficient -- max(3*U, 3) -- one name now appears on both sides, which is the point: they were two independent literals that had to agree and nothing said so. Refused if negative.",
+
+    "greeble_wall_extrusions": {
+      "value": 2,
+      "why": "Greeble wall thickness, as max(n*sqrt(U)*extrusion_width, n*extrusion_width). sqrt(U) not U: the wall is a printed feature sized to survive a snap fit, so it scales in extrusions rather than as a fraction of the airframe. The floor is the same n because a one-extrusion wall has no interior.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "panel_overlap_min_mm": {
+      "value": 4,
+      "why": "Floor on panel overlap, as max(panel_thickness, this). Absolute millimeters and deliberately unscaled -- it is a bond-area minimum, not a proportion of the airframe.",
+      "see": "doc/design/corner.md"
+    },
+
+    "greeble_margin_extrusions": {
+      "value": 2,
+      "why": "Clearance beyond the greeble's outer wall, in extrusions, keeping the panel's inner corner off the greeble perimeter. Appears three times in one derivation and is one quantity in all three: it is added into panel_clearance_radius, then removed before that radius is projected onto the 45-degree diagonal, then added back after. Splitting it into three names would let the projection stop undoing what it was meant to undo.",
+      "see": "doc/design/corner.md"
+    },
+
+    "greeble_snap_clearance_per_u": {
+      "value": 1,
+      "why": "Extra width around the greeble so the corner can snap in from the back side.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "panel_offset_quantum_mm": {
+      "value": 0.25,
+      "why": "Panel offset is rounded UP to a whole multiple of this, as q*ceil(offset/q). Was written 0.25*ceil(4*offset) -- the same parameter as its own reciprocal, two literals that had to stay inverse and nothing said so; editing one alone rounds to a grid nobody chose.",
+      "see": "doc/design/corner.md"
+    },
+
+    "cowl_flange_height_per_u": {
+      "value": 2,
+      "why": "Height the cowl-mounting flange stands off the bulkhead face. Zero on any bulkhead that mounts no cowl, which is structural rather than this value set to nothing.",
+      "see": "doc/design/cowl.md"
+    },
+
+    "cowl_bulkhead_flange_extrusions": {
+      "value": 3,
+      "why": "Bulkhead flange wall on a COWLING bulkhead, as max(ceil(n*U)*extrusion_width, n*extrusion_width). One extrusion thicker than the frame bulkhead's, because it carries the cowl.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "bulkhead_flange_extrusions": {
+      "value": 2,
+      "why": "Bulkhead flange wall on every non-cowling bulkhead, same form as above.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "bolt_thickness_per_u": {
+      "value": 3,
+      "why": "Boss thickness around the bolt, as max(n*U, n) -- so it never falls below its own 1U value on a sub-unit airframe.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "plate_layers": {
+      "value": 4,
+      "why": "Plate thickness as ceil(n*U) whole layer heights. A count of layers, not a length: the plate is a printed skin and wants to come out an exact number of passes.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "web_fillet_radius_per_u": {
+      "value": 2,
+      "why": "Fillet where the web meets the bulkhead ring.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_web_width_per_u": {
+      "value": 6,
+      "why": "Web width on a boom bulkhead -- twice the frame bulkhead's, because the web carries the boom.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "frame_web_width_per_u": {
+      "value": 3,
+      "why": "Web width on every non-boom bulkhead.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "bulkhead_flange_fillet_per_u": {
+      "value": 2,
+      "why": "Fillet at the root of the bulkhead flange.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "bulkhead_flange_chamfer_per_u": {
+      "value": 1,
+      "why": "Chamfer on the leading edge of the bulkhead flange.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_wall_per_u": {
+      "value": 2,
+      "why": "Wall thickness of the boom bulkhead itself.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_collet_thickness_per_u": {
+      "value": 3,
+      "why": "Wall of the collet that grips the boom tube. The bore is boom_diameter/2 + this + boom_tolerance.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_key_width_per_u": {
+      "value": 2,
+      "why": "Width of the anti-rotation key, as max(n*U, n). Equal to the key height today; named separately because they are independent dimensions that happen to agree, and merging them would make one impossible to change.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_key_height_per_u": {
+      "value": 2,
+      "why": "Height of the anti-rotation key, as max(n*U, n). See the note on the key width.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_key_radius_per_u": {
+      "value": 0.5,
+      "why": "Corner radius on the key, as max(n*U, n).",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_key_web_width_per_u": {
+      "value": 6,
+      "why": "Width of the web that carries the key.",
       "see": "doc/design/bulkhead.md"
     }
   },

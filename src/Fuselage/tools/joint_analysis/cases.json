@@ -1,0 +1,44 @@
+[
+ [
+  "case_A.json",
+  "1",
+  "The clearance on both faces, at the 0.05 mm test value",
+  "1.0 end_bolt 3/16 in &middot; corner &minus;68.03 mm&sup3;",
+  "The corner's flat face moves from &minus;7.2625 to &minus;7.2125 and its diagonal by 0.0707 in x, which is 0.05 measured normal to a 45&deg; face. The bulkhead is not rebuilt and does not move: its socket is cut from the same description at zero, so what you see between the two outlines is the whole clearance, carried once."
+ ],
+ [
+  "case_C.json",
+  "2",
+  "No panel, and the interface clearance is unaffected by that",
+  "1.0 end_bolt 0 mm &middot; corner &minus;109.36 mm&sup3;",
+  "<code>panel_tolerance</code> is zero here and the panel is absent, but <code>corner_tolerance</code> is a separate parameter on a separate pair of faces, so it applies exactly as everywhere else. That separation is the point of naming it: the two were entangled before, and one of them was doing the other's job by accident."
+ ],
+ [
+  "case_E.json",
+  "3",
+  "The smallest corner of the six",
+  "0.75 end_bolt 1/16 in &middot; corner &minus;49.89 mm&sup3;",
+  "0.05 mm is a larger fraction of a 7.5 mm corner radius than of a 20 mm one, so this is where a fixed clearance costs proportionally most. Worth watching if the value ever moves off zero: the tolerance is absolute, not scaled by U, and nothing currently forces it to be."
+ ],
+ [
+  "case_F.json",
+  "4",
+  "The largest corner of the six",
+  "1.5 end_bolt 1/16 in &middot; corner &minus;216.98 mm&sup3;",
+  "The same 0.05 mm over a longer face and a taller section removes four times the material of case 3. The clearance is a shift of two planes over the corner's full height, so what it costs scales with the size of the part rather than staying fixed."
+ ],
+ [
+  "case_D.json",
+  "5",
+  "The case the whole investigation turned on",
+  "1.0 end_bolt 1 mm &middot; corner &minus;98.36 mm&sup3;",
+  "This is the variant whose interface had the <code>panel_tolerance</code>-deep step in it, now removed. With the face clean, the clearance applies uniformly over the full height &mdash; which is the difference between a tolerance and the accident it replaced: the step was 0.1 mm over half a millimeter of height, this is 0.05 mm over all of it."
+ ],
+ [
+  "case_B.json",
+  "6",
+  "The panel term governs, and it makes no difference here",
+  "0.5 end_bolt 1 mm &middot; corner &minus;27.31 mm&sup3;",
+  "The family where the <code>max()</code> in <code>flat_offset</code> is decided by the panel term, so the diagonal begins on the flange face. The clearance shifts both faces regardless of which term set them; <code>flat_offset</code> moves by 0.0707 exactly as in every other case."
+ ]
+]
