@@ -8,8 +8,9 @@ def get_params():
     param_axes = fv.read_all_param_axes(csv_files)
     all_combinations = fv.flatten_param_space(param_axes)
 
+    # Already at the sweep's nozzle: PrinterSettings defaults come from
+    # design_constants.json, so this no longer needs an override on the next line.
     printer_settings = fv.null_printer_settings()
-    printer_settings.extrusion_width = 0.6
 
     # print(len(param_axes))
     # print(len(param_axes[0]))

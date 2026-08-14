@@ -34,19 +34,19 @@ function greeble_nub_radius_of(longeron_radius, longeron_tolerance, greeble_thic
 // third of lead-in either side for the joint to ride over as it engages.
 function greeble_nub_height_of(bulkhead_thickness) = bulkhead_thickness/3;
 
-module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
+module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, corner_tolerance = 0) {
 
 
     union() {
-    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width);
-    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
-    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
+    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width, corner_tolerance);
+    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, corner_tolerance);
+    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, 0, corner_tolerance);
         translate([0,0,unit_length]) {
             mirror([0,0,1]) {
                 union() {    
-                    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width);
-                    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
-                    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
+                    corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width, corner_tolerance);
+                    corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, corner_tolerance);
+                    corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, 0, corner_tolerance);
                 }
             }
         }
@@ -69,7 +69,7 @@ module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_
 //
 // So: one argument, one meaning. bulkhead_thickness is the thickness and sizes the rib.
 // overshoot is slop for the boolean and sizes nothing.
-module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, overshoot = 0) {
+module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, overshoot = 0, corner_tolerance = 0) {
     
     eps = geometry_eps();
     
@@ -85,7 +85,7 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
         translate([0,0,-overshoot]) {
             linear_extrude(height=bulkhead_thickness+eps+2*overshoot,center=false,convexity=3,twist=0,slices=1) {
                 mirror_xy() {
-                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
+                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance, corner_tolerance);
                 }
             }
         }
@@ -130,7 +130,7 @@ module corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_o
     }
 }
 
-module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width) {
+module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, corner_tolerance = 0) {
     
     eps = geometry_eps();
     
@@ -149,7 +149,7 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
             linear_extrude(height=bulkhead_thickness,center=false,convexity=3,twist=0,slices=1) {
 
                 mirror_xy() {
-                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
+                    corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance, corner_tolerance);
                 }
             }
             
@@ -180,7 +180,7 @@ module corner_transition(U, bulkhead_thickness, corner_radius, panel_thickness, 
 }
 
 
-module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width) {
+module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, extrusion_width, corner_tolerance = 0) {
     
     eps = geometry_eps();
     longeron_chamfer = extrusion_width;
@@ -189,17 +189,28 @@ module corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thick
         linear_extrude(height=unit_length/2-2*bulkhead_thickness+2*eps,center=false,convexity=3,twist=0,slices=1) {
 
             mirror_xy() {
-                corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance);
+                corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance, corner_tolerance);
             }
         }
     }
 }
 
-module corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance) {
+// corner_tolerance is the clearance on the two faces that seat against the bulkhead: the flat
+// face at flat_x and the diagonal at x + y = flat_offset. It applies over the corner's full
+// height and is carried ENTIRELY ON THE CORNER -- when the bulkhead re-evaluates this shape to
+// cut its own socket it passes 0, exactly as it does for greeble_tolerance, so the joint
+// carries the clearance once rather than twice. Defaulting to 0 here means a caller that does
+// not know about it gets the nominal shape, which is what the bulkhead wants. OQ-DES-C5.
+module corner_middle_shape(corner_radius, panel_thickness, longeron_radius, panel_offset, panel_overlap, longeron_chamfer, longeron_tolerance, panel_tolerance, corner_tolerance = 0) {
 
     // use longeron_chamfer as a minimum and ensure panel_overlap is at least the specified dimension
-    flat_offset = -max(longeron_radius + longeron_tolerance + longeron_chamfer, (panel_overlap+panel_offset)-(corner_radius-panel_thickness-panel_tolerance));
-    flat_x = -(panel_overlap+panel_offset);
+    nominal_flat_offset = -max(longeron_radius + longeron_tolerance + longeron_chamfer, (panel_overlap+panel_offset)-(corner_radius-panel_thickness-panel_tolerance));
+
+    // Both faces move inboard by corner_tolerance, measured NORMAL to each. The flat face is
+    // axis-aligned so it moves by the tolerance itself; the diagonal runs at 45 degrees, so
+    // shifting it by corner_tolerance perpendicular moves its intercept by sqrt(2) times that.
+    flat_offset = nominal_flat_offset + corner_tolerance*sqrt(2);
+    flat_x = -(panel_overlap+panel_offset) + corner_tolerance;
     flat_y = flat_offset - flat_x;
 
     difference(){

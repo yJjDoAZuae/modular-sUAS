@@ -1,0 +1,104 @@
+{
+  "units": "millimeters and degrees",
+
+  "what_this_is": [
+    "Every parameter the sweep passes to the geometry whose value does NOT vary across the",
+    "sweep. If a number reaches an OpenSCAD module as a named argument and is the same on",
+    "all 132 buildable variants, it is a setting, and it belongs here rather than in Python.",
+    "",
+    "These are not axes. The axes live in variant_param/*.csv and are combined factorially,",
+    "so a column added there multiplies the variant count; the values below are the same on",
+    "every variant by design, and changing one moves the whole sweep together.",
+    "",
+    "The membership test is mechanical, not a matter of taste: resolve the Parameters tree",
+    "for every variant in all three families, collect what each numeric field actually takes,",
+    "and keep the fields that come back with exactly one value. That is how boom_tolerance",
+    "and cowl_flange_tolerance were found -- neither sits near the others in the source, and",
+    "neither is named like a setting at its definition site.",
+    "",
+    "What is deliberately NOT here: the coefficients inside derivation formulas -- the 4 in",
+    "max(panel_thickness, 4), the 3 in max(3*U, 3), the 2*U in the cowl flange height. Those",
+    "are scaling rules rather than parameters; the sweep never passes them to geometry as",
+    "values, it passes what they produce. Turning a rule into data is a different decision",
+    "and has not been made.",
+    "",
+    "Read by fuselage_variants.load_constants(). Every key below is required and no other key",
+    "is accepted -- a typo is an error rather than a silently ignored row, and a value the",
+    "sweep needs can never go missing and be replaced by a default.",
+    "",
+    "Changing a value re-renders on the next --resume: these reach the generated part",
+    "definitions by value, and that is what the staleness comparison reads."
+  ],
+
+  "tolerances": {
+    "_about": "Clearances between mating parts. Every one is spacing that is MEANT to be there: it accommodates manufacturing variation and adhesive bond thickness, so a joint built with no gap has nowhere for the bond to go and nothing to absorb print variation. Refused if negative -- none of these joints is an interference fit.",
+
+    "longeron_tolerance": {
+      "value": 0.05,
+      "why": "Clearance on the longeron tube in the corner's bore and in the chamfer that leads into it.",
+      "see": "doc/design/corner.md"
+    },
+
+    "greeble_tolerance": {
+      "value": 0.05,
+      "why": "The snap-fit clearance between the bulkhead's greeble post and the corner's socket. Carried entirely on the CORNER -- its bore is opened out by this much and the bulkhead's post stays nominal, so the joint takes the clearance once. There is deliberately no bulkhead counterpart; 'the post is nominal' is an invariant, not a setting.",
+      "see": "doc/design/bulkhead.md OQ-DES-B6"
+    },
+
+    "corner_tolerance": {
+      "value": 0.0,
+      "why": "Clearance on the two corner faces that seat against the bulkhead -- the flat at flat_x and the diagonal -- over the corner's full height. Carried entirely on the corner, same as the greeble: when the bulkhead re-evaluates that shape to cut its own socket it passes 0. Held at 0 because 0 is what every flown part was built at. OPEN: if these faces are bonded, 0 leaves no bond line.",
+      "see": "doc/design/corner.md OQ-DES-C5"
+    },
+
+    "panel_tolerance": {
+      "value": 0.1,
+      "why": "The gap the panel stands off the flange face by, so its outer surface still lands flush with the mold line at corner_radius. Applies only where there IS a panel: a cowling bulkhead and the 0 mm panel variants take 0, and that zero is structural rather than a setting -- no panel, no gap to leave.",
+      "see": "doc/design/corner.md"
+    },
+
+    "boom_tolerance": {
+      "value": 0.2,
+      "why": "Clearance on the boom tube in the boom bulkhead's collet: collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance. Four times the longeron's 0.05 and nothing on record says why -- the boom is a larger tube through a deeper bore, but the number has never been justified in writing.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "cowl_flange_tolerance": {
+      "value": 0.2,
+      "why": "Clearance between the bulkhead's cowl-mounting flange and the cowl that slides over it. Sets the flange's outer radius at corner_radius - extrusion_width - cowl_flange_tolerance. Applies only to a cowling bulkhead; every other type takes 0, and that zero is structural -- there is no cowl flange on a bulkhead that mounts no cowl.",
+      "see": "doc/design/cowl.md"
+    }
+  },
+
+  "geometry": {
+    "_about": "Shape of the part rather than fit between parts. Constant across the sweep for the same reason the tolerances are -- nothing derives them from size -- but they are not clearances and are not subject to the non-negative rule.",
+
+    "greeble_opening_angle": {
+      "value": 35,
+      "why": "Half-angle of the wedge cut out of the greeble, so the mouth is 70 degrees wide. That mouth is what makes the greeble a C rather than a closed ring, and it is how the longeron is assembled: the tube presses in sideways and snaps into the bore, which the chord across the mouth (2*r*sin35 = 57% of the tube diameter) is narrow enough to hold. Arrived at by experiment -- a tuned value, not a derived one. Do not replace it with a formula.",
+      "see": "doc/design/bulkhead.md"
+    },
+
+    "boom_key_angle": {
+      "value": 0,
+      "why": "Rotation of the anti-rotation key around the boom tube, in degrees. The upper and lower webs mirror it as 180 - boom_key_angle, so 0 puts the key on the fuselage centerline. Never anything but 0 in the sweep; it exists because the key does not have to be there.",
+      "see": "doc/design/bulkhead.md"
+    }
+  },
+
+  "printer": {
+    "_about": "Properties of the machine, not of the design. The same airframe printed on a different nozzle wants different numbers here and no other change. Refused if not strictly positive.",
+
+    "extrusion_width": {
+      "value": 0.6,
+      "why": "Nozzle width the sweep sizes printed features against -- the greeble wall, the bulkhead flange and the cowl flange are all whole multiples of it. Was written out seven separate times across three files, each overriding a PrinterSettings default of 0.4 that nothing wanted; the default now comes from here and the overrides are gone. The hand drivers in scad/ are still at 0.4 and that is deliberate, not drift.",
+      "see": "src/Fuselage/docs/fuselage_folder_summary.md"
+    },
+
+    "layer_height": {
+      "value": 0.2,
+      "why": "Layer height the sweep sizes printed features against. Only plate_thickness = ceil(4*U) * layer_height reads it today. Unlike extrusion_width this was never overridden anywhere -- it sat as a dataclass default -- so the two halves of one machine profile were configured in opposite ways.",
+      "see": "src/Fuselage/docs/fuselage_folder_summary.md"
+    }
+  }
+}
