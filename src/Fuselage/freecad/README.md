@@ -97,7 +97,7 @@ divergence theorem, and bounding box; run it with a real Python, not `freecadcmd
 
 | File | Contents |
 | --- | --- |
-| `build_part.py` | **The sweep's entry point** (IP-FC-10). One process, one part, one parameter file in, one STL out -- shaped like a single `openscad -o` call so the sweep's queue could take it unchanged. Reads either definition shape: the two-table *variant* `export_parameters.py` writes, or the flat one-kind *part* the sweep writes. Every argument must go behind freecadcmd's `--pass` |
+| `build_part.py` | **The sweep's entry point** (IP-FC-10). One process, one part, one parameter file in, one STL out -- shaped like a single `openscad -o` call so the sweep's queue could take it unchanged. Reads either definition shape: the *variant* `export_parameters.py` writes, whose tables are named per part, or the flat one-kind *part* the sweep writes — told apart by `kind`, which only the sweep's document carries. Every argument must go behind freecadcmd's `--pass` |
 | `part_kinds.py` | Which module builds which kind, and the roots the IP-FC-11 digest walks from. **Imports nothing that imports FreeCAD** — that is the point of it: `tools/freecad_render.py` has to read it from the project virtualenv, where `import FreeCAD` fails |
 | `corner_common.py` | `Params`, the shared 2D section every axial slice extrudes, and the sheet machinery — `build_sheet` (seeded from the authority), `merge_params` (refuses an alias defined two ways) and `check_seed` (the finished sheet must reproduce `derived_parameters()`) |
 
@@ -136,7 +136,7 @@ dimension an expression over a `Spreadsheet::Sheet`, ending in a stable `Tip`.
 | `fillets.py` | All five true fillets and chamfers — `outer_corner_fillet`, `bulkhead_flange_chamfer`, `greeble_to_web_fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet`. Each is a block minus a stepped cylinder/cone/cylinder stack, where the step *is* the chamfer. The last two clip their block with a half-plane whose **rotation comes from an expression**, `atan2(dy; dx)`, because the bolt-centre-to-fillet-centre edge lies at no fixed angle |
 | `flange_boss.py` | The quadrant ring around the longeron bore, flared into the plate by a chamfer cone. The source builds this inline rather than as a module, so its isolated reference is a transcription — see the note in `ref_flange_boss.scad` |
 | `bulkhead_positive.py` | `bulkhead_flange_positive` assembled from all eight positives, checked against the **real module** — which is what makes the `flange_boss` transcription trustworthy. Also merges the per-module parameter sheets into one and asserts no alias is defined two different ways (IP-FC-41) |
-| `parameters.py` | Reads the JSON [`tools/export_parameters.py`](../tools/export_parameters.py) writes from `derived_parameters()`. The parameter set crosses from the project virtualenv as **data**, because FreeCAD's Python has no `solid2` and cannot call the authority directly. `seed()` feeds `corner_common.build_sheet`; `check_literals` and `check_refs` verify the modules and the hand-typed reference `.scad` files against the same authority (IP-FC-41) |
+| `parameters.py` | Reads the JSON [`tools/export_parameters.py`](../tools/export_parameters.py) writes from `derived_parameters()`. The parameter set crosses from the project virtualenv as **data**, because FreeCAD's Python has no `solid2` and cannot call the authority directly. `seed()` feeds `corner_common.build_sheet`; `check_literals`, `check_refs` and `check_variant_overlays` verify the modules, the hand-typed reference `.scad` files and a module's second-variant overrides against the same authority (IP-FC-41). Each check is gated on the table *and* the bulkhead type it is written at — the boom bulkhead's three types move three numbers, so one set of module literals cannot describe them all, and measured at the wrong type each reports the other's correct answer |
 
 | `bulkhead_cuts.py` | The five cut tools — opening wedge, outer-face cleanup, longeron and bolt holes, octant mask. The octant mask turns out to be the `x > y` half-plane shifted by `mask_eps`; the wedge is the one shape with arbitrary angles, and is a covering box clipped by three half-planes rather than a sketch |
 | `greeble_web.py` | `greeble_bolt_web`. Its plan view is a parallelogram — a strip laid along the corner-to-bolt diagonal — so one rotated box, plus a rib prism placed by composed rotation |
@@ -155,7 +155,7 @@ on faces. Every module below builds 2D, and each is checked against its own mode
 
 | module | what it is |
 | --- | --- |
-| `plane2d.py` | The 2D primitives and the one union rule. **Never fuse coplanar faces**: `Part::Fuse` returns a compound of abutting patches, and `Part::Offset2D` then offsets each patch separately, interior shared edges included — measured at +329% on the boom key. The union here is `R − ((R − a) − b)` instead, and `fragmented()` is the standing check that no two faces share an edge |
+| `plane2d.py` | The 2D primitives and the one union rule. **Never fuse coplanar faces**: `Part::Fuse` returns a compound of abutting patches, and `Part::Offset2D` then offsets each patch separately, interior shared edges included — measured at +329% on the boom key. The union here is `R − ((R − a) − b)` instead, and `fragmented()` is the standing check that no two faces share an edge. **The same complement merges a shape's own faces when an outward offset grows them into overlap** — `Part::Offset2D` offsets each face independently and keeps both, counting the shared area twice, which is IP-FC-52 and cost the boom bulkhead +0.167% at one swept variant. Both fillet functions merge their dilation for that reason |
 | `boom_key.py` | `boom_key_shape` — the keyed collet. The one site in this part that gets **real fillets**: a named corner round with a fixed count of four, which is what OQ-DES-B11 settled it on |
 | `boom_web.py` | The seven-vertex spine the boom's web is strokes of, and the mirror that doubles it |
 | `boom_webs.py` | `boom_web_outer_shape` and `boom_web_inner_shape` — the two region-wide roundings. `boom_make_vert_web` swaps an erode with a mirror, and **the two do not commute**: eroding each half first leaves the vertical web the flag is named for. Two of the three boom types set it |
@@ -172,9 +172,20 @@ To render a part the sweep would actually produce, use
 `derived_parameters()`:
 
 ```
-.venv/Scripts/python render_variant.py                     # list combinations + validity
-.venv/Scripts/python render_variant.py 1.0 end_bolt 3/16in
+.venv/Scripts/python render_variant.py                       # list combinations + validity
+.venv/Scripts/python render_variant.py 1.0 end_bolt 3/16in   # a frame bulkhead
+.venv/Scripts/python render_variant.py 1.0 center_single 3mm # a boom bulkhead
 ```
+
+**Two bulkhead families, and the type name says which.** The frame bulkhead and the boom
+bulkhead are separate sweeps off separate type axes, sharing the panel and size axes and
+nothing else, so a boom variant is a different set of numbers describing a different part.
+They are described once in `fuselage_variants.BULKHEAD_FAMILIES`, which `render_variant.py`,
+`export_parameters.py` and `compare_backends.py` all read. `export_parameters.py` writes a boom
+variant's parameters under `boom_parameters`, deliberately not under the frame bulkhead's
+`parameters`: seeding a boom bulkhead from a frame bulkhead's table would leave all eleven of
+its boom rows at their module literals and build the reference configuration under the swept
+part's name, which nothing downstream would catch. A named table makes it a refusal instead.
 
 **`panel.offset` is derived, not free.** It comes from `panel.overlap`, `panel.thickness`,
 the greeble clearance and the extrusion width — 0 mm panel gives 5.5, 3/16 in gives 2.5, and

@@ -66,25 +66,59 @@ def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
 
 
-def web_inner_shape(doc, oml=None):
+def web_inner_shape(doc, bores=None):
     """Geometry only, against whatever sheet the document already has.
 
-    `oml` is `bulkhead_oml_shape` when the caller has already built it -- the assembly has,
-    three times over in the source, and one object driven by one set of rows is the point of
-    the port. Left out, this module builds its own.
+    `bores` is `bulkhead_oml_inner_shape` when the caller has already built it -- the assembly
+    has, and one object driven by one set of rows is the point of the port. Left out, this
+    module builds its own.
 
-    Both operands are built before the node that consumes them. Writing the second one inline
-    as `clip.Shapes = [oml_outer_shape(doc), pocket]` creates the clip first and its dependency
+    **The source erodes the whole OML by `web_width`; this erodes the outline and grows the
+    bores instead.** They are the same region, by the morphological identity
+
+        erosion(A - B, w)  ==  erosion(A, w) - dilation(B, w)
+
+    -- a disc of radius `w` fits inside `A - B` exactly when it fits inside `A` and misses `B`
+    -- and only the right-hand side is computable here. `Part::Offset2D` returns a **null
+    shape** for the left-hand side at U=0.75 with a 3 mm panel, taking the whole part with it
+    (IP-FC-54). Not at one value either: every erosion from 3.0 to 5.0 mm is null there while
+    6.0 mm succeeds, so it is not a tangency that a nudge would clear.
+
+    What OCCT is being asked for in that form is a boundary that self-intersects heavily. The
+    longeron bore is *concentric with the corner arc*, so eroding by more than
+    `corner_radius - longeron_radius - longeron_tolerance` makes the grown bore swallow the
+    shrunk arc entirely, and at U=0.75 the panel notch is 4.4 mm deep against a 4.5 mm erosion
+    as well -- two features crossing the offset distance at once. Split in two, neither half is
+    degenerate: the outline erodes cleanly and dilating eight separated circles is trivial.
+
+    The identity is exact, not an approximation. Where the direct form works it agrees to the
+    last digit -- 5770.975162 either way at U=1.0 -- which is what says this is a change of
+    route and not of shape.
+
+    Both operands are built before the node that consumes them. Writing one inline as
+    `clip.Shapes = [oml_outer_shape(doc), pocket]` creates the clip first and its dependency
     afterwards, and FreeCAD's first recompute pass then reaches the clip while that dependency
     still holds a null shape -- an "Access violation" on stderr, after which a later pass
     quietly recomputes it correctly. The final area is right either way, so the only symptom
     is a line of stderr that is easy to read past. Build dependencies first.
     """
     outer = boom_oml.oml_outer_shape(doc)
-    if oml is None:
-        oml = boom_oml.oml_shape(doc)
-    eroded = plane2d.offset(doc, 'WebErode', oml, '-' + P + 'web_width')
-    pocket = plane2d.fillet_inner(doc, 'Web', eroded, P + 'web_fillet_radius')
+    if bores is None:
+        bores = boom_oml.oml_inner_shape(doc)
+
+    eroded_outer = plane2d.offset(doc, 'WebErodeOuter', outer, '-' + P + 'web_width')
+    # The eight dilated bores overlap each other here, which `Part::Cut` handles correctly --
+    # but merged anyway, so no node in the tree carries overlapping faces for a later offset
+    # to double-count (IP-FC-52).
+    grown = plane2d.merge(doc, 'WebBores',
+                          plane2d.offset(doc, 'WebBoresGrow', bores, P + 'web_width'),
+                          P + 'oml_reach')
+    eroded = C._cut(doc, 'WebErode', eroded_outer, grown)
+
+    # `oml_reach` encloses the OML itself, so it encloses an erosion of it dilated back by
+    # less than it was eroded by.
+    pocket = plane2d.fillet_inner(doc, 'Web', eroded, P + 'web_fillet_radius',
+                                  P + 'oml_reach')
 
     clip = C._owned(doc, 'Part::MultiCommon', 'BulkheadWebInner')
     clip.Shapes = [outer, pocket]

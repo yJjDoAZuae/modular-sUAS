@@ -109,7 +109,7 @@ def webs(doc, tag='', z=P + 'boom_z_position', angle=P + 'boom_key_angle'):
     inner = plane2d.fillet_inner(doc, tag + 'Inner',
                                  C._cut(doc, tag + 'InnerRaw',
                                         eroded_web(doc, spine, tag), pad),
-                                 P + 'web_fillet_radius')
+                                 P + 'web_fillet_radius', P + 'webs_reach')
 
     return {'outer': outer, 'inner': inner, 'key': key}
 

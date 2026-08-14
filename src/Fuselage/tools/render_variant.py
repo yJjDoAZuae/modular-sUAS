@@ -18,8 +18,16 @@ is exactly the clearance keeping the panel's inner corner off the greeble perime
 
 The relationships are defined in `fuselage_variants.py`. This calls them.
 
-    python render_variant.py                        # list every combination and its validity
-    python render_variant.py 1.0 end_bolt 3/16in    # derive, check, render
+    python render_variant.py                          # list every combination and its validity
+    python render_variant.py 1.0 end_bolt 3/16in      # derive, check, render
+    python render_variant.py 1.0 center_single 3mm    # ... a boom bulkhead
+
+**Both bulkhead families are listed and rendered here.** The frame bulkhead and the boom
+bulkhead are separate sweeps off separate type axes, and until IP-FC-12 this tool knew only
+the first -- so the boom bulkhead had no way to be rendered one at a time at all, and
+`export_parameters.py`, which enumerates through this file, answered "no such combination"
+for every boom variant. The type name says which family a variant belongs to; the families
+themselves are described in `fuselage_variants.BULKHEAD_FAMILIES`.
 
 Needs the project venv -- `fuselage_variants` imports solid2, which FreeCAD's bundled
 Python does not have.
@@ -39,12 +47,11 @@ import fuselage_variants as fv
 # `corner_common.out_path()` hands the FreeCAD-side scripts, so both toolchains still write
 # their comparable renders to one place.
 DEFAULT_OUT = os.path.join(HERE, '..', 'freecad', 'out', 'preview')
-CSV_AXES = ('panel_variants.csv', 'bulkhead_type_variants.csv',
-            'bulkhead_size_variants.csv')
 
 
-def combinations():
-    return fv.flatten_param_space(fv.read_all_param_axes(fv.axes(*CSV_AXES)))
+def combinations(family='bulkhead'):
+    """One family's parameter space. Kept for `export_parameters.py`, which imports it."""
+    return fv.family_combinations(family)
 
 
 def settings():
@@ -59,41 +66,56 @@ def main(argv):
     printer, FX = settings()
 
     if len(args) < 3:
-        print('%-6s %-14s %-10s %s' % ('U', 'type', 'panel', 'valid'))
-        for p in combinations():
-            dp = fv.derived_parameters(p['U'], FX, p, printer, True)
-            print('%-6s %-14s %-10s %s'
-                  % (p['U'], p['bulkhead_type_name'], p['panel_name'],
-                     fv.bulkhead_validity_check(dp)))
+        print('%-14s %-6s %-14s %-10s %s'
+              % ('family', 'U', 'type', 'panel', 'valid'))
+        for family in sorted(fv.BULKHEAD_FAMILIES):
+            for p in fv.family_combinations(family):
+                dp = fv.derived_parameters(p['U'], FX, p, printer, True)
+                print('%-14s %-6s %-14s %-10s %s'
+                      % (family, p['U'], p['bulkhead_type_name'], p['panel_name'],
+                         fv.family_is_valid(family, dp)))
         return 0
 
     want_u, want_type, want_panel = float(args[0]), args[1], args[2]
     out = args[3] if len(args) > 3 else DEFAULT_OUT
 
-    for p in combinations():
+    family = fv.family_of(want_type)
+    if family is None:
+        print('no bulkhead type named %r -- run with no arguments to list them'
+              % want_type)
+        return 1
+    spec = fv.BULKHEAD_FAMILIES[family]
+
+    for p in fv.family_combinations(family):
         if (float(p['U']) != want_u or p['bulkhead_type_name'] != want_type
                 or p['panel_name'] != want_panel):
             continue
 
         dp = fv.derived_parameters(p['U'], FX, p, printer, True)
-        valid = fv.bulkhead_validity_check(dp)
+        valid = fv.family_is_valid(family, dp)
 
-        print('variant: U=%s %s panel=%s' % (p['U'], p['bulkhead_type_name'],
-                                             p['panel_name']))
+        print('variant: %s U=%s %s panel=%s'
+              % (family, p['U'], p['bulkhead_type_name'], p['panel_name']))
         print('  panel.thickness    = %s' % dp.panel.thickness)
         print('  panel.overlap      = %s' % dp.panel.overlap)
         print('  panel.offset       = %s   (derived, not chosen)' % dp.panel.offset)
         print('  bulkhead.thickness = %s' % dp.bulkhead.thickness)
         print('  corner.radius      = %s' % dp.corner.radius)
         print('  extrusion_width    = %s' % dp.printer.extrusion_width)
+        if family == 'boom_bulkhead':
+            b = dp.boom_bulkhead
+            print('  boom.y_position    = %s' % b.y_position)
+            print('  boom.z_position    = %s' % b.z_position)
+            print('  boom.make_vert_web = %s' % b.make_vert_web)
+            print('  boom.make_lower_web= %s' % b.make_lower_web)
         print('  validity check     = %s' % valid)
 
         if not valid:
             print('  NOT RENDERED -- the sweep would not generate this combination')
             return 1
 
-        name = fv.generate_fuselage_bulkhead_variant_filename_from_params(dp)
-        fv.bulkhead_render(dp, out, name)
+        name = getattr(fv, spec['filename'])(dp)
+        getattr(fv, spec['render'])(dp, out, name)
         print('  rendered -> %s' % os.path.normpath(os.path.join(out, name)))
         return 0
 
