@@ -66,7 +66,7 @@ def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
 
 
-def web_inner_shape(doc, bores=None):
+def web_inner_shape(doc, bores=None, outer=None):
     """Geometry only, against whatever sheet the document already has.
 
     `bores` is `bulkhead_oml_inner_shape` when the caller has already built it -- the assembly
@@ -102,18 +102,12 @@ def web_inner_shape(doc, bores=None):
     quietly recomputes it correctly. The final area is right either way, so the only symptom
     is a line of stderr that is easy to read past. Build dependencies first.
     """
-    outer = boom_oml.oml_outer_shape(doc)
+    if outer is None:
+        outer = boom_oml.oml_outer_shape(doc)
     if bores is None:
         bores = boom_oml.oml_inner_shape(doc)
 
-    eroded_outer = plane2d.offset(doc, 'WebErodeOuter', outer, '-' + P + 'web_width')
-    # The eight dilated bores overlap each other here, which `Part::Cut` handles correctly --
-    # but merged anyway, so no node in the tree carries overlapping faces for a later offset
-    # to double-count (IP-FC-52).
-    grown = plane2d.merge(doc, 'WebBores',
-                          plane2d.offset(doc, 'WebBoresGrow', bores, P + 'web_width'),
-                          P + 'oml_reach')
-    eroded = C._cut(doc, 'WebErode', eroded_outer, grown)
+    eroded = plane2d.erode_difference(doc, 'Web', outer, [bores], P + 'web_width')
 
     # `oml_reach` encloses the OML itself, so it encloses an erosion of it dilated back by
     # less than it was eroded by.
