@@ -117,7 +117,7 @@ def profile(doc):
 
     oml = boom_oml.oml_shape(doc)
     bores = boom_oml.oml_inner_shape(doc)
-    pocket = bulkhead_web.web_inner_shape(doc, oml=oml)
+    pocket = bulkhead_web.web_inner_shape(doc, bores=bores)
     w = boom_webs.webs(doc)
     outer, inner = w['outer'], w['inner']
 
@@ -136,8 +136,10 @@ def profile(doc):
 
     material = C._cut(doc, 'Material', _union(doc, 'MaterialRaw', [rim, webs]), bores)
 
+    # The lightening region is inside the OML, so `oml_reach` encloses it and every dilation
+    # of it the fillet performs.
     lighten = plane2d.fillet_inner(doc, 'Lighten', C._cut(doc, 'LightenRaw', oml, material),
-                                   P + 'web_fillet_radius')
+                                   P + 'web_fillet_radius', P + 'oml_reach')
     return C._cut(doc, 'BoomBulkheadProfile',
                   C._cut(doc, 'ProfileLightened', oml, lighten), w['key'])
 

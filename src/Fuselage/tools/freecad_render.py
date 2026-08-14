@@ -62,10 +62,11 @@ def _load_part_kinds():
 
 _PART_KINDS = _load_part_kinds()
 
-# Sweep part kind -> the kind build_part.py knows. Only the two ported parts appear here;
-# a kind absent from this table has no FreeCAD generator yet and must keep using OpenSCAD.
-# Note this is per *kind*: the bulkhead is here, but only its end type is ported, which
-# `bulkhead_render` handles through `_backend_for(kind, supported=)` -- see IP-FC-47.
+# Sweep part kind -> the kind build_part.py knows. Only the ported parts appear here; a kind
+# absent from this table has no FreeCAD generator yet and must keep using OpenSCAD.
+# Note this is per *kind*: the frame bulkhead is here, but only its end type is ported, which
+# `bulkhead_render` handles through `_backend_for(kind, supported=)` -- see IP-FC-47. The
+# boom bulkhead needs no such gate, all three of its types being ported.
 KINDS = tuple(sorted(_PART_KINDS.KINDS))
 
 

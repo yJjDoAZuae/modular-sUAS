@@ -83,12 +83,42 @@ def union(doc, name, pieces, reach):
     return C._cut(doc, name, frame, node)
 
 
+def merge(doc, name, source, reach):
+    """One face out of a shape whose faces may OVERLAP. `union` with a single piece.
+
+    Separate from `union` by name because it answers a different question. `union` is for
+    pieces the caller built separately and wants combined; this is for a single node whose
+    own faces have grown into each other, which is what an outward `Part::Offset2D` on a
+    multi-face source produces -- see `offset`.
+    """
+    return union(doc, name, [source], reach)
+
+
 def offset(doc, name, source, value, join='Arc'):
     """OpenSCAD's `offset(r = value)`. Round joins, which is Join='Arc'.
 
     Measured faithful to 0.00456% across the chain, including `fillet_inner` -- see
     spike_offset2d.py, and note that the 2026-08-08 reading of 19% was taken at a degenerate
     parameter value and is wrong.
+
+    **An OUTWARD offset of a multi-face source does not merge faces that come to overlap.**
+    `Part::Offset2D` treats each face of its source independently -- correctly for faces that
+    stay apart, which is why `fragmented()` allows several faces -- but when a positive offset
+    grows two of them into each other it keeps both, and the shared area is then counted
+    twice. Every consumer downstream sees a closed, valid, plausible region that is too large.
+
+    Found by IP-FC-13 at U=0.75 / 1/8 in panel / `dual`, the one swept boom bulkhead where the
+    inner web's erosion disconnects into pieces closer together than twice the fillet radius.
+    `offset(-r)` split it into four faces, `offset(+2r)` regrew them overlapping and read
+    467.48 mm2 against OpenSCAD's 458.48, and the finished part came out +0.167% -- sixteen
+    times the tolerance, on a part whose other eleven sampled variants agree to 0.0006%.
+
+    An INWARD offset cannot create an overlap, so only the outward direction needs the merge.
+    `fillet_inner` and `fillet_outer` do it at their dilation steps, which is where an offset
+    is applied to a shape the same function just produced and so cannot be assumed to be one
+    face. A caller offsetting outward by hand must decide for itself -- there is no reach here
+    to merge with, and adding one to every offset would make the common single-face case pay
+    for the rare one.
     """
     node = C._owned(doc, 'Part::Offset2D', name)
     node.Source = source
@@ -98,14 +128,24 @@ def offset(doc, name, source, value, join='Arc'):
     return node
 
 
-def fillet_inner(doc, tag, source, radius):
+def fillet_inner(doc, tag, source, radius, reach):
     """`intersection() { offset(-r) offset(2r) offset(-r) children; children; }`.
 
     An opening followed by a closing, clipped to the input: it rounds **convex** corners and
     removes anything thinner than 2*radius. Never adds material.
+
+    The `2r` dilation is merged before it is eroded back. It is the step most exposed to the
+    multi-face overlap `offset` describes, and by construction rather than by accident: the
+    erosion before it exists precisely to pinch the shape apart at anything narrower than
+    2*radius, so its output is multi-face whenever the fillet does anything at all, and the
+    dilation is then asked to grow those pieces back by twice what separated them. `reach`
+    sizes the rectangle the merge complements against and must strictly enclose the dilation
+    -- which reaches `radius` beyond the source, not `2 * radius`, the first erosion having
+    taken the other half.
     """
     node = offset(doc, tag + 'ErodeA', source, '-(' + radius + ')')
     node = offset(doc, tag + 'Dilate', node, '2 * (' + radius + ')')
+    node = merge(doc, tag + 'Merge', node, reach)
     node = offset(doc, tag + 'ErodeB', node, '-(' + radius + ')')
     clip = C._owned(doc, 'Part::MultiCommon', tag + 'FilletInner')
     clip.Shapes = [node, source]
@@ -117,8 +157,15 @@ def fillet_outer(doc, tag, source, radius, reach):
 
     A closing unioned with the input: it fills **concave** corners and bridges gaps narrower
     than 2*radius. Never removes material.
+
+    Its dilation is merged for the same reason `fillet_inner`'s is, though the exposure is
+    weaker here: this one offsets the caller's own shape rather than an erosion, and every
+    current caller hands it a single face. It is merged anyway because "the caller happens to
+    pass one face" is not a property this function can check or enforce, and the failure it
+    would produce is a silently oversized region rather than an error.
     """
     node = offset(doc, tag + 'DilateA', source, radius)
+    node = merge(doc, tag + 'DilateMerge', node, reach)
     node = offset(doc, tag + 'ErodeA', node, '-(' + radius + ')')
     return union(doc, tag + 'FilletOuter', [node, source], reach)
 

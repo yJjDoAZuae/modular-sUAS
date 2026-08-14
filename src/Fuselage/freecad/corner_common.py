@@ -142,12 +142,74 @@ def is_literal(value):
     return True
 
 
+# The literal rows no parameter table is required to supply, and why each is exempt.
+#
+# **Every other literal row is configuration and MUST come from `derived_parameters()`** --
+# that is `is_literal`'s rule above, and until IP-FC-53 nothing made it true. `check_seed`
+# walks the *seed* and compares each value it carries against the sheet, so a value the
+# authority supplies is verified and a literal row the authority *fails* to supply is never
+# looked at. A parameter file missing rows therefore built a part with the module's own
+# reference values silently substituted for the variant's, under the variant's filename.
+#
+# This list is what lets the opposite check exist. Without it "every literal must be seeded"
+# cannot be asserted, because six rows legitimately cannot be -- and they are indistinguishable
+# in the table from the ones that must, all six being plain numbers like the rest.
+#
+# Keyed by alias rather than by module because aliases are already effectively global:
+# `merge_params` refuses one that means two different things on a shared sheet.
+# **The last four entries are a symptom, not a design.** They are on the bulkhead's sheet only
+# because `bulkhead_section` merges `corner_tree.PARAMS` to reuse `corner_end`, and no bulkhead
+# geometry reads any of them -- setting FX to 7.0 on a built bulkhead and recomputing leaves
+# the volume unchanged to the last digit, as does perturbing the other three. Exempting them
+# here keeps `check_unseeded` honest in the meantime; IP-FC-56 is to stop them reaching that
+# sheet at all, after which these entries go with them.
+#
+# `greeble_tolerance` and `FX` ARE design parameters -- of the corner. The corner's table
+# supplies both and its geometry reads both. What is wrong is their presence on the *other*
+# part's sheet, not their status.
+UNSEEDED = {
+    'eps': 'a constant of the OpenSCAD source, not a parameter -- geometry_eps(). IP-FC-49 '
+           'and IP-FC-50 measured what it is for and zeroed the two uses that had none, and '
+           'IP-FC-55 is auditing whether FreeCAD needs the rest of them at all',
+    'mask_eps': 'the same constant at the diagonal mask, kept named rather than dropped so a '
+                'reader can see the source says `+ eps` on purpose. Already 0.0',
+    'end_z0': 'where the port places the end section in z. A construction choice of the port, '
+              'and not a dimension of the part: the source has no such value',
+    'gt_tolerance': 'the clearance the greeble TOOL is built at, which is always 0 -- the tool '
+                    'forms the bulkhead post, and the post is nominal by construction because '
+                    'the whole fit clearance is carried on the corner bore. Distinct from '
+                    '`greeble_tolerance`, which is the corner-side parameter',
+
+    # Inherited from corner_tree onto the bulkhead's sheet, read by nothing it builds.
+    # Measured, not assumed -- see the note above this table. IP-FC-56 removes them.
+    'FX': 'a bulkhead is independent of bay length (OQ-DES-C3), so it has no FX. This row is '
+          'corner_tree\'s, and the corner\'s table does supply it',
+    'unit_length': 'the corner\'s bay length, `=U * FX * 100`. Same inheritance as FX, and '
+                   'the bulkhead has no bay',
+    'greeble_tolerance': 'the CORNER-side fit clearance, and the corner\'s table supplies it. '
+                         'The bulkhead post is nominal, which the port states as gt_tolerance '
+                         'above rather than through this row',
+    'mid_h': 'the corner\'s middle section, which a bulkhead does not have',
+}
+
+
+def check_unseeded(params, seed):
+    """Literal rows the seed does not supply and this file does not exempt.
+
+    The mirror of `check_seed`, and the half that was missing. That one asks "is every value
+    the authority gave reproduced by the sheet"; this asks "did the authority give every value
+    the sheet needs". A part can pass the first and still be built at the module's reference
+    configuration, which is the failure IP-FC-53 closes.
+    """
+    return sorted(alias for alias, value in params
+                  if is_literal(value) and alias not in seed and alias not in UNSEEDED)
+
+
 def seeded(params, seed=None):
     """`params` with its literal rows replaced by the exported parameter set.
 
-    A row is only replaced when the authority actually defines it. `eps`, `U` and `FX` are
-    literals no variant carries -- geometry_eps() is a constant of the source, not a
-    parameter -- so they stay as written rather than silently becoming zero.
+    A row is only replaced when the authority actually defines it -- the rows it never
+    defines are `UNSEEDED` above, and `check_unseeded` refuses any others.
     """
     if not seed:
         return list(params)
@@ -165,12 +227,33 @@ def build_sheet(doc, params, seed=None, extra=()):
 
     Left alone if the document already has one: the assembly builds a single merged sheet
     and then calls each constituent's geometry against it.
+
+    **A seed must cover every literal row it is not exempt from.** Checked here rather than in
+    `build_part.py` so it holds for every route to a seeded sheet, including the modules' own
+    `main()` when handed a parameter file. A run with no seed at all is the reference check,
+    where the literals are the configuration being measured and are the point.
     """
+    rows = list(params) + list(extra)
+    if seed:
+        missing = check_unseeded(rows, seed)
+        if missing:
+            # stderr and flushed, not the message of a SystemExit: freecadcmd discards that,
+            # and a refusal nobody can read is barely better than the wrong part it stopped.
+            sys.stderr.write(
+                'build_sheet: the parameter set does not define %s.\nThese are literal rows, '
+                'which means configuration -- they belong to derived_parameters(), and the '
+                'part would otherwise be built with this module\'s own reference values '
+                'silently substituted for the variant\'s. If one of them is genuinely not a '
+                'parameter, add it to corner_common.UNSEEDED with the reason.\n'
+                % ', '.join(missing))
+            sys.stderr.flush()
+            raise SystemExit(1)
+
     sheet = doc.getObject('Params')
     if sheet is not None:
         return sheet
     sheet = doc.addObject('Spreadsheet::Sheet', 'Params')
-    for row, (alias, value) in enumerate(seeded(list(params) + list(extra), seed), start=1):
+    for row, (alias, value) in enumerate(seeded(rows, seed), start=1):
         sheet.set('A%d' % row, alias)
         sheet.setAlias('B%d' % row, alias)
         sheet.set('B%d' % row, value)

@@ -106,10 +106,16 @@ if (mode == 9) {
                 bolt_hole_radius, bolt_offset);
         } else if (mode == 10) {
             // The frame web -- the fifth and last fillet_inner site, and the only one that
-            // reaches through the OML rather than the boom's own geometry. Its octant is
-            // built in the CORNER-LOCAL frame from three REGION-WIDE shapes, then tiled, so
-            // the translate and the octant_tiled do not cancel: each octant is a different
-            // window onto the same whole-outline erosion.
+            // reaches through the OML rather than the boom's own geometry.
+            //
+            // Its octant opens with translate([-arm, -arm]) and octant_tiled's
+            // corner_translate adds [+arm, +arm], so the two CANCEL EXACTLY and the octant's
+            // three operands are evaluated in world coordinates. Two of them are whole-region
+            // and dihedrally invariant; the third is a wedge whose eight images tile a square
+            // containing the outline. So the tiling is provably redundant and the port builds
+            // this region-wide. (An earlier note here said the translates do not cancel. They
+            // do -- and the trap is the other direction: computing the operands locally and
+            // then tiling gives a closed, valid, plausible, wrong region.)
             bulkhead_web_inner_shape(unit_width, corner_radius, panel_thickness, panel_offset,
                 panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance,
                 bolt_hole_radius, bolt_offset, web_fillet_radius, web_width);

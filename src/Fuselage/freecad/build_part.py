@@ -74,22 +74,29 @@ def load_seed(params_path, kind):
 
     Two things write these, and they are not the same document:
 
-    - `tools/export_parameters.py` writes a **variant**, which is two parts: a `parameters`
-      table for the bulkhead and a `corner_parameters` table for the corner. Used
-      interactively, and by every check script in this directory.
+    - `tools/export_parameters.py` writes a **variant**, which is one or more parts under
+      their own table names: a frame bulkhead variant carries `parameters` for the bulkhead
+      and `corner_parameters` for the corner, a boom bulkhead variant carries
+      `boom_parameters` and nothing else. Used interactively, and by every check script in
+      this directory.
     - the sweep writes a **part**, which is one: a single flat `parameters` table with the
       `kind` stated alongside it, because at that point the choice has already been made.
 
     Reading both from here is what lets the same builder serve the sweep and a hand check of
     one variant, and lets a definition file the sweep produced be replayed by hand later --
     which is the first thing anyone will want when a swept part looks wrong.
+
+    The two are told apart by `kind`, which only the sweep's document carries -- not by
+    looking for `corner_parameters`, which the boom bulkhead's variant has no reason to
+    contain. A variant then picks this part's table by name, and a name the file does not
+    carry is refused rather than silently substituted; see `parameters.table_of`.
     """
     module_name, table = KINDS[kind]
     with open(params_path) as f:
         doc = json.load(f)
-    if 'corner_parameters' in doc:
+    if 'kind' not in doc:
         return parameters.seed(params_path, table)      # a variant: pick this part's table
-    if doc.get('kind') not in (None, kind):
+    if doc['kind'] != kind:
         raise SystemExit('%s defines a %r, not a %r'
                          % (params_path, doc['kind'], kind))
     return dict(doc['parameters'])

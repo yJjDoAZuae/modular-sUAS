@@ -15,9 +15,18 @@ once it has one.
 """
 
 # kind -> (top geometry module, the name of its seed table in parameters.py)
+#
+# The boom bulkhead reads its own table rather than sharing the frame bulkhead's. They are
+# different parts of different sweeps and their parameter lists only partly overlap -- the
+# boom takes eleven names the frame bulkhead has never heard of and does without eight of
+# its. Sharing the name would mean a frame bulkhead's parameter file seeded a boom bulkhead
+# without complaint, leaving every boom row at its module literal: a part built at the
+# reference configuration under the swept variant's filename. A separate name makes that a
+# missing key instead.
 KINDS = {
     'corner': ('corner_tree', 'CORNER'),
     'bulkhead': ('bulkhead_full', 'BULKHEAD'),
+    'boom_bulkhead': ('boom_bulkhead', 'BOOM_BULKHEAD'),
 }
 
 

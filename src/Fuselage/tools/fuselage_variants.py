@@ -1035,7 +1035,10 @@ def run_bulkhead_parametric_sweep(csv_files, output_dir):
         
         dp = derived_parameters(U,FX,params,printer_settings,True)
         
-        is_valid = bulkhead_validity_check(dp)
+        # Through the family table, so what BULKHEAD_FAMILIES says this sweep checks is what
+        # it checks. The tools that offer to render one variant read that table; if it and
+        # this loop drifted apart, they would offer combinations the sweep skips.
+        is_valid = family_is_valid('bulkhead', dp)
 
         if is_valid:
 
@@ -1072,8 +1075,7 @@ def run_boom_bulkhead_parametric_sweep(csv_files, output_dir):
         
         dp = derived_parameters(U,FX,params,printer_settings,True)
         
-        is_valid = bulkhead_validity_check(dp)
-        is_valid &= boom_key_validity_check(dp)
+        is_valid = family_is_valid('boom_bulkhead', dp)
 
         if is_valid:
 
@@ -2034,39 +2036,73 @@ def bulkhead_render(dp, output_dir, filename):
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
+def boom_bulkhead_parameters(dp):
+    """The boom bulkhead's parameters, by name, as both backends need them.
+
+    Every one of the 25 names `boom_bulkhead` takes, including the two flags -- unlike
+    `bulkhead_parameters`, which leaves the frame bulkhead's type flags out because they are
+    decoded from `dp.bulkhead.type` at the call site rather than carried as dimensions.
+
+    The boom's two are different. `boom_make_vert_web` and `boom_make_lower_web` come
+    straight off the type axis CSV as their own columns, and the FreeCAD port reads them as
+    ordinary sheet rows -- 1.0 or 0.0, read in Python, never in an expression, because each
+    selects between two constructions rather than scaling one. Leaving them out of the
+    mapping would mean the two backends were handed different information about the same
+    part, which is the divergence this file exists to prevent.
+
+    pandas reads the CSV's TRUE/FALSE as numpy booleans. They are kept as they arrive:
+    OpenSCAD's `if` accepts them, and `float()` in the JSON export turns them into the 1.0
+    and 0.0 the sheet wants.
+    """
+    return {
+        'unit_width': dp.bulkhead.width,
+        'corner_radius': dp.corner.radius,
+        'panel_thickness': dp.panel.thickness,
+        'panel_offset': dp.panel.offset,
+        'panel_overlap': dp.panel.overlap,
+        'panel_tolerance': dp.panel.tolerance,
+        'longeron_radius': dp.longeron.radius,
+        'longeron_tolerance': dp.longeron.tolerance,
+        'bolt_hole_radius': dp.bolt.radius,
+        'bolt_offset': dp.bolt.offset,
+        'web_fillet_radius': dp.web.fillet_radius,
+        'web_width': dp.web.width,
+        'boom_diameter': dp.boom_bulkhead.diameter,
+        'boom_bulkhead_thickness': dp.boom_bulkhead.thickness,
+        'boom_y_position': dp.boom_bulkhead.y_position,
+        'boom_z_position': dp.boom_bulkhead.z_position,
+        'boom_collet_thickness': dp.boom_bulkhead.collet_thickness,
+        'boom_key_width': dp.boom_bulkhead.key_width,
+        'boom_key_height': dp.boom_bulkhead.key_height,
+        'boom_key_radius': dp.boom_bulkhead.key_radius,
+        'boom_key_angle': dp.boom_bulkhead.key_angle,
+        'boom_key_web_width': dp.boom_bulkhead.key_web_width,
+        'boom_tolerance': dp.boom_bulkhead.tolerance,
+        'boom_make_vert_web': dp.boom_bulkhead.make_vert_web,
+        'boom_make_lower_web': dp.boom_bulkhead.make_lower_web,
+    }
+
+
 def boom_bulkhead_render(dp, output_dir, filename):
 
-    # import math
-    
+    # All three boom types are ported, so there is no per-variant `supported` here as there
+    # is on the frame bulkhead. `offset_single` and `dual` set the same two flags and are
+    # `ref_boom_bulkhead.scad`; `center_single` sets the other pair and is
+    # `ref_boom_bulkhead_center.scad`. Both were measured against the port (IP-FC-12).
+    if _backend_for('boom_bulkhead') == 'freecad':
+        # No U on top of the mapping, and that differs from `bulkhead_render` on purpose.
+        # The frame bulkhead's sheet merges `corner_tree.PARAMS`, where `corner_radius` and
+        # `longeron_radius` are the relationships `=U * 10` and `=U * 2`, so its sheet needs
+        # U to evaluate them. The boom bulkhead's modules state both as literals seeded from
+        # this mapping, so nothing on its sheet reads U and a U row would sit there unused.
+        freecad_render('boom_bulkhead', boom_bulkhead_parameters(dp), output_dir, filename,
+                       _variant_note(dp))
+        return
+
     fbbgeom = scad_module('fuselage_boom_bulkhead_geometry.scad')
-    
-    scadobj = fbbgeom.boom_bulkhead(
-        unit_width=dp.bulkhead.width,
-        corner_radius=dp.corner.radius,
-        panel_thickness=dp.panel.thickness,
-        panel_offset=dp.panel.offset,
-        panel_overlap=dp.panel.overlap,
-        panel_tolerance=dp.panel.tolerance,
-        longeron_radius=dp.longeron.radius,
-        longeron_tolerance=dp.longeron.tolerance,
-        bolt_hole_radius=dp.bolt.radius,
-        bolt_offset=dp.bolt.offset,
-        web_fillet_radius=dp.web.fillet_radius,
-        web_width=dp.web.width,
-        boom_diameter=dp.boom_bulkhead.diameter,
-        boom_bulkhead_thickness=dp.boom_bulkhead.thickness,
-        boom_y_position=dp.boom_bulkhead.y_position,
-        boom_z_position=dp.boom_bulkhead.z_position,
-        boom_collet_thickness=dp.boom_bulkhead.collet_thickness,
-        boom_key_width=dp.boom_bulkhead.key_width,
-        boom_key_height=dp.boom_bulkhead.key_height,
-        boom_key_radius=dp.boom_bulkhead.key_radius,
-        boom_key_angle=dp.boom_bulkhead.key_angle,
-        boom_key_web_width=dp.boom_bulkhead.key_web_width,
-        boom_tolerance=dp.boom_bulkhead.tolerance,
-        boom_make_vert_web=dp.boom_bulkhead.make_vert_web,
-        boom_make_lower_web=dp.boom_bulkhead.make_lower_web)
-    
+
+    scadobj = fbbgeom.boom_bulkhead(**boom_bulkhead_parameters(dp))
+
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
@@ -2228,6 +2264,98 @@ def tail_render(U, dp, output_dir, filename):
 def axes(*names):
     """Parameter axis CSVs, resolved against PARAM_DIR rather than the cwd."""
     return [os.path.join(PARAM_DIR, n) for n in names]
+
+
+# ------------------------------------------------------------
+# The bulkhead families, as one table
+# ------------------------------------------------------------
+# A *family* is one bulkhead sweep: its own type axis, its own validity rules, its own
+# parameter mapping, its own filename. The frame bulkhead and the boom bulkhead share the
+# panel and size axes and nothing else, and until IP-FC-12 the difference was spread across
+# `run_boom_bulkhead_parametric_sweep`, `boom_bulkhead_render` and the axis tuple each
+# caller happened to type.
+#
+# It is gathered here because three tools outside this file need it and were each carrying a
+# hard-coded copy of the frame bulkhead's half: `render_variant.py`, `export_parameters.py`
+# and `compare_backends.py`. A tool that knows only one family cannot render, export or
+# compare the other -- which is exactly the state the boom bulkhead port finished in, with a
+# verified generator that no sweep could reach.
+#
+#   axis        the type CSV, which is the only axis that differs between families
+#   validity    every check the family's sweep applies, in the order it applies them
+#   parameters  the alias -> value mapping both backends are driven from
+#   render      the function that turns a resolved variant into a part
+#   filename    where that part lands
+#   kind        the name `part_kinds.py` and `build_part.py` know it by
+BULKHEAD_FAMILIES = {
+    'bulkhead': {
+        'axis': 'bulkhead_type_variants.csv',
+        'validity': ('bulkhead_validity_check',),
+        'parameters': 'bulkhead_parameters',
+        'render': 'bulkhead_render',
+        'filename': 'generate_fuselage_bulkhead_variant_filename_from_params',
+        'kind': 'bulkhead',
+    },
+    'boom_bulkhead': {
+        'axis': 'boom_bulkhead_type_variants.csv',
+        'validity': ('bulkhead_validity_check', 'boom_key_validity_check'),
+        'parameters': 'boom_bulkhead_parameters',
+        'render': 'boom_bulkhead_render',
+        'filename': 'generate_fuselage_boom_bulkhead_variant_filename_from_params',
+        'kind': 'boom_bulkhead',
+    },
+}
+
+# Both families share these, and neither owns them. Stated once so a caller assembling an
+# axis list cannot get the frame bulkhead's panel axis and the boom's size axis.
+SHARED_AXES = ('panel_variants.csv', 'bulkhead_size_variants.csv')
+
+
+def family_axes(family):
+    """The three axis CSVs of one bulkhead family, in the order its sweep reads them."""
+    f = BULKHEAD_FAMILIES[family]
+    return axes(SHARED_AXES[0], f['axis'], SHARED_AXES[1])
+
+
+def family_combinations(family):
+    """Every point in one family's parameter space, valid or not."""
+    return flatten_param_space(read_all_param_axes(family_axes(family)))
+
+
+def family_is_valid(family, dp):
+    """Whether this family's sweep would generate `dp`.
+
+    Runs every check the family declares, not just the first. The boom bulkhead adds
+    `boom_key_validity_check` on top of the shared one, and a tool that applied only the
+    shared check would offer to render combinations the sweep skips -- which for the boom key
+    means a tab wider than the hole it keys, a part that builds and looks plausible.
+    """
+    ok = True
+    for name in BULKHEAD_FAMILIES[family]['validity']:
+        ok &= globals()[name](dp)
+    return ok
+
+
+def family_of(type_name):
+    """Which family a bulkhead type name belongs to, read from the axis CSVs.
+
+    So `render_variant.py 1.0 end_bolt 3/16in` and `render_variant.py 1.0 center_single 3mm`
+    both work with no extra argument: the type name already says which sweep it came from.
+    Read rather than hard-coded, and refused if a name ever appears on two axes -- at which
+    point the type name would no longer identify a variant and every tool taking one would
+    have to grow a family argument.
+    """
+    found = []
+    for family, f in sorted(BULKHEAD_FAMILIES.items()):
+        names = {row['bulkhead_type_name'] for row in read_param_csv(
+            os.path.join(PARAM_DIR, f['axis']))}
+        if type_name in names:
+            found.append(family)
+    if len(found) > 1:
+        raise RuntimeError(
+            'bulkhead type %r appears in %s -- the type name no longer identifies a family'
+            % (type_name, ' and '.join(found)))
+    return found[0] if found else None
 
 
 @contextlib.contextmanager
