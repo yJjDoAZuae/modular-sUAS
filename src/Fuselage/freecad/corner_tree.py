@@ -72,12 +72,24 @@ PARAMS = [
     ('mask_reach', '=2 * corner_radius'),
     ('through_cut', '=bulkhead_thickness * 3'),
 
+    # The corner/bulkhead interface clearance, on the flat face at flat_x and on the diagonal,
+    # over the corner's full height. It is carried ENTIRELY ON THE CORNER: bulkhead_tree's
+    # greeble tool re-evaluates this description with the row forced to 0, exactly as it does
+    # for the greeble tolerance, so the joint takes the clearance once instead of twice. The
+    # sweep value is 0 -- see CORNER_TOLERANCE_MM in fuselage_variants.py. OQ-DES-C5.
+    ('corner_tolerance', '0.0'),
+
     # flat_offset takes the chamfer as a floor, so the flat face clears the bore and its
-    # chamfer *and* wherever the panel interface has been pushed out to.
-    ('flat_offset', '=-max(longeron_radius + longeron_tolerance + longeron_chamfer, '
-                    '(panel_overlap + panel_offset) - '
-                    '(corner_radius - panel_thickness - panel_tolerance))'),
-    ('flat_x', '=-(panel_overlap + panel_offset)'),
+    # chamfer *and* wherever the panel interface has been pushed out to. Both faces then move
+    # inboard by corner_tolerance measured NORMAL to each -- the flat face is axis-aligned so
+    # it moves by the tolerance itself, the diagonal runs at 45 degrees so its intercept moves
+    # by sqrt(2) times it.
+    ('nominal_flat_offset',
+     '=-max(longeron_radius + longeron_tolerance + longeron_chamfer, '
+     '(panel_overlap + panel_offset) - '
+     '(corner_radius - panel_thickness - panel_tolerance))'),
+    ('flat_offset', '=nominal_flat_offset + corner_tolerance * sqrt(2)'),
+    ('flat_x', '=-(panel_overlap + panel_offset) + corner_tolerance'),
 
     # Section z extents: end, transition, middle. The three sections OVERLAP by eps -- the end
     # reaches bt + eps where the transition starts at bt, and the middle starts at 2*bt - eps

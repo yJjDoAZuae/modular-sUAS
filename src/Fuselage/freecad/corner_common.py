@@ -152,8 +152,8 @@ def is_literal(value):
 # reference values silently substituted for the variant's, under the variant's filename.
 #
 # This list is what lets the opposite check exist. Without it "every literal must be seeded"
-# cannot be asserted, because six rows legitimately cannot be -- and they are indistinguishable
-# in the table from the ones that must, all six being plain numbers like the rest.
+# cannot be asserted, because nine rows legitimately cannot be -- and they are indistinguishable
+# in the table from the ones that must, all nine being plain numbers like the rest.
 #
 # Keyed by alias rather than by module because aliases are already effectively global:
 # `merge_params` refuses one that means two different things on a shared sheet.
@@ -167,6 +167,10 @@ def is_literal(value):
 # `greeble_tolerance` and `FX` ARE design parameters -- of the corner. The corner's table
 # supplies both and its geometry reads both. What is wrong is their presence on the *other*
 # part's sheet, not their status.
+#
+# `corner_tolerance` is NOT one of those four, and is placed with `gt_tolerance` instead. The
+# bulkhead does read it -- `bulkhead_section` reuses `corner_end` to cut the greeble socket --
+# and the value it reads is a deliberate 0, exactly as `gt_tolerance` is.
 UNSEEDED = {
     'eps': 'a constant of the OpenSCAD source, not a parameter -- geometry_eps(). IP-FC-49 '
            'and IP-FC-50 measured what it is for and zeroed the two uses that had none, and '
@@ -179,6 +183,15 @@ UNSEEDED = {
                     'forms the bulkhead post, and the post is nominal by construction because '
                     'the whole fit clearance is carried on the corner bore. Distinct from '
                     '`greeble_tolerance`, which is the corner-side parameter',
+    'corner_tolerance': 'the clearance the corner\'s two seating faces are built at when the '
+                        'BULKHEAD builds them, which is always 0. `bulkhead_section` reuses '
+                        '`corner_end` to cut the greeble socket, and that socket has to be '
+                        'nominal: the corner takes the whole clearance on its own copy of the '
+                        'same shape, so seeding this row would apply it twice and the joint '
+                        'would end up with a gap it was never designed for. The seed boundary '
+                        'is what enforces it -- bulkhead_parameters() does not export the row, '
+                        'exactly as it does not export greeble_tolerance. On the CORNER\'s '
+                        'sheet the row is seeded normally, from corner_parameters(). OQ-DES-C5',
 
     # Inherited from corner_tree onto the bulkhead's sheet, read by nothing it builds.
     # Measured, not assumed -- see the note above this table. IP-FC-56 removes them.

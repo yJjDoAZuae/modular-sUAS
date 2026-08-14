@@ -16,6 +16,7 @@ longeron_tolerance = 0.05;
 greeble_thickness = 0.8;
 greeble_nub_thickness = greeble_thickness;
 greeble_tolerance = 0.05;
+corner_tolerance = 0;
 extrusion_width = 0.4;
 
 corner_radius = 10*U;
@@ -29,4 +30,4 @@ panel_offset = 0;
 fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness,
                 panel_offset, panel_overlap, panel_tolerance, longeron_radius,
                 longeron_tolerance, greeble_thickness, greeble_nub_thickness,
-                greeble_tolerance, extrusion_width);
+                greeble_tolerance, extrusion_width, corner_tolerance);

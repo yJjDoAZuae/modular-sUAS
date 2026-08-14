@@ -9,7 +9,8 @@ several parameters are *derived*, not free:
     and it is not zero in general -- 0 mm panel gives 5.5, 3/16 in gives 2.5, and the
     driver hard-codes 0.
   * `panel.overlap` is `max(panel.thickness, 4)`, or 0 when the panel is 0 mm.
-  * the sweep uses `extrusion_width = 0.6`; `fuselage_bulkhead.scad` uses 0.4.
+  * the sweep uses `extrusion_width = 0.6` -- from `design_constants.json`, which is where
+    every unvaried parameter now lives; `fuselage_bulkhead.scad` uses 0.4.
 
 Overriding some of these and leaving the rest produces a combination the sweep would never
 generate. It renders without complaint and the geometry is wrong -- a 0 mm panel rendered
@@ -55,10 +56,13 @@ def combinations(family='bulkhead'):
 
 
 def settings():
-    """Exactly what run_bulkhead_parametric_sweep() uses."""
-    printer = fv.null_printer_settings()
-    printer.extrusion_width = 0.6
-    return printer, 1.0                # printer_settings, FX
+    """Exactly what run_bulkhead_parametric_sweep() uses.
+
+    Which is now the plain defaults: `PrinterSettings` reads them from
+    design_constants.json, so this and the sweep get the same nozzle by construction
+    rather than by two files agreeing to override it to the same number.
+    """
+    return fv.null_printer_settings(), 1.0     # printer_settings, FX
 
 
 def main(argv):

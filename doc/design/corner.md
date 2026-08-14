@@ -316,7 +316,7 @@ recorded — [OQ-DES-C4](#open-questions).
 | C2 | ~~resolved~~ 2026-08-06 | What is the greeble actually toleranced for? |
 | C3 | ~~resolved~~ 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
 | C4 | ~~answered~~ 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
-| C5 | open | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
+| C5 | ~~resolved~~ 2026-08-14 | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
 
 C1 became one parameter plus a formula (IP-GEO-22); C2 was closed by test prints at both ends
 of the range, U=0.5 and U=4; C3 was closed by the observation that the corner and its bulkhead
@@ -445,7 +445,7 @@ It is correct — they mate — but it means the corner cannot be reasoned about
 the FreeCAD port will have to decide whether the joint is a first-class object with its
 own parameters or stays as two parts that each know a dimension of the other.
 
-### OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own
+### ~~OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own~~ — RESOLVED 2026-08-14
 
 The corner seats against the bulkhead on two surfaces: the **diagonal face**, the plane
 `x + y = flat_offset` in the corner-local frame, and the **flat face** at
@@ -495,46 +495,80 @@ bearing faces — where zero is the right number and the fit is achieved by fini
 whether the interface has simply never been given a tolerance because the shared polygon made
 one impossible to express.
 
-**Decided in principle, 2026-08-14: the interface should carry a named tolerance of its own**,
-even if its value is tuned to zero. A tolerance that exists and is set to 0 is a design
-statement that can be reviewed and changed; a tolerance that does not exist is an omission
-that no reader can distinguish from a decision. What remains open is the form and the value.
+**RESOLVED 2026-08-14: alternative 3, carried on the corner, implemented at 0.**
 
-**Alternatives.**
+**What the tolerances at this joint are for.** Recorded 2026-08-14, and it was not written down
+anywhere before: they accommodate **manufacturing variation and adhesive bond thickness**. They
+are real, intentional spacing between surfaces — not dimensional allowances that happen to
+leave room. That is what makes a mating pair with no gap a defect rather than a style: a
+zero-gap pair has nowhere for the bond to go and nothing to absorb variation.
 
-1. **One scalar, `corner_tolerance`, applied normal to both faces.** The bulkhead's cutting
-   polygon is offset outward by it, the corner's is not, so the clearance is carried once on
-   the bulkhead — the opposite hand to the greeble, where the corner carries it.
-   *Benefits:* one number, one place, mirrors the greeble rule. *Drawbacks:* the diagonal and
-   the flat face may not want the same value; the flat face is also the panel seat's neighbour
-   and interacts with `panel_tolerance` and with the cleanup limit of
-   [OQ-DES-B13](bulkhead.md). *Prerequisite:* none.
-2. **Two scalars, one per face.** `corner_diagonal_tolerance` and `corner_flat_tolerance`.
-   *Benefits:* the two faces carry different loads and print in different orientations, so
-   they may genuinely want different numbers. *Drawbacks:* two parameters where the evidence
-   for one is not yet in; more surface for them to drift apart.
-   *Prerequisite:* none.
-3. **Carry it on the corner, as the greeble does.** Shrink the corner's own polygon rather
-   than growing the bulkhead's. *Benefits:* one hand for the whole joint — every clearance
-   in the assembly is on the corner, which is a rule worth having. *Drawbacks:* the corner's
-   polygon is also what generates its flat *face*, so shrinking it moves a load-bearing
-   surface rather than only a clearance. *Prerequisite:* confirm the flat face is not
-   positioned by anything else.
-4. **Leave it at zero but name it.** Introduce the parameter, set it to 0, change no geometry.
-   *Benefits:* records the decision with no risk to parts that have flown; makes the number
-   reviewable. *Drawbacks:* does not fix an interference if one exists.
-   *Prerequisite:* none.
+**The parameter.** `corner_tolerance` applies to both faces that seat against the bulkhead —
+the flat at `flat_x` and the diagonal at `x + y = flat_offset` — over the corner's **full
+height**. Each face moves inboard by the tolerance measured *normal to itself*, so:
 
-**Recommendation.** Alternative 4 first, then 1. Naming the parameter at 0 is free, changes
-no delivered geometry, and converts an omission into a statement — and the parts have been
-printed and flown at 0, which is the only evidence anyone has about whether 0 works. Moving
-to a non-zero value should follow a print check, not precede one, and it should be the same
-hand as the greeble unless there is a reason to split it. Alternative 3 is the tidier rule
-but touches a face that carries load, and that is not a change to make on tidiness alone.
+```
+flat_x      = -(panel_overlap + panel_offset) + corner_tolerance
+flat_offset = nominal_flat_offset + corner_tolerance * sqrt(2)
+```
 
-*This question interacts with [OQ-DES-B13](bulkhead.md).* The cleanup limit there is being
-dimensioned against the corner's material edge; if the interface gains a tolerance, that edge
-moves, and the limit must follow it rather than be restated.
+The `sqrt(2)` is not a fudge: the diagonal runs at 45°, so shifting it by `corner_tolerance`
+perpendicular moves its intercept by that times the tolerance. Dimension the two faces the same
+way and they get different gaps.
+
+**It is carried entirely on the corner**, which is alternative 3 and the same hand as the
+greeble. When the bulkhead re-evaluates this description to cut its own socket it passes 0, so
+the joint takes the clearance once. In the OpenSCAD authority that is an explicit trailing `0`
+on the `corner_end` call, beside the greeble's literal 0. In the port it is structural: the
+bulkhead's parameter set does not export the row at all, so the bulkhead's sheet holds the
+literal 0 and there is no path by which the corner's value could reach it.
+
+The drawback noted against alternative 3 — that the corner's polygon also generates its flat
+*face*, so shrinking it moves a load-bearing surface — is real and is the reason the value is 0
+rather than something larger. Moving the face is exactly what the parameter does; the question
+is only how far.
+
+**Where it is set.** The value is data, not code: `corner_tolerance` in
+[`src/Fuselage/design_constants.json`](../../src/Fuselage/design_constants.json), beside every
+other parameter the sweep holds constant — the five remaining clearances, two angles, and the
+printer profile. `fuselage_variants.load_constants()` reads it once at import, and the sweep
+exports the corner tolerance in the **corner's** parameter table only.
+
+That file is not an axis. Everything in `variant_param/` is combined factorially, so a column
+added there would make the clearance a swept dimension and multiply the variant count; the ten
+numbers in that file are the same on every variant by design, and changing one moves the whole
+sweep together. The loader refuses a missing key, an unrecognized one, a non-number and a negative,
+rather than falling back to a default — a settings file that quietly substitutes its own value
+builds every part at a clearance nobody chose and reports success. It is the same rule
+`check_unseeded` enforces on the FreeCAD side, one layer further out.
+
+Every OpenSCAD entry point that reaches the corner declares the row explicitly rather than
+relying on the module default — `fuselage_corner.scad` and the six reference files in
+`freecad/`. A default that nobody states is a parameter nobody can find, and `parameters.py`
+can only check an assignment that is written down: it compares the reference files line by
+line against the exported set and skips any row that is absent.
+
+**The value is 0 for the sweep.** 0 is what every flown part was built at, and it is the only
+value anything has evidence for. Verified 2026-08-14, four ways:
+
+| Check | Result |
+| --- | --- |
+| 0 is a true no-op | `ref_corner_full` renders at 14146.8357350 mm³, the stored reference to the last digit |
+| the parameter reaches the geometry | driving the full corner to 0.05 mm removes 55.6200845 mm³ at the driver's configuration |
+| both backends respond identically | at 0.05 mm, agreement across 3 corners, worst delta 0.00198% |
+| the bulkhead does not move | at 0.05 mm, 4 bulkheads render to the same figures as at 0, to the last digit |
+
+The last row is the one that matters for "carried once": the sweep value was set to 0.05, the
+bulkheads were rebuilt, and 2166.862256, 7111.092249, 37599.974537 and 74175.840334 mm³ came
+back unchanged. The seed boundary holds, and nothing about the bulkhead depends on the corner's
+clearance.
+
+**Still open, and it follows directly from the rationale above:** if these faces are bonded,
+0 leaves no bond line, and the right value is whatever the adhesive needs plus the print
+variation of two mating faces. A 0.05 mm test build is drawn in the IP-FC-59 working reference
+and costs the corner 27 to 217 mm³ depending on size. That the cost scales with the part while
+the tolerance does not is worth settling before the value moves off 0 — nothing currently makes
+it a function of `U`.
 
 ## See also
 

@@ -176,7 +176,12 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkh
        // the result down by eps -- which also inflated the snap rib, because corner_end
        // sizes it from the thickness. See OQ-DES-B12. Same z extent as before; the rib is
        // now nominal.
-       corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0, extrusion_width, eps);
+       //
+       // The trailing 0 is corner_tolerance, and it is a literal for the same reason the
+       // greeble tolerance above is: the socket this cuts is nominal by construction, and the
+       // clearance on the flat and diagonal faces is taken entirely on the corner. Passing
+       // anything else here would apply it twice. OQ-DES-C5.
+       corner_end(U, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, 0, extrusion_width, eps, 0);
         
         // Longeron opening cutout: the mouth the longeron snaps in through, which is
         // what makes the greeble a C rather than a closed ring. greeble_opening_angle is

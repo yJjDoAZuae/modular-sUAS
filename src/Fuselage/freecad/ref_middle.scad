@@ -17,8 +17,9 @@ panel_offset = 0;
 panel_overlap = 4;
 panel_tolerance = 0.1;
 longeron_tolerance = 0.05;
+corner_tolerance = 0;
 extrusion_width = 0.4;
 
 corner_middle(unit_length, bulkhead_thickness, corner_radius, panel_thickness,
               panel_offset, panel_overlap, panel_tolerance, longeron_radius,
-              longeron_tolerance, extrusion_width);
+              longeron_tolerance, extrusion_width, corner_tolerance);
