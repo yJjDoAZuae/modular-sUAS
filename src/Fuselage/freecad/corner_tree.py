@@ -79,7 +79,20 @@ PARAMS = [
                     '(corner_radius - panel_thickness - panel_tolerance))'),
     ('flat_x', '=-(panel_overlap + panel_offset)'),
 
-    # section z extents: end, transition, middle
+    # Section z extents: end, transition, middle. The three sections OVERLAP by eps -- the end
+    # reaches bt + eps where the transition starts at bt, and the middle starts at 2*bt - eps
+    # and runs eps past the mirror plane. That is union slop for CGAL, and OCCT does not need
+    # it: forcing all three flush moves the assembled corner by -0.0006 mm3 and changes no
+    # face (IP-FC-55).
+    #
+    # **It stays anyway, and the measurement is why the question is closed rather than open.**
+    # The overlap is stated by the authority -- `corner_end` extrudes `bulkhead_thickness+eps`
+    # and `corner_middle` starts at `2*bt-eps` and is `2*eps` taller -- so removing it here is
+    # a deliberate divergence, and it costs two cross-kernel checks: EndCutGroove moves -0.17%
+    # and MidSection -0.05% against their OpenSCAD references, the first of them outside
+    # main()'s 0.1% band. Trading a check against the authority for -4e-8 of the part is the
+    # wrong way round while the authority still stands. Revisit at IP-FC-34, when OpenSCAD is
+    # retired and there is no cross-kernel comparison left to weaken.
     ('end_z0', '0.0'),
     ('end_h', '=bulkhead_thickness + eps'),
     ('trans_z0', '=bulkhead_thickness'),
@@ -88,7 +101,15 @@ PARAMS = [
     ('mid_h', '=unit_length / 2 - bulkhead_thickness * 2 + eps * 2'),
 
     # panel interface
-    ('rect_w', '=panel_overlap + panel_offset - panel_tolerance'),
+    #
+    # `rect_w` reaches `panel_overlap + panel_offset` -- exactly `flat_x` -- and NOT one
+    # `panel_tolerance` short of it. Short, the extension stopped inboard of the corner's own
+    # mating plane, and in the band below the panel seat where the circle has already curved
+    # inside `flat_x` that left the corner cut off and the bulkhead standing over it. The one
+    # term fixes both halves, because the bulkhead subtracts this same section as its greeble
+    # tool. `panel_tolerance` is not the corner/bulkhead clearance -- that is OQ-DES-C5, and
+    # there is currently none. See OQ-DES-B13.
+    ('rect_w', '=panel_overlap + panel_offset'),
     ('slot_x', '=-panel_overlap * 2 - panel_offset + panel_tolerance'),
     ('slot_y', '=corner_radius - panel_thickness - panel_tolerance'),
     ('slot_w', '=panel_overlap * 2'),
@@ -122,7 +143,11 @@ PARAMS = [
     ('mouth_y', '=-greeble_radius * 3 / sqrt(2)'),
     ('cut_z0', '=-through_cut / 2'),
 
-    # the transition's tapered bore
+    # The transition's tapered bore. The eps on the two z levels is a CUT overshoot and it is
+    # NOT inert, which is what distinguishes it from the section-cut overshoots IP-FC-50
+    # deleted: forcing both flush leaves +0.0306 mm3 of material behind (IP-FC-55). This is
+    # the tangency case IP-FC-50 named -- a boolean that depends on a face being coincident
+    # rather than crossing under-removes -- so it stays, now measured rather than assumed.
     ('relief_depth', '=longeron_radius + greeble_thickness + greeble_tolerance'),
     ('relief_mid', '=0.75 * bulkhead_thickness + eps'),
     ('relief_top', '=bulkhead_thickness + eps'),

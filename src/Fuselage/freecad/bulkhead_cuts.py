@@ -40,11 +40,15 @@ import corner_tree as C
 from corner_common import build_sheet, is_entry_point
 
 # The cut tool, at mask_eps = 0. **This is deliberately not the OpenSCAD number.** OpenSCAD's
-# is 49813.5203117 with the bounding box starting at x = -59.99; the 0.01 mm is the mask
+# is 49812.1210938 with the bounding box starting at x = -59.99; the 0.01 mm is the mask
 # overlap it needs and OCCT does not (IP-FC-49), so the tool here is that sliver smaller and
 # starts at a round -60.0. The difference is confined to this intermediate: the finished part
-# is unchanged and still agrees with OpenSCAD to +0.00011% -- see bulkhead_full.
-REF = 49811.7251270
+# is unchanged and still agrees with OpenSCAD -- see bulkhead_full.
+#
+# Regenerated 2026-08-14 for OQ-DES-B13, which took the eps out of `clean_r`. The mask-overlap
+# sliver is unchanged at 1.7951847; both backends moved by the same amount, -1.4697 in OpenSCAD
+# against -1.4685 here.
+REF = 49810.3259091
 EXPECT_BBOX = (-60.0, -60.0, -9.0, 20.0, 20.0, 9.0)
 
 PARAMS = [
@@ -96,9 +100,40 @@ PARAMS = [
     ('wedge_cx', '=(wedge_chord - far) / sqrt(2)'),
     ('wedge_cy', '=(wedge_chord + far) / sqrt(2)'),
 
-    # outer-face cleanup: two boxes clipped to y >= x, then the inner bore removed
+    # Outer-face cleanup: two boxes clipped to y >= x, then the inner bore removed.
+    #
+    # **`clean_r`'s eps is load bearing, and a single-variant measurement said the opposite.**
+    # It is the odd one of the port's eps sites -- not union slop and not a cut overshoot, but
+    # 0.01 mm off a real bore radius, and stated that way by the source. Measured at U=1 with
+    # a 3/16 in panel it changed the part by nothing at all, to seven decimals. Measured
+    # across the 132 bulkhead variants that build it changes 27 of them, by 0.0017 to
+    # 0.048 mm3 -- and the ones it touches are exactly where 0.01 mm is a large fraction of a
+    # small corner radius: U = 0.5 to 1.5 with the thin panels, 1 mm, 3 mm, 1/32 in, 1/16 in.
+    #
+    # The way it nearly did not get measured is worth keeping (IP-FC-55): slop can be audited
+    # at one variant, because being locally irrelevant is its whole job, but a *dimension*
+    # cannot -- one variant not using it says nothing about the rest.
+    #
+    # **`clean_r` carried an eps until OQ-DES-B13 (2026-08-14); it does not now.** The row is
+    # the radius the flange's outer surface ends up at -- flush behind the panel -- so it is a
+    # material face, not a cut overshoot, and the eps cut it 0.01 mm too deep.
+    #
+    # It read as load bearing because deleting it alone changed 27 of the 132 buildable
+    # variants by 0.0017 to 0.048 mm3. That was the tell, not the justification: the only
+    # material within reach of the overcut was the bulkhead's own overhang over the corner,
+    # which the corner's rectangular extension used to create by stopping one `panel_tolerance`
+    # short of `flat_x`. With `rect_w` reaching `flat_x` (corner_tree.py) the overhang is gone
+    # and this eps removes nothing measurable -- verified on six variants, volume identical
+    # with and without.
+    #
+    # `clean_x0` is NOT toleranced and must not become so. `flat_x` is the corner/bulkhead
+    # interface itself, cut into both parts by the same polygon, so the cleanup already stops
+    # exactly at the joint. In particular do not reintroduce a `sqrt` here: an earlier reading
+    # had `clean_x0` follow the outer mold line's crossing with the flange face, which predicts
+    # the material loss on all 132 -- but it describes where the overhang ended, not where the
+    # joint is. IP-FC-59.
     ('clean_x0', '=-(panel_offset + panel_overlap)'),
-    ('clean_r', '=corner_radius - (panel_thickness + panel_tolerance + eps)'),
+    ('clean_r', '=corner_radius - (panel_thickness + panel_tolerance)'),
 
     # octant mask: hypotenuse is y = x - mask_eps, legs 2*corner_radius + unit_width/2
     ('mask_lo', '=-unit_width / 2 - corner_radius'),
