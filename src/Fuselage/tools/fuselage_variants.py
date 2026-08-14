@@ -48,6 +48,13 @@ PARAM_DIR = os.path.join(_ROOT, "variant_param")
 # they travel with the scripts that interpret them.
 COWL_DIR = _HERE
 
+# The unvaried parameters, at the Fuselage root beside the axes rather than in
+# variant_param/ with them. It is deliberately NOT in that directory: everything
+# there is an axis, read by read_all_param_axes() and combined factorially, and a
+# settings file sitting among them invites exactly the mistake of adding it to an
+# axis list -- where each constant would become a swept dimension.
+CONSTANTS_FILE = os.path.join(_ROOT, "design_constants.json")
+
 # Insert dimensions are a fixed reference table, likewise beside the scripts.
 INSERT_TABLE = os.path.join(_HERE, "threaded_insert_dimensions.csv")
 
@@ -97,34 +104,134 @@ def example_design_tool(**params):
     }
     return result
 
-# Fixed design values, previously written as bare literals inside
-# derived_parameters(). Named here so they are findable and so changing one is an
-# obvious edit rather than a number altered mid-function.
+# The unvaried parameters are data, in design_constants.json, not literals here.
 #
-# Units are millimetres and degrees: this is the OpenSCAD path, which is exempt from
-# the project's SI standard. See doc/guidelines/openscad.md.
-
-LONGERON_TOLERANCE_MM = 0.05
-
-# Half-angle of the wedge cut out of the greeble, so the mouth is 70 degrees wide. That
-# mouth is what makes the greeble a C rather than a closed ring, and it is how the
-# longeron is assembled: the tube presses in sideways and snaps into the bore, which the
-# chord across the mouth (2*r*sin35 = 57% of the tube diameter) is narrow enough to hold.
+# **Membership is decided by measurement, not by category.** A parameter belongs in that
+# file when the sweep passes it to the geometry and its value is the same on every variant
+# -- established by resolving the `Parameters` tree for all three families and collecting
+# what each numeric field actually takes. That is how `boom_tolerance` and
+# `cowl_flange_tolerance` were found: neither sits near the others in the source, and
+# neither is named like a setting at its definition site. Reading the file and picking out
+# what looks like configuration finds the ones that are already tidy and misses the rest.
 #
-# Arrived at by experiment. It is a tuned value, not a derived one -- do not replace it
-# with a formula. See doc/design/bulkhead.md.
-GREEBLE_OPENING_ANGLE_DEG = 35
-
-# The greeble is the positive post on the *bulkhead*; the corner carries the matching
-# bore and snap groove. Clearance goes entirely on the corner: its bore is opened out by
-# this much while the bulkhead's post stays nominal, so the fit is tuned from one side
-# only -- splitting it across both halves would double the clearance.
+# They were literals until 2026-08-14, and only two -- longeron and greeble -- were even
+# reviewable constants. The other eight were bare numbers inside `derived_parameters()`, or
+# in `extrusion_width`'s case the same literal restated seven times across three files. So
+# the set a builder would adjust together could not be seen together.
 #
-# There is deliberately no bulkhead counterpart. The bulkhead geometry takes no greeble
-# tolerance at all, because "the post is nominal" is an invariant rather than a setting.
-# A GREEBLE_TOLERANCE_BULKHEAD_MM used to exist, was passed down four levels of SCAD
-# module, and was discarded by a local zero at the bottom -- see OQ-DES-B6.
-GREEBLE_TOLERANCE_CORNER_MM = 0.05
+# The names below are this module's interface and have not changed; only where the number
+# comes from has. Each is also exactly the name of the corresponding OpenSCAD parameter,
+# which is what the JSON keys are, so there is one vocabulary from the settings file to the
+# geometry module.
+#
+# Units are millimeters and degrees: this is the OpenSCAD path, which is exempt from the
+# project's SI standard. See doc/guidelines/openscad.md.
+#
+# Loaded once at import. A sweep must not be able to change a constant halfway through.
+#
+# The groups are not decoration -- each carries a different rule about what a legal value
+# is, which is the whole reason they are separate rather than one flat table.
+CONSTANT_GROUPS = {
+    'tolerances': ('longeron_tolerance', 'greeble_tolerance', 'corner_tolerance',
+                   'panel_tolerance', 'boom_tolerance', 'cowl_flange_tolerance'),
+    'geometry': ('greeble_opening_angle', 'boom_key_angle'),
+    'printer': ('extrusion_width', 'layer_height'),
+}
+
+
+def _check_tolerance(name, value, path):
+    # These are clearances between parts that are bonded, not press fits, so a negative is
+    # a sign error. Relaxing it is a deliberate design decision, not something to slip past
+    # a loader.
+    if value < 0:
+        raise ValueError('%s: %s is %g. A negative clearance is an interference fit, and '
+                         'none of these joints is one.' % (path, name, value))
+
+
+def _check_printer(name, value, path):
+    # Zero is as wrong as negative here: a zero extrusion width silently collapses every
+    # feature sized in whole multiples of it -- the greeble wall, both flanges -- rather
+    # than failing.
+    if value <= 0:
+        raise ValueError('%s: %s is %g, and a printer dimension must be positive.'
+                         % (path, name, value))
+
+
+# Angles are unconstrained on purpose: a negative boom_key_angle is a legal rotation.
+_GROUP_RULES = {'tolerances': _check_tolerance, 'printer': _check_printer}
+
+
+def load_constants(path=None):
+    """The unvaried parameters, read from `design_constants.json`.
+
+    **Every name is required and no other name is accepted.** A settings file that silently
+    tolerates a missing key hands back a default, and the sweep then builds every part at a
+    value nobody chose while reporting success -- the same failure `check_unseeded` exists
+    to prevent on the FreeCAD side, one layer further out. An unrecognized key is refused
+    for the mirror reason: it is almost always a misspelling of one that matters, and
+    accepting it means the edit appears to have been made.
+
+    Returns one flat dict. The groups exist in the file to carry the per-group validity
+    rule and to keep it readable; nothing downstream needs to know which group a name is
+    in, and `merge_params`-style collisions cannot arise because the names are checked
+    unique across the whole file.
+    """
+    path = path or CONSTANTS_FILE
+    with open(path, encoding='utf-8') as f:
+        doc = json.load(f)
+
+    out = {}
+    problems = []
+    for group, names in CONSTANT_GROUPS.items():
+        table = doc.get(group)
+        if not isinstance(table, dict):
+            problems.append('  %s: missing or not an object' % group)
+            continue
+        # `_about` is prose for whoever opens the file, not a parameter.
+        supplied = [k for k in sorted(table) if not k.startswith('_')]
+        missing = [n for n in names if n not in supplied]
+        unknown = [n for n in supplied if n not in names]
+        if missing:
+            problems.append('  %s missing: %s' % (group, ', '.join(missing)))
+        if unknown:
+            problems.append('  %s unknown: %s' % (group, ', '.join(unknown)))
+
+        for name in names:
+            if name not in table:
+                continue
+            entry = table[name]
+            value = entry['value'] if isinstance(entry, dict) else entry
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                problems.append('  %s.%s is %r, which is not a number'
+                                % (group, name, value))
+                continue
+            rule = _GROUP_RULES.get(group)
+            if rule:
+                rule(name, value, path)
+            out[name] = value
+
+    if problems:
+        raise ValueError('%s does not define the constant set:\n%s'
+                         % (path, '\n'.join(problems)))
+    return out
+
+
+_CONSTANTS = load_constants()
+
+LONGERON_TOLERANCE_MM = _CONSTANTS['longeron_tolerance']
+GREEBLE_TOLERANCE_CORNER_MM = _CONSTANTS['greeble_tolerance']
+CORNER_TOLERANCE_MM = _CONSTANTS['corner_tolerance']
+PANEL_TOLERANCE_MM = _CONSTANTS['panel_tolerance']
+BOOM_TOLERANCE_MM = _CONSTANTS['boom_tolerance']
+COWL_FLANGE_TOLERANCE_MM = _CONSTANTS['cowl_flange_tolerance']
+
+GREEBLE_OPENING_ANGLE_DEG = _CONSTANTS['greeble_opening_angle']
+BOOM_KEY_ANGLE_DEG = _CONSTANTS['boom_key_angle']
+
+EXTRUSION_WIDTH_MM = _CONSTANTS['extrusion_width']
+LAYER_HEIGHT_MM = _CONSTANTS['layer_height']
 
 
 def greeble_nub_thickness_of(greeble_thickness):
@@ -202,8 +309,15 @@ class BulkheadType(Enum):
 
 @dataclass(slots=True)
 class PrinterSettings:
-    extrusion_width: float = 0.4
-    layer_height: float = 0.2
+    # From design_constants.json, not literals. The default used to be 0.4 -- the hand
+    # drivers' nozzle -- and every one of the seven places that built a PrinterSettings for
+    # the sweep immediately overrode it to 0.6 on the next line. Seven copies of one machine
+    # setting, and changing six of them would have produced a run built at two nozzle sizes
+    # with nothing to say so: the parts differ only in wall thickness, which a volume
+    # comparison passes. `layer_height` was never overridden anywhere, so the two halves of
+    # one profile were configured in opposite ways.
+    extrusion_width: float = EXTRUSION_WIDTH_MM
+    layer_height: float = LAYER_HEIGHT_MM
 
 
 @dataclass(slots=True)
@@ -211,6 +325,12 @@ class CornerParameters:
     FX: float = 1
     radius: float = 0
     length: float = 0
+    # Clearance on the two faces that seat against the bulkhead -- the flat at flat_x and the
+    # diagonal -- over the corner's full height. Carried entirely on the corner: the bulkhead
+    # cuts its socket from the same shape at 0, so the joint takes the clearance once. Held at
+    # 0 for the sweep until a print says otherwise; 0 is the only value that has flown.
+    # OQ-DES-C5.
+    tolerance: float = CORNER_TOLERANCE_MM
 
 
 @dataclass(slots=True)
@@ -549,10 +669,13 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     c.greeble.thickness = max(2*math.sqrt(U)*c.printer.extrusion_width, 2*c.printer.extrusion_width)
     c.greeble.nub_thickness = greeble_nub_thickness_of(c.greeble.thickness)
 
+    # The zero is structural, not a setting: a cowling has no panel and neither does the
+    # 0 mm panel variant, so there is no gap to leave. Only the else branch is tunable,
+    # which is why only it reads the tolerance file.
     if is_cowling or c.panel.thickness==0:
         c.panel.tolerance = 0.0
     else:
-        c.panel.tolerance = 0.1
+        c.panel.tolerance = PANEL_TOLERANCE_MM
     
     if not is_cowling:
         
@@ -600,9 +723,12 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     else:
         c.bolt.radius = c.bolt.diameter/2
 
+    # As with panel.tolerance, the zero on the else branch is structural: a bulkhead that
+    # mounts no cowl has no cowl flange, so there is no gap to leave. Only the cowling
+    # branch reads the tolerance file.
     if is_cowling:
         c.cowl_flange.height=2*U;
-        c.cowl_flange.tolerance=0.2;
+        c.cowl_flange.tolerance=COWL_FLANGE_TOLERANCE_MM;
         c.bulkhead_flange.thickness=max(math.ceil(3*U)*c.printer.extrusion_width, 3*c.printer.extrusion_width)
     else:
         c.cowl_flange.height=0;
@@ -747,8 +873,8 @@ def derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings):
     c.key_height = max(U*2, 2)
     c.key_radius = max(U*0.5, 0.5)
     c.key_web_width = U*6
-    c.key_angle = 0
-    c.tolerance = 0.2
+    c.key_angle = BOOM_KEY_ANGLE_DEG
+    c.tolerance = BOOM_TOLERANCE_MM
     c.type_name = user_parameters["bulkhead_type_name"]
     c.make_vert_web = user_parameters["make_vert_web"]
     c.make_lower_web = user_parameters["make_lower_web"]
@@ -853,7 +979,6 @@ def run_corner_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1023,7 +1148,6 @@ def run_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.extrusion_width = 0.6
     
     FX = 1.0
 
@@ -1063,7 +1187,6 @@ def run_boom_bulkhead_parametric_sweep(csv_files, output_dir):
     all_combinations = flatten_param_space(param_axes)
 
     printer_settings = null_printer_settings()
-    printer_settings.extrusion_width = 0.6
     
     FX = 1.0
 
@@ -1105,7 +1228,6 @@ def run_nose_parametric_sweep(csv_files, output_dir):
     # with the other sweeps, which takes it.
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1155,7 +1277,6 @@ def run_tail_parametric_sweep(csv_files, output_dir):
 
     FX = 1.0
     printer_settings = null_printer_settings()
-    printer_settings.extrusion_width = 0.6
 
     # Step 3 & 4: Iterate, run, save
     for params in all_combinations:
@@ -1914,6 +2035,7 @@ def corner_parameters(dp):
         'greeble_nub_thickness': dp.greeble.nub_thickness,
         'greeble_tolerance': dp.greeble.tolerance,
         'extrusion_width': dp.printer.extrusion_width,
+        'corner_tolerance': dp.corner.tolerance,
     }
 
 

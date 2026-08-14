@@ -450,10 +450,14 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that
 gets more expensive the longer it is deferred.
 
-**B13 was raised and decided on 2026-08-14, and was the same shape as B12**: a constant whose
-stated job is boolean slop was setting the position of a face on the finished part. The
-decision is to compute the intersection the `eps` was standing in for. Implementation is
-IP-FC-59 and has not been done — the geometry below is the authority for it.
+**B13 was raised, decided and fixed on 2026-08-14, and was the same shape as B12**: a constant
+whose stated job is boolean slop was setting the position of a face on the finished part. It
+was not the same *cause*, though — the `eps` was a symptom, and the decision recorded here
+first was to compute an intersection that turned out not to be the problem. The defect was one
+term in the corner's rectangular extension, which stopped one `panel_tolerance` short of the
+mating plane; fixing that made the `eps` inert, and it was then removed. Implemented as
+IP-FC-59. The geometry below is the authority, and it records all four readings including the
+three that were wrong.
 
 **B12 was raised, decided and fixed on 2026-08-11.** `corner_end` now takes an explicit
 `overshoot` argument, so its thickness argument no longer drives the snap rib as a side

@@ -22,6 +22,11 @@ longeron_tolerance = 0.05;
 greeble_thickness = 0.8;
 greeble_nub_thickness = greeble_thickness;
 greeble_tolerance = 0.05;
+// Clearance on the two faces that seat against the bulkhead -- the flat at flat_x and
+// the diagonal -- over the corner's full height. Carried entirely here: the bulkhead
+// cuts its socket from this same shape at zero, so the joint takes the clearance once.
+// 0 is the only value that has flown. See OQ-DES-C5 in doc/design/corner.md.
+corner_tolerance = 0;
 extrusion_width = 0.4;
 
 // These are based on the standard, don't change these
@@ -35,5 +40,5 @@ bulkhead_thickness = 6;
 panel_offset = 0;
 
 
-fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width);
+fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, greeble_thickness, greeble_nub_thickness, greeble_tolerance, extrusion_width, corner_tolerance);
 
