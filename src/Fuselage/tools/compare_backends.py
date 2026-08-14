@@ -18,6 +18,12 @@ against the authority catches them, and only if it covers more than one combinat
 
     uv run python src/Fuselage/tools/compare_backends.py --per-kind 4
     uv run python src/Fuselage/tools/compare_backends.py --all --workers 6
+    uv run python src/Fuselage/tools/compare_backends.py --all --kinds boom_bulkhead
+
+**Sample first, then sweep the kind exhaustively.** A sample finds systematic errors, which is
+most of them; it does not find the ones that need a particular corner of the space. IP-FC-50 was
+a boom bulkhead wrong by +0.167% at exactly one of eight sampled variants and by 0.0006% at the
+other seven -- had the sample missed it, nothing else in the toolchain would have.
 
 **Two tiers, per OQ-DES-B9.** The corner is exactly reproducible and held to `--tol`. Parts
 carrying real fillets are allowed a stated deviation, because a FreeCAD fillet is a true
@@ -46,6 +52,9 @@ SWEEPS = (
      ('panel_variants.csv', 'bulkhead_size_variants.csv', 'corner_size_variants.csv')),
     ('bulkhead', 'run_bulkhead_parametric_sweep',
      ('panel_variants.csv', 'bulkhead_type_variants.csv', 'bulkhead_size_variants.csv')),
+    ('boom_bulkhead', 'run_boom_bulkhead_parametric_sweep',
+     ('panel_variants.csv', 'boom_bulkhead_type_variants.csv',
+      'bulkhead_size_variants.csv')),
 )
 
 # Volume agreement, as a fraction.
@@ -71,20 +80,36 @@ TOL_EXACT = 6.0e-5          # 0.006% -- the 360-segment floor, with margin
 TOL_FILLETED = 1.0e-4       # 0.010% -- fillets add real surface-vs-facet error on top
 BBOX_TOL = 5.0e-4           # mm, absolute -- interfaces must not move
 
-FILLETED_KINDS = {'bulkhead'}
+FILLETED_KINDS = {'bulkhead', 'boom_bulkhead'}
 
 
 def kind_of(name: str) -> str:
-    """Which sweep produced this part, from its filename."""
-    if 'boom_bulkhead' in name:
-        return 'boom_bulkhead'
-    for kind, _driver, _axes in SWEEPS:
+    """Which sweep produced this part, from its filename.
+
+    Longest kind name first, because the names nest: both sweeps write into a `bulkhead`
+    directory and a boom bulkhead's file is `..._boom_bulkhead_offset_single.stl`, so a
+    plain scan in table order would call every boom part a frame bulkhead -- and compare it
+    at the frame bulkhead's tolerance against a part the frame sweep never produced.
+    """
+    for kind in sorted((k for k, _d, _a in SWEEPS), key=len, reverse=True):
         if kind in name:
             return kind
     return 'other'
 
 
-def wanted_parts(per_kind: int | None) -> dict[str, str]:
+def sweeps_for(kinds: set[str] | None):
+    """The sweeps to run, optionally narrowed to some kinds.
+
+    Exhaustive coverage of one kind is the useful thing to be able to ask for and `--all`
+    could not express it: a newly ported kind wants every one of its variants compared, and
+    paying for the two already covered at the same time is what makes that run unaffordable
+    and so not run. IP-FC-12's boom bulkhead is 132 valid variants against the frame
+    bulkhead's 148 and the corner's own space.
+    """
+    return tuple(s for s in SWEEPS if kinds is None or s[0] in kinds)
+
+
+def wanted_parts(per_kind: int | None, kinds: set[str] | None = None) -> dict[str, str]:
     """Part filename -> kind, for the variants to compare.
 
     Collected by running the sweeps with rendering stubbed out, so the selection comes from
@@ -101,7 +126,7 @@ def wanted_parts(per_kind: int | None) -> dict[str, str]:
     fv.solid_render = lambda obj, d, f: (note(f), (f, f, f))[1]
     fv.freecad_render = lambda k, p, d, f, v=None: note(f)
     try:
-        for _kind, driver, axis_names in SWEEPS:
+        for _kind, driver, axis_names in sweeps_for(kinds):
             getattr(fv, driver)(fv.axes(*axis_names), '/nonexistent')
     finally:
         fv.solid_render, fv.freecad_render = real_solid, real_freecad
@@ -110,7 +135,7 @@ def wanted_parts(per_kind: int | None) -> dict[str, str]:
         return collected
 
     out: dict[str, str] = {}
-    for kind, _driver, _axes in SWEEPS:
+    for kind, _driver, _axes in sweeps_for(kinds):
         names = sorted(n for n, k in collected.items() if k == kind)
         step = max(1, len(names) // per_kind)
         for n in names[::step][:per_kind]:
@@ -118,7 +143,8 @@ def wanted_parts(per_kind: int | None) -> dict[str, str]:
     return out
 
 
-def render(backend: str, out_dir: Path, wanted: set[str], workers: int) -> None:
+def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
+           kinds: set[str] | None = None) -> None:
     """Render exactly the wanted parts with `backend`, through the real sweep."""
     real_solid, real_freecad = fv.solid_render, fv.freecad_render
     count = {'n': 0}
@@ -139,7 +165,7 @@ def render(backend: str, out_dir: Path, wanted: set[str], workers: int) -> None:
     previous = fv.set_backend(backend)
     try:
         with fv.sweep_session(workers=workers, resume=False, previews=False):
-            for _kind, driver, axis_names in SWEEPS:
+            for _kind, driver, axis_names in sweeps_for(kinds):
                 getattr(fv, driver)(fv.axes(*axis_names), str(out_dir))
     finally:
         fv.solid_render, fv.freecad_render = real_solid, real_freecad
@@ -242,12 +268,22 @@ def main(argv=None) -> int:
                         help=f'volume tolerance for kinds carrying real fillets '
                              f'(default {TOL_FILLETED})')
     parser.add_argument('--keep', action='store_true', help='keep the rendered trees')
+    parser.add_argument('--kinds', default=None,
+                        help='comma-separated kinds to compare (default all): '
+                             + ', '.join(k for k, _d, _a in SWEEPS))
     args = parser.parse_args(argv)
 
-    wanted = wanted_parts(None if args.all else args.per_kind)
+    kinds = None
+    if args.kinds:
+        kinds = {k.strip() for k in args.kinds.split(',') if k.strip()}
+        unknown = kinds - {k for k, _d, _a in SWEEPS}
+        if unknown:
+            parser.error('no such kind: %s' % ', '.join(sorted(unknown)))
+
+    wanted = wanted_parts(None if args.all else args.per_kind, kinds)
     print(f'comparing {len(wanted)} part(s): '
           + ', '.join(f'{k}={sum(1 for v in wanted.values() if v == k)}'
-                      for k, _d, _a in SWEEPS))
+                      for k, _d, _a in sweeps_for(kinds)))
 
     scratch = args.scratch or Path(fv.OUTPUT_DIR).parent / 'compare_backends'
     scratch.mkdir(parents=True, exist_ok=True)
@@ -256,8 +292,8 @@ def main(argv=None) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
     names = set(wanted)
-    render('openscad', a_dir, names, args.workers)
-    render('freecad', b_dir, names, args.workers)
+    render('openscad', a_dir, names, args.workers, kinds)
+    render('freecad', b_dir, names, args.workers, kinds)
 
     code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted)
     if not args.keep:
