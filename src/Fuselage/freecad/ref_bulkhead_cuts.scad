@@ -42,10 +42,10 @@ union() {
                 [0,0],
                 [mask_reach(corner_radius),mask_reach(corner_radius)],
                 [-(panel_offset+panel_overlap),mask_reach(corner_radius)],
-                [-(panel_offset+panel_overlap),corner_radius-(panel_thickness+panel_tolerance+eps)],
-                [0,corner_radius-(panel_thickness+panel_tolerance+eps)]
+                [-(panel_offset+panel_overlap),corner_radius-(panel_thickness+panel_tolerance)],
+                [0,corner_radius-(panel_thickness+panel_tolerance)]
                 ]);
-            circle(r=corner_radius-(panel_thickness+panel_tolerance+eps));
+            circle(r=corner_radius-(panel_thickness+panel_tolerance));
         }
     }
 

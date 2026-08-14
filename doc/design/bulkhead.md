@@ -444,10 +444,16 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
 | B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
+| B13 | ~~resolved~~ 2026-08-14 — decided, not yet implemented | The outer-face cleanup tool sets a material face from `geometry_eps` |
 
 **Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that
 gets more expensive the longer it is deferred.
+
+**B13 was raised and decided on 2026-08-14, and was the same shape as B12**: a constant whose
+stated job is boolean slop was setting the position of a face on the finished part. The
+decision is to compute the intersection the `eps` was standing in for. Implementation is
+IP-FC-59 and has not been done — the geometry below is the authority for it.
 
 **B12 was raised, decided and fixed on 2026-08-11.** `corner_end` now takes an explicit
 `overshoot` argument, so its thickness argument no longer drives the snap rib as a side
@@ -831,9 +837,18 @@ easily was immune to it.
 
 ---
 
-**Original analysis, kept because it is what the decision was made against.**
+#### B10's original analysis, as written on 2026-08-08 — superseded by the decision above
 
-### OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order
+**This is history, not an open question.** It is kept because it is what the decision was made
+against, and because its numbers were partly wrong in a way worth being able to recognise: it
+was written at the hand driver's values, and the resolution above shows what the same call
+does at the derived ones. Nothing below is current. Its recommendation, its alternatives and
+its "porting in the meantime" note were all overtaken on 2026-08-08 — the call is fixed, and
+`audit_call_args.py` reports zero positional mismatches.
+
+Until 2026-08-14 this carried a second `### OQ-DES-B10` heading identical to the resolved
+one, so the document appeared to hold the same question twice, once decided and once open,
+and the summary table listed neither.
 
 **Problem.** Found 2026-08-08 while porting. There is one call site and its last three
 positional arguments are rotated against the signature:
@@ -1037,6 +1052,125 @@ agree on the *size* of the octant's change, −0.0290279 against −0.0290299, t
 is the stronger evidence, because a regenerated reference can always be made to agree with
 whatever the code now does. The assembled part lost exactly eight times the octant's change,
 so the eight-way tiling was not disturbed.
+
+### ~~OQ-DES-B13 — The outer-face cleanup tool sets a material face from `geometry_eps`~~ — DECIDED 2026-08-14: fix the corner's extension, then delete the `eps`
+
+**Decision.** Two changes, in this order, both implemented 2026-08-14:
+
+1. **The corner's rectangular extension reaches `flat_x`** — `rect_w` becomes
+   `panel_overlap + panel_offset`, dropping the `- panel_tolerance`. Short, it stopped inboard
+   of the corner's own mating plane and left the bulkhead standing over the corner.
+2. **The `eps` comes out of `clean_r`**, which is a material face and not a cut overshoot.
+
+The order matters. Deleting the `eps` on its own makes the defect **worse**: the `eps` was the
+only thing trimming the bulkhead's overhang, so removing it lets the overhang grow to full
+height. That was this question's third wrong answer and it had been written up as decided.
+`clean_x0` does not change and must not — it is already the right datum.
+
+**The construction, as measured on the built solids rather than read off the source.** In the
+corner-local frame, corner center at the origin, lengths in mm:
+
+```
+flange_r  = corner_radius - panel_thickness - panel_tolerance   the flange's outer surface,
+                                                                sitting flush behind the panel
+flat_x    = -(panel_offset + panel_overlap)                     the corner/bulkhead interface
+rect_edge = flat_x + panel_tolerance                            the rectangular extension's edge
+```
+
+`flat_x` is the **interface between the two parts**, and it carries no tolerance. The bulkhead
+forms its side by cutting itself with the *same polygon* the corner uses for its own bulkhead
+boundary — vertices `(flat_x, corner_radius)`, `(flat_x, flat_y)`, `(flat_offset, 0)` and their
+mirror — so the two surfaces are coincident there by construction. `clean_x0` is `flat_x`,
+which is correct: the cleanup stops at the joint.
+
+**But the corner's material does not reach `flat_x` all the way up.** Tracing the corner's
+outboard face against height on the built solid, at the section that mates with the bulkhead:
+
+| Case | Height range | Face sits at | Which feature |
+| --- | --- | --- | --- |
+| 1.0 end_bolt 3/16 in | `y` 4.88 → 5.1375 | −7.2625 | the mask, at `flat_x` |
+| 1.0 end_bolt 1 mm | `y` 5.34 → 7.57 | −5.5000 | the mask, at `flat_x` |
+| | `y` 8.46 → 8.90 | −5.4000 | the rectangular extension |
+| 0.75 end_bolt 1/16 in | `y` 3.49 → 5.78 | −4.7500 | the mask, at `flat_x` |
+| | `y` 5.8125 | −4.7395 | the circle |
+
+Over almost all of its height the face is `flat_x`. Near the flange face the circle of
+`corner_radius` has curved inside, the **rectangular extension becomes the outermost feature**,
+and because it is dimensioned `panel_overlap + panel_offset - panel_tolerance` it stops one
+`panel_tolerance` short of `flat_x`. The interface therefore has a step in it, `panel_tolerance`
+deep, in a thin band below the flange face — and the bulkhead fills the notch.
+
+**The bulkhead fills that notch, and stands over the corner.** Confirmed on an OpenSCAD render
+of `1.5 end_bolt 1/16in`, probing material against void: just outboard of `flat_x` at the
+flange face is bulkhead, just inboard is void, and 0.02 mm lower the bulkhead has material
+0.044 mm *inboard* of `flat_x` — a tongue lying over the corner's shoulder, bounded by the
+corner's circle. It is in the authority, not a port artifact.
+
+**That tongue is also the only thing the `eps` was reaching.** The tool cuts `eps` below the
+flange face across it, shaving the top off: 0.0017 to 0.048 mm³ depending on the variant, on 27
+of the 132 that build. Which is why deleting the `eps` alone is backwards — it makes the tongue
+taller.
+
+**`panel_tolerance` is not the corner/bulkhead clearance** — confirmed 2026-08-14 — so its
+appearance in the interface's position was never a design intent. It was the rectangular
+extension's own dimension leaking into a mating face it was not meant to define. With the
+extension reaching `flat_x` the corner meets its mating plane at every height, the tongue has
+nowhere to form, and the `eps` becomes inert: verified on six variants, volume identical with
+and without it.
+
+**What the change costs.** The corner gains and the bulkhead loses, measured on the built
+solids:
+
+| Variant | Corner | Bulkhead |
+| --- | --- | --- |
+| 1.0 end_bolt 3/16 in | +0.0000 | +0.0000 |
+| 1.0 end_bolt 0 mm | +0.0000 | +0.0000 |
+| 0.75 end_bolt 1/16 in | +0.0065 | +0.0000 |
+| 1.5 end_bolt 1/16 in | +0.6048 | −0.0589 |
+| 1.0 end_bolt 1 mm | +10.3142 | −2.4274 |
+| 0.5 end_bolt 1 mm | +0.5000 | −0.1280 |
+
+It is a no-op wherever the mask already bound, which is the ~105 variants that never had the
+defect. All twelve solids valid, one solid each.
+
+**Three earlier readings of this question are recorded here because each looked plausible.**
+The first was that the corner's diagonal face governed and the limit should be its crossing
+with the flange face; the diagonal passes well below the flange face on most variants and its
+crossing lands outboard of everything. The second was that the outer mold line governed, with
+`clean_x0 = max(-sqrt(corner_radius^2 - clean_r^2), flat_x)`; that predicts the material loss
+correctly on all 132 variants, which is why it survived as long as it did, but it describes
+where the *tongue* ends rather than where the interface is. The third was to delete the `eps`
+alone, which makes the overhang worse.
+
+All three looked for the defect in the cleanup tool. It was in the shape the tool was cleaning.
+The general lesson is the one IP-FC-55 already records in a different form: a term that is
+*locally* irrelevant can be audited at one variant, but a term that participates in a mating
+face cannot — and neither can be understood without looking at the part it mates with.
+
+**Caveats attached to the choice.**
+
+- Both changes were made in the **OpenSCAD authority first** and then in the port, and in the
+  transcription `ref_bulkhead_cuts.scad`. `bulkhead_cuts.REF` was regenerated: the mask-overlap
+  sliver it carries is unchanged at 1.7951847, and both backends moved by the same amount
+  (−1.4697 in OpenSCAD, −1.4685 in the port).
+- **It changes the shape of two parts that have flown**, by up to 10.3 mm³ on the corner and
+  2.4 mm³ on the bulkhead — roughly fifty times the `eps` change it supersedes. It wants a
+  print check, not only a sweep. It is a no-op on the ~105 variants where the mask already
+  bound.
+- The corner grows, so anything dimensioned off the corner's outboard extent near the panel
+  seat should be re-checked. `slot_x` and the rebate are unaffected — the rebate already
+  reached well past `flat_x`.
+- With the `eps` gone the tool's underside is coplanar with the flange face. That degeneracy is
+  what the `eps` was avoiding, and it is not fatal: all 132 variants build and the six checked
+  in detail are valid single solids.
+- One loose end, outside the design range and not part of this decision: hold `eps` at 0.020
+  and raise `panel_tolerance` and the affected width tracks it to 0.500, then at 0.550 the
+  affected material vanishes rather than growing. Something else takes over that face there.
+  The design value is 0.100.
+
+Drawings of all of this, taken from the built solid rather than from the equations, are the
+IP-FC-59 working reference.
+
 
 ## See also
 

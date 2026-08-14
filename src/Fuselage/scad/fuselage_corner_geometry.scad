@@ -206,9 +206,17 @@ module corner_middle_shape(corner_radius, panel_thickness, longeron_radius, pane
         union(){
             circle(corner_radius);
             
-            // rectangular extension
-            translate([-(panel_overlap+panel_offset-panel_tolerance),0,0]) {
-                square(size = [panel_overlap+panel_offset-panel_tolerance,corner_radius], center = false);
+            // Rectangular extension, carrying the panel interface out to the flat face the
+            // bulkhead mates against.
+            //
+            // It reaches panel_overlap+panel_offset -- exactly flat_x -- and NOT one
+            // panel_tolerance short of it. Short, it stopped inboard of the corner's own
+            // mating plane, and in the band below the panel seat where the circle has already
+            // curved inside flat_x that left the corner cut off and the bulkhead standing
+            // over it. panel_tolerance is not the corner/bulkhead clearance (OQ-DES-C5); it
+            // was this extension's own dimension leaking into a mating face. OQ-DES-B13.
+            translate([-(panel_overlap+panel_offset),0,0]) {
+                square(size = [panel_overlap+panel_offset,corner_radius], center = false);
             }
         }
         union() {
