@@ -316,12 +316,12 @@ recorded — [OQ-DES-C4](#open-questions).
 | C2 | ~~resolved~~ 2026-08-06 | What is the greeble actually toleranced for? |
 | C3 | ~~resolved~~ 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
 | C4 | ~~answered~~ 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
+| C5 | open | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
 
-**No open questions.** C1 became one parameter plus a formula (IP-GEO-22); C2 was closed
-by test prints at both ends of the range, U=0.5 and U=4; C3 was closed by the observation
-that the corner and its bulkhead are not independent designs at all. C4 is *answered* rather
-than resolved — the answer is "not currently possible", which names a future exploration
-rather than closing the subject.
+C1 became one parameter plus a formula (IP-GEO-22); C2 was closed by test prints at both ends
+of the range, U=0.5 and U=4; C3 was closed by the observation that the corner and its bulkhead
+are not independent designs at all. C4 is *answered* rather than resolved — the answer is "not
+currently possible", which names a future exploration rather than closing the subject.
 
 **~~OQ-DES-C4 — whole or split at the large sizes?~~ — ANSWERED 2026-08-07: whole, for now.**
 There is **no current method for printing large corners or bulkheads in pieces.** Splitting
@@ -444,6 +444,97 @@ Three of the corner's `z` dimensions derive from a parameter that belongs to the
 It is correct — they mate — but it means the corner cannot be reasoned about alone, and
 the FreeCAD port will have to decide whether the joint is a first-class object with its
 own parameters or stays as two parts that each know a dimension of the other.
+
+### OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own
+
+The corner seats against the bulkhead on two surfaces: the **diagonal face**, the plane
+`x + y = flat_offset` in the corner-local frame, and the **flat face** at
+`flat_x = -(panel_overlap + panel_offset)`. Neither carries any clearance. The bulkhead forms
+its side of the joint by cutting itself with the *same polygon* the corner uses for its own
+bulkhead boundary — the vertices `(flat_x, corner_radius)`, `(flat_x, flat_y)`,
+`(flat_offset, 0)` and their mirror — so the two surfaces are coincident by construction and
+no parameter exists that could separate them.
+
+Measured on the built solids to confirm it is not an artifact of reading the code: sectioning
+the corner's **end** at mid-bulkhead height and the bulkhead at the same height, in the same
+frame, and stepping across each interface:
+
+| Interface | Void between the parts |
+| --- | --- |
+| greeble, corner's socket against the bulkhead's post | 0.0500 mm |
+| diagonal face, sampled at ¼, ½ and ¾ along | 0.0000 mm |
+| flat face at `flat_x` | 0.0000 mm |
+
+So the joint has exactly one clearance, `greeble_tolerance` = 0.05 mm, and it is carried
+entirely on the corner's bore — which is correct and deliberate (see
+[bulkhead.md](bulkhead.md), the greeble post is nominal by construction so the joint carries
+the clearance once). Every other mating surface is nominal contact.
+
+**The flat face used to have a step in it, and the step was `panel_tolerance`.** Tracing the
+corner's outboard face against height on the built solid, it sat at `flat_x` over almost its
+whole height — but in a thin band below the flange face the circle of `corner_radius` has
+curved inside, the **rectangular extension** became the outermost feature, and because that
+extension was dimensioned `panel_overlap + panel_offset - panel_tolerance` it stopped one
+`panel_tolerance` short of `flat_x`. The bulkhead filled the notch and stood over the corner.
+
+That was `panel_tolerance` leaking into a mating face it was never meant to define —
+**confirmed 2026-08-14 that it was not intended as the corner/bulkhead clearance.** It was the
+extension's own dimension, and the extension exists to give the panel something to sit against,
+not to position the joint. **Fixed 2026-08-14 under [OQ-DES-B13](bulkhead.md):** `rect_w` now
+reaches `flat_x`, so the corner meets its mating plane at every height and the interface is one
+plane. That removed the bulkhead's overhang at the same time, because the bulkhead subtracts
+this same section as its greeble tool.
+
+The step is gone. **The question below is unchanged:** the interface still carries no clearance
+of its own. Making the face clean did not give it a tolerance.
+
+**Two printed parts meeting on coincident planes will interfere in practice.** Layer lines,
+elephant's foot at the first layer, and the corner's own printed tolerance all act in the
+direction that closes a zero gap. Nothing in the design records whether these are intended as
+bearing faces — where zero is the right number and the fit is achieved by finishing — or
+whether the interface has simply never been given a tolerance because the shared polygon made
+one impossible to express.
+
+**Decided in principle, 2026-08-14: the interface should carry a named tolerance of its own**,
+even if its value is tuned to zero. A tolerance that exists and is set to 0 is a design
+statement that can be reviewed and changed; a tolerance that does not exist is an omission
+that no reader can distinguish from a decision. What remains open is the form and the value.
+
+**Alternatives.**
+
+1. **One scalar, `corner_tolerance`, applied normal to both faces.** The bulkhead's cutting
+   polygon is offset outward by it, the corner's is not, so the clearance is carried once on
+   the bulkhead — the opposite hand to the greeble, where the corner carries it.
+   *Benefits:* one number, one place, mirrors the greeble rule. *Drawbacks:* the diagonal and
+   the flat face may not want the same value; the flat face is also the panel seat's neighbour
+   and interacts with `panel_tolerance` and with the cleanup limit of
+   [OQ-DES-B13](bulkhead.md). *Prerequisite:* none.
+2. **Two scalars, one per face.** `corner_diagonal_tolerance` and `corner_flat_tolerance`.
+   *Benefits:* the two faces carry different loads and print in different orientations, so
+   they may genuinely want different numbers. *Drawbacks:* two parameters where the evidence
+   for one is not yet in; more surface for them to drift apart.
+   *Prerequisite:* none.
+3. **Carry it on the corner, as the greeble does.** Shrink the corner's own polygon rather
+   than growing the bulkhead's. *Benefits:* one hand for the whole joint — every clearance
+   in the assembly is on the corner, which is a rule worth having. *Drawbacks:* the corner's
+   polygon is also what generates its flat *face*, so shrinking it moves a load-bearing
+   surface rather than only a clearance. *Prerequisite:* confirm the flat face is not
+   positioned by anything else.
+4. **Leave it at zero but name it.** Introduce the parameter, set it to 0, change no geometry.
+   *Benefits:* records the decision with no risk to parts that have flown; makes the number
+   reviewable. *Drawbacks:* does not fix an interference if one exists.
+   *Prerequisite:* none.
+
+**Recommendation.** Alternative 4 first, then 1. Naming the parameter at 0 is free, changes
+no delivered geometry, and converts an omission into a statement — and the parts have been
+printed and flown at 0, which is the only evidence anyone has about whether 0 works. Moving
+to a non-zero value should follow a print check, not precede one, and it should be the same
+hand as the greeble unless there is a reason to split it. Alternative 3 is the tidier rule
+but touches a face that carries load, and that is not a change to make on tidiness alone.
+
+*This question interacts with [OQ-DES-B13](bulkhead.md).* The cleanup limit there is being
+dimensioned against the corner's material edge; if the interface gains a tolerance, that edge
+moves, and the limit must follow it rather than be restated.
 
 ## See also
 

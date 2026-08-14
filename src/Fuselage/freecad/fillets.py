@@ -74,7 +74,12 @@ PARAMS = [
     ('ocf_cx', '=flange_inner_x - flange_fillet_radius'),
     ('ocf_cy', '=flange_y - flange_fillet_radius'),
 
-    # the stepped relief stack, shared by both fillets
+    # The stepped relief stack, shared by both fillets. `relief_h_top`'s eps is a cut
+    # overshoot and it earns its place on TOPOLOGY rather than volume: forcing it flush
+    # leaves the part's volume unchanged to the last digit but adds 4 faces, the cut then
+    # ending exactly on the face it should pass through and leaving a coincident boundary
+    # behind (IP-FC-55). Measured, not assumed -- and the reason a face count is checked
+    # alongside a volume, since a volume alone calls this one inert.
     ('relief_r_low', '=flange_fillet_radius - flange_chamfer'),
     ('relief_h_top', '=bulkhead_thickness - flange_chamfer - plate_thickness + eps'),
     ('relief_z_mid', '=plate_thickness'),

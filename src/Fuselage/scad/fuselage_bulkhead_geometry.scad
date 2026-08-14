@@ -189,17 +189,28 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkh
             polygon([[0,0],[sin(45-greeble_opening_angle)*corner_radius,cos(45-greeble_opening_angle)*corner_radius],[cos(45-greeble_opening_angle)*corner_radius,sin(45-greeble_opening_angle)*corner_radius]]);
         }
         
-        // clean up the outer faces of the corner cutout
+        // Clean up the outer faces of the corner cutout.
+        //
+        // The radius is the flange's finished outer surface, flush behind the panel, with NO
+        // eps: it is a material face, not a cut overshoot, and an eps here cut it 0.01 mm too
+        // deep. That went unnoticed for as long as it did because the only material in reach
+        // of the overcut was the bulkhead's overhang over the corner, which the corner's short
+        // rectangular extension used to create -- fixed there, so this now removes nothing
+        // measurable. Both halves of that are OQ-DES-B13.
+        //
+        // The outboard limit stays -(panel_offset+panel_overlap) = flat_x, untoleranced. That
+        // is the corner/bulkhead interface itself, cut into both parts by the same polygon,
+        // so the cleanup already stops exactly at the joint.
         linear_extrude(height=through_cut(bulkhead_thickness), center=true, convexity=5,twist=0,slices=1,scale=1){
             difference() {
                 polygon([
                     [0,0], 
                     [mask_reach(corner_radius),mask_reach(corner_radius)], 
                     [-(panel_offset+panel_overlap),mask_reach(corner_radius)],
-                    [-(panel_offset+panel_overlap),corner_radius-(panel_thickness+panel_tolerance+eps)],
-                    [0,corner_radius-(panel_thickness+panel_tolerance+eps)]
+                    [-(panel_offset+panel_overlap),corner_radius-(panel_thickness+panel_tolerance)],
+                    [0,corner_radius-(panel_thickness+panel_tolerance)]
                     ]);
-                circle(r=corner_radius-(panel_thickness+panel_tolerance+eps));
+                circle(r=corner_radius-(panel_thickness+panel_tolerance));
             }
         }
         
