@@ -25,7 +25,7 @@ The tree is organized by kind. Everything is under `src/Fuselage/`.
 | [`scad/`](../scad) | 13 hand-authored OpenSCAD files — the geometry. **Source of truth.** | 0.1 MB |
 | [`tools/`](../tools) | Python sweep drivers, shape-definition JSON, insert table | 108 MB |
 | [`variant_param/`](../variant_param) | 9 CSV parameter axes — the sweep inputs | 0.03 MB |
-| [`design_constants.json`](../design_constants.json) | The 10 unvaried parameters — clearances, two angles, the printer profile. *Settings*, not axes | <0.01 MB |
+| [`design_constants.json`](../design_constants.json) | Every unvaried parameter — the standard, the scaling coefficients, clearances, angles, printer profile. *Settings*, not axes | 0.01 MB |
 | [`oml/`](../oml) | Outer-mold-line meshes exported from OpenVSP | 37 MB |
 | [`cad/`](../cad) | The OpenVSP source model | 39 MB |
 | [`blender/`](../blender) | Surfacing and exploded-assembly Blender files | 36 MB |
@@ -166,12 +166,16 @@ the commented `$fa = 1; $fs = 0.1` for final output.
 
 1. Each CSV in [variant_param/](../variant_param) is one independent axis of variation.
    `read_all_param_axes` loads them, `flatten_param_space` takes the full Cartesian product.
-   The ten unvaried parameters are **not** axes — they come from
+   The unvaried parameters are **not** axes — they come from
    [design_constants.json](../design_constants.json), read once at import by
    `load_constants()`, and take the same value on every variant. Putting one in a CSV instead
-   would make it a swept dimension and multiply the run. Membership is decided by measurement:
-   resolve the `Parameters` tree for every variant in all three families and keep the numeric
-   fields that come back with exactly one value.
+   would make it a swept dimension and multiply the run. Five groups, each with its own rule
+   about what a legal value is: `standard` (what 1U means), `scaling` (the coefficients of the
+   derivation formulas), `tolerances`, `geometry`, `printer`. Nothing in the derivation is a
+   bare number any more — the reciprocal pair in `panel_offset` and eleven nominal-and-floor
+   pairs each now carry one name on both sides. Membership is decided by measurement: resolve
+   the `Parameters` tree for every variant in all three families and keep the numeric fields
+   that come back with exactly one value.
 2. `derived_parameters(U, FX, params, printer_settings, is_bulkhead)` expands a flat CSV
    row into the `Parameters` dataclass tree the geometry modules need — deriving greeble
    thickness from nozzle diameter, panel overlap from panel thickness, anchor bore from

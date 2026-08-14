@@ -136,6 +136,18 @@ CONSTANT_GROUPS = {
                    'panel_tolerance', 'boom_tolerance', 'cowl_flange_tolerance'),
     'geometry': ('greeble_opening_angle', 'boom_key_angle'),
     'printer': ('extrusion_width', 'layer_height'),
+    'standard': ('unit_width', 'unit_length', 'corner_radius', 'longeron_radius',
+                 'bolt_offset'),
+    'scaling': ('greeble_wall_extrusions', 'panel_overlap_min_mm',
+                'greeble_margin_extrusions', 'greeble_snap_clearance_per_u',
+                'panel_offset_quantum_mm', 'cowl_flange_height_per_u',
+                'cowl_bulkhead_flange_extrusions', 'bulkhead_flange_extrusions',
+                'bolt_thickness_per_u', 'plate_layers', 'web_fillet_radius_per_u',
+                'boom_web_width_per_u', 'frame_web_width_per_u',
+                'bulkhead_flange_fillet_per_u', 'bulkhead_flange_chamfer_per_u',
+                'boom_wall_per_u', 'boom_collet_thickness_per_u',
+                'boom_key_width_per_u', 'boom_key_height_per_u',
+                'boom_key_radius_per_u', 'boom_key_web_width_per_u'),
 }
 
 
@@ -157,8 +169,25 @@ def _check_printer(name, value, path):
                          % (path, name, value))
 
 
+def _check_standard(name, value, path):
+    # Everything the sweep builds is derived from these by multiplication, so a zero
+    # propagates into a degenerate part rather than into an error.
+    if value <= 0:
+        raise ValueError('%s: %s is %g, and a standard dimension must be positive.'
+                         % (path, name, value))
+
+
+def _check_scaling(name, value, path):
+    # Zero is allowed -- it is how a feature is switched off -- but negative is not: every
+    # one of these is a thickness, a width, a radius or a count.
+    if value < 0:
+        raise ValueError('%s: %s is %g, and a scaling coefficient sizes a feature, so it '
+                         'cannot be negative.' % (path, name, value))
+
+
 # Angles are unconstrained on purpose: a negative boom_key_angle is a legal rotation.
-_GROUP_RULES = {'tolerances': _check_tolerance, 'printer': _check_printer}
+_GROUP_RULES = {'tolerances': _check_tolerance, 'printer': _check_printer,
+                'standard': _check_standard, 'scaling': _check_scaling}
 
 
 def load_constants(path=None):
@@ -201,9 +230,12 @@ def load_constants(path=None):
                 continue
             entry = table[name]
             value = entry['value'] if isinstance(entry, dict) else entry
-            try:
-                value = float(value)
-            except (TypeError, ValueError):
+            # Taken as JSON typed it -- NOT coerced to float. `100` stays an int and `0.05`
+            # stays a float, because several of these reach solid2 and an int that becomes
+            # 100.0 changes the generated .scad text. The geometry would be identical and
+            # every part would still re-render, since --resume compares that text. bool is
+            # excluded explicitly: it is a subclass of int and `true` is not a dimension.
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
                 problems.append('  %s.%s is %r, which is not a number'
                                 % (group, name, value))
                 continue
@@ -233,6 +265,42 @@ BOOM_KEY_ANGLE_DEG = _CONSTANTS['boom_key_angle']
 EXTRUSION_WIDTH_MM = _CONSTANTS['extrusion_width']
 LAYER_HEIGHT_MM = _CONSTANTS['layer_height']
 
+# The parametric standard -- what 1U is, in millimeters.
+UNIT_WIDTH_MM = _CONSTANTS['unit_width']
+UNIT_LENGTH_MM = _CONSTANTS['unit_length']
+CORNER_RADIUS_MM = _CONSTANTS['corner_radius']
+LONGERON_RADIUS_MM = _CONSTANTS['longeron_radius']
+BOLT_OFFSET_MM = _CONSTANTS['bolt_offset']
+
+# Coefficients of the derivation formulas. The suffix carries the unit: _EXTRUSIONS is a
+# count of extrusion_width, _LAYERS a count of layer_height, _PER_U a multiple of U in
+# millimeters, and _MM an absolute floor that does not scale.
+#
+# Where a formula floors a scaled value at its own coefficient -- max(3*U, 3) -- the same
+# name now appears on both sides. That is the point of naming them: they were two separate
+# literals that had to agree, with nothing saying so.
+GREEBLE_WALL_EXTRUSIONS = _CONSTANTS['greeble_wall_extrusions']
+PANEL_OVERLAP_MIN_MM = _CONSTANTS['panel_overlap_min_mm']
+GREEBLE_MARGIN_EXTRUSIONS = _CONSTANTS['greeble_margin_extrusions']
+GREEBLE_SNAP_CLEARANCE_PER_U = _CONSTANTS['greeble_snap_clearance_per_u']
+PANEL_OFFSET_QUANTUM_MM = _CONSTANTS['panel_offset_quantum_mm']
+COWL_FLANGE_HEIGHT_PER_U = _CONSTANTS['cowl_flange_height_per_u']
+COWL_BULKHEAD_FLANGE_EXTRUSIONS = _CONSTANTS['cowl_bulkhead_flange_extrusions']
+BULKHEAD_FLANGE_EXTRUSIONS = _CONSTANTS['bulkhead_flange_extrusions']
+BOLT_THICKNESS_PER_U = _CONSTANTS['bolt_thickness_per_u']
+PLATE_LAYERS = _CONSTANTS['plate_layers']
+WEB_FILLET_RADIUS_PER_U = _CONSTANTS['web_fillet_radius_per_u']
+BOOM_WEB_WIDTH_PER_U = _CONSTANTS['boom_web_width_per_u']
+FRAME_WEB_WIDTH_PER_U = _CONSTANTS['frame_web_width_per_u']
+BULKHEAD_FLANGE_FILLET_PER_U = _CONSTANTS['bulkhead_flange_fillet_per_u']
+BULKHEAD_FLANGE_CHAMFER_PER_U = _CONSTANTS['bulkhead_flange_chamfer_per_u']
+BOOM_WALL_PER_U = _CONSTANTS['boom_wall_per_u']
+BOOM_COLLET_THICKNESS_PER_U = _CONSTANTS['boom_collet_thickness_per_u']
+BOOM_KEY_WIDTH_PER_U = _CONSTANTS['boom_key_width_per_u']
+BOOM_KEY_HEIGHT_PER_U = _CONSTANTS['boom_key_height_per_u']
+BOOM_KEY_RADIUS_PER_U = _CONSTANTS['boom_key_radius_per_u']
+BOOM_KEY_WEB_WIDTH_PER_U = _CONSTANTS['boom_key_web_width_per_u']
+
 
 def greeble_nub_thickness_of(greeble_thickness):
     """Wall thickness of the snap rib, derived from the greeble's seat wall.
@@ -259,11 +327,11 @@ def standard_values():
     
     c = dict()
     
-    c["unit_width"] = 100
-    c["unit_length"] = 100
-    c["corner_radius"] = 10
-    c["longeron_radius"] = 2
-    c["bolt_offset"] = 8
+    c["unit_width"] = UNIT_WIDTH_MM
+    c["unit_length"] = UNIT_LENGTH_MM
+    c["corner_radius"] = CORNER_RADIUS_MM
+    c["longeron_radius"] = LONGERON_RADIUS_MM
+    c["bolt_offset"] = BOLT_OFFSET_MM
 
     return c
 
@@ -666,7 +734,8 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     # sqrt(U), not U: the greeble wall is a printed feature sized to survive a snap fit,
     # so it scales in extrusions rather than as a fraction of the airframe. The max()
     # floors it at two extrusion widths, because a one-extrusion wall has no interior.
-    c.greeble.thickness = max(2*math.sqrt(U)*c.printer.extrusion_width, 2*c.printer.extrusion_width)
+    c.greeble.thickness = max(GREEBLE_WALL_EXTRUSIONS*math.sqrt(U)*c.printer.extrusion_width,
+                              GREEBLE_WALL_EXTRUSIONS*c.printer.extrusion_width)
     c.greeble.nub_thickness = greeble_nub_thickness_of(c.greeble.thickness)
 
     # The zero is structural, not a setting: a cowling has no panel and neither does the
@@ -682,10 +751,10 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         if c.panel.thickness==0:
             c.panel.overlap = 0
         else:
-            c.panel.overlap = max(c.panel.thickness, 4)
+            c.panel.overlap = max(c.panel.thickness, PANEL_OVERLAP_MIN_MM)
 
         # keep the inside corner of the panel from coming too close to the greeble perimeter
-        panel_clearance_radius = c.longeron.radius + c.longeron.tolerance + c.greeble.thickness  + c.greeble.nub_thickness + 2*c.printer.extrusion_width
+        panel_clearance_radius = c.longeron.radius + c.longeron.tolerance + c.greeble.thickness  + c.greeble.nub_thickness + GREEBLE_MARGIN_EXTRUSIONS*c.printer.extrusion_width
 
         # lower edge of the panel
         panel_corner_y = max(c.corner.radius - c.panel.thickness - c.panel.tolerance, 0)
@@ -700,13 +769,13 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         # print("panel_offset = " + str(panel_offset))
         # print("panel_clearance_radius = " + str(panel_clearance_radius))
         
-        greeble_clearance_width = 1*U # extra width around the greeble to allow the corner to snap in on the back side
+        greeble_clearance_width = GREEBLE_SNAP_CLEARANCE_PER_U*U # extra width around the greeble to allow the corner to snap in on the back side
         # print("greeble_clearance_width = " + str(greeble_clearance_width))
         
-        panel_offset = max(panel_offset, (panel_clearance_radius - 2*c.printer.extrusion_width)/math.sqrt(2) + 2*c.printer.extrusion_width + greeble_clearance_width - c.panel.overlap)
+        panel_offset = max(panel_offset, (panel_clearance_radius - GREEBLE_MARGIN_EXTRUSIONS*c.printer.extrusion_width)/math.sqrt(2) + GREEBLE_MARGIN_EXTRUSIONS*c.printer.extrusion_width + greeble_clearance_width - c.panel.overlap)
         panel_offset = max(panel_offset, 0)
         panel_offset = min(panel_offset, math.sqrt(2)*c.corner.radius)
-        panel_offset = 0.25*math.ceil(4*panel_offset) # inflate to nearest 0.25 mm
+        panel_offset = PANEL_OFFSET_QUANTUM_MM*math.ceil(panel_offset/PANEL_OFFSET_QUANTUM_MM) # inflate to the next whole quantum
 
         # print("panel_offset = " + str(panel_offset))
         
@@ -727,25 +796,27 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     # mounts no cowl has no cowl flange, so there is no gap to leave. Only the cowling
     # branch reads the tolerance file.
     if is_cowling:
-        c.cowl_flange.height=2*U;
+        c.cowl_flange.height=COWL_FLANGE_HEIGHT_PER_U*U;
         c.cowl_flange.tolerance=COWL_FLANGE_TOLERANCE_MM;
-        c.bulkhead_flange.thickness=max(math.ceil(3*U)*c.printer.extrusion_width, 3*c.printer.extrusion_width)
+        c.bulkhead_flange.thickness=max(math.ceil(COWL_BULKHEAD_FLANGE_EXTRUSIONS*U)*c.printer.extrusion_width,
+                                        COWL_BULKHEAD_FLANGE_EXTRUSIONS*c.printer.extrusion_width)
     else:
         c.cowl_flange.height=0;
         c.cowl_flange.tolerance=0.0;
-        c.bulkhead_flange.thickness=max(math.ceil(2*U)*c.printer.extrusion_width, 2*c.printer.extrusion_width)
+        c.bulkhead_flange.thickness=max(math.ceil(BULKHEAD_FLANGE_EXTRUSIONS*U)*c.printer.extrusion_width,
+                                        BULKHEAD_FLANGE_EXTRUSIONS*c.printer.extrusion_width)
     
-    c.bolt.thickness=max(3*U, 3)
-    c.plate.thickness=math.ceil(4*U)*c.printer.layer_height
-    c.web.fillet_radius=2*U
+    c.bolt.thickness=max(BOLT_THICKNESS_PER_U*U, BOLT_THICKNESS_PER_U)
+    c.plate.thickness=math.ceil(PLATE_LAYERS*U)*c.printer.layer_height
+    c.web.fillet_radius=WEB_FILLET_RADIUS_PER_U*U
     
     if is_boom:
-        c.web.width=6*U
+        c.web.width=BOOM_WEB_WIDTH_PER_U*U
     else:
-        c.web.width=3*U
+        c.web.width=FRAME_WEB_WIDTH_PER_U*U
         
-    c.bulkhead_flange.fillet_radius=2*U
-    c.bulkhead_flange.chamfer=1*U
+    c.bulkhead_flange.fillet_radius=BULKHEAD_FLANGE_FILLET_PER_U*U
+    c.bulkhead_flange.chamfer=BULKHEAD_FLANGE_CHAMFER_PER_U*U
 
     if is_boom:
         c.boom_bulkhead = derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings)
@@ -865,14 +936,14 @@ def derived_boom_bulkhead_parameters(U,FX,user_parameters,printer_settings):
     ssv = scaled_standard_values(U,FX)
 
     c.diameter = ssv["unit_width"]*user_parameters["boom_diameter"]
-    c.thickness = U*2
+    c.thickness = U*BOOM_WALL_PER_U
     c.y_position = ssv["unit_width"]*user_parameters["y_position"]
     c.z_position = ssv["unit_width"]*user_parameters["z_position"]
-    c.collet_thickness = U*3
-    c.key_width = max(U*2, 2)
-    c.key_height = max(U*2, 2)
-    c.key_radius = max(U*0.5, 0.5)
-    c.key_web_width = U*6
+    c.collet_thickness = U*BOOM_COLLET_THICKNESS_PER_U
+    c.key_width = max(U*BOOM_KEY_WIDTH_PER_U, BOOM_KEY_WIDTH_PER_U)
+    c.key_height = max(U*BOOM_KEY_HEIGHT_PER_U, BOOM_KEY_HEIGHT_PER_U)
+    c.key_radius = max(U*BOOM_KEY_RADIUS_PER_U, BOOM_KEY_RADIUS_PER_U)
+    c.key_web_width = U*BOOM_KEY_WEB_WIDTH_PER_U
     c.key_angle = BOOM_KEY_ANGLE_DEG
     c.tolerance = BOOM_TOLERANCE_MM
     c.type_name = user_parameters["bulkhead_type_name"]

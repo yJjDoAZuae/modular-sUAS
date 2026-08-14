@@ -572,6 +572,8 @@ it a function of `U`.
 
 ## See also
 
+- [corner_bulkhead_joint.md](corner_bulkhead_joint.md) — the joint drawn from the built
+  solids: six cases, four views each, with the clearance dimensioned normal to both faces.
 - [bulkhead.md](bulkhead.md) — the mating half, and the pocket that receives the greeble.
 - [geometry_refactor.md](../implementation/geometry_refactor.md) — IP-GEO-3 (the thickness
   formula), IP-GEO-7 (the dimension functions), OQ-GEO-1 (why the parameters are grouped
