@@ -144,8 +144,20 @@ def wanted_parts(per_kind: int | None, kinds: set[str] | None = None) -> dict[st
 
 
 def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
-           kinds: set[str] | None = None) -> None:
-    """Render exactly the wanted parts with `backend`, through the real sweep."""
+           kinds: set[str] | None = None) -> list:
+    """Render exactly the wanted parts with `backend`, through the real sweep.
+
+    **A part that will not build is a result, not the end of the run.** This used to inherit
+    the sweep's `fail_fast`, so the first unbuildable variant raised `RenderFailed` out of the
+    driver and the comparison never ran -- 287 of 288 parts rendered and nothing was compared,
+    because one of them was IP-FC-58. A check whose first failure hides every other failure
+    behind it is worse than no check: it reports the defect you already knew about and stays
+    silent about the ones you did not.
+
+    So failures are collected and returned. The parts that did not build have no mesh, and
+    `compare()` already reports a missing mesh as that part's own failure, which is where it
+    belongs -- against the part, in the table, with everything else still measured.
+    """
     real_solid, real_freecad = fv.solid_render, fv.freecad_render
     count = {'n': 0}
 
@@ -163,14 +175,19 @@ def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
 
     fv.solid_render, fv.freecad_render = solid, freecad
     previous = fv.set_backend(backend)
+    failed = []
     try:
-        with fv.sweep_session(workers=workers, resume=False, previews=False):
+        with fv.sweep_session(workers=workers, resume=False, previews=False,
+                              fail_fast=False) as queue:
             for _kind, driver, axis_names in sweeps_for(kinds):
                 getattr(fv, driver)(fv.axes(*axis_names), str(out_dir))
+        failed = list(queue.failures)
     finally:
         fv.solid_render, fv.freecad_render = real_solid, real_freecad
         fv.set_backend(previous)
-    print(f'  {backend}: rendered {count["n"]} part(s)', flush=True)
+    note = f', {len(failed)} failed to build' if failed else ''
+    print(f'  {backend}: rendered {count["n"] - len(failed)} part(s){note}', flush=True)
+    return failed
 
 
 def used_freecad(stl: Path) -> bool:
@@ -292,8 +309,11 @@ def main(argv=None) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
     names = set(wanted)
-    render('openscad', a_dir, names, args.workers, kinds)
-    render('freecad', b_dir, names, args.workers, kinds)
+    unbuildable = render('openscad', a_dir, names, args.workers, kinds)
+    unbuildable += render('freecad', b_dir, names, args.workers, kinds)
+    if unbuildable:
+        print(f'\n  {len(unbuildable)} part(s) could not be built and are reported as '
+              f'failures below rather than ending the run', flush=True)
 
     code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted)
     if not args.keep:
