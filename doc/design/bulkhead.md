@@ -87,6 +87,18 @@ posts, longeron bores, panel capture.
 It substitutes the cowl joint for the panel joint — flange ring, plate, cowl lip, and **no
 panel at all**, which `bulkhead_validity_check()` enforces.
 
+**One cowl bulkhead serves both ends.** The nose cowl and the tail cowl mount to the same
+bulkhead — there is no nose version and no tail version, and none should be added. The
+nose/tail split in the sweep is in the *cowl shells* (`nose_type_variants.csv`,
+`tail_type_variants.csv`, each naming its own shape JSON); the bulkhead knows nothing about
+which end it is at. Recorded 2026-08-14 because it is not recoverable from the code —
+nothing in `derived_parameters()` or the geometry distinguishes the two ends, and an absent
+distinction reads exactly like an unfinished one.
+
+**The cowl bulkhead varies on two axes and there are sixteen of them.** Eight `U` sizes × the `is_anchor` fastener choice, which applies to `COWLING` exactly as it does to `END` (see the variation table above) — a bolt version and an anchor version are both wanted at every size. The two are genuinely different parts: measured at `U` = 1.0, `bolt.radius` is 2.0 mm on `cowling_bolt` and 2.75 mm on `cowling_anchor`, the anchor being bored for a heat-set insert from `threaded_insert_dimensions.csv`, and the built volumes differ by 0.9–3.6% across the size range.
+
+**The panel axis does not multiply them, though it looks in the parameter space as if it does.** `bulkhead_validity_check()` rejects every cowling row with a non-zero panel, so 128 of the 144 cowling combinations in the Cartesian product are never built and the rendered output is two parts per `U` under `panel_0mm` alone. **Count the built output, not the Cartesian product** — the validity checks stand between the two.
+
 ### Family — inter-unit plates
 
 `TAIL_BOOM` is a **second distinct family**: a flat plate used **between** structural units,
@@ -444,7 +456,7 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
 | B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
-| B13 | ~~resolved~~ 2026-08-14 — decided, not yet implemented | The outer-face cleanup tool sets a material face from `geometry_eps` |
+| B13 | ~~resolved~~ 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
 
 **Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that

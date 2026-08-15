@@ -194,6 +194,13 @@ cython_debug/
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
+# compare_backends.py's scratch tree -- both backends' renders of the same parts, ~2.4 GB for
+# a full run. It deletes itself on the way out unless --keep is given, so it is normally
+# absent; it survives when a run *raises*, which is exactly the moment nobody is thinking
+# about git. Ignoring it means a crashed comparison cannot leave gigabytes for `git add -A`
+# to pick up. The default path comes from OUTPUT_DIR.parent, which is src/Fuselage.
+src/Fuselage/compare_backends/
+
 # Ruff stuff:
 .ruff_cache/
 

@@ -1427,10 +1427,24 @@ class RenderQueue:
     the run would look like it was skipping everything.
     """
 
-    def __init__(self, workers=1, chunk=None, progress_every=20):
+    def __init__(self, workers=1, chunk=None, progress_every=20, fail_fast=True):
         self.workers = max(1, int(workers))
         self.chunk = chunk or max(self.workers * 4, 8)
         self.progress_every = progress_every
+        # Whether a render that fails its serial retry ends the run.
+        #
+        # **True for a sweep, and that is right**: the sweep produces the parts, and a hole in
+        # the output is not something to discover later from a directory listing.
+        #
+        # **False for anything that is checking the parts rather than making them.** A
+        # comparison run that aborts on the first unbuildable variant reports nothing about the
+        # other 287, so one known defect hides every unknown one behind it -- which is the
+        # opposite of what a check is for. With this false, failures are collected in
+        # `self.failures` and the caller decides; the parts that did not build simply have no
+        # mesh, and `compare_backends.compare()` already reports a missing mesh as that part's
+        # own failure.
+        self.fail_fast = fail_fast
+        self.failures = []
         self._pending = []
         self._done = 0
         self._failed = 0
@@ -1491,13 +1505,19 @@ class RenderQueue:
             failures = self._retry_serially(failures)
 
         if failures:
+            self.failures.extend(failures)
             detail = '\n'.join('  %s\n    %s' % (job[0], e)
                                for job, e in failures[:10])
-            raise RenderFailed(
-                '%d of %d render(s) failed after a serial retry '
-                '(%d succeeded, %d recovered on retry):\n%s'
-                % (len(failures), self._done, self._done - self._failed,
-                   self._recovered, detail))
+            message = ('%d of %d render(s) failed after a serial retry '
+                       '(%d succeeded, %d recovered on retry):\n%s'
+                       % (len(failures), self._done, self._done - self._failed,
+                          self._recovered, detail))
+            if self.fail_fast:
+                raise RenderFailed(message)
+            # Reported, not raised -- see `fail_fast` in __init__. Stderr because the
+            # caller's own summary goes to stdout and these must not be interleaved into it.
+            sys.stderr.write('      RENDER FAILED, continuing:\n%s\n' % message)
+            sys.stderr.flush()
 
     def _retry_serially(self, failures):
         """Re-run failed commands one at a time; return those that failed again.
@@ -2552,7 +2572,7 @@ def family_of(type_name):
 
 
 @contextlib.contextmanager
-def sweep_session(workers=None, resume=False, previews=True):
+def sweep_session(workers=None, resume=False, previews=True, fail_fast=True):
     """Configure and tear down a sweep run.
 
     Owns the render queue, the resume and preview settings, and -- importantly --
@@ -2562,9 +2582,13 @@ def sweep_session(workers=None, resume=False, previews=True):
 
         with sweep_session(workers=5, resume=True):
             run_nose_parametric_sweep(axes(...), out_dir)
+
+    `fail_fast` defaults to True, which is right for a run that *produces* parts: a hole in
+    the output should stop the run, not be found later in a directory listing. Pass False from
+    a run that *checks* parts -- see `RenderQueue.fail_fast`.
     """
     workers = default_render_workers() if workers is None else max(1, int(workers))
-    queue = RenderQueue(workers)
+    queue = RenderQueue(workers, fail_fast=fail_fast)
     previous_queue = set_render_queue(queue)
     previous_resume = set_resume(resume)
     previous_previews = set_previews(previews)
