@@ -62,8 +62,27 @@ boom_bulkhead_parameters = fv.boom_bulkhead_parameters
 # is nominal, because split across both halves the joint would take it twice.
 ASYMMETRIC = {'greeble_tolerance'}
 
+# The panel joint -- exempted on a COWLING bulkhead, and only there.
+#
+# **A cowling bulkhead has no panel and no corner socket.** The cowl closes that end of the
+# airframe instead: `bulkhead_validity_check()` refuses any cowling row with a non-zero panel,
+# and the whole corner cut-out in `bulkhead_section` sits inside `if (!is_cowling)`. So these
+# four names are not two opinions about one shared dimension. On the bulkhead side they are
+# the *absence of a feature*, forced to 0 by `derived_parameters()`. On the corner side they
+# are that corner's own panel rebate, which it has regardless of what sits at the end of its
+# bay -- `derived_parameters(..., is_bulkhead=False)` never sees the type flags at all, so the
+# corner half cannot know the station is a cowl and correctly does not care.
+#
+# Comparing them asked whether two parts agree about a joint only one of them has, and it
+# failed the export for all 16 cowl bulkheads -- 8 sizes x the bolt and anchor fastener
+# variants. See doc/design/bulkhead.md, "Family -- the cowl interface".
+#
+# Exempted per variant rather than globally: on every other bulkhead type these four *are*
+# the joint, and dropping them from the comparison there would remove most of its value.
+PANEL_JOINT = {'panel_thickness', 'panel_offset', 'panel_overlap', 'panel_tolerance'}
 
-def check_agreement(bulkhead, corner):
+
+def check_agreement(bulkhead, corner, is_cowling=False):
     """Refuse a variant where the two halves disagree on a shared parameter.
 
     They are resolved separately -- `derived_parameters(..., is_bulkhead)` branches on that
@@ -71,8 +90,13 @@ def check_agreement(bulkhead, corner):
     this export reading the corner's parameters off a bulkhead variant, where
     `greeble.tolerance` is 0 and the corner's bore would have come out with no clearance at
     all.
+
+    `is_cowling` exempts the panel joint, which that family does not have -- see PANEL_JOINT.
+    Everything else is still compared, so a cowl bulkhead and its corner must still agree on
+    `corner_radius`, `longeron_radius`, `bulkhead_thickness` and the rest.
     """
-    for name in sorted(set(bulkhead) & set(corner) - ASYMMETRIC):
+    exempt = ASYMMETRIC | (PANEL_JOINT if is_cowling else set())
+    for name in sorted(set(bulkhead) & set(corner) - exempt):
         if abs(float(bulkhead[name]) - float(corner[name])) > 1e-12:
             raise RuntimeError(
                 '%s is %r for the bulkhead and %r for the corner -- the two halves of the '
@@ -204,7 +228,8 @@ def main(argv):
     if family == 'bulkhead':
         bulkhead = bulkhead_parameters(dp)
         corner = corner_parameters(dp_corner)
-        check_agreement(bulkhead, corner)
+        check_agreement(bulkhead, corner,
+                        is_cowling=dp.bulkhead.type == fv.BulkheadType.COWLING)
 
         # U and FX on top, exactly as the sweep's FreeCAD branches add them, and after
         # check_names -- neither is a parameter of the OpenSCAD modules, which take the
