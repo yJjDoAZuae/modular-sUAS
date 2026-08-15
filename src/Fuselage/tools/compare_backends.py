@@ -19,6 +19,15 @@ against the authority catches them, and only if it covers more than one combinat
     uv run python src/Fuselage/tools/compare_backends.py --per-kind 4
     uv run python src/Fuselage/tools/compare_backends.py --all --workers 6
     uv run python src/Fuselage/tools/compare_backends.py --all --kinds boom_bulkhead
+    uv run python src/Fuselage/tools/compare_backends.py --all --build-only
+
+**`--build-only` when the question is "what fails to build", not "do they agree".** Those are
+different questions with wildly different costs, and running the expensive one to answer the
+cheap one wastes hours. A full comparison renders the space twice; the OpenSCAD half measured
+2.5 hours at ~38 s/part against the FreeCAD half's ~1.3 s/part, and it exists *only* to supply
+reference volumes. It can produce no build failures of its own -- OpenSCAD is the authority, it
+builds everything. So a run whose purpose is to enumerate unbuildable variants gets the whole
+answer from the FreeCAD pass alone, in about a hundredth of the time.
 
 **Sample first, then sweep the kind exhaustively.** A sample finds systematic errors, which is
 most of them; it does not find the ones that need a particular corner of the space. IP-FC-50 was
@@ -202,6 +211,58 @@ def used_freecad(stl: Path) -> bool:
     return stl.with_suffix('.stl.json').exists()
 
 
+def report_builds(b_dir: Path, wanted: dict[str, str]) -> int:
+    """Which variants FreeCAD actually built, with no reference render and no comparison.
+
+    The build question and the agreement question are separable, and only the second one needs
+    the OpenSCAD side. Read off the tree rather than off the render queue's failure list: the
+    queue records a command line and an exception, which names the part only incidentally, and
+    it cannot see a part that FreeCAD "built" by silently falling back to OpenSCAD. Both of
+    those are answered by what is on disk beside the mesh -- a `.stl.json` means FreeCAD built
+    it, a `.stl.scad` means the fallback did, and no mesh at all means nothing did.
+    """
+    by_name = {p.name: p for p in b_dir.rglob('*.stl')
+               if not p.name.endswith('.partial.stl')}
+
+    missing, fell_back, built = [], [], []
+    for name in sorted(wanted):
+        mesh = by_name.get(name)
+        if mesh is None:
+            missing.append((name, wanted[name]))
+        elif not used_freecad(mesh):
+            fell_back.append((name, wanted[name]))
+        else:
+            built.append((name, wanted[name]))
+
+    def by_kind(rows):
+        return ', '.join('%s=%d' % (k, sum(1 for _n, rk in rows if rk == k))
+                         for k, _d, _a in SWEEPS if any(rk == k for _n, rk in rows))
+
+    print()
+    print('  %-28s %4d   %s' % ('built by FreeCAD', len(built), by_kind(built)))
+    print('  %-28s %4d   %s' % ('fell back to OpenSCAD', len(fell_back), by_kind(fell_back)))
+    print('  %-28s %4d   %s' % ('DID NOT BUILD', len(missing), by_kind(missing)))
+    print('-' * 100)
+
+    if fell_back:
+        print('  no FreeCAD generator for these variants, so nothing was proved about them:')
+        for name, _kind in fell_back[:6]:
+            print('      %s' % name[:88])
+        if len(fell_back) > 6:
+            print('      ... and %d more' % (len(fell_back) - 6))
+        print()
+
+    if missing:
+        print('  UNBUILDABLE -- FreeCAD was asked for these and produced no mesh:')
+        for name, _kind in missing:
+            print('      %s' % name[:88])
+        print('\n%d of %d PART(S) DO NOT BUILD' % (len(missing), len(wanted)))
+        return 1
+
+    print('EVERY PART BUILDS  (agreement not checked -- this was a --build-only run)')
+    return 0
+
+
 def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
             tol_filleted: float) -> int:
     a_by_name = {p.name: p for p in a_dir.rglob('*.stl') if not p.name.endswith('.partial.stl')}
@@ -284,6 +345,10 @@ def main(argv=None) -> int:
     parser.add_argument('--tol-filleted', type=float, default=TOL_FILLETED,
                         help=f'volume tolerance for kinds carrying real fillets '
                              f'(default {TOL_FILLETED})')
+    parser.add_argument('--build-only', action='store_true',
+                        help='render only the FreeCAD side and report which variants fail to '
+                             'build; skips the OpenSCAD reference render, which is the '
+                             'expensive half and cannot fail')
     parser.add_argument('--keep', action='store_true', help='keep the rendered trees')
     parser.add_argument('--kinds', default=None,
                         help='comma-separated kinds to compare (default all): '
@@ -298,7 +363,7 @@ def main(argv=None) -> int:
             parser.error('no such kind: %s' % ', '.join(sorted(unknown)))
 
     wanted = wanted_parts(None if args.all else args.per_kind, kinds)
-    print(f'comparing {len(wanted)} part(s): '
+    print(f'{"building" if args.build_only else "comparing"} {len(wanted)} part(s): '
           + ', '.join(f'{k}={sum(1 for v in wanted.values() if v == k)}'
                       for k, _d, _a in sweeps_for(kinds)))
 
@@ -309,13 +374,18 @@ def main(argv=None) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
     names = set(wanted)
-    unbuildable = render('openscad', a_dir, names, args.workers, kinds)
+    unbuildable = []
+    if not args.build_only:
+        unbuildable += render('openscad', a_dir, names, args.workers, kinds)
     unbuildable += render('freecad', b_dir, names, args.workers, kinds)
     if unbuildable:
         print(f'\n  {len(unbuildable)} part(s) could not be built and are reported as '
               f'failures below rather than ending the run', flush=True)
 
-    code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted)
+    if args.build_only:
+        code = report_builds(b_dir, wanted)
+    else:
+        code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted)
     if not args.keep:
         shutil.rmtree(scratch, ignore_errors=True)
     return code
