@@ -1258,6 +1258,23 @@ derivation constrains it. It is a difference of four independently chosen dimens
 `panel_offset`, `panel_overlap`, `flange_thickness` and `flange_fillet_radius` against
 `bolt_offset` — so it takes whatever value those happen to leave, including zero.
 
+**Those two rules are two tangencies, and the fillet already satisfies both exactly.** The
+vertical rule puts the center `flange_fillet_radius` from the plane `x = flange_inner_x`, so a
+circle of that radius is tangent to the flange's inner face. The circle rule puts it
+`flange_fillet_radius + bolt_hole_radius + bolt_thickness` from the bolt center, which is the
+fillet radius plus the boss radius, so the same circle is *externally tangent to the bolt
+boss*. Checked across all 88 valid end-type variants, the worst departure from either is
+1.8 × 10⁻¹⁵ mm and 3.6 × 10⁻¹⁵ mm — floating-point noise, because both are algebraic
+identities rather than fits. The built solid agrees: in the U = 2.0 section the fillet arc
+runs out to (−15.2346, −6.8821), which is the predicted boss tangency point to within the
+0.05 mm discretization used to sample it.
+
+**So the fillet is already the standard two-tangency blend between the flange face and the
+bolt boss**, and `bbf_dx` is not a design input at all — it is the horizontal component of the
+vector from the bolt center to that solution. This matters for the alternatives below: there
+is no version of "make the fillet belong to the boss" that leaves the finished part alone,
+because it already does belong to the boss, and to the flange, in the only way a fillet can.
+
 ![the construction, well away from the singularity](img/bolt_flange_fillet/construction_nominal.svg)
 
 At `U = 2.0` with no panel, `bbf_dx` is 1.100 mm and the construction is comfortable: the ray
@@ -1402,9 +1419,9 @@ matters here, because the design has no opinion about `bbf_dx` either way.
 read it as saying the fillet itself is in trouble somewhere in the swept space. It is not.
 Measured across all 88 valid end-type variants:
 
-- **No constraint is violated, anywhere.** The only relationship that could fail is the
-  tangency to the bolt ring, which fails when the discriminant `r_bolt_fillet² − bbf_dx²`
-  reaches zero. It never does. The tightest variant in the whole corpus is `U=0.5 end_bolt
+- **No constraint is violated, anywhere.** Of the two tangencies, the one to the flange face
+  is a subtraction and cannot fail; the one to the bolt boss fails only when the discriminant
+  `r_bolt_fillet² − bbf_dx²` reaches zero. It never does. The tightest variant is `U=0.5 end_bolt
   1mm`, where `|bbf_dx| / r_bolt_fillet = 0.9182` leaves a discriminant of 4.75 mm² out of
   `r_bolt_fillet² = 30.25 mm²`. At the one variant that would not build, `1.5 end_anchor` with
   no panel, it is 105.02 out of 105.06 — the tangency there is as comfortable as it ever gets.
@@ -1484,15 +1501,27 @@ can inspect. Alternative 6 below is the local form of that question.
    argument this document does not currently have. *Prerequisites:* a decision about what `k`
    means physically — a minimum wall, a print constraint, or a modeling margin.
 
-3. **Make the two features genuinely one.** If the fillet is meant to run tangent into the
-   bolt boss, derive its center from the bolt geometry alone and let the flange follow, so
-   `bbf_dx` ceases to exist as an independent quantity. *Benefits:* removes the degeneracy by
-   construction rather than by robustness, and states the design intent — the fillet belongs
-   to the bolt boss. *Drawbacks:* changes the finished geometry on every bulkhead, so it must
-   be re-verified against OpenSCAD across the corpus and would put the two backends out of
-   agreement until the OpenSCAD side is changed to match. It also assumes an intent that has
-   not been confirmed. *Prerequisites:* confirmation that the fillet is a feature of the boss
-   and not of the flange.
+3. **Tie the flange face to the bolt so `bbf_dx` stops being free.** `bbf_dx` is a difference
+   of dimensions that are chosen independently, so the only way to stop it taking an arbitrary
+   value is to make one of them depend on the others — for instance deriving `bolt_offset`
+   from the flange stack, or `panel_offset` from the bolt position, so that `bbf_dx` holds
+   some stated value. *Benefits:* removes the degeneracy by construction rather than by
+   robustness, and puts a number on a relationship that currently has none.
+   *Drawbacks:* **this necessarily moves real interfaces.** Each of the four inputs is
+   something the part is judged on elsewhere: `panel_offset` and `panel_overlap` are the panel
+   seat, `flange_thickness` is the flange wall, and `bolt_offset` places the bolt in the
+   corner. Whichever is made to follow, the finished geometry changes on every bulkhead, must
+   be re-verified against OpenSCAD across the corpus, and puts the two backends out of
+   agreement until the OpenSCAD side changes to match. *Prerequisites:* a decision about which
+   of the four interfaces is allowed to become a dependent quantity, and what value `bbf_dx`
+   should hold.
+
+   *An earlier version of this alternative — "derive the fillet center from the bolt geometry
+   alone and let the flange follow, so the two features become genuinely one" — rested on a
+   false premise and is withdrawn.* The fillet center is **already** simultaneously tangent to
+   the flange inner face and to the bolt boss, to 3.6 × 10⁻¹⁵ mm across the corpus. There are
+   no two features to unify, and nothing about the fillet's placement to change; what is free
+   is only where that tangency solution ends up relative to the bolt axis.
 
 4. **Constrain `flange_fillet_radius` so that `bbf_cx` cannot cross `bolt_c`.** Rather than
    check the result, choose the fillet radius from the available space:
@@ -1510,58 +1539,62 @@ can inspect. Alternative 6 below is the local form of that question.
    parameter change that moves a variant into it is noticed. *Drawbacks:* detects rather than
    prevents; still needs someone to act on the report. *Prerequisites:* none.
 
-6. **Express the tangency as a constraint rather than solving it.** Build the fillet from a
-   fully constrained sketch carrying a real `Tangent` constraint against the bolt ring and a
-   distance to the flange face, instead of computing `bbf_cy` from a clamped quadratic. This
+6. **Express the two tangencies as constraints rather than solving them.** Build the fillet
+   from a fully constrained sketch carrying **two** real `Tangent` constraints — one against
+   the bolt boss, one against the flange inner face — instead of computing `bbf_cx` from a
+   subtraction and `bbf_cy` from a clamped quadratic. Both tangencies already hold exactly, so
+   this states what the part is, and the solved position is the position it has today. This
    is the local form of [OQ-ARCH-11](../architecture/freecad_migration.md). *Benefits:* the
    relationship becomes a statement the solver checks and a reader can see; an unsatisfiable
    configuration fails loudly where `max(...; 0)` currently returns a plausible wrong answer;
    and drawings (IP-FC-21) and assemblies (IP-FC-19) gain something stable to reference.
-   *Drawbacks:* the solved position is no longer a closed-form function of the parameters,
-   which is what makes the part numerically comparable against the OpenSCAD original — the
-   verification that IP-FC-13 rests on. Slower to build, and it changes the failure mode of
-   any variant where the tangency cannot be met, from clamp to refusal. *Prerequisites:* the
-   same intent question as Alternative 3, plus a decision on OQ-ARCH-11, plus a way to keep
-   verifying a part whose geometry is solved rather than computed.
+   *Drawbacks:* slower to build, and it changes the failure mode of
+   any variant where a tangency cannot be met, from clamp to refusal. *Prerequisites:* a
+   decision on OQ-ARCH-11, and a way to keep verifying a part whose geometry is solved rather
+   than computed. It needs **no** prior intent ruling: both tangencies already hold, so what
+   to constrain is read off the part rather than chosen.
 
 **Recommendation**
 
-**Alternative 5 now, and Alternative 3 as the real answer once the intent is confirmed.**
+**Alternative 6, with Alternative 5 in the meantime. Alternatives 1, 2, 3 and 4 are ruled
+out.**
 
 The immediate risk is gone — the construction is robust and the whole corpus is verified — so
-nothing needs to change geometry today, and options 2 and 4 both do change geometry to solve a
-problem that no longer manifests. What remains is that a quantity governing a construction is
-unconstrained, undocumented and invisible, and the cheapest fix for invisibility is to measure
-it: exporting `bbf_dx` and flagging the band costs nothing and would have made IP-FC-58
-obvious before it was a build failure rather than after.
+nothing needs to change geometry today. That rules out 2, 3 and 4, all of which move the
+finished part to solve a problem that no longer manifests, and 3 most of all, since the only
+version of it that survives scrutiny moves a panel seat or a bolt position to pin a quantity
+that is a *consequence* of them.
 
-The durable answer is Alternative 3, because the fillet almost certainly *is* a feature of the
-bolt boss — its radius is already `flange_fillet_radius + bolt_hole_radius + bolt_thickness`
-from the bolt center, which is a statement that it wraps the boss — and if that is the intent
-then `bbf_dx` should never have been a free variable. **That cannot be settled from the code**,
-which is why this is an open question and not a defect: the OpenSCAD original places the
-fillet the same way, so both toolchains agree and neither records why. It needs the designer's
-answer to one question — is this fillet blending the flange into the boss, or is it a fillet
-on the flange that happens to reach the boss? Alternative 3 follows from the first; Alternative
-1 or 2 follows from the second.
+**The intent question is answerable from the code after all, which is a change from what this
+section said before 2026-08-16.** It read: "is this fillet blending the flange into the boss,
+or is it a fillet on the flange that happens to reach the boss? That cannot be settled from
+the code." It can. The center is `flange_fillet_radius` from the flange's inner face *and*
+`flange_fillet_radius + bolt_hole_radius + bolt_thickness` from the bolt center — tangent to
+both, to floating-point exactness on all 88 variants, as algebraic identities rather than as
+a fit. That is the definition of a blend between the two, and it leaves nothing for the
+designer to choose about the fillet's placement.
 
-**OQ-ARCH-11 was decided on 2026-08-15 toward constraints, which makes Alternative 6 the
-route and changes this recommendation.** The reason 6 was held back above — that it trades
-away a closed-form parameter-to-geometry mapping the verification depends on — **was wrong**:
+So what actually remains open is narrower than this question originally claimed: **not where
+the fillet goes, but whether the two-tangency solution is allowed to land on or near the bolt
+axis.** Nothing bounds `bbf_dx`, it is a difference of four dimensions each chosen for its own
+reasons, and 28 of 88 variants leave it inside 1.0 mm. That is a real gap in the design's
+stated intent even though the resulting fillet is correct at every one of them.
+
+Alternative 6 is the route, and OQ-ARCH-11's decision on 2026-08-15 toward constraints makes
+it the planned one. The reason 6 was held back in an earlier draft — that it trades away a
+closed-form parameter-to-geometry mapping the verification depends on — **was wrong**:
 `compare_backends` measures the built solid's volume and bounding box, so a constrained
-feature is checked exactly as a computed one is. With that objection gone, 6 dominates 3: both
-remove the degeneracy, but 6 also makes the tangency something the model states and the solver
-checks, and answers "was this position clamped?" for every other computed relationship in the
-part rather than only this one.
+feature is checked exactly as a computed one is. Its real merit is now clearer than when it
+was written: the two tangencies **already hold exactly**, so stating them as two `Tangent`
+constraints is a pure change of representation. The part does not move, the corpus comparison
+does not shift, and the relationship stops being a subtraction and a clamped square root that
+only a reader who reconstructs the algebra can see. It also converts the `max(...; 0)` clamp —
+which returns a plausible wrong position — into a solver failure that says so.
 
-Alternative 6 does **not** remove the need to answer the intent question. A constraint has to
-say what it constrains, so the fillet still has to be either tangent to the boss or dimensioned
-from the flange — the same question as before, now unavoidable rather than deferrable. That is
-the useful consequence: the conversion in IP-FC-73 forces this question to be answered instead
-of leaving it implicit in a coordinate.
-
-Alternative 5 remains worth doing in the meantime, being free and immediate, and Alternative 1
-is now ruled out.
+Alternative 5 remains worth doing immediately, being free: exporting `bbf_dx` and flagging the
+band would have made IP-FC-58 visible before it was a build failure rather than after, and it
+is the only thing here that addresses the remaining open part of the question, which is
+whether anyone is watching where that solution lands.
 
 Drawings are generated by `tools/draw_bolt_flange_fillet.py` from `derived_parameters()`, so
 every dimension quoted above is the swept value rather than a typed one. The three context

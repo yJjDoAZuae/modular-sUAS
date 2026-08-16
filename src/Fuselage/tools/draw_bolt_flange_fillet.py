@@ -718,6 +718,39 @@ def fig_scan(cid):
     return svg(v, '\n'.join(b), cid, head)
 
 
+def tangency_residuals():
+    """How exactly the fillet center satisfies the two tangencies it is placed by.
+
+    Both are algebraic identities -- distance to the flange face is `flange_fillet_radius` by
+    the definition of `bbf_cx`, and distance to the bolt center is `r_bolt_fillet` because
+    `bbf_dx² + bbf_dy² = r_bolt_fillet²` -- so the residuals should be rounding and nothing
+    else. Reported rather than asserted because the `max(...; 0)` in `bbf_cy` would break the
+    second one silently if it ever fired, and this is what would show it.
+    """
+    axes = fv.axes('panel_variants.csv', 'bulkhead_type_variants.csv',
+                   'bulkhead_size_variants.csv')
+    printer = fv.null_printer_settings()
+    n = 0
+    worst_flange = worst_boss = 0.0
+    for params in fv.flatten_param_space(fv.read_all_param_axes(axes)):
+        dp = fv.derived_parameters(params['U'], 1.0, params, printer, True)
+        if not fv.family_is_valid('bulkhead', dp) or dp.bulkhead.type != fv.BulkheadType.END:
+            continue
+        n += 1
+        ffr = dp.bulkhead_flange.fillet_radius
+        bolt_c = -dp.bolt.offset
+        boss_r = dp.bolt.radius + dp.bolt.thickness
+        face_x = -(dp.panel.tolerance + dp.panel.offset + dp.panel.overlap
+                   + dp.bulkhead_flange.thickness)
+        cx = face_x - ffr
+        dx = cx - bolt_c
+        cy = math.sqrt(max((ffr + boss_r) ** 2 - dx ** 2, 0.0)) + bolt_c
+        worst_flange = max(worst_flange, abs((face_x - cx) - ffr))
+        worst_boss = max(worst_boss,
+                         abs(math.hypot(cx - bolt_c, cy - bolt_c) - (ffr + boss_r)))
+    return n, worst_flange, worst_boss
+
+
 # --------------------------------------------------------------------------- driver
 
 def main(argv=None):
@@ -770,6 +803,12 @@ def main(argv=None):
         print('%-22s %10.4f %10.4f %10.4f %12.9f'
               % ('U=%s %s %s' % (g['U'], g['type'], g['panel']),
                  g['bbf_dx'], g['bbf_dy'], math.degrees(g['theta']), g['sliver']))
+
+    print()
+    n, flange, boss = tangency_residuals()
+    print('the two tangencies, across %d valid end-type variants:' % n)
+    print('  worst |dist(center, flange face) - flange_fillet_radius|  %.3e mm' % flange)
+    print('  worst |dist(center, bolt) - (fillet radius + boss radius)| %.3e mm' % boss)
     return 0
 
 
