@@ -43,9 +43,24 @@ TINY_EDGE = 1e-3
 TINY_FACE = 1e-4
 
 
-def make_broken(cells):
-    """The construction as it stood before IP-FC-58: block left edge at the fillet center."""
-    cells.set('bbf_bx', '=bbf_cx')
+def make_broken(doc):
+    """The construction as it stood before IP-FC-58: block left edge at the fillet center.
+
+    Since OQ-DES-B14 was implemented the center comes from the `BffTangency` sketch and the
+    block's extent is an expression on the block rather than a `bbf_bx` sheet row, so the
+    pre-fix state is restored by rewriting those two expressions. The fillet center itself is
+    untouched -- it was never what IP-FC-58 was about.
+    """
+    P, cx = 'Params.', fillets.BBF_CX
+    block = doc.getObject('BffBlock')
+    block.setExpression('Length', '%sbbf_sx - %s' % (P, cx))
+    block.setExpression('Placement.Base.x', cx)
+
+
+def center(doc):
+    """The solved fillet center, as the sketch reports it."""
+    sk = doc.getObject('BffTangency')
+    return sk.getDatum('bbf_cx').Value, sk.getDatum('bbf_cy').Value
 
 
 def stats(shape):
@@ -73,9 +88,9 @@ def isolated(seed, mode):
     doc = App.newDocument('bbfscan')
     fillets.sheet(doc, parameters.seed(seed))
     cells = doc.getObject('Params')
-    if mode == 'broken':
-        make_broken(cells)
     tip = fillets.bolt_flange_fillet(doc)
+    if mode == 'broken':
+        make_broken(doc)
     doc.recompute()
     return doc, cells, tip
 
@@ -87,10 +102,10 @@ def assembled(seed, mode):
     rows = bulkhead_section.merged_rows(s) + bulkhead_full.PARAMS
     bulkhead_section.sheet(doc, s, rows)
     cells = doc.getObject('Params')
-    if mode == 'broken':
-        make_broken(cells)
-        doc.recompute()
     octant = bulkhead_section.emit(doc, s, rows=rows)
+    if mode == 'broken':
+        make_broken(doc)
+        doc.recompute()
     octant.setExpression('Placement.Base.x', 'Params.corner_offset')
     octant.setExpression('Placement.Base.y', 'Params.corner_offset')
     tip = doc.addObject('Part::Refine', 'BulkheadFull')
@@ -102,15 +117,21 @@ def assembled(seed, mode):
 def cmd_scan(seed, mode):
     doc, cells, tip = isolated(seed, mode)
     r = float(cells.get('r_bolt_fillet'))
-    cx = float(cells.get('bbf_cx'))
-    print('mode=%s  r_bolt_fillet=%.4f  bbf_cx=%.4f' % (mode, r, cx))
+    cx0 = center(doc)[0]
+    print('mode=%s  r_bolt_fillet=%.4f  bbf_cx=%.4f' % (mode, r, cx0))
     print('%9s %9s %9s | %10s %5s %3s %11s | %10s %5s %3s %11s'
           % ('bbf_dx', 'theta deg', 'r/bbf_dx', 'ray vol', 'valid', 'nf', 'min edge',
              'fillet vol', 'valid', 'nf', 'min edge'))
     for d in DELTAS:
-        cells.set('bolt_offset', repr(-cx + d))
+        cells.set('bolt_offset', repr(-cx0 + d))
         doc.recompute()
-        dx = float(cells.get('bbf_dx'))
+        cx, cy = center(doc)
+        dx = cx - float(cells.get('bolt_c'))
+        # the sketch is re-solved at every step, so confirm it stayed on the same branch
+        expect = math.sqrt(max((r ** 2) - dx ** 2, 0.0)) + float(cells.get('bolt_c'))
+        if abs(cy - expect) > 1e-6:
+            print('  ** branch jump at bbf_dx=%.6f: cy %.6f, tangency gives %.6f'
+                  % (dx, cy, expect))
         theta = math.degrees(math.asin(min(abs(dx) / r, 1.0)))
         amp = (r / dx) if dx > 1e-12 else float('inf')
         a, b = stats(doc.getObject('BffRay').Shape), stats(tip.Shape)
@@ -121,9 +142,9 @@ def cmd_scan(seed, mode):
 
 def cmd_stages(seed, mode):
     doc, cells = assembled(seed, mode)
-    print('mode=%s  bbf_cx=%s  bbf_bx=%s  bolt_c=%s  bbf_dx=%s'
-          % (mode, cells.get('bbf_cx'), cells.get('bbf_bx'), cells.get('bolt_c'),
-             cells.get('bbf_dx')))
+    cx, cy = center(doc)
+    print('mode=%s  bbf_cx=%.6f  bbf_cy=%.6f  bolt_c=%s  bbf_dx=%.6f'
+          % (mode, cx, cy, cells.get('bolt_c'), cx - float(cells.get('bolt_c'))))
     for name in STAGES:
         obj = doc.getObject(name)
         if obj is None:
@@ -139,9 +160,9 @@ def cmd_stages(seed, mode):
 def cmd_edge(seed, mode):
     doc, cells = assembled(seed, mode)
     sh = doc.getObject('SectionCut').Shape
-    print('mode=%s  bbf_cx %s  bbf_cy %s  relief_r_low %s  plate_thickness %s'
-          % (mode, cells.get('bbf_cx'), cells.get('bbf_cy'), cells.get('relief_r_low'),
-             cells.get('plate_thickness')))
+    cx, cy = center(doc)
+    print('mode=%s  bbf_cx %.6f  bbf_cy %.6f  relief_r_low %s  plate_thickness %s'
+          % (mode, cx, cy, cells.get('relief_r_low'), cells.get('plate_thickness')))
     found = False
     for i, e in enumerate(sh.Edges):
         if e.Length >= TINY_EDGE:

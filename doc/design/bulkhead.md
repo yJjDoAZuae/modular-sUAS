@@ -457,13 +457,21 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
 | B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
 | B13 | ~~resolved~~ 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
-| B14 | **open** | Nothing keeps the bolt-flange fillet center off the bolt axis |
+| B14 | ~~resolved~~ 2026-08-16 — implemented | Nothing keeps the bolt-flange fillet center off the bolt axis |
 
-**Three open: B3, B8 and B14.** B3 and B8 need a decision rather than an answer — B3's original
-intent is not recoverable, B8 is a forward-looking structural choice. B14 is different: the
-symptom it caused has been fixed, and the relationship that produced it has not been decided.
-B3's original intent is not recoverable; B8 is a forward-looking structural choice that
-gets more expensive the longer it is deferred.
+**Two open: B3 and B8.** Both need a decision rather than an answer — B3's original intent is
+not recoverable, and B8 is a forward-looking structural choice that gets more expensive the
+longer it is deferred.
+
+**B14 was raised, answered and implemented between 2026-08-15 and 2026-08-16.** It turned out
+to contain a question that could be settled from the code and one that could not. The first —
+where does this fillet belong — is settled: its center is the circle of radius
+`flange_fillet_radius` tangent to both the flange's inner face and the bolt boss, exactly, on
+every swept variant, so it is a blend of the two and its placement was never free. That is now
+*stated*: `fillets.BffTangency` is a constrained sketch carrying the two `Tangent` constraints,
+and the geometry reads the solved center back from it. The second — whether that solution may
+land on the bolt axis — has no physical argument either way, so it is measured and reported
+rather than bounded (`tools/bbf_analysis/report_bbf_gap.py`).
 
 **B13 was raised, decided and fixed on 2026-08-14, and was the same shape as B12**: a constant
 whose stated job is boolean slop was setting the position of a face on the finished part. It
@@ -1193,6 +1201,57 @@ IP-FC-59 working reference.
 
 ### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis
 
+**Resolution, 2026-08-16 — Alternative 6, with Alternative 5 alongside. Implemented.**
+
+*Chosen:* the fillet center's two tangencies are now **stated as constraints** rather than
+solved into coordinates. `fillets._tangency_sketch()` builds `BffTangency`, a fully
+constrained construction sketch holding the fillet circle, the bolt boss and the flange's
+inner face, with a `Tangent` constraint against each; the CSG reads the solved center back
+through reference dimensions. The two spreadsheet rows it replaces — `bbf_cx`, a subtraction,
+and `bbf_cy`, a square root under `max(...; 0)` — are gone, along with `bbf_dx`, `bbf_dy`,
+`bbf_bx`, `bbf_r`, `bbf_ang`, `bbf_hx` and `bbf_hy`. Alternative 5 is implemented as
+`tools/bbf_analysis/report_bbf_gap.py`, which reports the gap for every variant and flags the
+band without rejecting anything.
+
+*Rationale:* both tangencies already held exactly, so this is a change of representation and
+not of geometry — every stage of the assembled bulkhead is bit-identical to the arithmetic it
+replaced, and a sampled backend comparison still agrees with OpenSCAD to 0.0016%. What it buys
+is that the relationship is now something the solver checks and a reader can see, and that an
+unsatisfiable configuration is **refused** where `max(...; 0)` used to clamp and return a
+plausible wrong center. Alternatives 1–4 were ruled out: 1 leaves the relationship unstated,
+and 2, 3 and 4 all move the finished part to fix a problem that no longer manifests.
+
+*Caveats, each checked rather than assumed —* `freecad/check_bff_tangency.py`:
+
+- **The sketch holds the center, not the profile — a matter of scope, not of capability.**
+  An earlier draft of this resolution claimed a profile sketch was impossible here, because
+  the profile degenerates from a quad to a triangle on 18 of the 88 valid end-type variants
+  where `bbf_sx = max(flange_inner_x; bolt_c)` resolves to `bolt_c`. **That reasoning was
+  wrong**: it assumed one sketch must serve the whole parameter space, and nothing requires
+  that — a document is generated per parameter set, so the generator emits four edges or
+  three as the parameters dictate. Measured rather than argued, a four-edge profile sketch is
+  exact up to *and including* the exactly-degenerate point, and fails only past it. Moving the
+  profile too would have put a verified construction and an unverified one in one step, so it
+  was left for the `PartDesign::` conversion (IP-FC-75), where profiles have to be sketches
+  anyway.
+- **The sheet may not read the sketch back.** FreeCAD's dependency graph is per object, so a
+  `Params` cell referring to a sketch that refers to `Params` reports "The graph must be a DAG"
+  and then leaves the sketch permanently touched, never recomputed, with stale values that
+  still look correct. The solved center therefore flows sketch → geometry only.
+- **The delivered `.FCStd` stays editable.** Saved, reloaded, and a parameter moved: the sketch
+  re-solves and the octant follows.
+- **The solver stays on the correct branch.** Two circles admit more than one common tangent
+  circle, so the closed form is retained as a *test* of the solved position, over a swept
+  parameter, not as its source.
+- **`FullyConstrained` is not a sufficient check, and this is general to the port.** Driving a
+  profile past a degeneracy makes the solver return −1 from all four of its algorithms while
+  `FullyConstrained` stays True and the extrusion keeps serving the last geometry that solved
+  — 42 mm³ adrift by the end of the sweep that found it. `corner_tree._sketch()` gated on
+  `FullyConstrained` alone and now checks `solve()` first.
+
+The record of how this was reached follows, and is kept because it is the authority on what
+this fillet is and how the construction behaves near the singularity.
+
 Each frame bulkhead carries a fillet where the flange meets the ring of material around the
 bolt hole. In the FreeCAD port this is `bolt_flange_fillet` in `freecad/fillets.py`; in the
 OpenSCAD original it is the equivalent block-minus-relief in the bulkhead geometry.
@@ -1481,7 +1540,7 @@ does not settle it, because that variation is *already represented*, as the `max
 selections and the branching in the derivation. It is being expressed; just in a form nothing
 can inspect. Alternative 6 below is the local form of that question.
 
-**Alternatives**
+**Alternatives, as they were considered**
 
 1. **Leave it unconstrained and rely on the robust construction.** Nothing further to do.
    *Benefits:* zero work; the fix is verified across the whole space and the exactly-zero case
@@ -1554,7 +1613,7 @@ can inspect. Alternative 6 below is the local form of that question.
    than computed. It needs **no** prior intent ruling: both tangencies already hold, so what
    to constrain is read off the part rather than chosen.
 
-**Recommendation**
+**Recommendation, as made and then adopted**
 
 **Alternative 6, with Alternative 5 in the meantime. Alternatives 1, 2, 3 and 4 are ruled
 out.**
@@ -1595,6 +1654,13 @@ Alternative 5 remains worth doing immediately, being free: exporting `bbf_dx` an
 band would have made IP-FC-58 visible before it was a build failure rather than after, and it
 is the only thing here that addresses the remaining open part of the question, which is
 whether anyone is watching where that solution lands.
+
+**Both were implemented on 2026-08-16 — see the Resolution at the top of this question.** The
+gap is measured by `fuselage_variants.bolt_flange_fillet_gap()` and reported by
+`tools/bbf_analysis/report_bbf_gap.py`; it spans −5.0500 to +4.7500 mm across the 88 valid
+end-type variants, with 28 inside 1.0 mm of zero and none anywhere near having no solution —
+the tightest keeps 0.4500 mm of the 5.5000 mm the two tangencies can be pulled apart, at
+`U=0.5 end_bolt 1mm`.
 
 Drawings are generated by `tools/draw_bolt_flange_fillet.py` from `derived_parameters()`, so
 every dimension quoted above is the swept value rather than a typed one. The three context

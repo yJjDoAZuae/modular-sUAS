@@ -24,6 +24,16 @@ clipping box takes its rotation from an expression, `atan2(dy; dx)`, bound to
 `Placement.Rotation.Angle` -- the first node in the port whose orientation is parametric
 rather than a literal.
 
+**`bulkhead_bolt_flange_fillet`'s center is solved, not computed** (OQ-DES-B14, 2026-08-16).
+It used to be two spreadsheet rows: `bbf_cx` a subtraction, `bbf_cy` a square root under
+`max(...; 0)`. What those two describe is a circle of radius `flange_fillet_radius` touching
+the flange's inner face and the bolt boss at once, and that is now *stated* -- `BffTangency`
+is a fully constrained construction sketch carrying two `Tangent` constraints, and the
+geometry reads the solved center back from its reference dimensions. See
+`_tangency_sketch()` for why the sketch holds only the center and not the profile, and why
+the sheet is not allowed to read it back. The change is representation only: every stage of
+the assembled bulkhead is bit-identical to the arithmetic it replaced.
+
 `bulkhead_flange_chamfer` is the first piece here whose prism is not axis-aligned. Rather
 than solve its cutting plane in world coordinates, the prism is built in the frame the
 source draws it in and the composed rotation is applied to the result -- the same approach
@@ -33,12 +43,15 @@ source draws it in and the composed rotation is applied to the result -- the sam
 
 Derived parameters for U=1.0 end_bolt 3/16in.
 """
+import math
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
+import Part
+import Sketcher as S
 
 import corner_tree as C
 from corner_common import build_sheet, is_entry_point
@@ -116,32 +129,13 @@ PARAMS = [
     # around the bolt hole, so their centres lie on this radius from the bolt centre.
     ('bolt_c', '=-bolt_offset'),
     ('r_bolt_fillet', '=flange_fillet_radius + bolt_hole_radius + bolt_thickness'),
+    # identical to simple_positives' row, so the merge keeps one of them (IP-FC-41)
+    ('bolt_boss_r', '=bolt_hole_radius + bolt_thickness'),
 
-    # bulkhead_bolt_flange_fillet: centre one radius outboard of the flange face, at the
-    # height where that vertical line meets the bolt ring. The discriminant clips at 0 for
-    # a flange too far out to reach the ring at all.
+    # bulkhead_bolt_flange_fillet's outboard extent. Its CENTRE is not here any more: it is
+    # solved by `BffTangency`, the sketch built in `_tangency_sketch()` below, and read back
+    # from that sketch's reference dimensions. See OQ-DES-B14.
     ('bbf_sx', '=max(flange_inner_x; bolt_c)'),
-    ('bbf_cx', '=flange_inner_x - flange_fillet_radius'),
-    ('bbf_dx', '=bbf_cx - bolt_c'),
-    # The block's left edge, which is NOT the fillet centre. The quad's leftmost vertex is
-    # whichever of the fillet centre and the bolt centre is further out, and starting the
-    # block anywhere right of that would clip the region. Starting it *at* `bbf_cx`, as this
-    # did, is correct in area -- the ray cut removes the excess either way -- but it puts the
-    # block's left edge, the ray edge and the relief cylinder's centre concurrent at
-    # `(bbf_cx, bbf_cy)`. When `bbf_dx` is small the two edges leaving that point are nearly
-    # collinear (1.12 deg apart at U=1.5), so the relief cylinder clips them at nearly the
-    # same place and leaves a face `relief_r_low * (1 - cos theta)` wide -- 0.0003 mm, which
-    # is what IP-FC-58 fails on. Taking the true extent moves the edge clear of the centre
-    # by `bbf_dx` and the concurrency is gone. Where `bbf_cx` already is the leftmost vertex
-    # this is exactly the old expression, so nothing changes on that side.
-    ('bbf_bx', '=min(bbf_cx; bolt_c)'),
-    ('bbf_cy', '=sqrt(max(r_bolt_fillet ^ 2 - bbf_dx ^ 2; 0)) + bolt_c'),
-    ('bbf_dy', '=bbf_cy - bolt_c'),
-    ('bbf_r', '=sqrt(bbf_dx ^ 2 + bbf_dy ^ 2)'),
-    # the bolt-centre-to-fillet-centre edge, as a half-plane box on its far side
-    ('bbf_ang', '=atan2(bbf_dy; bbf_dx)'),
-    ('bbf_hx', '=bolt_c - far * bbf_dx / bbf_r'),
-    ('bbf_hy', '=bolt_c - far * bbf_dy / bbf_r'),
 
     # web_to_bolt_fillet: the greeble flange wall runs at 45 degrees, half a flange
     # thickness either side of the diagonal, and the fillet centre is one radius off it.
@@ -259,16 +253,165 @@ def _ray_halfplane(doc, name, angle_expr, x, y):
     return box
 
 
+# The names the rest of the module reads the solved center back through. `Constraints.<name>`
+# resolves a *reference* (non-driving) dimension, whose value the solver writes.
+#
+# `/ 1mm` is not decoration. A sketch constraint is a Quantity carrying a length unit; every
+# row of this sheet is a bare number, because that is what the OpenSCAD source's millimetres
+# port to. Mixing them fails at recompute with "Unit mismatch in minus operation", so the
+# unit is divided out here, once, rather than at each of the six places these are used.
+SK = 'BffTangency.Constraints.'
+BBF_CX = '(%sbbf_cx / 1mm)' % SK
+BBF_CY = '(%sbbf_cy / 1mm)' % SK
+
+
+def _tangency_sketch(doc):
+    """OQ-DES-B14: the fillet center, stated as the two tangencies it actually satisfies.
+
+    The center used to be arithmetic -- `bbf_cx` a subtraction and `bbf_cy` a square root
+    under `max(...; 0)`. Both are true, and both are invisible: a reader has to reconstruct
+    the algebra to see that what they describe is a circle of radius `flange_fillet_radius`
+    touching the flange's inner face and the bolt boss at the same time. Here that circle is
+    drawn, the two `Tangent` constraints are stated, and the solver places it.
+
+    **Construction geometry only, and the profile is simply out of scope here.** The obvious
+    reading of "build the fillet from a sketch" is to sketch its profile. An earlier version
+    of this docstring claimed that could not be done, because on 18 of the 88 valid end-type
+    variants `bbf_sx = max(flange_inner_x; bolt_c)` resolves to `bolt_c`, the quad's bottom
+    edge collapses, and the profile is a triangle rather than a quad. **That argument was
+    wrong**: it assumed one sketch has to serve the whole parameter space, which nothing
+    requires -- a document is generated per parameter set, so the generator emits whichever
+    topology the parameters call for, four edges or three.
+
+    Measured on the real profile rather than argued (2026-08-16): a four-edge sketch is exact
+    right up to *and including* the exactly-degenerate point, where the collapsed edge is
+    0.0000 mm long and the volume still matches the trapezoid formula. Only past that point
+    does it fail, and then `solve()` returns -1 while `FullyConstrained` stays True and the
+    extrusion keeps serving the last geometry that solved. That is worth knowing generally,
+    and `corner_tree._sketch()` now checks `solve()` for exactly this reason.
+
+    So a profile sketch is available and is the natural target for `PartDesign::` (IP-FC-75).
+    It is not done here because this change is about where the center comes from, and moving
+    the profile as well would put a verified construction and an unverified one in the same
+    step.
+
+    **The sheet may not read this back.** FreeCAD's dependency graph is per object, so a
+    `Params` cell referring to this sketch, which refers to `Params`, is a cycle: it reports
+    "The graph must be a DAG" and then leaves the sketch permanently touched and never
+    recomputed, with its last solved values still in place and looking correct. So the
+    solved center flows sketch -> geometry only, and the handful of quantities that used to
+    be sheet rows are expressions on the objects that need them.
+    """
+    P = 'Params.'
+    sheet = doc.getObject('Params')
+    doc.recompute()
+
+    def cell(alias):
+        return float(sheet.get(alias))
+
+    face, ffr = cell('flange_inner_x'), cell('flange_fillet_radius')
+    bolt_c, boss_r = cell('bolt_c'), cell('bolt_boss_r')
+    seed_cx = face - ffr
+    span = (ffr + boss_r) ** 2 - (seed_cx - bolt_c) ** 2
+    if span <= 0:
+        # What `max(...; 0)` used to swallow. The flange is too far out for any circle of
+        # radius flange_fillet_radius to touch both it and the boss, so there is no fillet
+        # to place and the sketch below would be unsatisfiable.
+        raise RuntimeError(
+            'bolt_flange_fillet: no circle of radius %.4f can touch both the flange face at '
+            'x = %.4f and the bolt boss of radius %.4f at (%.4f, %.4f). The two tangencies '
+            'have no common solution (would-be discriminant %.4f mm2).'
+            % (ffr, face, boss_r, bolt_c, bolt_c, span))
+    seed_cy = math.sqrt(span) + bolt_c
+
+    sk = C._owned(doc, 'Sketcher::SketchObject', 'BffTangency')
+    if sk.GeometryCount == 0:
+        # G0 the fillet circle, G1 the bolt boss, G2 the flange's inner face. All
+        # construction: this sketch is never extruded, it only places a point.
+        sk.addGeometry(Part.Circle(V(seed_cx, seed_cy, 0), V(0, 0, 1), ffr), True)
+        sk.addGeometry(Part.Circle(V(bolt_c, bolt_c, 0), V(0, 0, 1), boss_r), True)
+        far = cell('far')
+        sk.addGeometry(Part.LineSegment(V(face, bolt_c - far, 0), V(face, bolt_c + far, 0)),
+                       True)
+
+        def con(c, expr=None, name=None, driving=True):
+            i = sk.addConstraint(c)
+            if expr is not None:
+                sk.setExpression('Constraints[%d]' % i, expr)
+            if not driving:
+                sk.setDriving(i, False)
+            if name:
+                sk.renameConstraint(i, name)
+            return i
+
+        # the flange face: a vertical line at flange_inner_x. Its endpoints carry no meaning
+        # and are pinned only so the sketch can reach full constraint.
+        con(S.Constraint('Vertical', 2))
+        con(S.Constraint('DistanceX', -1, 1, 2, 1, face), P + 'flange_inner_x')
+        con(S.Constraint('DistanceY', -1, 1, 2, 1, bolt_c - far), P + 'bolt_c - ' + P + 'far')
+        con(S.Constraint('DistanceY', -1, 1, 2, 2, bolt_c + far), P + 'bolt_c + ' + P + 'far')
+
+        # the boss, at the bolt center
+        con(S.Constraint('DistanceX', -1, 1, 1, 3, bolt_c), P + 'bolt_c')
+        con(S.Constraint('DistanceY', -1, 1, 1, 3, bolt_c), P + 'bolt_c')
+        con(S.Constraint('Radius', 1, boss_r), P + 'bolt_boss_r')
+
+        # the fillet circle: its radius, and the two statements this whole question is about
+        con(S.Constraint('Radius', 0, ffr), P + 'flange_fillet_radius')
+        con(S.Constraint('Tangent', 0, 2), name='tangent_to_flange_face')
+        con(S.Constraint('Tangent', 0, 1), name='tangent_to_bolt_boss')
+
+        # what the solver produced, for everything downstream to read
+        con(S.Constraint('DistanceX', -1, 1, 0, 3, seed_cx), name='bbf_cx', driving=False)
+        con(S.Constraint('DistanceY', -1, 1, 0, 3, seed_cy), name='bbf_cy', driving=False)
+
+    doc.recompute()
+    dof = sk.solve()
+    if dof != 0 or not sk.FullyConstrained:
+        raise RuntimeError('BffTangency did not solve (solve()=%d, fully constrained %s). '
+                           'The two tangencies have no common solution at these parameters.'
+                           % (dof, sk.FullyConstrained))
+
+    # The branch guard IP-FC-73 asks for. Two circles have two common tangent circles on a
+    # given side and the solver converges on whichever the seed is nearest; the closed form
+    # is kept HERE, as a test of the solved position rather than as its source, because a
+    # wrong branch is geometry that builds happily and is simply in the wrong place.
+    got = (sk.getDatum('bbf_cx').Value, sk.getDatum('bbf_cy').Value)
+    if max(abs(got[0] - seed_cx), abs(got[1] - seed_cy)) > 1e-7:
+        raise RuntimeError('BffTangency solved to (%.9f, %.9f) but the two tangencies place '
+                           'the center at (%.9f, %.9f) -- the solver took the wrong branch.'
+                           % (got[0], got[1], seed_cx, seed_cy))
+    return sk
+
+
 def bolt_flange_fillet(doc):
     """Quad (cx, cy) (sx, cy) (sx, -bolt) (-bolt, -bolt): the top edge is horizontal here
-    because the start and centre share a y, so only the ray edge needs clipping."""
+    because the start and center share a y, so only the ray edge needs clipping.
+
+    `cx, cy` is solved by `BffTangency` rather than computed -- see `_tangency_sketch()`.
+    The quantities that used to be sheet rows are expressions here for the reason given
+    there: a sheet row reading this sketch would close a dependency cycle.
+    """
     P = 'Params.'
-    block = C._box(doc, 'BffBlock', P + 'bbf_sx - ' + P + 'bbf_bx', P + 'bbf_dy',
-                   P + 'bulkhead_thickness', P + 'bbf_bx', P + 'bolt_c', '0')
+    _tangency_sketch(doc)
+
+    dx = '(%s - %sbolt_c)' % (BBF_CX, P)
+    dy = '(%s - %sbolt_c)' % (BBF_CY, P)
+    # The quad's leftmost vertex, which is NOT the fillet center -- IP-FC-58. Starting the
+    # block at the center puts its left edge, the ray edge and the relief cylinder's center
+    # concurrent, and OCCT does not survive that; see OQ-DES-B14.
+    bx = 'min(%s; %sbolt_c)' % (BBF_CX, P)
+    # `bbf_r` was sqrt(dx^2 + dy^2), which the circle rule makes identically r_bolt_fillet.
+    # That was true before and is now true *by construction*: it is the tangency the sketch
+    # states, so there is no clamped branch on which the identity could fail.
+    ray = '%sbolt_c - %sfar * %%s / %sr_bolt_fillet' % (P, P, P)
+
+    block = C._box(doc, 'BffBlock', '%sbbf_sx - %s' % (P, bx), dy,
+                   P + 'bulkhead_thickness', bx, P + 'bolt_c', '0')
     node = C._cut(doc, 'BffRay', block,
-                  _ray_halfplane(doc, 'BffRayBox', P + 'bbf_ang', P + 'bbf_hx',
-                                 P + 'bbf_hy'))
-    node = _relief_stack(doc, 'Bff', node, P + 'bbf_cx', P + 'bbf_cy')
+                  _ray_halfplane(doc, 'BffRayBox', 'atan2(%s; %s)' % (dy, dx),
+                                 ray % dx, ray % dy))
+    node = _relief_stack(doc, 'Bff', node, BBF_CX, BBF_CY)
     tip = C._owned(doc, 'Part::Refine', 'BoltFlangeFillet')
     tip.Source = node
     return tip
