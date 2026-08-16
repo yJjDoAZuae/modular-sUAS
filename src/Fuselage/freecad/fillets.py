@@ -210,7 +210,23 @@ def greeble_to_web_fillet(doc):
 
 def _chamfer_prism(doc, tag, length_expr):
     """The pentagon prism, built in the source's own frame: local x is the eventual world
-    z, local y runs into the flange, and the extrusion runs along local +z."""
+    z, local y runs into the flange, and the extrusion runs along local +z.
+
+    **This shape is a workaround, not a design (OQ-ARCH-13).** The feature is strain relief
+    along the interior corner between the flange and the web -- it follows that corner around
+    the full interior perimeter of the flange and on around the bolt or anchor, and its size
+    is a structural quantity rather than a modeling convenience. What a CAD package would say
+    is "chamfer that edge by `flange_chamfer`". OpenSCAD cannot designate an edge and chamfer
+    it, so the source had to build the material explicitly, in as many pieces as the corner
+    has runs, and this port transcribed that faithfully while OpenSCAD was the authority.
+
+    So do not read the two prisms, the nine `chm_*` rows or the rotated frame as intent to be
+    preserved: what is intended is the 45 degrees, the size, and that it follows the corner.
+    Replacing it with a real chamfer feature is IP-FC-78, gated on `PartDesign` (IP-FC-75)
+    because it needs to name an edge of a boolean result and those names are not yet stable.
+    Recorded because the first draft of OQ-ARCH-13 reasoned from this construction as though
+    it had been chosen, and recommended leaving it alone permanently on that basis.
+    """
     P = 'Params.'
     box = C._box(doc, tag + 'Box', P + 'chm_top', P + 'chm_deep', length_expr,
                  '0', '-' + P + 'chm_deep', '0')

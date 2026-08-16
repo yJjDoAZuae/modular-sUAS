@@ -682,7 +682,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
 | ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
-| ARCH-13 | open | Should the flange chamfer become a real chamfer feature? Its two-prism build is an OpenSCAD workaround, not a design — FreeCAD can chamfer the edge, but not until edge references are stable |
+| ARCH-13 | ~~decided~~ 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -1823,7 +1823,27 @@ That is the one real cost, and it is the question this alternative turns on.
 
 ---
 
-### OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature?
+### ~~OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature?~~ — DECIDED 2026-08-16: yes, but with the `PartDesign` move; leave it alone until then
+
+**Resolution.** **Alternative 1 now, alternative 3 later**, as recommended. The two-prism
+construction stays for the present and `fillets.py` records beside it that the shape is a
+workaround for OpenSCAD rather than a design, so the next reader does not mistake it for
+intent the way the first draft of this question did. Converting it to a real chamfer
+feature is scheduled as **IP-FC-78**, to be done with the move to `PartDesign` (IP-FC-75),
+which is where edge references become stable enough to name one and where a chamfer
+operation is the natural way to express the feature.
+
+**Caveats carried by the choice.** The chamfer keeps its nine spreadsheet rows and its
+rotated construction frame in the meantime, so a change to the flange outline still has to
+be carried into those rows by hand and nothing will report it if it is not. The conversion
+is also the one piece of this work that can move the flown part, so when IP-FC-78 is done
+it needs a whole-corpus comparison rather than the bit-identical check the rounded corners
+get, and the behavior where two runs meet at a corner has to be measured rather than
+assumed. **The question and its alternatives are kept below**, in this document's usual
+practice: the reasoning about why the construction is not evidence of intent is the part
+worth having when IP-FC-78 comes up.
+
+---
 
 **Nothing is blocked by this today.** The three rounded corners still to be converted can be done
 without an answer. The one thing it holds up is being able to say the work on the bulkhead is
