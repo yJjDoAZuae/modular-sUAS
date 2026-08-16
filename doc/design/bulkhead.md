@@ -457,8 +457,11 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
 | B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
 | B13 | ~~resolved~~ 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
+| B14 | **open** | Nothing keeps the bolt-flange fillet center off the bolt axis |
 
-**Two open: B3 and B8.** Neither is a defect — both need a decision rather than an answer.
+**Three open: B3, B8 and B14.** B3 and B8 need a decision rather than an answer — B3's original
+intent is not recoverable, B8 is a forward-looking structural choice. B14 is different: the
+symptom it caused has been fixed, and the relationship that produced it has not been decided.
 B3's original intent is not recoverable; B8 is a forward-looking structural choice that
 gets more expensive the longer it is deferred.
 
@@ -1186,6 +1189,298 @@ face cannot — and neither can be understood without looking at the part it mat
 
 Drawings of all of this, taken from the built solid rather than from the equations, are the
 IP-FC-59 working reference.
+
+
+### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis
+
+Each frame bulkhead carries a fillet where the flange meets the ring of material around the
+bolt hole. In the FreeCAD port this is `bolt_flange_fillet` in `freecad/fillets.py`; in the
+OpenSCAD original it is the equivalent block-minus-relief in the bulkhead geometry.
+
+**Where it is.**
+
+![where the bolt-flange fillet is in the whole bulkhead](img/bolt_flange_fillet/context_bulkhead.svg)
+
+There are eight of them, two at each corner. The bulkhead is drawn twice in one view: the pale
+outline is a section through the flat plate, which is the part's silhouette, and the tinted one
+is a section above the plate, through the standing flange wall and the four corner bosses that
+carry the bolts. Each fillet is the small solid between one boss and the wall, and the four
+circles the fillets straddle are the bolt holes.
+
+![the octant the fillet is built in](img/bolt_flange_fillet/context_octant.svg)
+
+Only one of the eight is ever built. The bulkhead is one octant mirrored three times, so the
+fillet is constructed once, in the octant's own frame, and the octant mask along `y = x` keeps
+the half on this side while the mirrored octant supplies the other half. **Every figure below
+is drawn in that frame**, in the dashed window shown. Its origin is the corner arc's center,
+`corner_offset = unit_width / 2 - corner_radius` away from the bulkhead's own center, which is
+why every coordinate below is negative: the bolt sits at `(bolt_c, bolt_c)` with
+`bolt_c = -bolt_offset`.
+
+**What it is made of.** The fillet is not a `Part::Fillet`; it is CSG, a box with two pieces
+cut off it. Four nouns recur below, and they are these:
+
+![the block, the wedge, the quad and the fillet](img/bolt_flange_fillet/terms.svg)
+
+- **the block** — `BffBlock`, an axis-aligned box of starting stock, reaching from the
+  leftmost vertex of the quad below out to the flange face, and from the bolt center up to
+  the fillet center. It is not a feature of the part; nothing of it survives except what the
+  two cuts leave.
+- **the wedge** — what the ray half-plane removes from the block. Its slanted side is the ray
+  from the bolt center through the fillet center.
+- **the quad** — the four-sided region left after that cut, and the shape the construction is
+  trying to produce. `fillets.py` builds it as a box minus half-planes rather than as a
+  sketch, which is why the block and the wedge exist at all.
+- **the relief cut** — the stepped cylinder / cone / cylinder stack centered on the fillet
+  center, which rounds the quad's top corner. The step *is* the chamfer, so the radius is
+  `relief_r_low` at the plate and `flange_fillet_radius` above it.
+
+Panel 4 is a section of the solid FreeCAD actually built, so the first three panels are
+checked by the last: had the block or the wedge been drawn wrong, panel 4 would not match
+panel 3.
+
+**How its center is placed.** By two rules: sit one fillet radius outboard of the flange's
+inner face, and sit on the circle around the bolt center at the radius where the fillet must
+be tangent to the bolt ring. In parameters,
+
+    flange_inner_x = -(panel_tolerance + panel_offset + panel_overlap + flange_thickness)
+    bbf_cx         = flange_inner_x - flange_fillet_radius          # the vertical rule
+    r_bolt_fillet  = flange_fillet_radius + bolt_hole_radius + bolt_thickness
+    bbf_cy         = sqrt(max(r_bolt_fillet^2 - bbf_dx^2; 0)) + bolt_c   # the circle rule
+
+where `bolt_c = -bolt_offset` is the bolt center and
+
+    bbf_dx = bbf_cx - bolt_c
+
+is **the gap between the fillet's vertical construction line and the bolt centerline**. That
+single quantity governs the whole construction, and nothing anywhere in the parameter
+derivation constrains it. It is a difference of four independently chosen dimensions —
+`panel_offset`, `panel_overlap`, `flange_thickness` and `flange_fillet_radius` against
+`bolt_offset` — so it takes whatever value those happen to leave, including zero.
+
+![the construction, well away from the singularity](img/bolt_flange_fillet/construction_nominal.svg)
+
+At `U = 2.0` with no panel, `bbf_dx` is 1.100 mm and the construction is comfortable: the ray
+from the bolt center to the fillet center crosses the block at a clear angle, 4.798° off
+vertical, so the wedge it removes is a solid triangle 1.100 mm across.
+
+![the same construction near the singularity](img/bolt_flange_fillet/construction_near.svg)
+
+At `U = 1.5`, also with no panel, `bbf_dx` falls to 0.200 mm and the ray comes to within
+1.118° of the block's own left edge. The two are drawn at the same scale; nothing else about
+the part has changed.
+
+**As `bbf_dx` approaches zero the construction degenerates, and it degenerates worse *near*
+zero than *at* zero.** The block the fillet is cut from used to start at `bbf_cx`, which put
+three things at one point — the block's corner, the ray that clips it, and the center of the
+relief cylinder that forms the chamfer:
+
+![the three constructions meeting at one point](img/bolt_flange_fillet/concurrency.svg)
+
+With the block starting at the fillet center, every point of the ray below that center lies
+to the *left* of the block, so the half-plane removes nothing at all. It touches the block
+along a single point and misses it everywhere else. That is a tangential boolean, and OCCT
+does not survive it cleanly:
+
+![the cut only touches](img/bolt_flange_fillet/residue_detail.svg)
+
+**There was no wedge in that version.** The block started exactly where the ray crossed the
+fillet center, so the triangle the half-plane would have removed lay wholly to the left of the
+block's left edge, and the two shapes met at a single point instead of overlapping. In exact
+arithmetic there is nothing to remove and nothing left over. What OCCT actually produced at `U = 1.5
+end_anchor`, no panel, was an edge 0.000335 mm long whose length is exactly twice the distance
+between its own endpoints — it doubles back — and beside it a face with a **negative area** of
+−0.00038 mm². The octant still measured as one valid solid, and the failure only appeared two
+steps later, when the octant was mirrored and fused into the full bulkhead and the fuse
+returned an empty shape. That was IP-FC-58: one variant of 88 that would not build, from a
+construction that is subtly wrong everywhere.
+
+**The exactly degenerate case is fine.** Two swept variants, `1.5 end_anchor 1/4in` and
+`1.5 end_bolt 1/4in`, sit at `bbf_dx = 0.0000` and build correctly, because there the ray and
+the block edge are the same line and OCCT handles exact coincidence. It is the neighborhood
+of zero that is dangerous, not zero itself.
+
+**How much of the corpus is in that neighborhood:**
+
+![bbf_dx across the swept space](img/bolt_flange_fillet/scan.svg)
+
+Across all 88 valid end-type variants, 14 sit within 0.5 mm of zero and 28 within 1.0 mm, and
+12 of the 18 (bulkhead type, panel) families cross zero as `U` varies. Roughly a third of the
+frame-bulkhead corpus is being built inside the unstable band. Today exactly one variant falls
+over, and which one it is depends on tessellation and boolean luck rather than on anything
+designed.
+
+**Three things this is not.** The account above concerns the *construction*, and it is easy to
+read it as saying the fillet itself is in trouble somewhere in the swept space. It is not.
+Measured across all 88 valid end-type variants:
+
+- **No constraint is violated, anywhere.** The only relationship that could fail is the
+  tangency to the bolt ring, which fails when the discriminant `r_bolt_fillet² − bbf_dx²`
+  reaches zero. It never does. The tightest variant in the whole corpus is `U=0.5 end_bolt
+  1mm`, where `|bbf_dx| / r_bolt_fillet = 0.9182` leaves a discriminant of 4.75 mm² out of
+  `r_bolt_fillet² = 30.25 mm²`. At the one variant that would not build, `1.5 end_anchor` with
+  no panel, it is 105.02 out of 105.06 — the tangency there is as comfortable as it ever gets.
+  The `max(...; 0)` clamp has been reached zero times.
+- **The fillet has a valid solution at every swept value, `bbf_dx = 0` included.** A zero
+  `bbf_dx` puts the fillet center directly above the bolt center, which is an ordinary quad,
+  not a degenerate one — the quad's area there is unremarkable and the two variants that sit
+  exactly at zero build correctly. Nothing about the *fillet* degenerates as `bbf_dx → 0`.
+  What degenerated was the *construction*: where the block's left edge was placed relative to
+  the ray. Those are different failures, and only the second one ever occurred.
+- **The fillet is built and used in every one of them.** It is never skipped, never clamped
+  out and never zero-sized. The quad's area ranges from 4.49 mm² at `U=0.75 end_bolt 1mm` to
+  252.01 mm² at `U=4.0 end_anchor 1/4in`, median 55.48 mm²; the `1.5 end_anchor` no-panel
+  variant that failed carries 31.77 mm² of it. IP-FC-58 was not a fillet that could not be
+  solved — it was a solvable fillet built by a method that put three edges through one point.
+
+**What has already been done, and what has not.** The construction was made robust on
+2026-08-15 (IP-FC-58): the block now starts at `min(bbf_cx; bolt_c)`, the true leftmost vertex
+of the quad, so the cut is transversal instead of tangential and the concurrency is gone.
+
+![the same point after the fix](img/bolt_flange_fillet/concurrency_fixed.svg)
+
+Verified across the whole swept space — 484 of 484 ported parts build where 483 did before,
+all 484 agree with the OpenSCAD original, and the worst deviation in the corpus *improved*
+from 0.00375% to 0.00234%, so the old geometry was slightly wrong and this corrected it.
+
+**That fix removes the symptom, not the question.** The construction is now robust at any
+`bbf_dx`, including zero, but the design still has no opinion about whether the flange fillet
+center may sit on the bolt axis. The two features are placed by rules that were written
+independently and happen to collide; a future change to `panel_offset`, `flange_thickness`,
+`flange_fillet_radius` or `bolt_offset` moves `bbf_dx` with no warning and nothing checks it.
+The remaining question is whether that is acceptable.
+
+**Why nothing catches it: the tangency is arithmetic, not a constraint.** `bbf_cy` states a
+tangency — the fillet center must lie on the circle of radius `r_bolt_fillet` about the bolt
+center — but it is solved as a quadratic in the spreadsheet and stored as a coordinate rather
+than expressed as a `Tangent` constraint. **The port expresses no geometric constraints at
+all**: across every module the entire vocabulary is `Coincident`, `Horizontal`, `Vertical`,
+`PointOnObject`, `DistanceX` and `DistanceY`, all of them on the single sketch in a 158-object
+document. The relationship this question is about is therefore not represented anywhere that
+FreeCAD, or a reader, can see or check.
+
+The `max(...; 0)` in `bbf_cy` is where that bites. A tangency a solver cannot satisfy is
+reported; a clamped discriminant silently returns a plausible wrong position — the fillet
+center collapsing to the bolt center's height — and nothing downstream distinguishes the two.
+Measured across all 88 valid end-type variants the clamp is never currently reached: closest
+approach `|bbf_dx| / r_bolt_fillet = 0.9182` at `U=0.5 end_bolt 1mm`, discriminant 4.748. That
+is unguarded margin held by four independently chosen dimensions, not a designed limit — the
+same shape as `bbf_dx` itself.
+
+**This generalizes past this fillet** and is raised separately as
+[OQ-ARCH-11](../architecture/freecad_migration.md): should geometric relationships be
+expressed as constraints, or stay solved into coordinates? The usual defense of coordinates —
+that the relationships differ across the parameter space, so no fixed constraint set applies —
+does not settle it, because that variation is *already represented*, as the `max`/`min`
+selections and the branching in the derivation. It is being expressed; just in a form nothing
+can inspect. Alternative 6 below is the local form of that question.
+
+**Alternatives**
+
+1. **Leave it unconstrained and rely on the robust construction.** Nothing further to do.
+   *Benefits:* zero work; the fix is verified across the whole space and the exactly-zero case
+   is known good. *Drawbacks:* the design continues to have no stated intent about the
+   relationship, so a reviewer cannot tell whether `bbf_dx = 0.2` is intentional or accidental;
+   a future construction change re-inherits the fragility; and if the two features ever need to
+   be distinguishable in a drawing (IP-FC-21), there is no dimension to call out.
+   *Prerequisites:* none.
+
+2. **Add a validity check with a stated minimum, and reject variants that violate it.**
+   Require `|bbf_dx| >= k` for some `k` tied to a real dimension, and refuse the variant
+   otherwise, as `bulkhead_validity_check()` already does for other combinations. *Benefits:*
+   makes the relationship explicit and catches a bad parameter change at derivation time
+   rather than in a boolean. *Drawbacks:* would reject swept variants that currently build
+   correctly, including the two at exactly zero, unless zero is special-cased — which is
+   awkward to justify in a rule about a minimum distance. Choosing `k` needs a physical
+   argument this document does not currently have. *Prerequisites:* a decision about what `k`
+   means physically — a minimum wall, a print constraint, or a modeling margin.
+
+3. **Make the two features genuinely one.** If the fillet is meant to run tangent into the
+   bolt boss, derive its center from the bolt geometry alone and let the flange follow, so
+   `bbf_dx` ceases to exist as an independent quantity. *Benefits:* removes the degeneracy by
+   construction rather than by robustness, and states the design intent — the fillet belongs
+   to the bolt boss. *Drawbacks:* changes the finished geometry on every bulkhead, so it must
+   be re-verified against OpenSCAD across the corpus and would put the two backends out of
+   agreement until the OpenSCAD side is changed to match. It also assumes an intent that has
+   not been confirmed. *Prerequisites:* confirmation that the fillet is a feature of the boss
+   and not of the flange.
+
+4. **Constrain `flange_fillet_radius` so that `bbf_cx` cannot cross `bolt_c`.** Rather than
+   check the result, choose the fillet radius from the available space:
+   `flange_fillet_radius = min(current rule; flange_inner_x - bolt_c - margin)`. *Benefits:*
+   keeps the relationship one-directional and self-satisfying; no variant is rejected.
+   *Drawbacks:* silently shrinks a fillet radius that is currently a clean function of `U`,
+   which is exactly the kind of hidden clamp `bbf_sx = max(...)` already introduced and which
+   made the pentagon-versus-quad reasoning in `fillets.py` necessary. Changes geometry on the
+   affected variants. *Prerequisites:* a decision on whether fillet radius is allowed to stop
+   tracking `U`.
+
+5. **Record the relationship as a monitored quantity without constraining it.** Export
+   `bbf_dx` in the parameter set and have `compare_backends` or a sweep report flag variants
+   inside the band. *Benefits:* cheap, changes no geometry, and makes the band visible so a
+   parameter change that moves a variant into it is noticed. *Drawbacks:* detects rather than
+   prevents; still needs someone to act on the report. *Prerequisites:* none.
+
+6. **Express the tangency as a constraint rather than solving it.** Build the fillet from a
+   fully constrained sketch carrying a real `Tangent` constraint against the bolt ring and a
+   distance to the flange face, instead of computing `bbf_cy` from a clamped quadratic. This
+   is the local form of [OQ-ARCH-11](../architecture/freecad_migration.md). *Benefits:* the
+   relationship becomes a statement the solver checks and a reader can see; an unsatisfiable
+   configuration fails loudly where `max(...; 0)` currently returns a plausible wrong answer;
+   and drawings (IP-FC-21) and assemblies (IP-FC-19) gain something stable to reference.
+   *Drawbacks:* the solved position is no longer a closed-form function of the parameters,
+   which is what makes the part numerically comparable against the OpenSCAD original — the
+   verification that IP-FC-13 rests on. Slower to build, and it changes the failure mode of
+   any variant where the tangency cannot be met, from clamp to refusal. *Prerequisites:* the
+   same intent question as Alternative 3, plus a decision on OQ-ARCH-11, plus a way to keep
+   verifying a part whose geometry is solved rather than computed.
+
+**Recommendation**
+
+**Alternative 5 now, and Alternative 3 as the real answer once the intent is confirmed.**
+
+The immediate risk is gone — the construction is robust and the whole corpus is verified — so
+nothing needs to change geometry today, and options 2 and 4 both do change geometry to solve a
+problem that no longer manifests. What remains is that a quantity governing a construction is
+unconstrained, undocumented and invisible, and the cheapest fix for invisibility is to measure
+it: exporting `bbf_dx` and flagging the band costs nothing and would have made IP-FC-58
+obvious before it was a build failure rather than after.
+
+The durable answer is Alternative 3, because the fillet almost certainly *is* a feature of the
+bolt boss — its radius is already `flange_fillet_radius + bolt_hole_radius + bolt_thickness`
+from the bolt center, which is a statement that it wraps the boss — and if that is the intent
+then `bbf_dx` should never have been a free variable. **That cannot be settled from the code**,
+which is why this is an open question and not a defect: the OpenSCAD original places the
+fillet the same way, so both toolchains agree and neither records why. It needs the designer's
+answer to one question — is this fillet blending the flange into the boss, or is it a fillet
+on the flange that happens to reach the boss? Alternative 3 follows from the first; Alternative
+1 or 2 follows from the second.
+
+**OQ-ARCH-11 was decided on 2026-08-15 toward constraints, which makes Alternative 6 the
+route and changes this recommendation.** The reason 6 was held back above — that it trades
+away a closed-form parameter-to-geometry mapping the verification depends on — **was wrong**:
+`compare_backends` measures the built solid's volume and bounding box, so a constrained
+feature is checked exactly as a computed one is. With that objection gone, 6 dominates 3: both
+remove the degeneracy, but 6 also makes the tangency something the model states and the solver
+checks, and answers "was this position clamped?" for every other computed relationship in the
+part rather than only this one.
+
+Alternative 6 does **not** remove the need to answer the intent question. A constraint has to
+say what it constrains, so the fillet still has to be either tangent to the boss or dimensioned
+from the flange — the same question as before, now unavoidable rather than deferrable. That is
+the useful consequence: the conversion in IP-FC-73 forces this question to be answered instead
+of leaving it implicit in a coordinate.
+
+Alternative 5 remains worth doing in the meantime, being free and immediate, and Alternative 1
+is now ruled out.
+
+Drawings are generated by `tools/draw_bolt_flange_fillet.py` from `derived_parameters()`, so
+every dimension quoted above is the swept value rather than a typed one. The three context
+figures — the bulkhead, the octant, and panel 4 of the terms figure — are traced from the
+built solid instead, because where a feature *is* cannot be recovered from the feature's own
+arithmetic. Their input is a snapshot written by
+`tools/bbf_analysis/measure_bbf_context.py`; re-run it if the bulkhead moves, or those
+figures will keep showing the old shape while still looking authoritative.
 
 
 ## See also

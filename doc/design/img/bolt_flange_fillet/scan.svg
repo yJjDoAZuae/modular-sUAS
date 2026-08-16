@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="sheet" viewBox="0 0 460 300" role="img"
+preserveAspectRatio="xMidYMid meet"><title>bbf_dx across all 88 valid end-type variants &#8212; 28 within 1.0 mm of zero</title><style>
+.fbody   { fill:rgba(16,22,25,.14); stroke:#101619; stroke-width:1.3; }
+.fquad   { fill:rgba(122,94,168,.22); stroke:#7a5ea8; stroke-width:1.6; }
+.fplate  { fill:rgba(16,22,25,.10); stroke:#101619; stroke-width:1; }
+.fstand  { fill:rgba(11,110,128,.16); stroke:#0b6e80; stroke-width:1; }
+.zoom    { fill:none; stroke:#b8372a; stroke-width:1.6; stroke-dasharray:5 3; }
+.fsliver { fill:#b8372a; stroke:#b8372a; stroke-width:.8; }
+.tool    { fill:none; stroke:#0b6e80; stroke-width:1.1; stroke-dasharray:7 4; }
+.relief  { fill:rgba(11,110,128,.10); stroke:#0b6e80; stroke-width:1.2; }
+.ring    { fill:none; stroke:#1c7a54; stroke-width:1.6; }
+.rule    { stroke:#9fb0ba; stroke-width:1; stroke-dasharray:3 4; }
+.ray     { stroke:#b8372a; stroke-width:1.8; }
+.edge    { stroke:#0b6e80; stroke-width:1.8; }
+.axis    { stroke:#9fb0ba; stroke-width:1; }
+.bar     { fill:rgba(122,94,168,.55); stroke:#7a5ea8; stroke-width:.8; }
+.barbad  { fill:rgba(184,55,42,.65); stroke:#b8372a; stroke-width:.8; }
+.band    { fill:rgba(184,55,42,.10); stroke:none; }
+text.lbl   { font-family:monospace; font-size:10px; fill:#5d6f79; }
+text.plbl  { font-family:monospace; font-size:10px; fill:#0b6e80; font-weight:600; }
+text.nclbl { font-family:monospace; font-size:10px; fill:#7a5ea8; font-weight:600; }
+text.gclbl { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+text.xlbl  { font-family:monospace; font-size:10px; fill:#1c7a54; font-weight:600; }
+text.ttl   { font-family:monospace; font-size:11px; fill:#5d6f79; font-weight:600; }
+.dim line  { stroke:#b8372a; stroke-width:1.1; }
+.dim text  { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+.faint line { stroke:#5d6f79; stroke-width:1; }
+.faint text { fill:#5d6f79; font-weight:400; }
+@media (prefers-color-scheme: dark) {
+  .fbody   { fill:rgba(220,230,234,.13); stroke:#dce6ea; }
+  .fquad   { fill:rgba(179,154,224,.24); stroke:#b39ae0; }
+  .fplate  { fill:rgba(220,230,234,.10); stroke:#dce6ea; }
+  .fstand  { fill:rgba(69,194,214,.16); stroke:#45c2d6; }
+  .zoom    { stroke:#ff6f5e; }
+  .fsliver { fill:#ff6f5e; stroke:#ff6f5e; }
+  .tool, .relief { stroke:#45c2d6; }
+  .relief  { fill:rgba(69,194,214,.12); }
+  .ring    { stroke:#4fd39b; }
+  .rule, .axis { stroke:#5b6f79; }
+  .ray     { stroke:#ff6f5e; }
+  .edge    { stroke:#45c2d6; }
+  .bar     { fill:rgba(179,154,224,.55); stroke:#b39ae0; }
+  .barbad  { fill:rgba(255,111,94,.65); stroke:#ff6f5e; }
+  .band    { fill:rgba(255,111,94,.12); }
+  text.lbl { fill:#8ea3ad; } text.plbl { fill:#45c2d6; } text.nclbl { fill:#b39ae0; }
+  text.gclbl { fill:#ff6f5e; } text.xlbl { fill:#4fd39b; } text.ttl { fill:#8ea3ad; }
+  .dim line { stroke:#ff6f5e; } .dim text { fill:#ff6f5e; }
+  .faint line { stroke:#8ea3ad; } .faint text { fill:#8ea3ad; }
+}
+</style><defs><clipPath id="sc"><rect x="0" y="0" width="460" height="300"/></clipPath></defs><g clip-path="url(#sc)"><rect class="band" x="0" y="128.02" width="460" height="51.72"/>
+<path class="bar" d="M10.7757 284.4828 L14.6387 284.4828 L14.6387 153.8793 L10.7757 153.8793 Z"/>
+<path class="bar" d="M15.8586 284.4828 L19.7215 284.4828 L19.7215 153.8793 L15.8586 153.8793 Z"/>
+<path class="bar" d="M20.9414 271.5517 L24.8044 271.5517 L24.8044 153.8793 L20.9414 153.8793 Z"/>
+<path class="bar" d="M26.0243 271.5517 L29.8873 271.5517 L29.8873 153.8793 L26.0243 153.8793 Z"/>
+<path class="bar" d="M31.1072 252.1552 L34.9702 252.1552 L34.9702 153.8793 L31.1072 153.8793 Z"/>
+<path class="bar" d="M36.1901 252.1552 L40.0530 252.1552 L40.0530 153.8793 L36.1901 153.8793 Z"/>
+<path class="bar" d="M41.2729 245.6897 L45.1359 245.6897 L45.1359 153.8793 L41.2729 153.8793 Z"/>
+<path class="bar" d="M46.3558 245.6897 L50.2188 245.6897 L50.2188 153.8793 L46.3558 153.8793 Z"/>
+<path class="bar" d="M51.4387 220.1509 L55.3017 220.1509 L55.3017 153.8793 L51.4387 153.8793 Z"/>
+<path class="bar" d="M56.5215 220.1509 L60.3845 220.1509 L60.3845 153.8793 L56.5215 153.8793 Z"/>
+<path class="bar" d="M61.6044 217.2414 L65.4674 217.2414 L65.4674 153.8793 L61.6044 153.8793 Z"/>
+<path class="bar" d="M66.6873 217.2414 L70.5503 217.2414 L70.5503 153.8793 L66.6873 153.8793 Z"/>
+<path class="bar" d="M71.7702 193.9655 L75.6331 193.9655 L75.6331 153.8793 L71.7702 153.8793 Z"/>
+<path class="bar" d="M76.8530 193.9655 L80.7160 193.9655 L80.7160 153.8793 L76.8530 153.8793 Z"/>
+<path class="bar" d="M81.9359 193.9655 L85.7989 193.9655 L85.7989 153.8793 L81.9359 153.8793 Z"/>
+<path class="bar" d="M87.0188 193.9655 L90.8818 193.9655 L90.8818 153.8793 L87.0188 153.8793 Z"/>
+<path class="bar" d="M92.1017 193.9655 L95.9646 193.9655 L95.9646 153.8793 L92.1017 153.8793 Z"/>
+<path class="bar" d="M97.1845 193.9655 L101.0475 193.9655 L101.0475 153.8793 L97.1845 153.8793 Z"/>
+<path class="bar" d="M102.2674 191.3793 L106.1304 191.3793 L106.1304 153.8793 L102.2674 153.8793 Z"/>
+<path class="bar" d="M107.3503 191.3793 L111.2133 191.3793 L111.2133 153.8793 L107.3503 153.8793 Z"/>
+<path class="barbad" d="M112.4331 174.5690 L116.2961 174.5690 L116.2961 153.8793 L112.4331 153.8793 Z"/>
+<path class="barbad" d="M117.5160 174.5690 L121.3790 174.5690 L121.3790 153.8793 L117.5160 153.8793 Z"/>
+<path class="barbad" d="M122.5989 174.5690 L126.4619 174.5690 L126.4619 153.8793 L122.5989 153.8793 Z"/>
+<path class="barbad" d="M127.6818 174.5690 L131.5448 174.5690 L131.5448 153.8793 L127.6818 153.8793 Z"/>
+<path class="barbad" d="M132.7646 174.5690 L136.6276 174.5690 L136.6276 153.8793 L132.7646 153.8793 Z"/>
+<path class="barbad" d="M137.8475 174.5690 L141.7105 174.5690 L141.7105 153.8793 L137.8475 153.8793 Z"/>
+<path class="barbad" d="M142.9304 174.5690 L146.7934 174.5690 L146.7934 153.8793 L142.9304 153.8793 Z"/>
+<path class="barbad" d="M148.0133 174.5690 L151.8762 174.5690 L151.8762 153.8793 L148.0133 153.8793 Z"/>
+<path class="barbad" d="M153.0961 171.9828 L156.9591 171.9828 L156.9591 153.8793 L153.0961 153.8793 Z"/>
+<path class="barbad" d="M158.1790 171.9828 L162.0420 171.9828 L162.0420 153.8793 L158.1790 153.8793 Z"/>
+<path class="barbad" d="M163.2619 153.8793 L167.1249 153.8793 L167.1249 153.8793 L163.2619 153.8793 Z"/>
+<path class="barbad" d="M168.3448 153.8793 L172.2077 153.8793 L172.2077 153.8793 L168.3448 153.8793 Z"/>
+<path class="barbad" d="M173.4276 153.8793 L177.2906 153.8793 L177.2906 151.6164 L173.4276 151.6164 Z"/>
+<path class="barbad" d="M178.5105 153.8793 L182.3735 153.8793 L182.3735 151.6164 L178.5105 151.6164 Z"/>
+<path class="barbad" d="M183.5934 153.8793 L187.4564 153.8793 L187.4564 151.2931 L183.5934 151.2931 Z"/>
+<path class="barbad" d="M188.6762 153.8793 L192.5392 153.8793 L192.5392 151.2931 L188.6762 151.2931 Z"/>
+<path class="barbad" d="M193.7591 153.8793 L197.6221 153.8793 L197.6221 151.2931 L193.7591 151.2931 Z"/>
+<path class="barbad" d="M198.8420 153.8793 L202.7050 153.8793 L202.7050 151.2931 L198.8420 151.2931 Z"/>
+<path class="barbad" d="M203.9249 153.8793 L207.7878 153.8793 L207.7878 151.2931 L203.9249 151.2931 Z"/>
+<path class="barbad" d="M209.0077 153.8793 L212.8707 153.8793 L212.8707 151.2931 L209.0077 151.2931 Z"/>
+<path class="barbad" d="M214.0906 153.8793 L217.9536 153.8793 L217.9536 151.2931 L214.0906 151.2931 Z"/>
+<path class="barbad" d="M219.1735 153.8793 L223.0365 153.8793 L223.0365 151.2931 L219.1735 151.2931 Z"/>
+<path class="barbad" d="M224.2564 153.8793 L228.1193 153.8793 L228.1193 148.7069 L224.2564 148.7069 Z"/>
+<path class="barbad" d="M229.3392 153.8793 L233.2022 153.8793 L233.2022 148.7069 L229.3392 148.7069 Z"/>
+<path class="barbad" d="M234.4221 153.8793 L238.2851 153.8793 L238.2851 130.6034 L234.4221 130.6034 Z"/>
+<path class="barbad" d="M239.5050 153.8793 L243.3680 153.8793 L243.3680 130.6034 L239.5050 130.6034 Z"/>
+<path class="barbad" d="M244.5878 153.8793 L248.4508 153.8793 L248.4508 128.3405 L244.5878 128.3405 Z"/>
+<path class="barbad" d="M249.6707 153.8793 L253.5337 153.8793 L253.5337 128.3405 L249.6707 128.3405 Z"/>
+<path class="bar" d="M254.7536 153.8793 L258.6166 153.8793 L258.6166 128.0172 L254.7536 128.0172 Z"/>
+<path class="bar" d="M259.8365 153.8793 L263.6994 153.8793 L263.6994 128.0172 L259.8365 128.0172 Z"/>
+<path class="bar" d="M264.9193 153.8793 L268.7823 153.8793 L268.7823 128.0172 L264.9193 128.0172 Z"/>
+<path class="bar" d="M270.0022 153.8793 L273.8652 153.8793 L273.8652 128.0172 L270.0022 128.0172 Z"/>
+<path class="bar" d="M275.0851 153.8793 L278.9481 153.8793 L278.9481 128.0172 L275.0851 128.0172 Z"/>
+<path class="bar" d="M280.1680 153.8793 L284.0309 153.8793 L284.0309 128.0172 L280.1680 128.0172 Z"/>
+<path class="bar" d="M285.2508 153.8793 L289.1138 153.8793 L289.1138 125.4310 L285.2508 125.4310 Z"/>
+<path class="bar" d="M290.3337 153.8793 L294.1967 153.8793 L294.1967 125.4310 L290.3337 125.4310 Z"/>
+<path class="bar" d="M295.4166 153.8793 L299.2796 153.8793 L299.2796 107.3276 L295.4166 107.3276 Z"/>
+<path class="bar" d="M300.4994 153.8793 L304.3624 153.8793 L304.3624 107.3276 L300.4994 107.3276 Z"/>
+<path class="bar" d="M305.5823 153.8793 L309.4453 153.8793 L309.4453 105.0647 L305.5823 105.0647 Z"/>
+<path class="bar" d="M310.6652 153.8793 L314.5282 153.8793 L314.5282 105.0647 L310.6652 105.0647 Z"/>
+<path class="bar" d="M315.7481 153.8793 L319.6110 153.8793 L319.6110 104.7414 L315.7481 104.7414 Z"/>
+<path class="bar" d="M320.8309 153.8793 L324.6939 153.8793 L324.6939 104.7414 L320.8309 104.7414 Z"/>
+<path class="bar" d="M325.9138 153.8793 L329.7768 153.8793 L329.7768 104.7414 L325.9138 104.7414 Z"/>
+<path class="bar" d="M330.9967 153.8793 L334.8597 153.8793 L334.8597 104.7414 L330.9967 104.7414 Z"/>
+<path class="bar" d="M336.0796 153.8793 L339.9425 153.8793 L339.9425 104.7414 L336.0796 104.7414 Z"/>
+<path class="bar" d="M341.1624 153.8793 L345.0254 153.8793 L345.0254 104.7414 L341.1624 104.7414 Z"/>
+<path class="bar" d="M346.2453 153.8793 L350.1083 153.8793 L350.1083 102.1552 L346.2453 102.1552 Z"/>
+<path class="bar" d="M351.3282 153.8793 L355.1912 153.8793 L355.1912 102.1552 L351.3282 102.1552 Z"/>
+<path class="bar" d="M356.4110 153.8793 L360.2740 153.8793 L360.2740 84.0517 L356.4110 84.0517 Z"/>
+<path class="bar" d="M361.4939 153.8793 L365.3569 153.8793 L365.3569 84.0517 L361.4939 84.0517 Z"/>
+<path class="bar" d="M366.5768 153.8793 L370.4398 153.8793 L370.4398 81.7888 L366.5768 81.7888 Z"/>
+<path class="bar" d="M371.6597 153.8793 L375.5227 153.8793 L375.5227 81.7888 L371.6597 81.7888 Z"/>
+<path class="bar" d="M376.7425 153.8793 L380.6055 153.8793 L380.6055 81.4655 L376.7425 81.4655 Z"/>
+<path class="bar" d="M381.8254 153.8793 L385.6884 153.8793 L385.6884 81.4655 L381.8254 81.4655 Z"/>
+<path class="bar" d="M386.9083 153.8793 L390.7713 153.8793 L390.7713 81.4655 L386.9083 81.4655 Z"/>
+<path class="bar" d="M391.9912 153.8793 L395.8541 153.8793 L395.8541 81.4655 L391.9912 81.4655 Z"/>
+<path class="bar" d="M397.0740 153.8793 L400.9370 153.8793 L400.9370 81.4655 L397.0740 81.4655 Z"/>
+<path class="bar" d="M402.1569 153.8793 L406.0199 153.8793 L406.0199 81.4655 L402.1569 81.4655 Z"/>
+<path class="bar" d="M407.2398 153.8793 L411.1028 153.8793 L411.1028 78.8793 L407.2398 78.8793 Z"/>
+<path class="bar" d="M412.3227 153.8793 L416.1856 153.8793 L416.1856 78.8793 L412.3227 78.8793 Z"/>
+<path class="bar" d="M417.4055 153.8793 L421.2685 153.8793 L421.2685 35.2371 L417.4055 35.2371 Z"/>
+<path class="bar" d="M422.4884 153.8793 L426.3514 153.8793 L426.3514 35.2371 L422.4884 35.2371 Z"/>
+<path class="bar" d="M427.5713 153.8793 L431.4343 153.8793 L431.4343 34.9138 L427.5713 34.9138 Z"/>
+<path class="bar" d="M432.6541 153.8793 L436.5171 153.8793 L436.5171 34.9138 L432.6541 34.9138 Z"/>
+<path class="bar" d="M437.7370 153.8793 L441.6000 153.8793 L441.6000 32.3276 L437.7370 32.3276 Z"/>
+<path class="bar" d="M442.8199 153.8793 L446.6829 153.8793 L446.6829 32.3276 L442.8199 32.3276 Z"/>
+<path class="bar" d="M447.9028 153.8793 L451.7657 153.8793 L451.7657 31.0345 L447.9028 31.0345 Z"/>
+<path class="bar" d="M452.9856 153.8793 L456.8486 153.8793 L456.8486 31.0345 L452.9856 31.0345 Z"/>
+<line class="axis" x1="0.000" y1="153.879" x2="460.000" y2="153.879"/>
+<text class="lbl" x="1.00" y="286.19" text-anchor="start">-5</text>
+<text class="lbl" x="1.00" y="260.33" text-anchor="start">-4</text>
+<text class="lbl" x="1.00" y="234.47" text-anchor="start">-3</text>
+<text class="lbl" x="1.00" y="208.60" text-anchor="start">-2</text>
+<text class="lbl" x="1.00" y="182.74" text-anchor="start">-1</text>
+<text class="lbl" x="1.00" y="156.88" text-anchor="start">+0</text>
+<text class="lbl" x="1.00" y="131.02" text-anchor="start">+1</text>
+<text class="lbl" x="1.00" y="105.16" text-anchor="start">+2</text>
+<text class="lbl" x="1.00" y="79.29" text-anchor="start">+3</text>
+<text class="lbl" x="1.00" y="53.43" text-anchor="start">+4</text>
+<text class="lbl" x="1.00" y="27.57" text-anchor="start">+5</text>
+<text class="gclbl" x="211.45" y="147.88" text-anchor="start">bbf_dx = 0</text>
+<text class="ttl" x="8" y="14">bbf_dx across all 88 valid end-type variants &#8212; 28 within 1.0 mm of zero</text>
+<text class="lbl" x="8" y="292">one bar per swept variant, sorted; mm on the vertical; shaded band is |bbf_dx| &lt; 1 mm</text></g></svg>

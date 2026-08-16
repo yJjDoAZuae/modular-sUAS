@@ -123,6 +123,18 @@ PARAMS = [
     ('bbf_sx', '=max(flange_inner_x; bolt_c)'),
     ('bbf_cx', '=flange_inner_x - flange_fillet_radius'),
     ('bbf_dx', '=bbf_cx - bolt_c'),
+    # The block's left edge, which is NOT the fillet centre. The quad's leftmost vertex is
+    # whichever of the fillet centre and the bolt centre is further out, and starting the
+    # block anywhere right of that would clip the region. Starting it *at* `bbf_cx`, as this
+    # did, is correct in area -- the ray cut removes the excess either way -- but it puts the
+    # block's left edge, the ray edge and the relief cylinder's centre concurrent at
+    # `(bbf_cx, bbf_cy)`. When `bbf_dx` is small the two edges leaving that point are nearly
+    # collinear (1.12 deg apart at U=1.5), so the relief cylinder clips them at nearly the
+    # same place and leaves a face `relief_r_low * (1 - cos theta)` wide -- 0.0003 mm, which
+    # is what IP-FC-58 fails on. Taking the true extent moves the edge clear of the centre
+    # by `bbf_dx` and the concurrency is gone. Where `bbf_cx` already is the leftmost vertex
+    # this is exactly the old expression, so nothing changes on that side.
+    ('bbf_bx', '=min(bbf_cx; bolt_c)'),
     ('bbf_cy', '=sqrt(max(r_bolt_fillet ^ 2 - bbf_dx ^ 2; 0)) + bolt_c'),
     ('bbf_dy', '=bbf_cy - bolt_c'),
     ('bbf_r', '=sqrt(bbf_dx ^ 2 + bbf_dy ^ 2)'),
@@ -251,8 +263,8 @@ def bolt_flange_fillet(doc):
     """Quad (cx, cy) (sx, cy) (sx, -bolt) (-bolt, -bolt): the top edge is horizontal here
     because the start and centre share a y, so only the ray edge needs clipping."""
     P = 'Params.'
-    block = C._box(doc, 'BffBlock', P + 'bbf_sx - ' + P + 'bbf_cx', P + 'bbf_dy',
-                   P + 'bulkhead_thickness', P + 'bbf_cx', P + 'bolt_c', '0')
+    block = C._box(doc, 'BffBlock', P + 'bbf_sx - ' + P + 'bbf_bx', P + 'bbf_dy',
+                   P + 'bulkhead_thickness', P + 'bbf_bx', P + 'bolt_c', '0')
     node = C._cut(doc, 'BffRay', block,
                   _ray_halfplane(doc, 'BffRayBox', P + 'bbf_ang', P + 'bbf_hx',
                                  P + 'bbf_hy'))

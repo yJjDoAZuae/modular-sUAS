@@ -680,6 +680,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
 | ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
+| ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -1381,6 +1382,172 @@ full part exactly eight times the octant, which proves the same thing more direc
 
 Kept because the alternatives were correctly costed and the reasoning is sound given its
 premise — which is exactly why it is worth being able to recognise this shape again.
+
+---
+
+### ~~OQ-ARCH-11 — Should geometric relationships be expressed as constraints, or stay solved into coordinates?~~ — DECIDED 2026-08-15: constraints, staged toward `PartDesign::`
+
+A part in this port is a CSG tree of primitives whose positions and sizes are bound by
+expression to a spreadsheet. One built frame bulkhead is 158 objects:
+
+    Part::Box 39   Part::Cut 39   Part::Fuse 31   Part::Cylinder 20   Part::Refine 13
+    Part::Cone 8   Part::Mirroring 4   Part::Common 1   Part::Extrusion 1
+    Sketcher::SketchObject 1   Spreadsheet::Sheet 1
+
+Roughly 192 `Placement` bindings plus `Height`, `Length`, `Width` and `Radius` expressions
+place all of it. There is one sketch, and it exists only because a wedge profile did not
+decompose into primitives.
+
+**No geometric constraint is expressed anywhere in the port.** The complete constraint
+vocabulary across every module is `Coincident`, `Horizontal`, `Vertical`, `PointOnObject`,
+`DistanceX` and `DistanceY` — all of them on that single sketch. There is no `Tangent`, no
+`Equal`, no `Symmetric`, no `Perpendicular`, no `Parallel`, no `Angle`, and no `Radius`
+constraint in the project. Relationships that a CAD model would normally *state* are instead
+*solved* in the spreadsheet and stored as coordinates.
+
+The bolt-flange fillet is the clearest case. Its center must lie tangent to the ring of
+material around the bolt, and that condition appears as a hand-solved quadratic:
+
+    bbf_cy = sqrt(max(r_bolt_fillet ^ 2 - bbf_dx ^ 2; 0)) + bolt_c
+
+which is "where the vertical line `x = bbf_cx` meets the circle of radius `r_bolt_fillet`
+about the bolt center", evaluated to a number. See [OQ-DES-B14](../design/bulkhead.md), which
+is one instance of this question.
+
+**The variation argument does not settle it.** The obvious defence of coordinates is that the
+geometry is not one shape but a family, and the relationships that hold are not the same at
+every parameter value — a constraint set that is satisfiable at `U = 2` may not be at
+`U = 0.5`. That is true, and it is *already represented*: it is exactly what the `max(...; 0)`
+clamps, the `min`/`max` selections such as `bbf_sx = max(flange_inner_x; bolt_c)`, and the
+branching in `derived_parameters()` encode. So the variation is not a reason to omit
+constraints; it is the thing a constraint model would have to express, and the arithmetic is
+already expressing it — just in a form nothing can inspect.
+
+**The cost is that FreeCAD does not know what the geometry means.** The document records
+where every face is and never why. Concretely:
+
+- **Unsatisfiable configurations resolve silently.** A tangency the solver cannot satisfy is
+  reported; `max(discriminant; 0)` returns a plausible wrong answer instead. Measured across
+  the 88 valid end-type variants the clamp is never currently reached — closest approach is
+  `|bbf_dx| / r_bolt_fillet = 0.9182` at `U=0.5 end_bolt 1mm`, discriminant 4.748 — so this is
+  unguarded margin held by four independently chosen dimensions, not a designed limit.
+- **Near-degenerate configurations are invisible.** IP-FC-58 was a boolean that touched a
+  block at exactly one point and produced a negative-area face. A model that stated "this edge
+  is tangent to that circle" has somewhere to check; a model of coordinates has nowhere.
+- **Downstream features need topology, not numbers.** OQ-ARCH-7 already decided that drawing
+  dimensions are named expressions *bound to topological references* (IP-FC-21), OQ-ARCH-6
+  that assemblies use real joints verified against constructed placements (IP-FC-19), and
+  IP-FC-36 that interface dimensions are enumerated. All three want to attach meaning to
+  faces and edges of a tree that currently carries none, over a 158-node CSG history where
+  topological names are least stable.
+- **A hand edit has nothing to preserve.** Someone opening a generated document sees a box at
+  x = −11.8 with no record that it is one fillet radius outboard of the flange face; move it
+  and nothing objects.
+
+**Alternatives**
+
+1. **Keep coordinates everywhere.** Status quo. *Benefits:* fastest to build (~1.3 s/part),
+   trivially diffable, and it is what made the port verifiable — every part could be compared
+   numerically against the OpenSCAD original because both are pure functions of parameters.
+   Editability in the sense that matters today is preserved: change `U` and everything
+   follows. *Drawbacks:* every point above. *Prerequisites:* none.
+
+2. **Express relationships as constraints only where a relationship exists.** Keep CSG for
+   bulk material; use fully constrained sketches with real `Tangent`, `Perpendicular` and
+   `Equal` constraints for the features whose position is *derived* from another feature —
+   the fillets, the chamfers, the greeble interface. *Benefits:* the solver reports what the
+   arithmetic clamps; the document states intent; drawing and assembly references attach to
+   things that mean something. *Drawbacks:* sketches are slower to solve, and a solver can
+   pick the wrong branch of a relationship that has two solutions — the other intersection of
+   a line and a circle — which is a real risk and a detectable one. Variants where a
+   relationship is unsatisfiable now *fail* rather than clamp, which is the point but changes
+   the swept space. **It does not cost the OpenSCAD verification**, contrary to the first
+   draft of this question: `compare_backends` measures the *built solid* — mesh volume and
+   bounding box — and never needs a closed-form parameter-to-coordinate mapping, so a
+   constrained feature is compared exactly as a computed one is. *Prerequisites:* deciding,
+   per feature, what the relationship actually is — which is OQ-DES-B14 for the bolt-flange
+   fillet, and is not recorded for the others either.
+
+3. **Keep coordinates, add assertions.** Compute as now, but check the relationship the
+   arithmetic is supposed to satisfy — assert tangency to a tolerance, assert discriminants
+   are positive by a margin, assert no two construction planes are closer than some distance.
+   *Benefits:* catches every failure mode listed above at build time, costs no solver time,
+   changes no geometry, and is verifiable as a no-op. *Drawbacks:* does nothing for the
+   downstream topology problem — drawings and assemblies still have nothing to bind to — and
+   the assertions restate the intent in a third place rather than recording it once.
+   *Prerequisites:* none technically; each assertion still needs the intent it is asserting.
+
+4. **Move the whole port to `PartDesign::` with sketch-driven features.** Revisits OQ-ARCH-1,
+   which chose `Part::` on the evidence of IP-FC-5. *Benefits:* the fullest expression of
+   intent, and the native path for drawings and assemblies — **this is what a FreeCAD model of
+   this part would look like if it had been authored in FreeCAD rather than translated into
+   it.** *Drawbacks:* a rewrite of every ported module, and PartDesign's single-solid-per-body
+   rule fits the octant-and-mirror construction badly — that constraint needs a real answer,
+   not a workaround. *Prerequisites:* the OpenSCAD reference retired or frozen (see the
+   staging below), and a resolution for the body rule against the tiling.
+
+**Direction — decided 2026-08-15: stage toward Alternative 4, starting with Alternative 2**
+
+**Alternative 4 is the target state, not a rejected option.** It is the true native FreeCAD
+implementation, and the intent is to get there rather than to settle permanently for a
+translated CSG tree. What follows is the route, and the first step is Alternative 2 —
+relationships expressed as constraints FreeCAD can act on, not merely computed and stored.
+
+Two facts make the staging principled rather than arbitrary:
+
+- **Constraints do not cost the OpenSCAD verification.** `compare_backends` measures the built
+  solid's volume and bounding box. Nothing in it requires geometry to be a closed-form
+  function of the parameters, so a constrained feature is checked exactly as a computed one
+  is. The first draft of this question claimed otherwise and was wrong; that error was the
+  main reason it recommended deferring.
+- **The OpenSCAD reference already has a planned retirement.** OQ-ARCH-4 decided on 2026-08-07
+  to retire it once IP-FC-13 demonstrates equivalence across the parameter range, at which
+  point FreeCAD becomes the definition of correctness. So the strongest objection to
+  Alternative 4 — that a rewrite discards the verification chain — expires on a date the
+  architecture has already chosen, rather than standing forever.
+
+**Stage 1 — express the relationships (Alternative 2), OpenSCAD reference intact.**
+Keep CSG for bulk material. Convert the features whose position is *derived* from another
+feature — the five fillets and chamfers in `fillets.py` first, since that is where IP-FC-58
+came from — to fully constrained sketches carrying the real relationship. Each conversion is
+verified with the existing comparison, which continues to work unchanged. Each also forces the
+intent question for that feature to be answered and written down, which is the part that has
+no shortcut: OQ-DES-B14 is that question for the bolt-flange fillet and nothing equivalent is
+recorded for the others. Exit criterion: every derived feature states its relationship, and
+the whole corpus still agrees with OpenSCAD.
+
+**Stage 2 — bind the downstream work to it.** With features carrying stable, meaningful
+references, IP-FC-21's family drawings and IP-FC-19's assembly joints attach to geometry
+rather than to positions in a 158-node boolean history. These are the features that make the
+constraint work pay, and they should pull stage 1 forward for whatever they need first rather
+than waiting for it to complete.
+
+**Stage 3 — Alternative 4, gated on OQ-ARCH-4 firing.** When IP-FC-12 completes the cowls and
+IP-FC-13 closes whole-corpus equivalence, OpenSCAD retires and a frozen FreeCAD corpus becomes
+the reference — `compare_backends` compares meshes, so it retargets to that corpus with no
+change to what it does. At that point PartDesign conversion is verifiable body by body against
+frozen geometry, which is the safe way to do it, and stage 1 will already have produced the
+constrained sketches PartDesign features need. The open item to resolve before stage 3 is the
+single-solid-per-body rule against the octant-and-mirror construction — that is a real
+architectural question and it should be raised on its own once stage 1 is under way.
+
+**What is still genuinely open**, and should not be read as settled by the above: whether
+stage 3 converts the whole corpus or only the parts that benefit; how a solver branch
+ambiguity is guarded against in stage 1 (a constraint with two solutions can converge on the
+wrong one, which the mesh comparison detects but does not prevent); and whether Alternative 3's
+assertions are still worth adding as an interim measure for features not yet converted. The
+first stage-1 conversion should be treated as answering those empirically.
+
+**Superseded recommendation, kept because it was wrong in an instructive way.** The first
+draft of this question recommended *Alternative 3 now, Alternative 2 only where IP-FC-21 and
+IP-FC-19 force it, and not Alternative 4*, on the reasoning that constraints would cost the
+numeric verification chain and that the chain is the only reason the port is trustworthy. **The
+premise was false**: `compare_backends` compares built meshes, not coordinates, so constraints
+cost it nothing. The conclusion inherited the error — it deferred the architecturally correct
+move to protect something that was never at risk, and it treated as permanent an objection that
+OQ-ARCH-4 had already scheduled to expire. Worth rereading whenever "we cannot do that, it
+would break verification" is offered as an argument: check what the verification actually
+measures first.
 
 ---
 

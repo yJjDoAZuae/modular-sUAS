@@ -1408,6 +1408,16 @@ class RenderFailed(RuntimeError):
     """One or more queued OpenSCAD runs failed."""
 
 
+class UnportedPart(RenderFailed):
+    """`--backend freecad` was asked for a part FreeCAD has no generator for.
+
+    A distinct type because it is a different fact about the world than a render that failed,
+    and the tools have to be able to tell them apart: "FreeCAD cannot build this yet" is
+    expected during the migration and names remaining work, where "FreeCAD tried and produced
+    nothing" is a defect. Reporting them in one bucket would bury the second in the first.
+    """
+
+
 class RenderQueue:
     """Runs the sweep's OpenSCAD invocations, optionally across a thread pool.
 
@@ -1445,6 +1455,10 @@ class RenderQueue:
         # own failure.
         self.fail_fast = fail_fast
         self.failures = []
+        # Parts refused for having no FreeCAD generator. Counted separately from `failures`
+        # only to keep the log readable -- hundreds are expected until IP-FC-12 lands, so
+        # `refuse()` lists the first few and counts the rest.
+        self._refused = 0
         self._pending = []
         self._done = 0
         self._failed = 0
@@ -1476,6 +1490,28 @@ class RenderQueue:
                               stderr=subprocess.DEVNULL)
         if on_success is not None:
             on_success()
+
+    def refuse(self, description):
+        """Record a part that will not be rendered at all, having queued nothing.
+
+        The counterpart of a failed job for work that is never submitted, so that one place
+        answers "what did this run not produce".
+
+        **`fail_fast` deliberately does not apply.** It exists to stop a run whose renders are
+        failing, so a broken sweep does not grind through hundreds of parts before saying so.
+        A refusal is not that: it is the catalogued, expected consequence of the port being
+        incomplete, and every `--backend freecad` run will hit hundreds of them until IP-FC-12
+        lands. Raising here would mean the FreeCAD sweep could never produce the documents it
+        *can* produce, which is the opposite of the point.
+        """
+        self.failures.append(((description, None), UnportedPart(description)))
+        self._refused += 1
+        if self._refused <= 5:
+            sys.stderr.write('      REFUSED (no FreeCAD generator): %s\n' % description)
+            sys.stderr.flush()
+        elif self._refused == 6:
+            sys.stderr.write('      ... further refusals counted, not listed\n')
+            sys.stderr.flush()
 
     def drain(self):
         """Run everything queued. Raises RenderFailed if any job failed."""
@@ -1583,9 +1619,10 @@ _BACKEND = 'openscad'
 def set_backend(name):
     """Select 'openscad' or 'freecad'. Returns the previous value.
 
-    Only the corner and the bulkhead have FreeCAD generators. The other three sweeps fall
-    back to OpenSCAD per part rather than failing the run -- see `_backend_for`, where that
-    decision is made explicit rather than left to whichever call site notices first.
+    Only the corner and the bulkhead have FreeCAD generators. Under 'freecad' the parts that
+    do not are **not produced at all** -- they are recorded as refusals and the run continues
+    (or stops, under fail_fast). They are not rendered with OpenSCAD and filed under the
+    FreeCAD name; see `solid_render`, which is where that is enforced for every sweep at once.
     """
     global _BACKEND
     if name not in ('openscad', 'freecad'):
@@ -1597,18 +1634,19 @@ def set_backend(name):
 def _backend_for(kind, supported=True):
     """The backend that will actually render `kind`, which is not always the one selected.
 
-    A part with no FreeCAD generator yet renders in OpenSCAD even under --backend freecad.
-    Silently, and deliberately: the alternative is a sweep that cannot run at all until every
-    part is ported, which would make the backend flag useless for exactly the period it is
-    most needed. `main()` prints which parts this applies to, so it is not invisible.
+    A part with no FreeCAD generator returns 'openscad' here even under --backend freecad --
+    but that no longer means "render it with OpenSCAD". `solid_render` refuses when the
+    selected backend is 'freecad', so this answer routes the part to a refusal rather than to
+    a silent substitution. The distinction is worth keeping: this function still answers "can
+    FreeCAD build this", which is what the call sites need to decide which parameter set to
+    assemble, and it is not the place that decides what to do about the answer.
 
     `supported` extends that per *variant*, not just per kind, and it exists because the
     coarser test was wrong. `bulkhead` is ported, but only its plain end type: the FreeCAD
     `bulkhead_full.emit()` takes no `is_cowling` or `is_interconnect`, where the OpenSCAD
     call site passes both. So `--backend freecad` rendered all five swept types as the end
-    type -- three of five silently wrong, under the right filename, with a plausible volume.
-    A part that falls back is a part still rendered correctly; a part built from the wrong
-    branch is a part nobody has reason to re-examine.
+    type -- three of five silently wrong, under the right filename, with a plausible volume
+    (IP-FC-47).
     """
     if _BACKEND == 'freecad' and kind in freecad_render_backend.KINDS and supported:
         return 'freecad'
@@ -1853,7 +1891,7 @@ def default_render_workers():
 
 
 def render_definition(write_definition, definition_suffix, make_command,
-                      output_dir, filename):
+                      output_dir, filename, sidecars=()):
     """Render one part, whatever built its definition.
 
     IP-FC-10 split this out of `solid_render`. Everything here is engine-independent and had
@@ -1861,10 +1899,17 @@ def render_definition(write_definition, definition_suffix, make_command,
     comparison, the atomic write, the preview, the queue submission. Only two things differ
     between OpenSCAD and FreeCAD, and both arrive as arguments --
 
-        write_definition(path)          put the file that *defines* this part at `path`
-        make_command(definition, stl)   the argv (or command string) that renders it
+        write_definition(path)                    put the file that *defines* this part there
+        make_command(definition, stl, sidecars)   the argv (or command string) that renders it
 
     -- so a third backend would need nothing here at all.
+
+    `sidecars` names further artifacts the renderer produces beside the mesh, by suffix --
+    `('.FCStd',)` for the FreeCAD backend, nothing for OpenSCAD. They are not an afterthought
+    bolted on next to the STL: they go through the *same* partial-then-rename write and the
+    same resume check, because a half-written `.FCStd` and a stale one are exactly as
+    misleading as a truncated mesh, and a resume that looked only at the STL would skip every
+    part rendered before the sidecar existed and never backfill it.
 
     Returns (definition_path, stl_path, png_path).
     """
@@ -1881,6 +1926,9 @@ def render_definition(write_definition, definition_suffix, make_command,
     definition_filepath = beside(definition_suffix)
     stl_filepath = beside('.stl')
     png_filepath = beside('.png')
+
+    # suffix -> (where the renderer writes it, where it belongs once the render succeeded)
+    sidecar_paths = {s: (beside('.partial' + s), beside(s)) for s in sidecars}
 
     # Write the definition to a temporary path first, so a resume can compare it against
     # what is already on disk. Writing it is cheap next to rendering, and it is what makes
@@ -1900,7 +1948,10 @@ def render_definition(write_definition, definition_suffix, make_command,
     # a killed render used to leave a partial .stl that every existence check
     # treated as finished. Combined with the atomic write below, a present .stl now
     # genuinely means a finished render of the definition sitting beside it.
-    if _RESUME and definition_unchanged and mesh_stats.is_complete(stl_filepath):
+    sidecars_present = all(os.path.isfile(final) for _p, final in sidecar_paths.values())
+
+    if (_RESUME and definition_unchanged and sidecars_present
+            and mesh_stats.is_complete(stl_filepath)):
         os.remove(partial_definition)
         _RESUME_COUNTS['skipped'] += 1
         if _RESUME_COUNTS['skipped'] % 50 == 0:
@@ -1931,7 +1982,8 @@ def render_definition(write_definition, definition_suffix, make_command,
     # that scan the tree for parts filter '*.partial.stl' back out.
     partial_filepath = beside('.partial.stl')
 
-    def _finalize(src=partial_filepath, dst=stl_filepath, png=png_filepath):
+    def _finalize(src=partial_filepath, dst=stl_filepath, png=png_filepath,
+                  extras=tuple(sidecar_paths.items())):
         # The render "succeeded" -- meaning it exited zero -- so if there is no mesh here,
         # the exit code lied. **freecadcmd's does, routinely.** It exits 0 on an uncaught
         # exception in the script it was handed, printing "Exception while processing file"
@@ -1945,7 +1997,19 @@ def render_definition(write_definition, definition_suffix, make_command,
                 '%s exited without error but wrote no mesh -- look for a traceback from '
                 'the renderer above (freecadcmd reports script failures on stderr and '
                 'still exits 0)' % os.path.basename(dst))
+        # Sidecars are checked as strictly as the mesh. A missing one means the renderer was
+        # asked for the parametric document and did not produce it -- which for this project
+        # is the *primary* output, not a nicety, so it fails the part rather than quietly
+        # leaving a mesh-only result that looks complete on disk.
+        for suffix, (partial, final) in extras:
+            if not os.path.isfile(partial):
+                raise RenderFailed(
+                    '%s built a mesh but no %s -- it was asked for one via --fcstd and '
+                    'exited zero without writing it' % (os.path.basename(dst), suffix))
+
         os.replace(src, dst)
+        for _suffix, (partial, final) in extras:
+            os.replace(partial, final)
         if _PREVIEWS:
             _write_preview(dst, png)
 
@@ -1954,7 +2018,8 @@ def render_definition(write_definition, definition_suffix, make_command,
     # queue installed by main() it is deferred and overlapped. The definition on disk is
     # complete either way, so nothing downstream is affected by the STL arriving later;
     # none of the five call sites use the returned STL path.
-    _RENDER_QUEUE.submit(make_command(definition_filepath, partial_filepath),
+    _RENDER_QUEUE.submit(make_command(definition_filepath, partial_filepath,
+                                      {s: p for s, (p, _f) in sidecar_paths.items()}),
                          on_success=_finalize)
 
     # The preview PNG is rendered by _finalize above, from the finished STL, as
@@ -1993,7 +2058,29 @@ def stamp_geometry_version(scad_path):
 
 
 def solid_render(scad_obj, output_dir, filename):
-    """Render a part with OpenSCAD, from a solid2 object."""
+    """Render a part with OpenSCAD, from a solid2 object.
+
+    **Under `--backend freecad` this refuses rather than rendering.** Reaching here with the
+    FreeCAD backend selected *is* the fallback, by definition -- every unported kind and every
+    unported variant of a ported kind arrives at exactly this call -- which makes it the one
+    place the fallback can be closed off for all five sweeps at once.
+
+    It used to render anyway, quietly, on the reasoning that a fallback part is still a
+    correct part and refusing would make `--backend freecad` unusable until everything was
+    ported. That reasoning was wrong in the way that matters. The output tree is the record of
+    what the port can do, and a `.stl` that OpenSCAD produced sitting in the FreeCAD tree
+    under the FreeCAD name says the port built something it cannot build. Nothing downstream
+    -- a print job, a comparison, a person reading the directory -- can tell the difference
+    without checking for a sidecar nobody knows to check for. IP-FC-47 was this exact shape:
+    parts that looked built and were not what they claimed.
+
+    So the part is not produced at all, and its absence is recorded. `--backend openscad`, the
+    default, is untouched: this is only about not lying in the other direction.
+    """
+    if _BACKEND == 'freecad':
+        _RENDER_QUEUE.refuse(os.path.basename(filename))
+        return (filename, filename, filename)
+
     solid2.set_global_fn(0)
     solid2.set_global_fa(1)
     solid2.set_global_fs(0.05)
@@ -2005,7 +2092,7 @@ def solid_render(scad_obj, output_dir, filename):
         relativize_scad_references(path)         # same directory, so same result
         stamp_geometry_version(path)             # after relativize: it reads the refs
 
-    def make_command(scad_path, stl_path):
+    def make_command(scad_path, stl_path, _sidecars):
         cmd = solid2.config.config.openscad_stl_command.format(
             scadfile=scad_path, stlfile=stl_path)
         return os.path.join(user_path, cmd)
@@ -2022,16 +2109,25 @@ def freecad_render(kind, params, output_dir, filename, variant=None):
     tell a stale part from a current one, and so the STL is not the only record of what
     produced it. The definition is a `.stl.json` rather than a bare `.json` so it sorts and
     globs beside its `.stl.scad` counterpart, and so a tree can hold both.
+
+    **The `.FCStd` is written for every part, always** (IP-FC-14, UC-2). The mesh is a
+    by-product; the parametric document is the thing this migration exists to produce, and a
+    sweep that emitted meshes alone would leave the port with nothing the OpenSCAD path did
+    not already have. `build_part.py` has always been able to save it -- it just was never
+    asked, so 544 documents were being built in memory and thrown away on every run. There is
+    deliberately no switch to turn this off: an STL-only mode would be a way to spend hours
+    producing the wrong artifact.
     """
     def write_params(path):
         with open(path, 'w') as f:
             f.write(freecad_render_backend.definition_text(kind, params, variant))
 
-    def make_command(params_path, stl_path):
-        return freecad_render_backend.build_command(kind, params_path, stl_path)
+    def make_command(params_path, stl_path, sidecars):
+        return freecad_render_backend.build_command(kind, params_path, stl_path,
+                                                    sidecars['.FCStd'])
 
     return render_definition(write_params, '.stl.json', make_command,
-                             output_dir, filename)
+                             output_dir, filename, sidecars=('.FCStd',))
 
 
 def lookup_anchor_diameter(bolt_diameter):
