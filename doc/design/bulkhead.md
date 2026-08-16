@@ -1287,28 +1287,116 @@ does not survive it cleanly:
 **There was no wedge in that version.** The block started exactly where the ray crossed the
 fillet center, so the triangle the half-plane would have removed lay wholly to the left of the
 block's left edge, and the two shapes met at a single point instead of overlapping. In exact
-arithmetic there is nothing to remove and nothing left over. What OCCT actually produced at `U = 1.5
-end_anchor`, no panel, was an edge 0.000335 mm long whose length is exactly twice the distance
-between its own endpoints — it doubles back — and beside it a face with a **negative area** of
-−0.00038 mm². The octant still measured as one valid solid, and the failure only appeared two
-steps later, when the octant was mirrored and fused into the full bulkhead and the fuse
-returned an empty shape. That was IP-FC-58: one variant of 88 that would not build, from a
-construction that is subtly wrong everywhere.
+arithmetic there is nothing to remove — which had a consequence beyond the boolean, covered
+under *a second defect* below.
 
-**The exactly degenerate case is fine.** Two swept variants, `1.5 end_anchor 1/4in` and
-`1.5 end_bolt 1/4in`, sit at `bbf_dx = 0.0000` and build correctly, because there the ray and
-the block edge are the same line and OCCT handles exact coincidence. It is the neighborhood
-of zero that is dangerous, not zero itself.
+#### Is there a near divide-by-zero as `bbf_dx` → 0?
 
-**How much of the corpus is in that neighborhood:**
+**Not in the arithmetic.** The construction is six spreadsheet cells:
+
+    bbf_dx  = bbf_cx - bolt_c
+    bbf_dy  = sqrt(max(r_bolt_fillet^2 - bbf_dx^2; 0))
+    bbf_r   = sqrt(bbf_dx^2 + bbf_dy^2)
+    bbf_ang = atan2(bbf_dy; bbf_dx)
+    bbf_hx  = bolt_c - far * bbf_dx / bbf_r
+    bbf_hy  = bolt_c - far * bbf_dy / bbf_r
+
+There is exactly one division, by `bbf_r`. Substituting the line above it,
+
+    bbf_r² = bbf_dx² + (r_bolt_fillet² - bbf_dx²) = r_bolt_fillet²
+
+so **`bbf_r ≡ r_bolt_fillet` identically** — 10.25 mm at `U = 1.5`, and independent of
+`bbf_dx`. The denominator is a constant of the variant; it cannot approach zero.
+
+Every other quantity gets *better* conditioned as `bbf_dx → 0`, not worse:
+
+- `d(bbf_dy)/d(bbf_dx) = −bbf_dx / sqrt(r_bolt_fillet² − bbf_dx²) → 0`. The fillet center's
+  height is at its **least** sensitive to `bbf_dx` exactly where the trouble is.
+- `atan2` is ill-conditioned only at `(0, 0)`; here its first argument is
+  `bbf_dy → r_bolt_fillet ≠ 0`, so `bbf_ang → 90°` smoothly.
+- the discriminant `r_bolt_fillet² − bbf_dx²` approaches `r_bolt_fillet²`, its largest value,
+  so the `max(...; 0)` clamp is furthest from firing precisely here.
+
+**The small quantity is an angle, and it is the kernel that has to resolve it.** The tilt of
+the ray away from the block's left face is
+
+    θ = atan2(bbf_dx; bbf_dy) = asin(bbf_dx / r_bolt_fillet)
+
+— 1.118° at `U = 1.5`, and → 0 with `bbf_dx`. Nothing in the derivation divides by `sin θ`,
+but a solid kernel intersecting two surfaces that shallow does, in the general sense that the
+position of the intersection is amplified by `1 / sin θ = r_bolt_fillet / bbf_dx`: 51× at
+`U = 1.5`. **So the 1/`bbf_dx` is real, and it is inside OCCT rather than in the parameters.**
+
+#### It is a representation failure, and it appears at one identifiable stage
+
+Same seed, same tree, one cell different — `bbf_bx = min(bbf_cx; bolt_c)` against
+`bbf_bx = bbf_cx` — at `1.5 end_anchor` with no panel:
+
+| stage | fixed | pre-fix |
+| --- | --- | --- |
+| `BoltFlangeFillet` | 9 faces, min edge 1.200 mm | 9 faces, min edge 1.200 mm |
+| `OuterCornerFillet` | 9 faces, min edge 1.200 mm | 9 faces, min edge 1.200 mm |
+| `FlangePositive` | 28 faces, min edge 0.900 mm | 28 faces, min edge 0.900 mm |
+| `SectionCut` | 49 faces, min edge 0.530 mm | **50 faces, min edge 0.000335 mm, min face −0.000377 mm²** |
+| `BulkheadSection` | 33 faces, valid, 2175.779 mm³ | 34 faces, valid, 2175.827 mm³ |
+| first tiling fuse | 4351.559 mm³, one solid | **0 mm³, zero solids** |
+
+The fillet on its own is sound in both, at every `bbf_dx` from 0 to 3 mm. So is the flange
+positive. The defect is created by the **final subtraction of the cut tools from the
+positive**, it passes `isValid()`, and it kills the mirror-and-fuse two steps later.
+
+**What the defect is.** The extra 50th face lies on the plane `x = bbf_cx`, normal `(1, 0, 0)`,
+with an area of **−0.000377 mm²**. Its boundary carries two near-duplicate pairs: straight
+lines of 3.300000 mm and 3.300144 mm, and a straight line of 2.121320 mm against a
+**hyperbola** of 2.121655 mm. That `2.121320 = relief_r_low · √2` is the exact section of the
+45° relief cone by a plane through its own axis — a *degenerate* conic, which is a pair of
+straight lines rather than a curve. OCCT produced both the straight answer and a hyperbola
+0.000335 mm longer, and the edge closing the loop between them is a `Line` 0.000334608 mm long
+whose length is exactly twice the distance between its own endpoints. Its endpoints are at
+`x = bbf_cx`, `y = bbf_cy − relief_r_low`, `z = plate_thickness` — the point where the low
+relief cylinder touches that plane, at the height it steps into the cone.
+
+#### Why zero is safe and near-zero is not
+
+The relief stack is centered on `(bbf_cx, bbf_cy)`, so its axis lies inside **any** vertical
+plane through that point — including both the block's left face and the ray plane. Measured:
+
+- **One such plane is fine.** The fixed construction has exactly one, the tilted ray plane
+  (face normal `(−0.9998, 0.0195, 0)`, distance to the axis 0.000000000), and is clean.
+- **At `bbf_dx = 0` the pre-fix construction also has one**, because the block's left face and
+  the ray plane are then the *same* plane. Two swept variants, `1.5 end_anchor 1/4in` and
+  `1.5 end_bolt 1/4in`, sit at exactly zero and build correctly.
+- **What fails is two of them, θ apart**, each demanding its own copy of the same degenerate
+  conic section of the same cone. At `bbf_dx = 0` they merge into one; at `bbf_dx = 0.2 mm`
+  they are 1.118° apart and the two answers differ by 0.000335 mm.
+
+So the neighborhood of zero is dangerous and zero itself is not — and the reason is a duplicate
+degenerate conic, not a division anywhere.
+
+#### A second defect: the pre-fix fillet was also short of material
+
+Because the ray half-plane removed **nothing**, the region built was the rectangle from
+`bbf_cx` to `bbf_sx`, not the trapezoid out to `bolt_c` that the OpenSCAD polygon produces.
+The shortfall is the wedge itself, `bbf_dx · bbf_dy · bulkhead_thickness / 2`. Measured on the
+real tree at `1.5 end_anchor 0mm`, the solid after the ray cut is 190.6137 mm³ with the fix
+and 184.4649 mm³ without — a difference of 6.1488 mm³, exactly that triangle. It is a quiet
+error: the union with the flange base and the web reclaims most of it, leaving 3.56 mm³ at
+`FlangePositive`, which is why it showed up only as the corpus-wide agreement with OpenSCAD
+improving when the fix went in rather than as anything failing.
+
+That whole chain is IP-FC-58: one variant of 88 that would not build, from a construction that
+was quietly wrong on **every** variant with `bbf_dx > 0` and only fell over on one of them.
+
+**How much of the corpus sat near zero:**
 
 ![bbf_dx across the swept space](img/bolt_flange_fillet/scan.svg)
 
 Across all 88 valid end-type variants, 14 sit within 0.5 mm of zero and 28 within 1.0 mm, and
 12 of the 18 (bulkhead type, panel) families cross zero as `U` varies. Roughly a third of the
-frame-bulkhead corpus is being built inside the unstable band. Today exactly one variant falls
-over, and which one it is depends on tessellation and boolean luck rather than on anything
-designed.
+frame-bulkhead corpus was being built inside the band where the two axis planes are within a
+degree or so of each other. Only one variant actually fell over, and which one it was depended
+on tessellation and boolean luck rather than on anything designed — which is the part that
+matters here, because the design has no opinion about `bbf_dx` either way.
 
 **Three things this is not.** The account above concerns the *construction*, and it is easy to
 read it as saying the fillet itself is in trouble somewhere in the swept space. It is not.
@@ -1331,7 +1419,8 @@ Measured across all 88 valid end-type variants:
   out and never zero-sized. The quad's area ranges from 4.49 mm² at `U=0.75 end_bolt 1mm` to
   252.01 mm² at `U=4.0 end_anchor 1/4in`, median 55.48 mm²; the `1.5 end_anchor` no-panel
   variant that failed carries 31.77 mm² of it. IP-FC-58 was not a fillet that could not be
-  solved — it was a solvable fillet built by a method that put three edges through one point.
+  solved — it was a solvable fillet built by a method that left a redundant planar face on the
+  relief cone's own axis.
 
 **What has already been done, and what has not.** The construction was made robust on
 2026-08-15 (IP-FC-58): the block now starts at `min(bbf_cx; bolt_c)`, the true leftmost vertex
@@ -1481,6 +1570,14 @@ built solid instead, because where a feature *is* cannot be recovered from the f
 arithmetic. Their input is a snapshot written by
 `tools/bbf_analysis/measure_bbf_context.py`; re-run it if the bulkhead moves, or those
 figures will keep showing the old shape while still looking authoritative.
+
+Every number in *Is there a near divide-by-zero* and the two sections after it comes from
+`tools/bbf_analysis/probe_bbf_degeneracy.py`, which builds the real tree and restores the
+pre-IP-FC-58 construction by setting one cell, so the two can be compared without checking out
+an old revision:
+
+    freecadcmd src/Fuselage/tools/bbf_analysis/probe_bbf_degeneracy.py \
+        --pass params.json {scan|stages|edge} [fixed|broken]
 
 
 ## See also
