@@ -90,6 +90,14 @@ TOL_EXACT = 6.0e-5          # 0.006% -- the 360-segment floor, with margin
 TOL_FILLETED = 1.0e-4       # 0.010% -- fillets add real surface-vs-facet error on top
 BBOX_TOL = 5.0e-4           # mm, absolute -- interfaces must not move
 
+# Ask `mesh_stats` for the box at full precision. Its default rounds to 4 decimal places --
+# a 1e-4 grid, one fifth of BBOX_TOL -- and rounding two coordinates onto different grid
+# points before subtracting them manufactures a difference that is not in either mesh. That
+# is precisely what IP-FC-71 was: two bulkheads whose extents differ by 0.000497 mm, rounded
+# to 0.000500 and then failed by 2e-15 mm on the comparison. Rounding is right for the
+# `same_geometry` and display callers, which want a stable key; it is wrong under a subtraction.
+BBOX_PLACES = 9
+
 FILLETED_KINDS = {'bulkhead', 'boom_bulkhead'}
 
 
@@ -325,7 +333,8 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
             skipped.append((name, kind))
             continue
         try:
-            sa, sb = mesh_stats.mesh_stats(a), mesh_stats.mesh_stats(b)
+            sa = mesh_stats.mesh_stats(a, bbox_places=BBOX_PLACES)
+            sb = mesh_stats.mesh_stats(b, bbox_places=BBOX_PLACES)
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             failures.append((name, f'unreadable: {exc}'))
             continue
