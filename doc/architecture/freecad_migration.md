@@ -681,7 +681,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
 | ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
-| ARCH-12 | open | What carries the interface verification tier above 100 mm, where the OpenSCAD reference mesh cannot express the tolerance the check applies? — Not blocking, but it silently weakens the strictest tier on the largest parts |
+| ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -1552,12 +1552,53 @@ measures first.
 
 ---
 
-### OQ-ARCH-12 — What carries the interface verification tier above 100 mm?
+### ~~OQ-ARCH-12 — What carries the interface verification tier above 100 mm?~~ — DECIDED 2026-08-16: scale `BBOX_TOL` with `U`, and let the limit expire with the OpenSCAD sweep
 
-**Not blocking.** No part is known to be wrong, and the check is sound on every part whose
-extents stay under about 100 mm — which is all of `U` ≤ 2.0. What is at stake is the *strictest*
-tier of the equivalence check quietly losing its resolution on the largest parts, where nothing
-in the output says so.
+**Resolution.** **Alternative 2** for the mechanism — `BBOX_TOL` becomes `5e-4 mm × U`, floored
+at its historical value for `U` < 1 — together with **Alternative 4** for the disposition: the
+underlying limit is accepted and allowed to lapse when OQ-ARCH-4 retires the OpenSCAD reference
+after IP-FC-13. **Alternative 1 was explicitly declined**: the reference is *not* to be
+re-rendered as binary STL, even though the measurement showed it would drive the difference to
+exactly zero, because it invalidates every stored reference tree to improve a check that already
+has a scheduled end. Alternative 3 was not taken up.
+
+Implemented the same day in `compare_backends.py` as `bbox_tol(u)`, with `u_of(name)` reading
+the size off the part filename the way `kind_of` already reads the kind — the comparison is
+handed nothing but names and two rendered trees. A name whose `U` cannot be read raises rather
+than defaulting, since assuming `U` = 1 would apply a threshold too tight for a large part and
+report a failure that is not real.
+
+**Caveats attached to the choice, each of which is a thing this deliberately gives up.**
+
+- **The interface tier is now size-dependent**, which is the drawback recorded under
+  Alternative 2 and is accepted, not solved: at large `U` the threshold is a fraction of the
+  part rather than a fixed distance, which is closer to what the volume tier already measures.
+- **The relative component is set from the reference's file format, not from any design
+  requirement.** `5e-4 × U` was chosen because it clears the six-significant-figure quantum at
+  every swept size — 5.0× headroom at `U` ≤ 1, 10× at `U` = 2.0, and a thinnest 1.2× at
+  `U` = 2.5, immediately after the quantum's decade step. It carries no other meaning.
+- **The change can only loosen, never tighten**, which is why no corpus re-run was required to
+  adopt it safely: with the floor at `U` = 1 the new threshold is greater than or equal to the
+  old one at every swept size, so no part that passed before can fail now. The converse is the
+  cost — parts whose bounding boxes differ by between 5e-4 mm and `5e-4 × U` will now pass
+  silently. From the last full run only IP-FC-71's two bulkheads were anywhere near the old
+  threshold, and both are explained.
+- **Nothing physical is at stake in either direction**, which is what makes accepting the limit
+  reasonable: the worst discrepancy involved is 1e-3 mm, 100× under a printed bolt clearance and
+  200× under one layer.
+
+**The question and its alternatives are kept below**, in this document's usual practice, because
+the measurements in them are the justification for the number — particularly the binary-STL
+result, which will be the right answer for anyone who revisits this before OQ-ARCH-4 fires.
+
+---
+
+**Not blocking, and the physical stakes are low.** No part is known to be wrong, the check is
+sound on every part whose extents stay under about 100 mm — all of `U` ≤ 2.0 — and the largest
+discrepancy involved, 1e-3 mm, is **100 times under a printed bolt clearance and 200 times under
+one 0.2 mm layer**. Nothing here is a fit or airworthiness question. What is at stake is
+*detection*: the strictest tier of the equivalence check quietly loses its resolution on the
+largest parts, and nothing in the output says so.
 
 **The setup, in full.** The port is verified by rendering the same variant with both geometry
 engines and comparing the two solids. `compare_backends.py` applies two independent tolerances
@@ -1574,16 +1615,23 @@ explains a moved interface.
 emits an **ASCII STL**, which writes each coordinate at **six significant figures**. That is a
 quantization whose absolute size grows with the coordinate:
 
-| coordinate magnitude | ASCII STL quantum | `BBOX_TOL` = 5e-4 mm |
+| coordinate magnitude | ASCII STL quantum | against `BBOX_TOL` = 5e-4 mm |
 | --- | --- | --- |
-| 10 mm | 1e-5 mm | 50× finer than the tolerance — check is sound |
-| 100 mm | 1e-4 mm | 5× finer — still sound |
-| 120 mm | 1e-3 mm | **2× coarser — the check cannot resolve its own tolerance** |
-| 200 mm | 1e-3 mm | **2× coarser** |
+| 1 to 10 mm | 1e-5 mm | 50× finer than the tolerance — check is sound |
+| 10 to 100 mm | 1e-4 mm | 5× finer — still sound |
+| 100 to 1000 mm | 1e-3 mm | **2× coarser — the check cannot resolve its own tolerance** |
+
+Measured on this build rather than derived from the format: writing 1.234565, 12.34565, 98.76545,
+123.4565 and 234.5675 mm gives back `1.23457`, `12.3456`, `98.7654`, `123.456` and `234.568`.
+The quantum steps by decade, so the boundary is sharp — a coordinate at 99 mm is checked five
+times finer than its tolerance and one at 101 mm twice coarser.
 
 FreeCAD writes a **binary STL**, whose float32 coordinates carry about seven significant figures
-— roughly 1e-5 mm at 120 mm, comfortably inside the tolerance. So the two meshes are not equally
-precise, and the less precise one is the authority.
+— 7.6e-6 mm at 120 mm and 1.5e-5 mm at 200 mm, comfortably inside the tolerance. So the two
+meshes are not equally precise, and the less precise one is the authority. **The format, not the
+engine, is what differs**: OpenSCAD writes binary STL to the same float32 precision when asked,
+measured on this build (see Alternative 1), so this is a choice the port made rather than a
+limitation of the reference implementation.
 
 **Measured, not projected.** On `U_2.5 imperial 3/16in`, the plan half-extent is
 `unit_width / 2 − (panel_thickness + panel_tolerance)` = 125 − 4.8625 = **120.1375 mm exactly**,
@@ -1604,6 +1652,50 @@ these parts now pass partly because OpenSCAD's sixth digit happened to round **d
 rounded up to `120.138`, the raw difference would be 0.000503 mm and the check would still fail
 with the two models in exact agreement.
 
+**The underlying mismatch is that the three quantities involved do not scale the same way,
+and this was bound to break somewhere.** `unit_width` is `100 · U` exactly, so every plan
+coordinate grows linearly with `U` and every volume grows as `U³`. Against that:
+
+| quantity | how it is expressed | what happens as `U` grows |
+| --- | --- | --- |
+| volume tolerances (6e-5, 1e-4) | **relative** to the part's volume | absolute allowance grows as `U³` — tracks the part |
+| ASCII STL precision | **relative** (six significant figures) | absolute quantum grows with the coordinate, by decade steps |
+| `BBOX_TOL` (5e-4 mm) | **absolute** | unchanged — so it becomes *relatively stricter* |
+
+In numbers, `BBOX_TOL` as a fraction of the part's own half-extent (`50 · U`) is 2.0e-5 at
+`U` = 0.5, 1.0e-5 at `U` = 1.0, 4.0e-6 at `U` = 2.5 and 2.5e-6 at `U` = 4.0 — **eight times
+stricter on the largest part than on the smallest**, while the reference's relative precision
+stays flat at roughly six figures throughout. Two curves moving in opposite directions must
+cross, and the crossing is exactly the 100 mm step in the table above: the extent is
+`unit_width / 2 − (panel_thickness + panel_tolerance)`, which is 95.1375 mm at `U` = 2.0 and
+120.1375 mm at `U` = 2.5.
+
+**`BBOX_TOL` is a numerical agreement threshold, not a manufacturing tolerance, and reading it
+as the latter leads to wrong conclusions.** It is worth being explicit, because the mistake is
+easy: 5e-4 mm is **200 times tighter than a printed bolt clearance**, which is on the order of
+0.1 mm, and **400 times finer than the 0.2 mm layer height**. No joint on this airframe is toleranced
+anywhere near 5e-4 mm and none could be — the process cannot hold it. What OQ-DES-B9 actually
+says is that parts built before and after the port are interchangeable *at every interface*,
+"since no interface dimension is set by a fillet": fillets are the only thing the port changes,
+so the **expected difference at an interface is exactly zero**. `BBOX_TOL` is therefore a noise
+floor around that zero — set as low as the two meshes allow, to catch a modeling divergence
+whose signature happens to be small — and not a statement about what a joint may be out by.
+
+**That reframing sets the real severity, which is lower than a bounding-box failure suggests.**
+The worst discrepancy this question concerns is the 1e-3 mm ASCII quantum, which is 100 times
+under a bolt clearance and 200 times under one printed layer. **Nothing unfittable or unprintable
+is hiding here.** What is at stake is evidence, not airworthiness: the check exists to notice
+that a face moved at all, because on a part whose interfaces should reproduce exactly, a
+sub-micron displacement can be the visible tip of a modeling difference that matters elsewhere.
+Losing resolution costs detection, not fit.
+
+**The absolute form is still the right one for a floor around zero** — a threshold that grows
+with the part would stop meaning "these agree" and start meaning "these agree to within a
+fraction," which is what the volume tier already measures. The defect is that the *reference's
+precision* is relative while the *threshold* is absolute, so any absolute threshold whatsoever
+fails once the part is large enough. Nothing about 5e-4 mm in particular is at fault; a 1e-3 mm
+threshold would meet the same wall a decade further out.
+
 **Affected and unaffected.** Affected: any extent whose value needs a seventh significant figure,
 which in the swept space means `U` ≥ 2.5 on the imperial panels — measured at U = 2.5 and U = 3.0,
 and predicted at U = 4.0 (195.1375 mm) by the same arithmetic. Unaffected: every metric panel,
@@ -1614,17 +1706,31 @@ document carries doubles and is not involved.
 #### Alternatives
 
 1. **Export the OpenSCAD reference as binary STL.**
-   OpenSCAD can emit binary STL, whose float32 coordinates give about seven significant figures.
-   *Benefits:* removes the limit rather than describing it — the quantum returns to roughly 1e-5 mm
-   at 120 mm, five times finer than `BBOX_TOL`, at every swept size; `BBOX_TOL` and the OQ-DES-B9
-   position stay exactly as they are; no per-size special casing anywhere.
+   OpenSCAD emits binary STL with `--export-format binstl`. **Measured 2026-08-16 on this build
+   (OpenSCAD 2021.01), and it is better than "about seven significant figures":** exporting a
+   solid whose extents are 120.1375, 145.1375 and 195.1375 mm — the three plan half-extents that
+   need a seventh figure — the ASCII writer emits `120.137`, `145.137`, `195.137`, while the
+   binary writer stores `120.13749694824219`, `145.1374969482422` and `195.1374969482422`. Those
+   are **exactly the nearest float32 to each true value, and bit-identical to what FreeCAD's own
+   binary STL stores.** The float32 quantum at these magnitudes is 7.6e-6 mm below 128 mm and
+   1.5e-5 mm above it — **33 to 65 times finer than `BBOX_TOL`**, against the ASCII writer's
+   1e-3 mm, which is twice coarser.
+   *Benefits:* removes the limit rather than describing it, at every swept size; because both
+   engines would then write the nearest float32 of the same true value, the bounding-box
+   difference on the affected extents becomes **exactly zero rather than merely under tolerance**;
+   `BBOX_TOL` and the OQ-DES-B9 position stay exactly as they are; no per-size special casing
+   anywhere. **The comparison tooling needs no change** — `mesh_stats.load_triangles` already
+   reads binary STL, since the FreeCAD side has always been binary, and nothing outside that
+   module parses STL text.
    *Drawbacks:* changes the authority's output format, so every stored reference mesh is
    invalidated and `--reference` trees must be re-rendered; the ASCII form is human-readable and
    greppable, which has been useful in diagnosis — including this one, where reading the vertex
    line directly is what identified the cause; float32 is still not exact, so the limit is pushed
-   out rather than removed in principle.
-   *Prerequisites:* confirm this OpenSCAD build's binary STL writer is float32 and not something
-   narrower; a full corpus re-render and comparison to confirm no verdict changes.
+   out by four orders rather than removed in principle.
+   *Prerequisites:* ~~confirm this OpenSCAD build's binary STL writer is float32~~ — **done, see
+   above.** Remaining: the render command is `solid2`'s `openscad_stl_command` template, used at
+   one call site in `fuselage_variants.py`, so the change is that template plus a full corpus
+   re-render and comparison to confirm no verdict changes.
 
 2. **Give `BBOX_TOL` a relative component sized to the reference's precision.**
    Replace the absolute 5e-4 mm with something like `max(5e-4, k · |coordinate|)`, where `k` is
@@ -1636,9 +1742,18 @@ document carries doubles and is not involved.
    tolerance would have to reach about 1e-3 mm, twice its current value, to cover the quantum,
    and a real 1e-3 mm face displacement there would then pass; it encodes a property of the
    *reference's file format* into a tolerance that is supposed to express a *design* position,
-   so the number stops meaning what OQ-DES-B9 says it means.
-   *Prerequisites:* a decision on whether the interface tier may legitimately be size-dependent,
-   which is an OQ-DES-B9 question rather than an architecture one.
+   so the number stops meaning "these two agree" and starts meaning "these two agree to within a
+   fraction of the part", which is what the volume tier already measures; the interface check
+   then no longer has a form the volume check does not.
+   *Prerequisites:* a value for the relative component, taken from the reference's six-figure
+   precision rather than from any design requirement — which is the honest way to set it, and
+   also the tell that it is compensating for a file format.
+   *A drawback claimed here on 2026-08-16 and withdrawn the same day:* that a relative component
+   "inverts the design intent" by letting the largest parts have the loosest joints. That reads
+   `BBOX_TOL` as a manufacturing tolerance, which it is not — 5e-4 mm is 200 times tighter than a
+   printed bolt clearance and could not be held by the process. It is a noise floor around an
+   expected zero, and scaling a noise floor with the noise is coherent. The real objection to
+   this alternative is the one above: it makes the interface tier a second volume tier.
 
 3. **Compare each extent against its derived design value instead of mesh against mesh.**
    Express the expected bounding box as a function of the parameters — for the frame bulkhead,
@@ -1675,10 +1790,13 @@ document carries doubles and is not involved.
 to do more than that.**
 
 It is the only option that restores the check to what it was supposed to be, and it does so
-without touching `BBOX_TOL` or OQ-DES-B9 — the design position is not in question here, only the
-file format's ability to carry it. Alternative 2 would encode an artifact of that file format
-into a number that is supposed to express a design decision, which makes the tolerance mean
-something different at different sizes for a reason that has nothing to do with the design.
+without touching `BBOX_TOL` or OQ-DES-B9 — the position is not in question here, only the file
+format's ability to carry it. Because OQ-DES-B9's claim is that the expected interface
+difference is **exactly zero**, and binary STL makes both engines write the same bits, this
+alternative does not merely widen the margin — it lets the check assert the thing the design
+position actually claims. Alternative 2 reaches the same verdicts by loosening the threshold
+until the format's noise fits inside it, which works, but leaves the interface tier measuring a
+fraction of the part — a second volume tier, in a check that already has one.
 Alternative 3 is the right long-term answer for a different reason — it catches both engines
 being wrong together, which nothing currently does — but it is a large piece of work whose
 failure mode is confident false failures, and it should be justified on its own merits rather
@@ -1690,11 +1808,17 @@ mistake OQ-ARCH-11's superseded recommendation made in the other direction. That
 against Alternatives 2 and 3, not against 1 — Alternative 1 is a change to a render flag and a
 re-render, small enough that the retirement schedule does not argue against it.
 
-**One measurement is needed before this can be closed**, and it is cheap: confirm that this
-OpenSCAD build's binary STL output is float32, and re-render the corpus to confirm no comparison
-verdict changes. If the binary writer turns out to be no more precise than the ASCII one, the
-recommendation becomes Alternative 4, since 2 and 3 would then both be paying real cost for a
-check with a scheduled expiry.
+**The measurement this recommendation was conditional on has been made, and it came back
+favorable.** OpenSCAD 2021.01's binary writer stores full float32 — bit-identical to FreeCAD's,
+33 to 65 times finer than `BBOX_TOL` at the magnitudes involved — so the conditional fallback to
+Alternative 4 does not apply. It also strengthens the case beyond what was first written here:
+the two engines would not merely agree within tolerance on the affected extents, they would write
+**the same bits**, which is the strongest form this check can take. And the comparison tooling
+already reads binary STL, so the change is a render flag rather than a porting job.
+
+**What remains before closing is a decision, not a measurement**: whether re-rendering every
+stored reference tree is worth spending on a check that OQ-ARCH-4 has scheduled for retirement.
+That is the one real cost, and it is the question this alternative turns on.
 
 ---
 
