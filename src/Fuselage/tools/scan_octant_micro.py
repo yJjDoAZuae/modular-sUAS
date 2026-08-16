@@ -44,6 +44,13 @@ AXES = ('panel_variants.csv', 'bulkhead_type_variants.csv', 'bulkhead_size_varia
 BANDS = [(1e-4, 'under 0.0001'), (1e-3, '0.0001 to 0.001'), (1e-2, '0.001 to 0.01'),
          (2e-1, '0.01 to 0.2'), (float('inf'), 'over 0.2 (a real feature)')]
 
+# Below this a refine/section volume difference is OCCT integrating the same solid twice, not
+# a refine editing geometry: the two shapes have different face counts, so their volumes are
+# summed over different partitions and the last few digits need not agree. Measured at 2e-9
+# on parts of 260 to 890 mm3, i.e. around 1e-11 relative -- and IP-FC-68's defect was
+# 0.006150 mm3, six orders above this, so the floor cannot hide the thing it is filtering for.
+REFINE_FLOOR = 1e-6
+
 
 def freecadcmd():
     for path in (FREECAD, FALLBACK):
@@ -154,6 +161,36 @@ def main(argv=None):
         if notsolid:
             print('variants whose octant is not one valid solid: %d -- %s'
                   % (len(notsolid), ', '.join(r['name'] for r in notsolid[:5])))
+
+        # IP-FC-68: the refine must not change the volume. Reported as the worst difference
+        # rather than a count, because the number that matters is how far it moved.
+        moved = [(abs(r['refined'] - r['section']), r) for r in good
+                 if r.get('refined') is not None]
+        print()
+        if not moved:
+            print('refine volume check: no BulkheadSection node was built')
+        else:
+            changed = [m for m in moved if m[0] > REFINE_FLOOR]
+            print('refine moves the octant volume by more than %g mm3 on %d of %d variant(s)'
+                  % (REFINE_FLOOR, len(changed), len(moved)))
+            for _d, r in sorted(changed, reverse=True)[:5]:
+                print('  %-34s %+.9f mm3  (%.6f -> %.6f)'
+                      % (r['name'], r['refined'] - r['section'], r['section'], r['refined']))
+            worst = max(moved)
+            print('  worst difference anywhere: %+.12f mm3 on %s'
+                  % (worst[1]['refined'] - worst[1]['section'], worst[1]['name']))
+
+        # IP-FC-66: which nodes are invalid, and on how many variants. The row claims the
+        # refined cut tools are unorientable everywhere; this is the count that settles it.
+        nodes = {}
+        for r in good:
+            for name in r.get('invalid', []):
+                nodes.setdefault(name, []).append(r['name'])
+        print()
+        print('nodes with an invalid shape: %d variant(s) of %d carry at least one'
+              % (len([r for r in good if r.get('invalid')]), len(good)))
+        for name, rows in sorted(nodes.items(), key=lambda kv: -len(kv[1])):
+            print('  %-22s %3d variant(s)   e.g. %s' % (name, len(rows), rows[0]))
     for r in bad:
         print('  FAILED %-34s %s' % (r['name'], r['error']))
     return 1 if bad else 0
