@@ -43,6 +43,7 @@ which is what the bounding-box check stands in for until IP-FC-36 enumerates the
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 import tempfile
@@ -88,7 +89,58 @@ SWEEPS = (
 # corner at +0.00222%.
 TOL_EXACT = 6.0e-5          # 0.006% -- the 360-segment floor, with margin
 TOL_FILLETED = 1.0e-4       # 0.010% -- fillets add real surface-vs-facet error on top
-BBOX_TOL = 5.0e-4           # mm, absolute -- interfaces must not move
+# The bounding-box tolerance scales with `U`. **Decided 2026-08-16, OQ-ARCH-12.**
+#
+# It is not a manufacturing tolerance and must not be read as one: 5e-4 mm is 200x tighter
+# than a printed bolt clearance (~0.1 mm) and 400x finer than the 0.2 mm layer height. It is a
+# *noise floor* around an expected zero -- OQ-DES-B9 holds that no interface dimension is set
+# by a fillet, so the two engines should put every interface in exactly the same place, and any
+# nonzero difference is evidence of a modeling divergence rather than a fit allowance.
+#
+# It has to scale because the noise does. The OpenSCAD reference is an ASCII STL carrying six
+# significant figures, so its quantum is 1e-5 mm below 10 mm, 1e-4 mm from 10 to 100, and
+# 1e-3 mm above 100 -- while `unit_width` is 100*U, so a part's coordinates grow linearly with
+# U and cross 100 mm between U = 2.0 (95.1375 mm) and U = 2.5 (120.1375 mm). A fixed 5e-4 mm
+# is five times finer than the noise at U = 1 and twice *coarser* than it at U = 2.5, which is
+# what IP-FC-71 was: two bulkheads flagged for a 0.000497 mm difference that was entirely the
+# reference writing `120.137` for a design value of exactly 120.1375.
+#
+# **The alternative of re-rendering the reference as binary STL was measured and declined.**
+# OpenSCAD 2021.01 writes full float32 binary, bit-identical to FreeCAD's, which would make the
+# difference exactly zero -- but it invalidates every stored reference tree, and OQ-ARCH-4 has
+# already scheduled the OpenSCAD sweep for retirement after IP-FC-13. The limit is allowed to
+# expire with the reference that causes it rather than paying a re-render to outlive it.
+BBOX_TOL_PER_U = 5.0e-4     # mm at U = 1
+
+# Floored at U = 1 rather than scaled all the way down. Pure proportionality would *tighten*
+# the check below U = 1 -- 2.5e-4 mm at U = 0.5 -- which is a change nobody asked for, made for
+# a problem that does not exist there: at a 25 mm extent the reference's quantum is 1e-4 mm and
+# the fixed tolerance already clears it five times over. Tightening a threshold can only newly
+# fail parts, and no corpus run has been made at the tighter value. Delete the `max` to make it
+# purely proportional.
+BBOX_TOL_FLOOR_U = 1.0
+
+
+def bbox_tol(u: float) -> float:
+    """The bounding-box tolerance for a part built at size `u`, in mm."""
+    return BBOX_TOL_PER_U * max(u, BBOX_TOL_FLOOR_U)
+
+
+def u_of(name: str) -> float:
+    """The size multiplier `U` a part was built at, from its filename.
+
+    Parsed rather than passed, because `compare` is handed nothing but two rendered trees and
+    a set of names -- the same reason `kind_of` reads the kind off the name. Every sweep writes
+    `U_<value>__...`, built from `dp.bulkhead.U` in `fuselage_variants.py`.
+
+    Raises rather than defaulting. A part whose size cannot be read cannot be checked at the
+    right tolerance, and quietly assuming U = 1 would apply a threshold too tight on the large
+    parts -- reporting failures that are not real, which is exactly what this scaling fixes.
+    """
+    m = re.match(r'U_([0-9]+(?:\.[0-9]+)?)__', name)
+    if m is None:
+        raise ValueError('cannot read U from part name %r' % name)
+    return float(m.group(1))
 
 # Ask `mesh_stats` for the box at full precision. Its default rounds to 4 decimal places --
 # a 1e-4 grid, one fifth of BBOX_TOL -- and rounding two coordinates onto different grid
@@ -335,6 +387,7 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
         try:
             sa = mesh_stats.mesh_stats(a, bbox_places=BBOX_PLACES)
             sb = mesh_stats.mesh_stats(b, bbox_places=BBOX_PLACES)
+            btol = bbox_tol(u_of(name))
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             failures.append((name, f'unreadable: {exc}'))
             continue
@@ -342,21 +395,22 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
         rel = (sb['volume'] - sa['volume']) / sa['volume']
         bbox_off = max(abs(x - y) for x, y in zip(sa['bbox'], sb['bbox']))
         tol = tol_filleted if kind in FILLETED_KINDS else tol_exact
-        ok = abs(rel) <= tol and bbox_off <= BBOX_TOL
-        rows.append((name, kind, sa['volume'], sb['volume'], rel, bbox_off, ok))
+        ok = abs(rel) <= tol and bbox_off <= btol
+        rows.append((name, kind, sa['volume'], sb['volume'], rel, bbox_off, btol, ok))
         if not ok:
             why = []
             if abs(rel) > tol:
                 why.append(f'volume {rel * 100:+.5f}% exceeds {tol * 100:.5f}%')
-            if bbox_off > BBOX_TOL:
-                why.append(f'bounding box moved {bbox_off:.6f} mm')
+            if bbox_off > btol:
+                why.append(f'bounding box moved {bbox_off:.6f} mm, '
+                           f'over {btol:.6f} mm at U = {u_of(name)}')
             failures.append((name, '; '.join(why)))
 
     print()
     print(f'  {"part":<52} {"openscad":>14} {"freecad":>14} {"delta":>11}  bbox')
-    for name, _kind, va, vb, rel, bbox_off, ok in rows:
+    for name, _kind, va, vb, rel, bbox_off, btol, ok in rows:
         print(f'  {name[:52]:<52} {va:>14.6f} {vb:>14.6f} {rel * 100:>+10.5f}% '
-              f'{"ok" if bbox_off <= BBOX_TOL else f"{bbox_off:.6f}mm"}'
+              f'{"ok" if bbox_off <= btol else f"{bbox_off:.6f}mm"}'
               f'{"" if ok else "   <-- FAIL"}')
 
     print('-' * 100)
