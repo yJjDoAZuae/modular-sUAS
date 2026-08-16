@@ -124,6 +124,42 @@ def definition_text(kind, params, variant=None):
     return json.dumps(doc, indent=2, sort_keys=False) + '\n'
 
 
+class PathTooLong(ValueError):
+    """A `.FCStd` path FreeCAD cannot save to. Raised before the render, not after it."""
+
+
+# FreeCAD's document save fails silently above this path length: the document is not written,
+# an exception is raised inside the script, and **freecadcmd still exits 0** -- so the caller
+# sees success, a mesh on disk and no `.FCStd` (IP-FC-69). Bisected against a trivial
+# document: 222 characters writes, 223 does not. That is well under Windows' 260-character
+# MAX_PATH; the headroom goes to the longer transient name the save writes beside the target.
+#
+# **The `\\?\` extended-length prefix does not lift it.** Measured 2026-08-16 across 200, 222,
+# 223 and 240 characters: a prefixed path fails at exactly the same *real* length as a plain
+# one, so whatever imposes the limit is not the Win32 path parser the prefix bypasses. That
+# rules out the other half of IP-FC-69's proposed fix and leaves this one -- refuse early,
+# name the number, and say what to do about it.
+FCSTD_MAX = 222
+
+
+def check_fcstd_length(path):
+    """Refuse a path the save would fail on, before a part is built rather than after.
+
+    Checked against the path actually handed to `saveAs`, which for a sweep is the
+    `.partial.FCStd` -- longer than the final name by the eight characters of `.partial`, and
+    the one the limit actually applies to.
+    """
+    full = os.path.abspath(path)
+    if len(full) <= FCSTD_MAX:
+        return
+    raise PathTooLong(
+        'the .FCStd path is %d characters and FreeCAD cannot save past %d -- %d too many.\n'
+        '  %s\n'
+        'Nothing about the part is wrong; the output root is too deep. Render to a shorter '
+        'directory (--scratch, or the output directory argument) and this goes away.'
+        % (len(full), FCSTD_MAX, len(full) - FCSTD_MAX, full))
+
+
 def build_command(kind, params_path, stl_path, fcstd_path=None):
     """The argv that builds one part.
 
@@ -139,5 +175,6 @@ def build_command(kind, params_path, stl_path, fcstd_path=None):
            '--pass', '--params=%s' % params_path,
            '--pass', '--out=%s' % stl_path]
     if fcstd_path:
+        check_fcstd_length(fcstd_path)
         cmd += ['--pass', '--fcstd=%s' % fcstd_path]
     return cmd
