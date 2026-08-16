@@ -678,9 +678,10 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-6 | ~~decided~~ 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
 | ARCH-7 | ~~decided~~ 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
 | ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
-| ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
+| ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
+| ARCH-12 | open | What carries the interface verification tier above 100 mm, where the OpenSCAD reference mesh cannot express the tolerance the check applies? — Not blocking, but it silently weakens the strictest tier on the largest parts |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -1548,6 +1549,152 @@ move to protect something that was never at risk, and it treated as permanent an
 OQ-ARCH-4 had already scheduled to expire. Worth rereading whenever "we cannot do that, it
 would break verification" is offered as an argument: check what the verification actually
 measures first.
+
+---
+
+### OQ-ARCH-12 — What carries the interface verification tier above 100 mm?
+
+**Not blocking.** No part is known to be wrong, and the check is sound on every part whose
+extents stay under about 100 mm — which is all of `U` ≤ 2.0. What is at stake is the *strictest*
+tier of the equivalence check quietly losing its resolution on the largest parts, where nothing
+in the output says so.
+
+**The setup, in full.** The port is verified by rendering the same variant with both geometry
+engines and comparing the two solids. `compare_backends.py` applies two independent tolerances
+per part: a **volume** tolerance, relative, 6e-5 for kinds that reproduce exactly and 1e-4 for
+kinds carrying fillets; and a **bounding-box** tolerance, `BBOX_TOL`, **absolute at 5e-4 mm**
+(0.5 µm). The two answer different questions. Volume asks whether the same amount of material is
+present; the bounding box asks whether it is in the same *place*, since a part can be the right
+size and have one face displaced. `BBOX_TOL` is deliberately absolute and deliberately strict in
+both tiers, per OQ-DES-B9 in [bulkhead.md](../design/bulkhead.md), on the reasoning that **no
+interface dimension is set by a fillet** — faceting error explains a volume difference and never
+explains a moved interface.
+
+**The problem is that the reference cannot express 5e-4 mm at the sizes involved.** OpenSCAD
+emits an **ASCII STL**, which writes each coordinate at **six significant figures**. That is a
+quantization whose absolute size grows with the coordinate:
+
+| coordinate magnitude | ASCII STL quantum | `BBOX_TOL` = 5e-4 mm |
+| --- | --- | --- |
+| 10 mm | 1e-5 mm | 50× finer than the tolerance — check is sound |
+| 100 mm | 1e-4 mm | 5× finer — still sound |
+| 120 mm | 1e-3 mm | **2× coarser — the check cannot resolve its own tolerance** |
+| 200 mm | 1e-3 mm | **2× coarser** |
+
+FreeCAD writes a **binary STL**, whose float32 coordinates carry about seven significant figures
+— roughly 1e-5 mm at 120 mm, comfortably inside the tolerance. So the two meshes are not equally
+precise, and the less precise one is the authority.
+
+**Measured, not projected.** On `U_2.5 imperial 3/16in`, the plan half-extent is
+`unit_width / 2 − (panel_thickness + panel_tolerance)` = 125 − 4.8625 = **120.1375 mm exactly**,
+seven significant figures. OpenSCAD writes `120.137`; FreeCAD stores `120.137496948`, the nearest
+float32 to the true value. **Both engines built the same geometry** — the entire 0.000497 mm
+difference is how the number was written down. The same discrepancy appears on `U_3.0 3/16in` at
+145.137 against 145.1375, **identical to the last digit** at 0.00049694824218704525 mm. Note the
+imperial panel is the trigger only because it produces a seven-figure extent: 3/16 in is
+4.7625 mm exactly, and 4.7625 + 0.1 mm of tolerance leaves a trailing 5 that the sixth figure
+cannot hold. Metric panels at the same sizes land on shorter decimals and are unaffected.
+
+**Why this surfaced now, and why it looked like a geometry defect.** Both variants were reported
+as bounding-box failures at exactly 0.000500 mm (IP-FC-71), because the comparison rounded each
+box to four decimal places before subtracting — landing 120.137 and 120.1375 on different grid
+points — and the resulting subtraction of two ~120 mm doubles fell 2.4e-15 mm above the tolerance.
+That rounding is fixed. What is left is the underlying limit, which the fix does not touch:
+these parts now pass partly because OpenSCAD's sixth digit happened to round **down**. Had it
+rounded up to `120.138`, the raw difference would be 0.000503 mm and the check would still fail
+with the two models in exact agreement.
+
+**Affected and unaffected.** Affected: any extent whose value needs a seventh significant figure,
+which in the swept space means `U` ≥ 2.5 on the imperial panels — measured at U = 2.5 and U = 3.0,
+and predicted at U = 4.0 (195.1375 mm) by the same arithmetic. Unaffected: every metric panel,
+every `U` ≤ 2.0, the volume tolerance at all sizes, and the FreeCAD side throughout. Also
+unaffected is anything that reads the FreeCAD `.FCStd` rather than a mesh — the parametric
+document carries doubles and is not involved.
+
+#### Alternatives
+
+1. **Export the OpenSCAD reference as binary STL.**
+   OpenSCAD can emit binary STL, whose float32 coordinates give about seven significant figures.
+   *Benefits:* removes the limit rather than describing it — the quantum returns to roughly 1e-5 mm
+   at 120 mm, five times finer than `BBOX_TOL`, at every swept size; `BBOX_TOL` and the OQ-DES-B9
+   position stay exactly as they are; no per-size special casing anywhere.
+   *Drawbacks:* changes the authority's output format, so every stored reference mesh is
+   invalidated and `--reference` trees must be re-rendered; the ASCII form is human-readable and
+   greppable, which has been useful in diagnosis — including this one, where reading the vertex
+   line directly is what identified the cause; float32 is still not exact, so the limit is pushed
+   out rather than removed in principle.
+   *Prerequisites:* confirm this OpenSCAD build's binary STL writer is float32 and not something
+   narrower; a full corpus re-render and comparison to confirm no verdict changes.
+
+2. **Give `BBOX_TOL` a relative component sized to the reference's precision.**
+   Replace the absolute 5e-4 mm with something like `max(5e-4, k · |coordinate|)`, where `k` is
+   set from the six-significant-figure quantum.
+   *Benefits:* keeps the strict absolute limit on the small parts, where it bites hardest and
+   where interfaces are tightest; needs no change to the authority or to any stored mesh; states
+   the limit in the check itself rather than leaving it implicit.
+   *Drawbacks:* explicitly weakens the interface tier on the largest parts — at 120 mm the
+   tolerance would have to reach about 1e-3 mm, twice its current value, to cover the quantum,
+   and a real 1e-3 mm face displacement there would then pass; it encodes a property of the
+   *reference's file format* into a tolerance that is supposed to express a *design* position,
+   so the number stops meaning what OQ-DES-B9 says it means.
+   *Prerequisites:* a decision on whether the interface tier may legitimately be size-dependent,
+   which is an OQ-DES-B9 question rather than an architecture one.
+
+3. **Compare each extent against its derived design value instead of mesh against mesh.**
+   Express the expected bounding box as a function of the parameters — for the frame bulkhead,
+   `unit_width / 2 − (panel_thickness + panel_tolerance)` and its counterparts — and check each
+   mesh against that rather than against the other mesh.
+   *Benefits:* the only option that inherits neither mesh's precision, so it is exact for both
+   engines at every size; it also catches the case where *both* engines are wrong in the same
+   way, which a mesh-to-mesh comparison can never detect; it makes the interface dimensions
+   explicit as expressions, which is what OQ-ARCH-7 already decided drawing dimensions must be.
+   *Drawbacks:* by far the most work, and the work is per kind — each part's extents must be
+   derived and kept correct as geometry changes, which is a second implementation of the geometry
+   that can itself be wrong; a wrong expression produces confident false failures.
+   *Prerequisites:* the extents expressed as parameters for all five kinds; a way to keep them
+   honest against the geometry modules, since a stale expression is worse than no check.
+
+4. **Accept the limit and let it expire with the OpenSCAD reference.**
+   Record the limit, leave the check as it is, and let it lapse when OQ-ARCH-4 fires and the
+   OpenSCAD implementation is retired after IP-FC-13 — at which point there is no reference mesh
+   and no cross-kernel bounding-box comparison at all.
+   *Benefits:* costs nothing; touches neither the authority nor the tolerance nor the design
+   position; matches the precedent set in IP-FC-55, where a real but non-urgent removal was
+   deliberately deferred to IP-FC-34 rather than weakening a check against the authority while
+   the authority still stood.
+   *Drawbacks:* IP-FC-13 is the item this check exists to *serve*, so the weakened tier is in
+   force for exactly the period it matters most — every remaining verdict on the largest parts is
+   taken with a check that cannot resolve its own tolerance; if a genuine interface defect at
+   1e-3 mm exists on a large part today, this option is the one that guarantees it is not found.
+   *Prerequisites:* none, but it needs the limit recorded where a reader of a passing comparison
+   will see it, not only here.
+
+#### Recommendation
+
+**Alternative 1, binary STL for the reference, with Alternative 4's reasoning as the reason not
+to do more than that.**
+
+It is the only option that restores the check to what it was supposed to be, and it does so
+without touching `BBOX_TOL` or OQ-DES-B9 — the design position is not in question here, only the
+file format's ability to carry it. Alternative 2 would encode an artifact of that file format
+into a number that is supposed to express a design decision, which makes the tolerance mean
+something different at different sizes for a reason that has nothing to do with the design.
+Alternative 3 is the right long-term answer for a different reason — it catches both engines
+being wrong together, which nothing currently does — but it is a large piece of work whose
+failure mode is confident false failures, and it should be justified on its own merits rather
+than adopted as a fix for a six-digit export.
+
+Alternative 4 is a serious contender and is what makes this "not blocking": the whole
+cross-kernel comparison has a scheduled end, and spending heavily on it now is exactly the
+mistake OQ-ARCH-11's superseded recommendation made in the other direction. That is the argument
+against Alternatives 2 and 3, not against 1 — Alternative 1 is a change to a render flag and a
+re-render, small enough that the retirement schedule does not argue against it.
+
+**One measurement is needed before this can be closed**, and it is cheap: confirm that this
+OpenSCAD build's binary STL output is float32, and re-render the corpus to confirm no comparison
+verdict changes. If the binary writer turns out to be no more precise than the ASCII one, the
+recommendation becomes Alternative 4, since 2 and 3 would then both be paying real cost for a
+check with a scheduled expiry.
 
 ---
 
