@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -383,7 +384,9 @@ def main(argv=None) -> int:
                        help='compare every valid combination -- slow, the OpenSCAD half '
                             'dominates')
     parser.add_argument('--workers', type=int, default=None)
-    parser.add_argument('--scratch', type=Path, default=None)
+    parser.add_argument('--scratch', type=Path, default=None,
+                        help='where the two rendered trees go (default: a fixed directory '
+                             'under the system temp dir, outside the repo)')
     parser.add_argument('--tol', type=float, default=TOL_EXACT,
                         help=f'volume tolerance for exactly-reproducible kinds '
                              f'(default {TOL_EXACT})')
@@ -417,7 +420,14 @@ def main(argv=None) -> int:
           + ', '.join(f'{k}={sum(1 for v in wanted.values() if v == k)}'
                       for k, _d, _a in sweeps_for(kinds)))
 
-    scratch = args.scratch or Path(fv.OUTPUT_DIR).parent / 'compare_backends'
+    # Outside the repo by default. This used to be `src/Fuselage/compare_backends`, which is
+    # gitignored and so looked harmless -- until a crashed run left 2.6 GB of meshes in the
+    # source tree, and until IP-FC-72, where an Explorer window left open on that tree put two
+    # directories into Windows' delete-pending state and silently dropped 22 parts from a
+    # comparison that still printed a verdict. Both are far less likely somewhere nobody
+    # browses. A fixed name, not `mkdtemp`: `--resume` and `--reference` want to find the
+    # previous run's tree, and the `freecad` half is wiped on the way in regardless.
+    scratch = args.scratch or Path(tempfile.gettempdir()) / 'modular_suas_compare_backends'
     scratch.mkdir(parents=True, exist_ok=True)
     b_dir = scratch / 'freecad'
     shutil.rmtree(b_dir, ignore_errors=True)

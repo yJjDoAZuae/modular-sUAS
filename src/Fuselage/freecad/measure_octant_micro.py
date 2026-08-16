@@ -13,6 +13,14 @@ Three numbers per variant, all on `SectionCut`, which is where IP-FC-58's defect
     min_face    the smallest face area. A negative one is a fold-back, not a small face.
     pairs       distinct vertices closer together than `--tol`, which is the measure a short
                 edge misses: two vertices can be near-coincident without an edge joining them.
+    invalid     nodes of the built tree whose shape fails `isValid()`. IP-FC-66's claim that
+                the refined cut tools are unorientable "on every variant" was also made on a
+                handful, and it is the same tree and the same build, so it is measured here
+                rather than in a second sweep of its own.
+    refined     `BulkheadSection`'s volume, which is `Part::Refine(SectionCut)`. IP-FC-68:
+                a topological cleanup must not change the volume, and this one did -- by
+                0.006150 mm3, small enough to pass every tolerance in `compare_backends` and
+                so only findable by looking on purpose.
 
 Driven by `tools/scan_octant_micro.py`, which resolves the variants and writes the manifest.
 One process for the whole list, because a FreeCAD start-up per variant dominates the run:
@@ -48,6 +56,17 @@ def close_pairs(shape, tol):
     return out
 
 
+def invalid_nodes(doc):
+    """Names of built nodes whose shape fails `isValid()`, in build order."""
+    out = []
+    for obj in doc.Objects:
+        shape = getattr(obj, 'Shape', None)
+        if shape is None or shape.isNull() or shape.isValid():
+            continue
+        out.append(obj.Name)
+    return out
+
+
 def measure(entry, tol):
     doc = App.newDocument('micro')
     try:
@@ -55,6 +74,7 @@ def measure(entry, tol):
         bulkhead_section.emit(doc, parameters.seed(entry['params']))
         doc.recompute()
         shape = doc.getObject('SectionCut').Shape
+        refined = doc.getObject('BulkheadSection')
         edges = [e.Length for e in shape.Edges]
         areas = [f.Area for f in shape.Faces]
         pairs = close_pairs(shape, tol)
@@ -64,7 +84,13 @@ def measure(entry, tol):
                     min_edge=round(min(edges), 9) if edges else 0.0,
                     min_face=round(min(areas), 9) if areas else 0.0,
                     pairs=len(pairs),
-                    closest_pair=pairs[0] if pairs else None)
+                    closest_pair=pairs[0] if pairs else None,
+                    invalid=invalid_nodes(doc),
+                    # Full precision, not rounded: the difference this exists to catch is
+                    # 0.006 mm3 against a 2000 mm3 part, and rounding either operand first
+                    # would decide the answer before the subtraction does.
+                    refined=refined.Shape.Volume if refined is not None else None,
+                    section=shape.Volume)
     except Exception as exc:
         return dict(name=entry['name'], ok=False, error=str(exc)[:200])
     finally:
@@ -88,8 +114,9 @@ def main():
         r = measure(entry, tol)
         results.append(r)
         if r['ok']:
-            print('  %3d/%d %-34s min_edge %11.8f  min_face %12.8f  pairs %d'
-                  % (i, len(entries), r['name'], r['min_edge'], r['min_face'], r['pairs']))
+            print('  %3d/%d %-34s min_edge %11.8f  min_face %12.8f  pairs %d  invalid %s'
+                  % (i, len(entries), r['name'], r['min_edge'], r['min_face'], r['pairs'],
+                     ','.join(r['invalid']) or '-'))
         else:
             print('  %3d/%d %-34s FAILED: %s' % (i, len(entries), r['name'], r['error']))
         sys.stdout.flush()

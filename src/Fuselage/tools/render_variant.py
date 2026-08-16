@@ -22,6 +22,15 @@ The relationships are defined in `fuselage_variants.py`. This calls them.
     python render_variant.py                          # list every combination and its validity
     python render_variant.py 1.0 end_bolt 3/16in      # derive, check, render
     python render_variant.py 1.0 center_single 3mm    # ... a boom bulkhead
+    python render_variant.py 1.0 end_bolt 3/16in --backend freecad
+
+`--backend` takes the same two names as `fuselage_variants.py`'s and defaults to `openscad`.
+Without it this tool could not produce the thing the migration exists to produce, which made
+the one-part path -- the path this project directs people to instead of `-D` overrides --
+unusable for FreeCAD work and left targeted re-measurement with no supported route at all
+(IP-FC-70). A variant with no FreeCAD generator is **refused**, not quietly rendered with
+OpenSCAD under the FreeCAD name; that rule lives in `fuselage_variants.solid_render` and this
+tool inherits it rather than restating it (IP-FC-65).
 
 **Both bulkhead families are listed and rendered here.** The frame bulkhead and the boom
 bulkhead are separate sweeps off separate type axes, and until IP-FC-12 this tool knew only
@@ -65,8 +74,36 @@ def settings():
     return fv.null_printer_settings(), 1.0     # printer_settings, FX
 
 
+def take_backend(args):
+    """Pull `--backend NAME` (or `--backend=NAME`) out of `args`, returning the name.
+
+    Hand-parsed to match the rest of this file, whose arguments are positional and whose
+    fourth one is an output directory -- a flag has to come out of the list before the
+    positional read, or `--backend` lands in `out`.
+    """
+    for i, a in enumerate(list(args)):
+        if a == '--backend':
+            if i + 1 >= len(args):
+                raise SystemExit('--backend needs a name: openscad or freecad')
+            name = args[i + 1]
+            del args[i:i + 2]
+            return check(name)
+        if a.startswith('--backend='):
+            del args[i]
+            return check(a.split('=', 1)[1])
+    return 'openscad'
+
+
+def check(name):
+    """Reject an unknown backend before any work is done, not at the render call."""
+    if name not in ('openscad', 'freecad'):
+        raise SystemExit('unknown backend %r -- openscad or freecad' % name)
+    return name
+
+
 def main(argv):
     args = [a for a in argv if not a.endswith('.py')]
+    backend = take_backend(args)
     printer, FX = settings()
 
     if len(args) < 3:
@@ -119,8 +156,33 @@ def main(argv):
             return 1
 
         name = getattr(fv, spec['filename'])(dp)
-        getattr(fv, spec['render'])(dp, out, name)
-        print('  rendered -> %s' % os.path.normpath(os.path.join(out, name)))
+
+        # Own the queue rather than leaning on the module-level default, so a refusal can be
+        # read back. `RenderQueue.refuse` is the only record that a part was deliberately not
+        # produced, and without it this tool would print "rendered ->" for a path with no file
+        # at it -- the same silent-success shape IP-FC-65 closed one layer down.
+        queue = fv.RenderQueue(workers=1, fail_fast=False)
+        previous_queue = fv.set_render_queue(queue)
+        previous_backend = fv.set_backend(backend)
+        try:
+            getattr(fv, spec['render'])(dp, out, name)
+        finally:
+            fv.set_render_queue(previous_queue)
+            fv.set_backend(previous_backend)
+
+        if queue.failures:
+            # Two different things end up here and they want opposite responses: a variant the
+            # port cannot build yet is expected under `--backend freecad`, a render that broke
+            # is not. The exception type is what separates them, so name it (IP-FC-65).
+            exc = queue.failures[-1][1]
+            print('  NOT RENDERED -- %s: %s' % (type(exc).__name__, exc))
+            return 1
+        # The mesh, not `name`. The filename functions return the `.scad` definition, which
+        # only the OpenSCAD backend writes -- naming it under `--backend freecad` would point
+        # at a file that is not there and never was.
+        mesh = os.path.splitext(name)[0] + '.stl'
+        print('  rendered -> %s   (%s)'
+              % (os.path.normpath(os.path.join(out, mesh)), backend))
         return 0
 
     print('no such combination -- run with no arguments to list them')
