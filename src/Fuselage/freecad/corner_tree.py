@@ -296,9 +296,20 @@ def _sketch(doc, name, pts, horizontals, verticals, on_x, dims, angle, z_expr):
         sk.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(0, 0, 1), angle))
         sk.setExpression('Placement.Base.z', z_expr)
     doc.recompute()
+    # Both checks, and not only the second. `FullyConstrained` answers "are there enough
+    # constraints", never "were they satisfiable". Measured 2026-08-16 on a profile driven
+    # past a degeneracy: the solver returned -1 from all four of its algorithms and printed
+    # "Solving the sketch failed", `FullyConstrained` stayed True throughout, and the
+    # extrusion quietly kept serving the last geometry that did solve -- 42 mm3 adrift by the
+    # end of the sweep. That is precisely the silent deformation this guard exists to catch,
+    # and on its own the constraint count did not catch it.
+    dof = sk.solve()
+    if dof != 0:
+        raise RuntimeError('%s did not solve (solve() = %d) -- its constraints have no '
+                           'solution at these parameters, and the shape it feeds is whatever '
+                           'last worked' % (name, dof))
     if not sk.FullyConstrained:
-        raise RuntimeError('%s is under-constrained (%d DoF) -- it would deform silently'
-                           % (name, sk.solve()))
+        raise RuntimeError('%s is under-constrained -- it would deform silently' % name)
     return sk
 
 
