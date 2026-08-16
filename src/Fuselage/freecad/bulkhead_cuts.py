@@ -241,14 +241,27 @@ def cuts(doc):
         octant_mask(doc),
     ]
 
+    # **No `Part::Refine` on the tip, since IP-FC-66.** This node is a *negative* -- a fused set
+    # of cut tools, never a part -- and refining one buys nothing the cut that consumes it does
+    # not redo: `bulkhead_section` refines `SectionCut` afterwards, so any coplanar faces merged
+    # here are merged again there, on the shape that actually ships.
+    #
+    # It was not merely useless. `Part::Refine` of `CutFuse4` returned an **unorientable shape**
+    # on every variant built with the `0mm` panel -- 16 of the 88 valid end types, all eight
+    # sizes and both end types -- and propagated that invalidity into `SectionTools`. `CutFuse4`
+    # itself is a clean, valid single solid at those same parameters, so the refine was the sole
+    # source of the defect. `0mm` is where `panel_thickness`, `panel_overlap` and
+    # `panel_tolerance` are all zero and the outer mold line's panel notch degenerates, which is
+    # the same corner of the space IP-FC-46, IP-FC-54 and IP-FC-57 came out of.
+    #
+    # The last fuse carries the tip's name so the node downstream reads the same as before.
     node = tools[0]
     for i, tool in enumerate(tools[1:], start=1):
-        node = C._fuse(doc, 'CutFuse%d' % i, node, tool)
+        last = i == len(tools) - 1
+        node = C._fuse(doc, 'BulkheadCuts' if last else 'CutFuse%d' % i, node, tool)
 
-    tip = C._owned(doc, 'Part::Refine', 'BulkheadCuts')
-    tip.Source = node
     doc.recompute()
-    return tip
+    return node
 
 
 def main():
