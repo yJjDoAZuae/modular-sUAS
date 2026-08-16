@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="sheet" viewBox="0 0 520 545" role="img"
+preserveAspectRatio="xMidYMid meet"><title>the tangential contact at the fillet center</title><style>
+.fbody   { fill:rgba(16,22,25,.14); stroke:#101619; stroke-width:1.3; }
+.fquad   { fill:rgba(122,94,168,.22); stroke:#7a5ea8; stroke-width:1.6; }
+.fplate  { fill:rgba(16,22,25,.10); stroke:#101619; stroke-width:1; }
+.fstand  { fill:rgba(11,110,128,.16); stroke:#0b6e80; stroke-width:1; }
+.zoom    { fill:none; stroke:#b8372a; stroke-width:1.6; stroke-dasharray:5 3; }
+.fsliver { fill:#b8372a; stroke:#b8372a; stroke-width:.8; }
+.tool    { fill:none; stroke:#0b6e80; stroke-width:1.1; stroke-dasharray:7 4; }
+.relief  { fill:rgba(11,110,128,.10); stroke:#0b6e80; stroke-width:1.2; }
+.ring    { fill:none; stroke:#1c7a54; stroke-width:1.6; }
+.rule    { stroke:#9fb0ba; stroke-width:1; stroke-dasharray:3 4; }
+.ray     { stroke:#b8372a; stroke-width:1.8; }
+.edge    { stroke:#0b6e80; stroke-width:1.8; }
+.axis    { stroke:#9fb0ba; stroke-width:1; }
+.bar     { fill:rgba(122,94,168,.55); stroke:#7a5ea8; stroke-width:.8; }
+.barbad  { fill:rgba(184,55,42,.65); stroke:#b8372a; stroke-width:.8; }
+.band    { fill:rgba(184,55,42,.10); stroke:none; }
+text.lbl   { font-family:monospace; font-size:10px; fill:#5d6f79; }
+text.plbl  { font-family:monospace; font-size:10px; fill:#0b6e80; font-weight:600; }
+text.nclbl { font-family:monospace; font-size:10px; fill:#7a5ea8; font-weight:600; }
+text.gclbl { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+text.xlbl  { font-family:monospace; font-size:10px; fill:#1c7a54; font-weight:600; }
+text.ttl   { font-family:monospace; font-size:11px; fill:#5d6f79; font-weight:600; }
+.dim line  { stroke:#b8372a; stroke-width:1.1; }
+.dim text  { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+.faint line { stroke:#5d6f79; stroke-width:1; }
+.faint text { fill:#5d6f79; font-weight:400; }
+@media (prefers-color-scheme: dark) {
+  .fbody   { fill:rgba(220,230,234,.13); stroke:#dce6ea; }
+  .fquad   { fill:rgba(179,154,224,.24); stroke:#b39ae0; }
+  .fplate  { fill:rgba(220,230,234,.10); stroke:#dce6ea; }
+  .fstand  { fill:rgba(69,194,214,.16); stroke:#45c2d6; }
+  .zoom    { stroke:#ff6f5e; }
+  .fsliver { fill:#ff6f5e; stroke:#ff6f5e; }
+  .tool, .relief { stroke:#45c2d6; }
+  .relief  { fill:rgba(69,194,214,.12); }
+  .ring    { stroke:#4fd39b; }
+  .rule, .axis { stroke:#5b6f79; }
+  .ray     { stroke:#ff6f5e; }
+  .edge    { stroke:#45c2d6; }
+  .bar     { fill:rgba(179,154,224,.55); stroke:#b39ae0; }
+  .barbad  { fill:rgba(255,111,94,.65); stroke:#ff6f5e; }
+  .band    { fill:rgba(255,111,94,.12); }
+  text.lbl { fill:#8ea3ad; } text.plbl { fill:#45c2d6; } text.nclbl { fill:#b39ae0; }
+  text.gclbl { fill:#ff6f5e; } text.xlbl { fill:#4fd39b; } text.ttl { fill:#8ea3ad; }
+  .dim line { stroke:#ff6f5e; } .dim text { fill:#ff6f5e; }
+  .faint line { stroke:#8ea3ad; } .faint text { fill:#8ea3ad; }
+}
+</style><defs><clipPath id="rd"><rect x="0" y="0" width="520" height="545"/></clipPath></defs><g clip-path="url(#rd)"><path class="tool" d="M260.0000 125.8065 L679.3548 125.8065 L679.3548 629.0323 L260.0000 629.0323 Z"/>
+<text class="plbl" x="385.81" y="356.45" text-anchor="middle">BffBlock</text>
+<path class="fsliver" d="M260.0000 125.8065 L260.0000 629.0323 L190.8316 629.0323 Z"/>
+<text class="gclbl" x="134.19" y="427.74" text-anchor="middle">where the wedge would be</text>
+<text class="gclbl" x="134.19" y="486.45" text-anchor="middle">entirely outside the block</text>
+<path class="relief" fill="none" d="M68.8569 236.1630 L70.8120 239.4821 L72.8247 242.7666 L74.8944 246.0154 L77.0206 249.2276 L79.2024 252.4023 L81.4394 255.5383 L83.7307 258.6349 L86.0757 261.6910 L88.4737 264.7057 L90.9240 267.6781 L93.4257 270.6073 L95.9782 273.4923 L98.5807 276.3324 L101.2323 279.1266 L103.9323 281.8742 L106.6798 284.5741 L109.4740 287.2258 L112.3141 289.8282 L115.1992 292.3807 L118.1284 294.8825 L121.1008 297.3327 L124.1155 299.7307 L127.1716 302.0757 L130.2681 304.3671 L133.4042 306.6040 L136.5788 308.7859 L139.7910 310.9120 L143.0399 312.9818 L146.3244 314.9945 L149.6435 316.9496 L152.9962 318.8465 L156.3815 320.6845 L159.7984 322.4632 L163.2458 324.1820 L166.7226 325.8404 L170.2279 327.4379 L173.7605 328.9739 L177.3194 330.4480 L180.9035 331.8599 L184.5117 333.2089 L188.1429 334.4948 L191.7959 335.7171 L195.4697 336.8754 L199.1632 337.9695 L202.8753 338.9989 L206.6047 339.9634 L210.3504 340.8627 L214.1112 341.6964 L217.8860 342.4644 L221.6736 343.1664 L225.4729 343.8022 L229.2827 344.3716 L233.1018 344.8744 L236.9292 345.3104 L240.7636 345.6796 L244.6038 345.9819 L248.4488 346.2170 L252.2972 346.3851 L256.1480 346.4859 L260.0000 346.5195 L263.8520 346.4859 L267.7028 346.3851 L271.5512 346.2170 L275.3962 345.9819 L279.2364 345.6796 L283.0708 345.3104 L286.8982 344.8744 L290.7173 344.3716 L294.5271 343.8022 L298.3264 343.1664 L302.1140 342.4644 L305.8888 341.6964 L309.6496 340.8627 L313.3953 339.9634 L317.1247 338.9989 L320.8368 337.9695 L324.5303 336.8754 L328.2041 335.7171 L331.8571 334.4948 L335.4883 333.2089 L339.0965 331.8599 L342.6806 330.4480 L346.2395 328.9739 L349.7721 327.4379 L353.2774 325.8404 L356.7542 324.1820 L360.2016 322.4632 L363.6185 320.6845 L367.0038 318.8465 L370.3565 316.9496 L373.6756 314.9945 L376.9601 312.9818 L380.2090 310.9120 L383.4212 308.7859 L386.5958 306.6040 L389.7319 304.3671 L392.8284 302.0757 L395.8845 299.7307 L398.8992 297.3327 L401.8716 294.8825 L404.8008 292.3807 L407.6859 289.8282 L410.5260 287.2258 L413.3202 284.5741 L416.0677 281.8742 L418.7677 279.1266 L421.4193 276.3324 L424.0218 273.4923 L426.5743 270.6073 L429.0760 267.6781 L431.5263 264.7057 L433.9243 261.6910 L436.2693 258.6349 L438.5606 255.5383 L440.7976 252.4023 L442.9794 249.2276 L445.1056 246.0154 L447.1753 242.7666 L449.1880 239.4821 L451.1431 236.1630"/>
+<text class="plbl" x="266.00" y="360.52" text-anchor="start">relief_r_low 1.50</text>
+<circle cx="260.000" cy="125.806" r="3.4" fill="#7a5ea8"/>
+<text class="nclbl" x="260.00" y="115.81" text-anchor="middle">block corner = fillet center = relief center</text>
+<text class="ttl" x="8" y="14">the cut only touches &#8212; angle exaggerated 7&#215;</text>
+<text class="lbl" x="8" y="28">true angle 1.118&#176;. The wedge is real but lies outside the block, so the</text>
+<text class="lbl" x="8" y="42">half-plane removes nothing and contact is a single point.</text>
+<text class="lbl" x="8" y="537">OCCT emits a 0.000335 mm fold-back edge and a negative-area face there.</text></g></svg>

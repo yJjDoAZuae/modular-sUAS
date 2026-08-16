@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="sheet" viewBox="0 0 714 407" role="img"
+preserveAspectRatio="xMidYMid meet"><title>the block, the wedge, the quad and the fillet</title><style>
+.fbody   { fill:rgba(16,22,25,.14); stroke:#101619; stroke-width:1.3; }
+.fquad   { fill:rgba(122,94,168,.22); stroke:#7a5ea8; stroke-width:1.6; }
+.fplate  { fill:rgba(16,22,25,.10); stroke:#101619; stroke-width:1; }
+.fstand  { fill:rgba(11,110,128,.16); stroke:#0b6e80; stroke-width:1; }
+.zoom    { fill:none; stroke:#b8372a; stroke-width:1.6; stroke-dasharray:5 3; }
+.fsliver { fill:#b8372a; stroke:#b8372a; stroke-width:.8; }
+.tool    { fill:none; stroke:#0b6e80; stroke-width:1.1; stroke-dasharray:7 4; }
+.relief  { fill:rgba(11,110,128,.10); stroke:#0b6e80; stroke-width:1.2; }
+.ring    { fill:none; stroke:#1c7a54; stroke-width:1.6; }
+.rule    { stroke:#9fb0ba; stroke-width:1; stroke-dasharray:3 4; }
+.ray     { stroke:#b8372a; stroke-width:1.8; }
+.edge    { stroke:#0b6e80; stroke-width:1.8; }
+.axis    { stroke:#9fb0ba; stroke-width:1; }
+.bar     { fill:rgba(122,94,168,.55); stroke:#7a5ea8; stroke-width:.8; }
+.barbad  { fill:rgba(184,55,42,.65); stroke:#b8372a; stroke-width:.8; }
+.band    { fill:rgba(184,55,42,.10); stroke:none; }
+text.lbl   { font-family:monospace; font-size:10px; fill:#5d6f79; }
+text.plbl  { font-family:monospace; font-size:10px; fill:#0b6e80; font-weight:600; }
+text.nclbl { font-family:monospace; font-size:10px; fill:#7a5ea8; font-weight:600; }
+text.gclbl { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+text.xlbl  { font-family:monospace; font-size:10px; fill:#1c7a54; font-weight:600; }
+text.ttl   { font-family:monospace; font-size:11px; fill:#5d6f79; font-weight:600; }
+.dim line  { stroke:#b8372a; stroke-width:1.1; }
+.dim text  { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+.faint line { stroke:#5d6f79; stroke-width:1; }
+.faint text { fill:#5d6f79; font-weight:400; }
+@media (prefers-color-scheme: dark) {
+  .fbody   { fill:rgba(220,230,234,.13); stroke:#dce6ea; }
+  .fquad   { fill:rgba(179,154,224,.24); stroke:#b39ae0; }
+  .fplate  { fill:rgba(220,230,234,.10); stroke:#dce6ea; }
+  .fstand  { fill:rgba(69,194,214,.16); stroke:#45c2d6; }
+  .zoom    { stroke:#ff6f5e; }
+  .fsliver { fill:#ff6f5e; stroke:#ff6f5e; }
+  .tool, .relief { stroke:#45c2d6; }
+  .relief  { fill:rgba(69,194,214,.12); }
+  .ring    { stroke:#4fd39b; }
+  .rule, .axis { stroke:#5b6f79; }
+  .ray     { stroke:#ff6f5e; }
+  .edge    { stroke:#45c2d6; }
+  .bar     { fill:rgba(179,154,224,.55); stroke:#b39ae0; }
+  .barbad  { fill:rgba(255,111,94,.65); stroke:#ff6f5e; }
+  .band    { fill:rgba(255,111,94,.12); }
+  text.lbl { fill:#8ea3ad; } text.plbl { fill:#45c2d6; } text.nclbl { fill:#b39ae0; }
+  text.gclbl { fill:#ff6f5e; } text.xlbl { fill:#4fd39b; } text.ttl { fill:#8ea3ad; }
+  .dim line { stroke:#ff6f5e; } .dim text { fill:#ff6f5e; }
+  .faint line { stroke:#8ea3ad; } .faint text { fill:#8ea3ad; }
+}
+</style><defs><clipPath id="tm"><rect x="0" y="0" width="714" height="407"/></clipPath></defs><g clip-path="url(#tm)"><g transform="translate(0.0 46.0)"><path class="fstand" d="M28.9157 306.2153 L121.0843 306.2153 L121.0843 69.3976 L28.9157 69.3976 Z"/>
+<g class="dim"><line x1="28.92" y1="60.36" x2="121.08" y2="60.36"/><line x1="28.92" y1="56.36" x2="28.92" y2="64.36"/><line x1="121.08" y1="56.36" x2="121.08" y2="64.36"/><text x="75.00" y="51.36" text-anchor="middle">5.100</text></g>
+<g class="dim"><line x1="130.12" y1="306.22" x2="130.12" y2="69.40"/><line x1="126.12" y1="306.22" x2="134.12" y2="306.22"/><line x1="126.12" y1="69.40" x2="134.12" y2="69.40"/><text x="138.12" y="191.81">13.104</text></g>
+<text class="plbl" x="30.92" y="301.22" text-anchor="start">the block</text>
+<text class="lbl" x="0" y="351">1. BffBlock, the covering box</text></g>
+<g transform="translate(184.0 46.0)"><path class="tool" d="M28.9157 306.2153 L121.0843 306.2153 L121.0843 69.3976 L28.9157 69.3976 Z"/>
+<path class="fquad" d="M48.7952 69.3976 L121.0843 69.3976 L121.0843 306.2153 L28.9157 306.2153 Z"/>
+<path class="fsliver" d="M28.9157 306.2153 L28.9157 69.3976 L48.7952 69.3976 Z"/>
+<line class="ray" x1="28.916" y1="306.215" x2="48.795" y2="69.398"/>
+<text class="gclbl" x="45.80" y="62.40" text-anchor="end">the wedge</text>
+<text class="nclbl" x="118.08" y="187.81" text-anchor="end">the quad</text>
+<text class="lbl" x="0" y="351">2. minus the ray half-plane</text></g>
+<g transform="translate(368.0 46.0)"><path class="fquad" d="M48.7952 69.3976 L121.0843 69.3976 L121.0843 306.2153 L28.9157 306.2153 Z"/>
+<path class="fsliver" d="M48.7952 69.3976 L84.9398 69.3976 L84.9183 70.6432 L84.8539 71.8874 L84.7467 73.1286 L84.5967 74.3654 L84.4043 75.5963 L84.1695 76.8198 L83.8927 78.0345 L83.5742 79.2389 L83.2144 80.4316 L82.8137 81.6113 L82.3725 82.7764 L81.8915 83.9256 L81.3712 85.0576 L80.8121 86.1709 L80.2151 87.2643 L79.5807 88.3366 L78.9097 89.3863 L78.2029 90.4122 L77.4612 91.4132 L76.6855 92.3880 L75.8766 93.3356 L75.0355 94.2547 L74.1633 95.1442 L73.2609 96.0032 L72.3295 96.8305 L71.3701 97.6253 L70.3839 98.3865 L69.3720 99.1133 L68.3357 99.8048 L67.2762 100.4602 L66.1947 101.0786 L65.0926 101.6594 L63.9710 102.2019 L62.8315 102.7054 L61.6753 103.1694 L60.5038 103.5932 L59.3183 103.9764 L58.1204 104.3185 L56.9114 104.6191 L55.6927 104.8779 L54.4659 105.0946 L53.2323 105.2688 L51.9934 105.4004 L50.7508 105.4892 L49.5058 105.5352 L48.2599 105.5382 L47.0148 105.4983 L45.7717 105.4155 Z"/>
+<path class="tool" fill="none" d="M42.7482 141.4334 L43.7419 141.5099 L44.7367 141.5727 L45.7322 141.6218 L46.7282 141.6572 L47.7247 141.6788 L48.7214 141.6867 L49.7181 141.6809 L50.7146 141.6613 L51.7107 141.6279 L52.7063 141.5809 L53.7012 141.5201 L54.6951 141.4456 L55.6879 141.3574 L56.6794 141.2555 L57.6694 141.1400 L58.6577 141.0108 L59.6441 140.8680 L60.6285 140.7117 L61.6106 140.5417 L62.5902 140.3583 L63.5673 140.1613 L64.5415 139.9509 L65.5128 139.7271 L66.4809 139.4899 L67.4456 139.2394 L68.4068 138.9757 L69.3642 138.6987 L70.3177 138.4085 L71.2672 138.1052 L72.2123 137.7888 L73.1530 137.4595 L74.0891 137.1172 L75.0204 136.7620 L75.9467 136.3940 L76.8678 136.0133 L77.7836 135.6199 L78.6939 135.2139 L79.5985 134.7954 L80.4972 134.3645 L81.3899 133.9213 L82.2764 133.4657 L83.1566 132.9980 L84.0302 132.5182 L84.8971 132.0264 L85.7572 131.5227 L86.6102 131.0072 L87.4561 130.4800 L88.2946 129.9411 L89.1256 129.3908 L89.9489 128.8290 L90.7644 128.2560 L91.5719 127.6717 L92.3713 127.0764 L93.1624 126.4701 L93.9450 125.8530 L94.7191 125.2251 L95.4845 124.5866 L96.2410 123.9377 L96.9884 123.2783 L97.7267 122.6087 L98.4557 121.9291 L99.1753 121.2394 L99.8852 120.5398 L100.5855 119.8306 L101.2759 119.1117 L101.9564 118.3834 L102.6267 117.6458 L103.2868 116.8990 L103.9365 116.1432 L104.5758 115.3785 L105.2045 114.6051 L105.8224 113.8230 L106.4295 113.0325 L107.0256 112.2338 L107.6107 111.4268 L108.1846 110.6119 L108.7472 109.7892 L109.2984 108.9588 L109.8381 108.1208 L110.3662 107.2755 L110.8825 106.4230 L111.3871 105.5635 L111.8798 104.6970 L112.3605 103.8239 L112.8291 102.9442 L113.2855 102.0582 L113.7297 101.1659 L114.1616 100.2676 L114.5810 99.3635 L114.9879 98.4536 L115.3822 97.5382 L115.7638 96.6175 L116.1328 95.6916 L116.4889 94.7606 L116.8321 93.8249 L117.1625 92.8845 L117.4798 91.9397 L117.7841 90.9906 L118.0752 90.0373 L118.3532 89.0802 L118.6180 88.1193 L118.8694 87.1548 L119.1076 86.1870 L119.3324 85.2160 L119.5438 84.2419 L119.7417 83.2651 L119.9262 82.2856 L120.0971 81.3037 L120.2545 80.3195 L120.3983 79.3332 L120.5285 78.3450 L120.6450 77.3551 L120.7479 76.3638 L120.8371 75.3711 L120.9126 74.3772 L120.9744 73.3824 L121.0225 72.3869 L121.0569 71.3908 L121.0775 70.3943 L121.0843 69.3976"/>
+<circle cx="48.795" cy="69.398" r="2.4" fill="#7a5ea8"/>
+<text class="gclbl" x="52.80" y="118.54" text-anchor="start">the relief cut</text>
+<text class="plbl" x="52.80" y="154.69" text-anchor="start">relief_r_low 2.00</text>
+<text class="plbl" x="52.80" y="166.69" text-anchor="start">then 4.00 up the chamfer</text>
+<text class="nclbl" x="45.80" y="63.40" text-anchor="end">fillet center</text>
+<text class="lbl" x="0" y="351">3. minus the relief stack</text></g>
+<g transform="translate(552.0 46.0)"><path class="fquad" d="M45.7717 105.4159 L28.9157 306.2153 L121.0843 306.2153 L121.0843 69.3978 L84.9398 69.3978 L81.7030 84.3472 L72.5729 96.6183 L59.1867 104.0171 L45.7717 105.4159 Z"/>
+<text class="nclbl" x="118.08" y="187.81" text-anchor="end">the fillet</text>
+<text class="lbl" x="0" y="351">4. the result, as built</text></g>
+<text class="ttl" x="0" y="14">the four nouns &#8212; U=2.0 end_anchor 0mm, after the fix</text>
+<text class="lbl" x="0" y="28">plan view, one scale for both axes; dimensions in mm</text></g></svg>

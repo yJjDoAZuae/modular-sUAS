@@ -153,7 +153,7 @@ def wanted_parts(per_kind: int | None, kinds: set[str] | None = None) -> dict[st
 
 
 def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
-           kinds: set[str] | None = None) -> list:
+           kinds: set[str] | None = None, resume: bool = False) -> list:
     """Render exactly the wanted parts with `backend`, through the real sweep.
 
     **A part that will not build is a result, not the end of the run.** This used to inherit
@@ -186,7 +186,7 @@ def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
     previous = fv.set_backend(backend)
     failed = []
     try:
-        with fv.sweep_session(workers=workers, resume=False, previews=False,
+        with fv.sweep_session(workers=workers, resume=resume, previews=False,
                               fail_fast=False) as queue:
             for _kind, driver, axis_names in sweeps_for(kinds):
                 getattr(fv, driver)(fv.axes(*axis_names), str(out_dir))
@@ -194,8 +194,15 @@ def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
     finally:
         fv.solid_render, fv.freecad_render = real_solid, real_freecad
         fv.set_backend(previous)
-    note = f', {len(failed)} failed to build' if failed else ''
-    print(f'  {backend}: rendered {count["n"] - len(failed)} part(s){note}', flush=True)
+    # count['n'] counts parts *asked for*, which includes the ones refused for having no
+    # FreeCAD generator -- they pass the gate and are turned away after it. Subtract both so
+    # "rendered" means rendered.
+    refused, broken = split_failures(failed)
+    notes = ([f'{len(broken)} failed to build'] if broken else []) + \
+            ([f'{len(refused)} not ported'] if refused else [])
+    suffix = (', ' + ', '.join(notes)) if notes else ''
+    print(f'  {backend}: rendered {count["n"] - len(broken) - len(refused)} part(s){suffix}',
+          flush=True)
     return failed
 
 
@@ -211,7 +218,23 @@ def used_freecad(stl: Path) -> bool:
     return stl.with_suffix('.stl.json').exists()
 
 
-def report_builds(b_dir: Path, wanted: dict[str, str]) -> int:
+def split_failures(failures) -> tuple[set[str], list]:
+    """Refusals (no FreeCAD generator) apart from renders that were tried and failed.
+
+    `RenderQueue.failures` holds both, as `(job, exception)`. They must not be reported
+    together: the first names porting work that is known to be outstanding, the second names a
+    defect. Returns the refused part names as `.stl` names, and the genuine failures.
+    """
+    unported, broken = set(), []
+    for job, exc in failures:
+        if isinstance(exc, fv.UnportedPart):
+            unported.add(Path(job[0]).with_suffix('.stl').name)
+        else:
+            broken.append((job, exc))
+    return unported, broken
+
+
+def report_builds(b_dir: Path, wanted: dict[str, str], unported: set[str]) -> int:
     """Which variants FreeCAD actually built, with no reference render and no comparison.
 
     The build question and the agreement question are separable, and only the second one needs
@@ -224,10 +247,12 @@ def report_builds(b_dir: Path, wanted: dict[str, str]) -> int:
     by_name = {p.name: p for p in b_dir.rglob('*.stl')
                if not p.name.endswith('.partial.stl')}
 
-    missing, fell_back, built = [], [], []
+    missing, fell_back, built, refused = [], [], [], []
     for name in sorted(wanted):
         mesh = by_name.get(name)
-        if mesh is None:
+        if name in unported:
+            refused.append((name, wanted[name]))
+        elif mesh is None:
             missing.append((name, wanted[name]))
         elif not used_freecad(mesh):
             fell_back.append((name, wanted[name]))
@@ -240,31 +265,44 @@ def report_builds(b_dir: Path, wanted: dict[str, str]) -> int:
 
     print()
     print('  %-28s %4d   %s' % ('built by FreeCAD', len(built), by_kind(built)))
+    print('  %-28s %4d   %s' % ('not ported (refused)', len(refused), by_kind(refused)))
     print('  %-28s %4d   %s' % ('fell back to OpenSCAD', len(fell_back), by_kind(fell_back)))
     print('  %-28s %4d   %s' % ('DID NOT BUILD', len(missing), by_kind(missing)))
     print('-' * 100)
 
+    if refused:
+        print('  %d variant(s) have no FreeCAD generator. They were NOT rendered with '
+              'OpenSCAD under\n  the FreeCAD name -- nothing was written for them at all. '
+              'This is outstanding porting\n  work, not a defect:' % len(refused))
+        for name, _kind in refused[:6]:
+            print('      %s' % name[:88])
+        if len(refused) > 6:
+            print('      ... and %d more' % (len(refused) - 6))
+        print()
+
     if fell_back:
-        print('  no FreeCAD generator for these variants, so nothing was proved about them:')
+        print('  UNEXPECTED: these have an OpenSCAD definition in the FreeCAD tree, which the '
+              'refusal\n  in solid_render should have made impossible:')
         for name, _kind in fell_back[:6]:
             print('      %s' % name[:88])
-        if len(fell_back) > 6:
-            print('      ... and %d more' % (len(fell_back) - 6))
         print()
 
     if missing:
-        print('  UNBUILDABLE -- FreeCAD was asked for these and produced no mesh:')
+        print('  UNBUILDABLE -- FreeCAD has a generator for these and produced no mesh:')
         for name, _kind in missing:
             print('      %s' % name[:88])
-        print('\n%d of %d PART(S) DO NOT BUILD' % (len(missing), len(wanted)))
+        print('\n%d of %d PORTED PART(S) DO NOT BUILD'
+              % (len(missing), len(built) + len(missing)))
         return 1
 
-    print('EVERY PART BUILDS  (agreement not checked -- this was a --build-only run)')
+    print('EVERY PORTED PART BUILDS  (%d of %d variants; %d not ported yet. Agreement not '
+          'checked -- this was a --build-only run)'
+          % (len(built), len(wanted), len(refused)))
     return 0
 
 
 def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
-            tol_filleted: float) -> int:
+            tol_filleted: float, unported: set[str] = frozenset()) -> int:
     a_by_name = {p.name: p for p in a_dir.rglob('*.stl') if not p.name.endswith('.partial.stl')}
     b_by_name = {p.name: p for p in b_dir.rglob('*.stl') if not p.name.endswith('.partial.stl')}
 
@@ -272,6 +310,13 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
     for name in sorted(wanted):
         kind = wanted[name]
         a, b = a_by_name.get(name), b_by_name.get(name)
+        # Not ported is not a disagreement. FreeCAD was never asked to build these -- it has
+        # no generator for them -- so there is nothing to compare and nothing is wrong. They
+        # used to appear here as a fallback mesh that silently compared OpenSCAD against
+        # itself and passed; now they are simply absent, which must not read as a failure.
+        if name in unported:
+            skipped.append((name, kind))
+            continue
         if a is None or b is None:
             failures.append((name, 'not produced by ' + ('openscad' if a is None else 'freecad')))
             continue
@@ -306,8 +351,8 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
 
     print('-' * 100)
     if skipped:
-        print(f'  {len(skipped)} part(s) fell back to OpenSCAD and were NOT compared '
-              f'(no FreeCAD generator for that variant):')
+        print(f'  {len(skipped)} part(s) have no FreeCAD generator, were not produced, and so '
+              f'were NOT compared (outstanding porting work, not a failure):')
         for name, kind in skipped[:6]:
             print(f'      {name[:70]}')
         if len(skipped) > 6:
@@ -345,6 +390,11 @@ def main(argv=None) -> int:
     parser.add_argument('--tol-filleted', type=float, default=TOL_FILLETED,
                         help=f'volume tolerance for kinds carrying real fillets '
                              f'(default {TOL_FILLETED})')
+    parser.add_argument('--reference', type=Path, default=None,
+                        help='reuse an existing OpenSCAD tree as the reference instead of '
+                             'rendering one. Rendered with --resume, so parts whose '
+                             'definition still matches cost nothing and only stale or '
+                             'missing ones are rebuilt')
     parser.add_argument('--build-only', action='store_true',
                         help='render only the FreeCAD side and report which variants fail to '
                              'build; skips the OpenSCAD reference render, which is the '
@@ -369,25 +419,53 @@ def main(argv=None) -> int:
 
     scratch = args.scratch or Path(fv.OUTPUT_DIR).parent / 'compare_backends'
     scratch.mkdir(parents=True, exist_ok=True)
-    a_dir, b_dir = scratch / 'openscad', scratch / 'freecad'
-    for d in (a_dir, b_dir):
-        shutil.rmtree(d, ignore_errors=True)
+    b_dir = scratch / 'freecad'
+    shutil.rmtree(b_dir, ignore_errors=True)
+
+    # A supplied reference is the caller's tree, not ours: never wiped going in, never deleted
+    # coming out, and rendered with --resume so a part whose definition still matches byte for
+    # byte costs nothing. That check is the same one --resume already trusts, which is what
+    # makes reuse safe rather than merely fast -- a reference rendered before a geometry or
+    # parameter change re-renders exactly the parts the change invalidated, and no others.
+    a_dir = args.reference if args.reference else scratch / 'openscad'
+    if args.reference is None:
+        shutil.rmtree(a_dir, ignore_errors=True)
+    elif not a_dir.is_dir():
+        parser.error('--reference %s is not a directory' % a_dir)
 
     names = set(wanted)
-    unbuildable = []
+    failures = []
     if not args.build_only:
-        unbuildable += render('openscad', a_dir, names, args.workers, kinds)
-    unbuildable += render('freecad', b_dir, names, args.workers, kinds)
-    if unbuildable:
-        print(f'\n  {len(unbuildable)} part(s) could not be built and are reported as '
+        if args.reference:
+            print(f'  reusing reference tree at {a_dir}', flush=True)
+        failures += render('openscad', a_dir, names, args.workers, kinds,
+                           resume=args.reference is not None)
+    failures += render('freecad', b_dir, names, args.workers, kinds)
+
+    unported, broken = split_failures(failures)
+    if broken:
+        print(f'\n  {len(broken)} part(s) could not be built and are reported as '
               f'failures below rather than ending the run', flush=True)
+    if unported:
+        print(f'  {len(unported)} part(s) have no FreeCAD generator and were refused rather '
+              f'than rendered with OpenSCAD', flush=True)
 
     if args.build_only:
-        code = report_builds(b_dir, wanted)
+        code = report_builds(b_dir, wanted, unported)
     else:
-        code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted)
+        code = compare(a_dir, b_dir, wanted, args.tol, args.tol_filleted, unported)
     if not args.keep:
-        shutil.rmtree(scratch, ignore_errors=True)
+        # A supplied reference is never deleted. It usually sits *inside* the scratch tree --
+        # that is the natural place for it, since it is what a previous run left there -- so
+        # the ordinary "remove the scratch" cleanup would take hours of rendering with it.
+        # Only what this run produced is removed in that case.
+        if args.reference and args.reference.resolve() != scratch.resolve() \
+                and args.reference.resolve().is_relative_to(scratch.resolve()):
+            shutil.rmtree(b_dir, ignore_errors=True)
+        elif not args.reference:
+            shutil.rmtree(scratch, ignore_errors=True)
+        else:
+            shutil.rmtree(b_dir, ignore_errors=True)
     return code
 
 
