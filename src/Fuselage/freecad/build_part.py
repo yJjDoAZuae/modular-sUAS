@@ -1,4 +1,4 @@
-"""IP-FC-10: build one part from one parameter file, and write its mesh.
+"""IP-FC-10: build one part from one parameter file, and write its parametric document.
 
 This is the FreeCAD counterpart of a single `openscad -o part.stl part.scad` invocation, and
 it is deliberately shaped like one: one process, one part, one file in, one file out, an exit
@@ -14,6 +14,15 @@ to be rewritten to accept a second backend; they never knew which binary they we
 selects which: seeding the corner from the bulkhead's table would build its bore with no fit
 clearance at all (see `parameters.py`). That is why the kind is passed explicitly rather than
 inferred from the file -- the file describes a *variant*, and a variant is two parts.
+
+**The `.FCStd` is written by default, beside the mesh.** It is the reason this backend exists:
+an editable, parametric document is the one thing the OpenSCAD path cannot produce, and every
+downstream use case -- UC-2, the modelled non-printed components in IP-FC-18, the family
+drawings in IP-FC-21 -- consumes the document, not the triangles. Saving it used to require an
+explicit `--fcstd`, which nothing passed, so every invocation built the document in memory and
+threw it away. `--fcstd=<path>` now only *relocates* it; there is no way to suppress it, and
+none is wanted. (An empty `--fcstd=` cannot be the off switch even if one were: freecadcmd
+parses it as an option of its own, prints its usage, and exits 0 without running the script.)
 
 **The mesh is a setting, not a property of the model.** A B-rep has no triangles; the numbers
 below decide how many. They are stated here, once, rather than left to whatever the FreeCAD
@@ -192,6 +201,17 @@ def parse(argv):
     return out
 
 
+def fcstd_path(opt):
+    """Where the parametric document goes. Always somewhere -- it is never skipped.
+
+    Defaults to the mesh's own path with the extension swapped, so the document lands beside
+    the part it describes without every caller having to name it twice. `--out=x.partial.stl`
+    gives `x.partial.FCStd`, which is what the sweep's partial-then-rename write wants -- it
+    renames both on success, so a killed render leaves neither.
+    """
+    return opt.get('fcstd') or os.path.splitext(opt['out'])[0] + '.FCStd'
+
+
 def main():
     opt = parse(sys.argv[1:])
 
@@ -215,13 +235,16 @@ def main():
         return 1
 
     facets = write_mesh(shape, opt['out'])
-    print('%s  %.6f mm3  %d facets  -> %s'
-          % (opt['kind'], shape.Volume, facets, os.path.basename(opt['out'])))
 
-    if opt.get('fcstd'):
-        # UC-2 wants the parametric document, not just its mesh. Written here when asked so
-        # the sweep can produce both in one build; IP-FC-14 is what turns it on by default.
-        doc.saveAs(opt['fcstd'])
+    # UC-2 wants the parametric document, not just its mesh -- and it is the *primary* output
+    # of this backend, so it is written every time rather than only when asked (IP-FC-14). The
+    # document is already built and recomputed by this point; saving it is the cheap part.
+    fcstd = fcstd_path(opt)
+    doc.saveAs(fcstd)
+
+    print('%s  %.6f mm3  %d facets  -> %s + %s'
+          % (opt['kind'], shape.Volume, facets,
+             os.path.basename(opt['out']), os.path.basename(fcstd)))
 
     return 0
 
