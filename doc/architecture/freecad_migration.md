@@ -682,6 +682,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
 | ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
 | ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
+| ARCH-13 | open | Should the flange chamfer become a real chamfer feature? Its two-prism build is an OpenSCAD workaround, not a design — FreeCAD can chamfer the edge, but not until edge references are stable |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -1819,6 +1820,195 @@ already reads binary STL, so the change is a render flag rather than a porting j
 **What remains before closing is a decision, not a measurement**: whether re-rendering every
 stored reference tree is worth spending on a check that OQ-ARCH-4 has scheduled for retirement.
 That is the one real cost, and it is the question this alternative turns on.
+
+---
+
+### OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature?
+
+**Nothing is blocked by this today.** The three rounded corners still to be converted can be done
+without an answer. The one thing it holds up is being able to say the work on the bulkhead is
+finished, because that work was defined in a way that neither clearly includes nor clearly
+excludes this one feature.
+
+#### What the feature is
+
+The bulkhead is a flat plate with a wall — the flange — standing up around its outer edge. Where
+the inside of that wall meets the flat material inboard of it there is a sharp internal corner,
+and the flange chamfer fills it with a 45 degree face. It is extra material, not a cut: it is one
+of eight pieces union'd together to make the flange.
+
+**What it is for, stated 2026-08-16:** it runs the full interior perimeter of the flange and
+continues around the bolt or anchor, and its job is **strain relief** at that interior corner
+between the flange and the web. That is a structural purpose, not a cosmetic break of a sharp
+edge, and it is not recoverable from the code — the geometry says where the material is and
+nothing says why.
+
+Two things follow that matter here. The feature is **defined by the corner it follows**, so
+wherever that corner goes the chamfer must go. And its **size is a structural quantity**, so it
+is not free to be changed for modeling convenience.
+
+The run, traced from the assembled part — along the inside of the flange, then turning in to the
+bolt:
+
+![Where the flange chamfer runs on the bulkhead](img/flange_chamfer/where.svg)
+
+Sawn through square, at the place marked above, the flange is 1.2 mm thick and stands 6 mm up
+from a plate 0.8 mm thick. The chamfer is the shaded wedge in the corner between them — 1.0 mm
+along the flat and 1.0 mm up the wall, at 45 degrees:
+
+![The flange sawn through, with the chamfer picked out](img/flange_chamfer/section.svg)
+
+#### What the four rounded corners are
+
+The same job — filling an internal corner between two surfaces — but with a circular arc instead
+of a straight face. This one fills the corner between a wall that runs diagonally across the
+bulkhead and the raised boss around a bolt hole:
+
+![A rounded corner and the two surfaces it touches](img/flange_chamfer/rounded_corner.svg)
+
+#### Why the chamfer sits awkwardly in this work
+
+Both kinds of feature are defined against two surfaces, so the difference is not that one has a
+relationship and the other does not. The difference is what has to happen before you can say
+where it goes.
+
+For a rounded corner of a given radius there is exactly one position where the circle touches
+both surfaces, and finding it takes algebra. In the model as it stands that algebra was done by
+hand and the answer stored as a pair of coordinates in a spreadsheet, so what survives is a
+number and the reason for it is gone. That is what the work in progress is for: put the
+requirement in a sketch, let FreeCAD find the position, and the reason is in the model again.
+
+For the chamfer there is nothing to find. Its two ends are 1.0 mm from the corner along each
+surface, which is a measurement, not a solution.
+
+That is why the work these five features belong to describes what it covers in two ways that
+disagree here, in a single sentence:
+
+- **by what the feature is like** — the features whose position is worked out from where another
+  feature ended up
+- **by where the code lives** — the five fillets and chamfers in `freecad/fillets.py`
+
+The four rounded corners match both. The chamfer matches the second and not the first.
+
+#### What was measured
+
+On 2026-08-16 each of the four rounded corners was checked, on all 148 buildable bulkheads,
+against the claim that its position is exactly where the two surfaces it touches put it. All four
+hold to within 3.6e-15 mm — so the coordinates in the spreadsheet today really are those contacts
+worked out by hand, and replacing them with stated requirements will not move the part.
+`tools/fillet_intent.py` is that check. The chamfer is absent from it because there is no
+equivalent claim to test.
+
+#### How the chamfer is built today, and why
+
+Two prisms, one running along the flange and one turning in toward the bolt. Each is a
+rectangular box with a second box, rotated 45 degrees, subtracted from it to take one corner off
+— so a flat 45 degree face is expressed as the leftover of one box minus another. Nine
+spreadsheet rows size and place those boxes, and it is the only feature in the file built in a
+rotated frame of its own rather than in the part's coordinates.
+
+**That construction is not a design decision — it is a workaround for OpenSCAD** (stated
+2026-08-16). OpenSCAD has no way to point at an edge and chamfer it, the way a CAD package does,
+so a chamfer has to be built as explicit geometry, in as many pieces as the corner has runs. The
+FreeCAD port then transcribed that workaround faithfully, which was the right thing to do while
+OpenSCAD was the authority.
+
+**That reframes the question.** Two different things were lost getting these features into the
+model, with different causes and different fixes:
+
+| what was lost | how | which features |
+| --- | --- | --- |
+| the *reason* a position is what it is | a tangency solved by hand, the answer stored as coordinates | the four rounded corners |
+| the *operation* the feature is | a tool that cannot chamfer an edge, so the shape is built by hand | the chamfer |
+
+The work in progress addresses the first. The chamfer suffers the second. Both amount to "the
+model no longer says what was meant", which is why grouping all five together looked reasonable —
+but the fix for one is not the fix for the other, and only the chamfer's fix is blocked on
+something outside itself.
+
+#### Alternatives
+
+1. **Leave the construction as it is, and write down why.**
+   Record that this feature's position needs no solving and that its build is an OpenSCAD
+   workaround, and leave it alone.
+   *Benefits:* no work, and no risk to a part that is currently correct.
+   *Drawbacks:* keeps a hand-built stand-in for an operation FreeCAD can perform directly, and
+   keeps nine spreadsheet rows that must stay mutually consistent to produce one 45 degree face.
+   *Prerequisites:* none.
+
+2. **Draw its outline as a sketch.**
+   Replace the box-minus-rotated-box with a five-corner sketch of the profile, dimensioned
+   against the same spreadsheet rows and extruded to the same lengths.
+   *Benefits:* the profile becomes a shape a reader can see rather than the residue of a
+   subtraction. Two of the nine rows exist only to place the rotated cutting box and would go.
+   *Drawbacks:* states nothing that was not already stated, and it is still a hand-built shape
+   standing in for an operation.
+   *Prerequisites:* none; the sketch conventions already exist in this file.
+
+3. **Use a real chamfer feature.**
+   Build the flange with a sharp internal corner, then apply FreeCAD's chamfer operation to that
+   edge, sized by the one parameter that means "how much relief".
+   *Benefits:* the only option where the model says what the feature is and does what it is for.
+   One parameter replaces nine spreadsheet rows. The chamfer follows the corner wherever the
+   corner goes, instead of being re-derived by hand if the flange outline changes. It also
+   produces a named edge, which is what the later work on drawings and assembly joints needs.
+   *Drawbacks:* it has to identify an edge of a shape produced by a boolean, and those names are
+   not stable across a rebuild — the same instability already blocking that later work. The
+   chamfer runs around corners where two runs meet, and whether FreeCAD produces the same shape
+   there as the present construction is unknown. **This is the only alternative that can change
+   the flown part**, so it needs a full comparison against OpenSCAD rather than the bit-identical
+   check the rounded corners get.
+   *Prerequisites:* a dependable way to name the edge; a whole-corpus comparison.
+
+4. **Decide it later.**
+   Leave it alone and revisit when the parts move to FreeCAD's `PartDesign` workbench, where the
+   choice comes up anyway.
+   *Benefits:* avoids doing the work twice. Costs nothing now.
+   *Drawbacks:* the question stays open until then, and that move is itself blocked behind a
+   whole-corpus comparison.
+
+#### Recommendation
+
+**Alternative 3 — a real chamfer feature — is the right end state, and alternative 1 is what to
+do until it can be done safely.** So: leave the construction alone for now, write next to it in
+`fillets.py` that it is an OpenSCAD workaround rather than a design, and do alternative 3 as part
+of the work that makes edge references stable.
+
+**This reverses the first recommendation written here, and the reason is worth keeping.** That
+version argued for leaving the chamfer alone permanently, on the grounds that its position is
+measured rather than solved, so it is simply not the kind of feature this work is about. The
+first half of that is still true. The conclusion was wrong, because it reasoned from the
+construction as though the construction were intended. Once it is known that the two-prism build
+exists only because OpenSCAD cannot chamfer an edge, "not the kind of thing we are fixing" stops
+holding: it is exactly the kind of thing — a feature the model no longer states, because the tool
+of the day could not state it — and FreeCAD is the tool that can.
+
+Three things make it the target rather than a nice-to-have:
+
+- **The feature is defined by the edge it follows.** Its purpose is strain relief along the
+  interior corner. A chamfer applied to that edge follows the corner wherever it goes; two
+  hand-placed prisms have to be re-derived by hand if the flange outline changes, and nothing
+  would report it if they were not.
+- **Its size is structural.** One parameter meaning "how much relief" is safer than nine
+  spreadsheet rows that must stay mutually consistent to produce it.
+- **The reason for the workaround is being retired.** OQ-ARCH-4 already decided OpenSCAD goes
+  once the comparison passes, after which FreeCAD is the definition of correctness. Carrying its
+  limitations past that point is the opposite of the point of the migration.
+
+**What holds it back is real and unchanged**: it needs to name an edge of a shape produced by a
+boolean, those names are not stable across a rebuild, it is the only option here that can move
+the flown part, and the behavior where two runs meet has to be measured rather than assumed. None
+of that argues for never doing it. It argues for doing it with the work that solves edge naming,
+and not before.
+
+Alternative 2 is not worth doing on its own: it would move dimensions from one place to another
+and still leave a hand-built shape standing in for an operation. If the remaining rounded corners
+end up needing sketched profiles anyway it becomes nearly free, but it is a waypoint, not a
+destination.
+
+The figures are generated by `tools/draw_flange_chamfer.py`. The two that show the part are
+traced from the assembled bulkhead for U = 1.0, bolt end, 3/16 in panel, from a snapshot written
+by `chamfer_analysis/measure_chamfer_context.py`; re-run that if the geometry moves.
 
 ---
 

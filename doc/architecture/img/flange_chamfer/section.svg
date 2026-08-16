@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="sheet" viewBox="0 0 440 396" role="img"
+preserveAspectRatio="xMidYMid meet"><title>the flange sawn through, with the chamfer picked out</title><style>
+.fbody   { fill:rgba(16,22,25,.14); stroke:#101619; stroke-width:1.3; }
+.fquad   { fill:rgba(122,94,168,.22); stroke:#7a5ea8; stroke-width:1.6; }
+.fplate  { fill:rgba(16,22,25,.10); stroke:#101619; stroke-width:1; }
+.fstand  { fill:rgba(11,110,128,.16); stroke:#0b6e80; stroke-width:1; }
+.zoom    { fill:none; stroke:#b8372a; stroke-width:1.6; stroke-dasharray:5 3; }
+.fsliver { fill:#b8372a; stroke:#b8372a; stroke-width:.8; }
+.tool    { fill:none; stroke:#0b6e80; stroke-width:1.1; stroke-dasharray:7 4; }
+.relief  { fill:rgba(11,110,128,.10); stroke:#0b6e80; stroke-width:1.2; }
+.ring    { fill:none; stroke:#1c7a54; stroke-width:1.6; }
+.rule    { stroke:#9fb0ba; stroke-width:1; stroke-dasharray:3 4; }
+.ray     { stroke:#b8372a; stroke-width:1.8; }
+.edge    { stroke:#0b6e80; stroke-width:1.8; }
+.axis    { stroke:#9fb0ba; stroke-width:1; }
+.bar     { fill:rgba(122,94,168,.55); stroke:#7a5ea8; stroke-width:.8; }
+.barbad  { fill:rgba(184,55,42,.65); stroke:#b8372a; stroke-width:.8; }
+.band    { fill:rgba(184,55,42,.10); stroke:none; }
+text.lbl   { font-family:monospace; font-size:10px; fill:#5d6f79; }
+text.plbl  { font-family:monospace; font-size:10px; fill:#0b6e80; font-weight:600; }
+text.nclbl { font-family:monospace; font-size:10px; fill:#7a5ea8; font-weight:600; }
+text.gclbl { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+text.xlbl  { font-family:monospace; font-size:10px; fill:#1c7a54; font-weight:600; }
+text.ttl   { font-family:monospace; font-size:11px; fill:#5d6f79; font-weight:600; }
+.dim line  { stroke:#b8372a; stroke-width:1.1; }
+.dim text  { font-family:monospace; font-size:10px; fill:#b8372a; font-weight:600; }
+.faint line { stroke:#5d6f79; stroke-width:1; }
+.faint text { fill:#5d6f79; font-weight:400; }
+@media (prefers-color-scheme: dark) {
+  .fbody   { fill:rgba(220,230,234,.13); stroke:#dce6ea; }
+  .fquad   { fill:rgba(179,154,224,.24); stroke:#b39ae0; }
+  .fplate  { fill:rgba(220,230,234,.10); stroke:#dce6ea; }
+  .fstand  { fill:rgba(69,194,214,.16); stroke:#45c2d6; }
+  .zoom    { stroke:#ff6f5e; }
+  .fsliver { fill:#ff6f5e; stroke:#ff6f5e; }
+  .tool, .relief { stroke:#45c2d6; }
+  .relief  { fill:rgba(69,194,214,.12); }
+  .ring    { stroke:#4fd39b; }
+  .rule, .axis { stroke:#5b6f79; }
+  .ray     { stroke:#ff6f5e; }
+  .edge    { stroke:#45c2d6; }
+  .bar     { fill:rgba(179,154,224,.55); stroke:#b39ae0; }
+  .barbad  { fill:rgba(255,111,94,.65); stroke:#ff6f5e; }
+  .band    { fill:rgba(255,111,94,.12); }
+  text.lbl { fill:#8ea3ad; } text.plbl { fill:#45c2d6; } text.nclbl { fill:#b39ae0; }
+  text.gclbl { fill:#ff6f5e; } text.xlbl { fill:#4fd39b; } text.ttl { fill:#8ea3ad; }
+  .dim line { stroke:#ff6f5e; } .dim text { fill:#ff6f5e; }
+  .faint line { stroke:#8ea3ad; } .faint text { fill:#8ea3ad; }
+}
+</style><defs><clipPath id="sc"><rect x="0" y="0" width="440" height="396"/></clipPath></defs><g clip-path="url(#sc)"><path class="fbody" d="M220.0000 323.9560 L389.2308 323.9560 L389.2308 82.1978 L340.8791 82.1978 L340.8791 251.4286 L300.5861 291.7216 L220.0000 291.7216 L220.0000 323.9560 Z"/><path class="fquad" d="M340.8791 251.4286 L300.5861 291.7216 L300.5861 323.9560 L389.2308 323.9560 L389.2308 251.4286 L340.8791 251.4286 Z"/><line class="ray" x1="300.586" y1="291.722" x2="340.879" y2="251.429"/><text class="lbl" x="222.00" y="305.72" text-anchor="start">the plate, 0.8 mm thick</text><text class="lbl" x="385.23" y="66.20" text-anchor="end">the flange, 1.2 mm thick,</text><text class="lbl" x="385.23" y="77.20" text-anchor="end">standing 6 mm up</text><text class="lbl" x="292.59" y="237.43" text-anchor="end">the chamfer fills this inside corner,</text><text class="lbl" x="292.59" y="248.43" text-anchor="end">at 45&#176;, 1.0 mm each way</text><g class="dim"><line x1="169.23" y1="323.96" x2="169.23" y2="251.43"/><line x1="165.23" y1="323.96" x2="173.23" y2="323.96"/><line x1="165.23" y1="251.43" x2="173.23" y2="251.43"/><text x="159.23" y="291.69">1.8 mm up</text></g><g class="dim"><line x1="300.59" y1="362.64" x2="389.23" y2="362.64"/><line x1="300.59" y1="358.64" x2="300.59" y2="366.64"/><line x1="389.23" y1="358.64" x2="389.23" y2="366.64"/><text x="344.91" y="353.64" text-anchor="middle">2.2 mm in</text></g><circle cx="340.879" cy="251.429" r="2.6" fill="#7a5ea8"/><circle cx="300.586" cy="291.722" r="2.6" fill="#7a5ea8"/></g></svg>
