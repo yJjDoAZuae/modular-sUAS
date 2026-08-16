@@ -1203,6 +1203,39 @@ def boom_key_validity_check(dp):
 
     return is_valid
 
+def bolt_flange_fillet_gap(dp):
+    """OQ-DES-B14: how far the bolt-flange fillet's centre lands from the bolt axis.
+
+    The fillet between the bulkhead flange and the bolt boss is the circle of radius
+    `bulkhead_flange.fillet_radius` that touches both. Its centre is therefore determined,
+    not chosen. WHERE that centre lands relative to the bolt axis is not determined by
+    anything, and this returns that signed gap:
+
+        gap   = (flange_inner_x - fillet_radius) - (-bolt_offset)
+        reach = fillet_radius + bolt_boss_radius
+
+    with `flange_inner_x = -(panel_tolerance + panel_offset + panel_overlap +
+    flange_thickness)`. The gap is a difference of four dimensions chosen independently of
+    one another -- the panel seat, the flange wall, and the bolt's position in the corner --
+    so it takes whatever value they happen to leave, including zero. `reach` is how far the
+    two tangencies can be pulled apart before no such circle exists at all; `abs(gap) >=
+    reach` has no solution, and the FreeCAD generator refuses to build it rather than
+    clamping to a plausible wrong centre.
+
+    **Deliberately reported and not enforced.** This is Alternative 5 of OQ-DES-B14. A stated
+    minimum was Alternative 2 and was rejected: every swept value builds correctly and there
+    is no physical argument for a limit. What a small gap used to mean was a construction
+    that put two nearly-parallel planes through the relief cone's axis and tripped OCCT
+    (IP-FC-58); that construction is gone. What it still means is that a design relationship
+    nobody stated is holding at a value nobody chose, so it is measured rather than assumed.
+    """
+    flange_inner_x = -(dp.panel.tolerance + dp.panel.offset + dp.panel.overlap
+                       + dp.bulkhead_flange.thickness)
+    fillet_radius = dp.bulkhead_flange.fillet_radius
+    gap = (flange_inner_x - fillet_radius) - (-dp.bolt.offset)
+    reach = fillet_radius + dp.bolt.radius + dp.bolt.thickness
+    return gap, reach
+
 def run_bulkhead_parametric_sweep(csv_files, output_dir):
     """
     Main function:

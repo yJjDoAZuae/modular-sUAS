@@ -15,15 +15,24 @@ is_cowling false -- and it is the last check the port needs before tiling:
                 the bolt hole                 /
                 the octant mask              /
 
-Sixteen modules, and **not one sketch among them**. That was not the expected outcome: the
-working assumption at IP-FC-38 was that arbitrary polygons would force sketches. Every
-profile the bulkhead defines turned out to be a convex region -- a covering box minus the
-half-planes of its non-axis-aligned edges -- and where an edge's angle moves with the
-parameters, `Placement.Rotation.Angle` takes an expression just as `Placement.Base` does.
+Sixteen modules, and **not one sketched profile among them**. That was not the expected
+outcome: the working assumption at IP-FC-38 was that arbitrary polygons would force
+sketches. Every profile the bulkhead defines turned out to be a convex region -- a covering
+box minus the half-planes of its non-axis-aligned edges -- and where an edge's angle moves
+with the parameters, `Placement.Rotation.Angle` takes an expression just as `Placement.Base`
+does.
 
-The assembled section does contain one sketch, and it is not the bulkhead's: the greeble
-tool is corner_end, and corner_end's wedge is one of the corner's two genuinely non-convex
-profiles. Reusing the corner's description brings the corner's sketch with it.
+The assembled section contains two sketches and neither is a profile. One is the corner's:
+the greeble tool is corner_end, and corner_end's wedge is one of the corner's two genuinely
+non-convex profiles, so reusing the corner's description brings the corner's sketch with it.
+The other is the bulkhead's own `BffTangency` (OQ-DES-B14, 2026-08-16) -- construction
+geometry whose two `Tangent` constraints solve the bolt-flange fillet's centre, replacing a
+subtraction and a clamped square root with a relationship the solver checks and a reader can
+see. That fillet's *profile* is still half-planes, which is scope and not capability: the
+profile does change topology across the parameter space, from a quad to a triangle on 18 of
+the 88 valid end-type variants, but a document is generated per parameter set so the
+generator can simply emit the topology those parameters call for.
+`fillets._tangency_sketch()` carries the measurement.
 
 What this proves that the isolated checks could not: `ref_bulkhead_cuts.scad` transcribes
 five cut tools the source builds inline, so comparing against it only shows the port matches
