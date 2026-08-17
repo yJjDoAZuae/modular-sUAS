@@ -137,23 +137,14 @@ PARAMS = [
     # from that sketch's reference dimensions. See OQ-DES-B14.
     ('bbf_sx', '=max(flange_inner_x; bolt_c)'),
 
-    # web_to_bolt_fillet: the greeble flange wall runs at 45 degrees, half a flange
-    # thickness either side of the diagonal, and the fillet centre is one radius off it.
-    ('wtb_a', '=flange_fillet_radius + flange_thickness / 2'),
-    ('wtb_tan', '=sqrt(max(r_bolt_fillet ^ 2 - wtb_a ^ 2; 0))'),
-    ('wtb_cx', '=bolt_c + (wtb_tan - wtb_a) / sqrt(2)'),
-    ('wtb_cy', '=bolt_c + (wtb_tan + wtb_a) / sqrt(2)'),
-    ('wtb_sx', '=bolt_c + (wtb_tan - flange_thickness / 2) / sqrt(2)'),
-    ('wtb_dx', '=wtb_cx - bolt_c'),
-    ('wtb_dy', '=wtb_cy - bolt_c'),
-    ('wtb_r', '=sqrt(wtb_dx ^ 2 + wtb_dy ^ 2)'),
-    ('wtb_ang', '=atan2(wtb_dy; wtb_dx)'),
-    ('wtb_hx', '=bolt_c - far * wtb_dx / wtb_r'),
-    ('wtb_hy', '=bolt_c - far * wtb_dy / wtb_r'),
-    # half-plane x + y > wtb_sum, as a box rotated +45 with its near edge on the line
-    ('wtb_sum', '=wtb_cx + wtb_cy'),
-    ('wtb_45x', '=wtb_sum / 2 + far'),
-    ('wtb_45y', '=wtb_sum / 2 - far'),
+    # web_to_bolt_fillet's center is solved by `WtbTangency`, the sketch built in
+    # `_wtb_tangency_sketch()`, and read back from that sketch's reference dimensions --
+    # IP-FC-73. The thirteen rows that used to live here (`wtb_a`, `wtb_tan`, `wtb_cx`,
+    # `wtb_cy`, `wtb_sx`, `wtb_dx`, `wtb_dy`, `wtb_r`, `wtb_ang`, `wtb_hx`, `wtb_hy`,
+    # `wtb_sum`, `wtb_45x`, `wtb_45y`) are expressions on the objects that need them, for the
+    # same reason the bolt-flange fillet's are: a sheet row reading the sketch would close a
+    # dependency cycle. `wtb_tan`'s `sqrt(max(...; 0))` was the last clamped root in this
+    # module; the sketch refuses instead of returning a plausible wrong position.
 ]
 
 
@@ -280,6 +271,10 @@ SK = 'BffTangency.Constraints.'
 BBF_CX = '(%sbbf_cx / 1mm)' % SK
 BBF_CY = '(%sbbf_cy / 1mm)' % SK
 
+WSK = 'WtbTangency.Constraints.'
+WTB_CX = '(%swtb_cx / 1mm)' % WSK
+WTB_CY = '(%swtb_cy / 1mm)' % WSK
+
 
 def _tangency_sketch(doc):
     """OQ-DES-B14: the fillet center, stated as the two tangencies it actually satisfies.
@@ -400,6 +395,121 @@ def _tangency_sketch(doc):
     return sk
 
 
+def _wtb_tangency_sketch(doc):
+    """IP-FC-73: the web-to-bolt fillet's center, stated as the two tangencies it satisfies.
+
+    Same move as `_tangency_sketch()` and for the same reason. The center used to be four
+    rows of arithmetic ending in `sqrt(max(r_bolt_fillet^2 - wtb_a^2; 0))` -- the last
+    clamped square root in this module, and the same shape of expression OQ-ARCH-11 named as
+    the hazard: past the clamp it returns a plausible wrong position instead of reporting
+    that the relationship cannot be met.
+
+    What those rows describe is a circle of radius `flange_fillet_radius` touching two things
+    at once: the **bolt boss**, a circle of radius `bolt_boss_r` about the bolt, and the
+    **greeble flange wall**, which runs at 45 degrees through the bolt center, half a
+    `flange_thickness` either side. Established by measurement before being stated here --
+    both hold as identities to 3.6e-15 mm across all 148 buildable bulkheads
+    (`tools/fillet_intent.py`), so stating them does not move the part.
+
+    Construction geometry only, and the sheet may not read it back; both points are argued in
+    `_tangency_sketch()`, which this deliberately mirrors rather than generalizes. Two sketches
+    with the same shape are easier to read side by side than one function with a switch, and
+    the second one is what shows which parts of the first were incidental.
+    """
+    P = 'Params.'
+    sheet = doc.getObject('Params')
+    doc.recompute()
+
+    def cell(alias):
+        return float(sheet.get(alias))
+
+    ffr, ft = cell('flange_fillet_radius'), cell('flange_thickness')
+    bolt_c, boss_r = cell('bolt_c'), cell('bolt_boss_r')
+    far = cell('far')
+
+    # The perpendicular distance from the diagonal to the fillet center, if it touches the
+    # wall: half the wall plus the radius. The clamp fires when the boss is too small for any
+    # such circle to also reach it -- `bolt_boss_r < flange_thickness / 2`.
+    a = ffr + ft / 2.0
+    span = (ffr + boss_r) ** 2 - a ** 2
+    if span <= 0:
+        raise RuntimeError(
+            'web_to_bolt_fillet: no circle of radius %.4f can touch both the bolt boss of '
+            'radius %.4f at (%.4f, %.4f) and a wall %.4f thick through it. The two tangencies '
+            'have no common solution (would-be discriminant %.4f mm2).'
+            % (ffr, boss_r, bolt_c, bolt_c, ft, span))
+    tan = math.sqrt(span)
+    seed_cx = bolt_c + (tan - a) / math.sqrt(2)
+    seed_cy = bolt_c + (tan + a) / math.sqrt(2)
+
+    sk = C._owned(doc, 'Sketcher::SketchObject', 'WtbTangency')
+    if sk.GeometryCount == 0:
+        # G0 the fillet circle, G1 the bolt boss, G2 the wall's near face. All construction:
+        # this sketch is never extruded, it only places a point.
+        sk.addGeometry(Part.Circle(V(seed_cx, seed_cy, 0), V(0, 0, 1), ffr), True)
+        sk.addGeometry(Part.Circle(V(bolt_c, bolt_c, 0), V(0, 0, 1), boss_r), True)
+        off = ft / 2.0 / math.sqrt(2)
+        reach = far / math.sqrt(2)
+        sk.addGeometry(Part.LineSegment(V(bolt_c - off - reach, bolt_c + off - reach, 0),
+                                        V(bolt_c - off + reach, bolt_c + off + reach, 0)),
+                       True)
+
+        def con(c, expr=None, name=None, driving=True):
+            i = sk.addConstraint(c)
+            if expr is not None:
+                sk.setExpression('Constraints[%d]' % i, expr)
+            if not driving:
+                sk.setDriving(i, False)
+            if name:
+                sk.renameConstraint(i, name)
+            return i
+
+        # The wall face: a 45 degree line offset half a thickness from the bolt's diagonal.
+        # Both endpoints are pinned, which is four constraints for a line's four degrees of
+        # freedom -- there is no `Vertical` to lean on here as there was for the flange face.
+        OFF = '%sflange_thickness / 2 / sqrt(2)' % P
+        REACH = '%sfar / sqrt(2)' % P
+        con(S.Constraint('DistanceX', -1, 1, 2, 1, bolt_c - off - reach),
+            '%sbolt_c - %s - %s' % (P, OFF, REACH))
+        con(S.Constraint('DistanceY', -1, 1, 2, 1, bolt_c + off - reach),
+            '%sbolt_c + %s - %s' % (P, OFF, REACH))
+        con(S.Constraint('DistanceX', -1, 1, 2, 2, bolt_c - off + reach),
+            '%sbolt_c - %s + %s' % (P, OFF, REACH))
+        con(S.Constraint('DistanceY', -1, 1, 2, 2, bolt_c + off + reach),
+            '%sbolt_c + %s + %s' % (P, OFF, REACH))
+
+        # the boss, at the bolt center
+        con(S.Constraint('DistanceX', -1, 1, 1, 3, bolt_c), P + 'bolt_c')
+        con(S.Constraint('DistanceY', -1, 1, 1, 3, bolt_c), P + 'bolt_c')
+        con(S.Constraint('Radius', 1, boss_r), P + 'bolt_boss_r')
+
+        # the fillet circle: its radius, and the two statements this conversion is about
+        con(S.Constraint('Radius', 0, ffr), P + 'flange_fillet_radius')
+        con(S.Constraint('Tangent', 0, 2), name='tangent_to_wall_face')
+        con(S.Constraint('Tangent', 0, 1), name='tangent_to_bolt_boss')
+
+        # what the solver produced, for everything downstream to read
+        con(S.Constraint('DistanceX', -1, 1, 0, 3, seed_cx), name='wtb_cx', driving=False)
+        con(S.Constraint('DistanceY', -1, 1, 0, 3, seed_cy), name='wtb_cy', driving=False)
+
+    doc.recompute()
+    dof = sk.solve()
+    if dof != 0 or not sk.FullyConstrained:
+        raise RuntimeError('WtbTangency did not solve (solve()=%d, fully constrained %s). '
+                           'The two tangencies have no common solution at these parameters.'
+                           % (dof, sk.FullyConstrained))
+
+    # The branch guard, as for `BffTangency`. A circle tangent to a circle and a line has
+    # four solutions; the closed form is kept here as a test of which one the solver reached,
+    # never as its source.
+    got = (sk.getDatum('wtb_cx').Value, sk.getDatum('wtb_cy').Value)
+    if max(abs(got[0] - seed_cx), abs(got[1] - seed_cy)) > 1e-7:
+        raise RuntimeError('WtbTangency solved to (%.9f, %.9f) but the two tangencies place '
+                           'the center at (%.9f, %.9f) -- the solver took the wrong branch.'
+                           % (got[0], got[1], seed_cx, seed_cy))
+    return sk
+
+
 def bolt_flange_fillet(doc):
     """Quad (cx, cy) (sx, cy) (sx, -bolt) (-bolt, -bolt): the top edge is horizontal here
     because the start and center share a y, so only the ray edge needs clipping.
@@ -435,18 +545,40 @@ def bolt_flange_fillet(doc):
 
 def web_to_bolt_fillet(doc):
     """Quad (cx, cy) (sx, sy) (sx, -bolt) (-bolt, -bolt). Two clips: the 45 degree greeble
-    flange wall through the centre, and the ray edge."""
+    flange wall through the center, and the ray edge.
+
+    `cx, cy` is solved by `WtbTangency` rather than computed -- see `_wtb_tangency_sketch()`.
+    The quantities that used to be sheet rows are expressions here, for the reason given in
+    `_tangency_sketch()`: a sheet row reading this sketch would close a dependency cycle.
+    """
     P = 'Params.'
-    block = C._box(doc, 'WtbBlock', P + 'wtb_sx - ' + P + 'bolt_c', P + 'wtb_dy',
+    _wtb_tangency_sketch(doc)
+
+    dx = '(%s - %sbolt_c)' % (WTB_CX, P)
+    dy = '(%s - %sbolt_c)' % (WTB_CY, P)
+    # `wtb_r` was sqrt(dx^2 + dy^2), which the tangency to the boss makes identically
+    # r_bolt_fillet -- the center sits flange_fillet_radius outside a boss of bolt_boss_r,
+    # and those sum to exactly that row. True before by algebra, true now by construction.
+    # Measured across all 148 buildable bulkheads, worst 3.6e-15 mm.
+    ray = '%sbolt_c - %sfar * %%s / %sr_bolt_fillet' % (P, P, P)
+    # `wtb_sx` was reached through the clamped square root; it is the x of the point where
+    # the fillet meets the wall, which is the center offset one radius along the 45 degree
+    # normal. Same value to 3.6e-15 mm over the corpus, without the clamp.
+    sx = '(%s + %sflange_fillet_radius / sqrt(2))' % (WTB_CX, P)
+    # half-plane x + y > cx + cy, as a box rotated +45 with its near edge on the line
+    half = '(%s + %s) / 2' % (WTB_CX, WTB_CY)
+
+    block = C._box(doc, 'WtbBlock', '%s - %sbolt_c' % (sx, P), dy,
                    P + 'bulkhead_thickness', P + 'bolt_c', P + 'bolt_c', '0')
     node = C._cut(doc, 'WtbWall', block,
                   C._box(doc, 'WtbWallBox', P + 'diag_len', P + 'diag_wid',
-                         P + 'bulkhead_thickness * 3', P + 'wtb_45x', P + 'wtb_45y',
+                         P + 'bulkhead_thickness * 3',
+                         '%s + %sfar' % (half, P), '%s - %sfar' % (half, P),
                          '-' + P + 'bulkhead_thickness', angle=45))
     node = C._cut(doc, 'WtbRay', node,
-                  _ray_halfplane(doc, 'WtbRayBox', P + 'wtb_ang', P + 'wtb_hx',
-                                 P + 'wtb_hy'))
-    node = _relief_stack(doc, 'Wtb', node, P + 'wtb_cx', P + 'wtb_cy')
+                  _ray_halfplane(doc, 'WtbRayBox', 'atan2(%s; %s)' % (dy, dx),
+                                 ray % dx, ray % dy))
+    node = _relief_stack(doc, 'Wtb', node, WTB_CX, WTB_CY)
     tip = C._owned(doc, 'Part::Refine', 'WebToBoltFillet')
     tip.Source = node
     return tip

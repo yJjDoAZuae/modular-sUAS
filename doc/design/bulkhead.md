@@ -1221,7 +1221,7 @@ unsatisfiable configuration is **refused** where `max(...; 0)` used to clamp and
 plausible wrong center. Alternatives 1–4 were ruled out: 1 leaves the relationship unstated,
 and 2, 3 and 4 all move the finished part to fix a problem that no longer manifests.
 
-*Caveats, each checked rather than assumed —* `freecad/check_bff_tangency.py`:
+*Caveats, each checked rather than assumed —* `freecad/check_tangency.py`:
 
 - **The sketch holds the center, not the profile — a matter of scope, not of capability.**
   An earlier draft of this resolution claimed a profile sketch was impossible here, because
