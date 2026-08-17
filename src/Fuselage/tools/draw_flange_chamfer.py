@@ -47,19 +47,75 @@ SQ2 = math.sqrt(2.0)
 CH_W, ASCENT, DESCENT = 6.0, 8.0, 2.5
 
 
+TOKEN = re.compile(r'<g\b[^>]*>|</g>|<text\b[^>]*>[^<]*</text>')
+TRANSLATE = re.compile(r'translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)')
+CLIP_DEF = re.compile(
+    r'<clipPath\s+id="([^"]+)"\s*>\s*<rect\b([^>]*)/>', re.S)
+CLIP_USE = re.compile(r'clip-path="url\(#([^)]+)\)"')
+BIG = 1e9
+
+
+def _clip_rects(svg_text):
+    """id -> (x, y, w, h) for every clipPath the drawing defines."""
+    out = {}
+    for m in CLIP_DEF.finditer(svg_text):
+        attrs = {}
+        for a in ('x', 'y', 'width', 'height'):
+            v = re.search(r'\b%s="(-?[\d.]+)"' % a, m.group(2))
+            attrs[a] = float(v.group(1)) if v else 0.0
+        out[m.group(1)] = (attrs['x'], attrs['y'], attrs['width'], attrs['height'])
+    return out
+
+
 def label_boxes(svg_text):
-    """Every label's approximate box, as (x0, y0, x1, y1, text)."""
+    """Every label's box and the region it may occupy, as (x0, y0, x1, y1, text, clip).
+
+    Two things a naive read of the `<text>` elements gets wrong, and both have shipped an
+    unreadable figure at least once.
+
+    A multi-panel figure puts each panel in a `<g transform="translate(...)">`, so two panels
+    can carry the same label at the same local coordinates and still be drawn far apart. Read
+    naively that looks like every panel colliding with every other -- a false alarm loud
+    enough to train the reader to ignore the check.
+
+    A panel is also usually clipped to its own rectangle, so a label can sit well inside the
+    drawing and still be cut in half by the edge of the panel it belongs to. `clip` is the
+    region actually available to that label, which is every enclosing clipPath intersected;
+    checking against the viewBox alone misses this entirely.
+    """
+    clips = _clip_rects(svg_text)
     out = []
-    for m in re.finditer(r'<text[^>]*?x="(-?[\d.]+)"[^>]*?y="(-?[\d.]+)"[^>]*?>([^<]*)</text>',
-                         svg_text):
-        x, y, s = float(m.group(1)), float(m.group(2)), m.group(3)
-        if not s.strip():
+    stack = [(0.0, 0.0, (-BIG, -BIG, BIG, BIG))]
+    for m in TOKEN.finditer(svg_text):
+        tag = m.group(0)
+        if tag == '</g>':
+            if len(stack) > 1:
+                stack.pop()
             continue
-        am = re.search(r'text-anchor="(\w+)"', m.group(0))
+        if tag.startswith('<g'):
+            ox, oy, clip = stack[-1]
+            t = TRANSLATE.search(tag)
+            if t:
+                ox, oy = ox + float(t.group(1)), oy + float(t.group(2))
+            u = CLIP_USE.search(tag)
+            if u and u.group(1) in clips:
+                cx, cy, cw, ch = clips[u.group(1)]
+                clip = (max(clip[0], cx + ox), max(clip[1], cy + oy),
+                        min(clip[2], cx + ox + cw), min(clip[3], cy + oy + ch))
+            stack.append((ox, oy, clip))
+            continue
+        a = re.search(r'\bx="(-?[\d.]+)"', tag)
+        c = re.search(r'\by="(-?[\d.]+)"', tag)
+        s = tag[tag.index('>') + 1:tag.rindex('<')]
+        if not (a and c and s.strip()):
+            continue
+        ox, oy, clip = stack[-1]
+        x, y = float(a.group(1)) + ox, float(c.group(1)) + oy
+        am = re.search(r'text-anchor="(\w+)"', tag)
         anchor = am.group(1) if am else 'start'
         w = len(s) * CH_W
         x0 = x if anchor == 'start' else (x - w / 2 if anchor == 'middle' else x - w)
-        out.append((x0, y - ASCENT, x0 + w, y + DESCENT, s))
+        out.append((x0, y - ASCENT, x0 + w, y + DESCENT, s, clip))
     return out
 
 
@@ -76,13 +132,18 @@ def overlaps(svg_text):
 
 
 def off_frame(svg_text):
-    """Labels that run outside the drawing, which are cut off in the rendered figure."""
+    """Labels cut off in the rendered figure -- by the drawing's edge or by their own panel."""
     m = re.search(r'viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"', svg_text)
     if not m:
         return []
     w, h = float(m.group(1)), float(m.group(2))
-    return [b[4] for b in label_boxes(svg_text)
-            if b[0] < 0 or b[1] < 0 or b[2] > w or b[3] > h]
+    bad = []
+    for x0, y0, x1, y1, s, clip in label_boxes(svg_text):
+        lo_x, lo_y = max(0.0, clip[0]), max(0.0, clip[1])
+        hi_x, hi_y = min(w, clip[2]), min(h, clip[3])
+        if x0 < lo_x or y0 < lo_y or x1 > hi_x or y1 > hi_y:
+            bad.append(s)
+    return bad
 
 
 def geometry(U=1.0, type_name='end_bolt', panel_name='3/16in'):
