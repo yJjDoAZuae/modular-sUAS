@@ -25,14 +25,19 @@ does.
 The assembled section contains two sketches and neither is a profile. One is the corner's:
 the greeble tool is corner_end, and corner_end's wedge is one of the corner's two genuinely
 non-convex profiles, so reusing the corner's description brings the corner's sketch with it.
-The other is the bulkhead's own `BffTangency` (OQ-DES-B14, 2026-08-16) -- construction
-geometry whose two `Tangent` constraints solve the bolt-flange fillet's centre, replacing a
-subtraction and a clamped square root with a relationship the solver checks and a reader can
-see. That fillet's *profile* is still half-planes, which is scope and not capability: the
-profile does change topology across the parameter space, from a quad to a triangle on 18 of
-the 88 valid end-type variants, but a document is generated per parameter set so the
+The other is the bulkhead's own `FilletTangency` -- construction geometry whose `Tangent`
+constraints solve all four rounded corners' centers at once, replacing subtractions and two
+clamped square roots with relationships the solver checks and a reader can see. It began as
+`BffTangency`, one sketch for the bolt-flange fillet (OQ-DES-B14, 2026-08-16); OQ-ARCH-14
+merged the four into one on 2026-08-17, so the count here stayed at two sketches while the
+number of solved corners went from one to four. **It carries only the corners this variant
+has**, which is why the section is 142 nodes at some parameter sets and 153 at others.
+
+Those fillets' *profiles* are still half-planes, which is scope and not capability: the
+bolt-flange profile does change topology across the parameter space, from a quad to a triangle
+on 18 of the 88 valid end-type variants, but a document is generated per parameter set so the
 generator can simply emit the topology those parameters call for.
-`fillets._tangency_sketch()` carries the measurement.
+`fillets._fillet_tangency_sketch()` carries the measurement.
 
 What this proves that the isolated checks could not: `ref_bulkhead_cuts.scad` transcribes
 five cut tools the source builds inline, so comparing against it only shows the port matches

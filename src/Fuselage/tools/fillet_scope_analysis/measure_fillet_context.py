@@ -35,6 +35,7 @@ The output is a snapshot, not a live query: re-run it if the bulkhead moves, or 
 that read it will keep showing the old shape while still looking authoritative.
 """
 import json
+import math
 import os
 import sys
 
@@ -50,13 +51,22 @@ from corner_common import is_entry_point, script_args
 
 DEFL = 0.03
 
-# Everything the drawings label or place something by. `corner_offset` is the octant's own
-# translate, so it is what converts between the frame the fillets are built in and the
-# bulkhead's; `gtw_start` is the conditional the question turns on.
+# Everything the drawings label or place something by, that is still a sheet row.
+# `corner_offset` is the octant's own translate, so it is what converts between the frame the
+# fillets are built in and the bulkhead's.
 KEEP = ('unit_width', 'corner_radius', 'corner_offset', 'bulkhead_thickness',
         'plate_thickness', 'flange_thickness', 'flange_inner_x', 'flange_y',
         'flange_fillet_radius', 'bolt_c', 'bolt_offset', 'bolt_hole_radius', 'bolt_boss_r',
-        'gtw_start', 'gtw_cx', 'gtw_cy', 'gtw_ex', 'gtw_ey', 'ocf_cx', 'ocf_cy', 'web_width')
+        'web_width')
+
+# The fillet centers the drawings label. **These stopped being sheet rows when IP-FC-73
+# converted the four corners** -- they are solved by `FilletTangency` and read back from its
+# reference dimensions, so that is where this reads them too, rather than recomputing an
+# arithmetic the model no longer contains. `gtw_ex` and `gtw_ey` are the point where the
+# greeble-to-web fillet meets the 45 degree wall, one radius along the wall's normal from the
+# center, which the tangency makes exact.
+SKETCH = 'FilletTangency'
+CENTERS = ('ocf', 'gtw', 'bbf', 'wtb')
 
 # The eight octants, as the sign pattern `bulkhead_full.octant_to_full()` produces: mirror
 # about x = y, then about y = 0, then about x = 0. Stored so the drawing does not have to
@@ -114,6 +124,36 @@ def wires_of(faces):
     return out
 
 
+def solved_centers(doc, P):
+    """The four fillet centers, out of the sketch that solves them, plus what the drawings
+    need alongside them.
+
+    `gtw_start` is computed here rather than read: it was the sheet row
+    `max(flange_inner_x; -bolt_offset)`, and OQ-ARCH-14 removed it. It is kept in the snapshot
+    because these figures exist to show what that clamp did -- the drawings label both
+    branches of it -- so the value has to come from somewhere once the model no longer holds
+    it. `gtw_active` records the condition that replaced it.
+    """
+    out = {}
+    sk = doc.getObject(SKETCH)
+    for tag in CENTERS:
+        for axis in ('cx', 'cy'):
+            name = '%s_%s' % (tag, axis)
+            try:
+                out[name] = sk.getDatum(name).Value
+            except Exception:
+                out[name] = None
+    r = P['flange_fillet_radius']
+    if out['gtw_cx'] is not None:
+        out['gtw_ex'] = out['gtw_cx'] + r / math.sqrt(2)
+        out['gtw_ey'] = out['gtw_cy'] - r / math.sqrt(2)
+    else:
+        out['gtw_ex'] = out['gtw_ey'] = None
+    out['gtw_start'] = max(P['flange_inner_x'], P['bolt_c'])
+    out['gtw_active'] = P['flange_inner_x'] >= P['bolt_c']
+    return out
+
+
 def main():
     args = script_args()
     if len(args) < 2:
@@ -132,6 +172,7 @@ def main():
             P[key] = float(cells.get(key))
         except Exception:
             P[key] = None
+    P.update(solved_centers(doc, P))
 
     half = P['unit_width']
     levels = {'plate': P['plate_thickness'] / 2.0,
@@ -153,7 +194,10 @@ def main():
         for name in TRACED:
             obj = doc.getObject(name)
             if obj is None:
-                missing.append(name)
+                # An absent greeble-to-web fillet is a state the model has since OQ-ARCH-14
+                # and is not a fault; anything else missing is.
+                if not (name == 'GreebleToWebFillet' and not P['gtw_active']):
+                    missing.append(name)
                 continue
             cur[name] = wires_of(faces_at(obj.Shape, z, half))
         for name in FILLETS:

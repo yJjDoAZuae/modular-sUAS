@@ -69,7 +69,6 @@ def derived(p):
     d['bolt_c'] = -p['bolt_offset']
     d['bolt_boss_r'] = p['bolt_hole_radius'] + p['bolt_thickness']
     d['r_bolt_fillet'] = p['flange_fillet_radius'] + d['bolt_boss_r']
-    d['gtw_start'] = max(d['flange_inner_x'], -p['bolt_offset'])
     return d
 
 
@@ -92,14 +91,23 @@ def outer_corner_fillet(d):
 
 
 def greeble_to_web_fillet(d):
-    """Center one radius off the greeble's start face and off the 45 degree wall face."""
+    """Center one radius off the flange's inner face and off the 45 degree wall face.
+
+    **Checked only where the corner exists** (OQ-ARCH-14, 2026-08-17). This used to measure
+    against `gtw_start = max(flange_inner_x; -bolt_offset)`, and the tangency held trivially
+    because the arithmetic under test and the claim being tested were the same `max`. What the
+    fillet rounds is where the web's upper face runs into the flange's inner face, so the face
+    is `flange_inner_x` and nothing else; where the web stops short of it -- 27 of 148
+    variants, every one at U <= 1.0 -- there is no corner, the model builds no body, and there
+    is no tangency to check.
+    """
+    if d['flange_inner_x'] < d['bolt_c']:
+        return []
     r, ft = d['flange_fillet_radius'], d['flange_thickness']
-    cx = d['gtw_start'] - r
-    ex = cx + r / SQ2
-    ey = ex + SQ2 / 2 * ft
-    cy = ey + r / SQ2
-    return [('tangent to the greeble start face (x = gtw_start)',
-             abs(cx - d['gtw_start']) - r),
+    cx = d['flange_inner_x'] - r
+    cy = cx + r * SQ2 + ft / SQ2
+    return [('tangent to the flange inner face (x = flange_inner_x)',
+             abs(cx - d['flange_inner_x']) - r),
             ('tangent to the 45 degree wall face',
              point_to_line_45(cx, cy, cx, cx) - (ft / 2 + r))]
 
