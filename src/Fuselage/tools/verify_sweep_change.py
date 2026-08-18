@@ -23,7 +23,8 @@ Usage, from the repository root:
     --per-kind N   parts to check per part kind (default 2)
     --workers N    concurrent OpenSCAD renders
     --scratch DIR  where to build the sample (default: a temp directory)
-    --tol FLOAT    volume tolerance (default 1e-6)
+    --tol FLOAT    volume tolerance, RELATIVE to each part's own volume (default 1e-6)
+    --distance-samples N   also measure sampled surface distance (0 = off, ~30 s/part)
 """
 
 from __future__ import annotations
@@ -35,8 +36,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import mesh_stats  # noqa: E402
 import fuselage_variants as fv  # noqa: E402
+import mesh_stats  # noqa: E402
+import surface_distance  # noqa: E402
 
 # Sweep name -> (driver function, axis CSVs). Mirrors main(); a new sweep must be added
 # here or it silently escapes verification.
@@ -103,7 +105,17 @@ def build_sample(scratch: Path, wanted: set[str], workers: int) -> None:
     print(f'rendered {rendered["count"]} sampled part(s)\n')
 
 
-def compare(reference: Path, scratch: Path, wanted: set[str], tol: float) -> int:
+def compare(reference: Path, scratch: Path, wanted: set[str], tol: float,
+            samples: int = 0) -> int:
+    """Compare the sample against the reference by measured geometry.
+
+    Two tiers, per OQ-ARCH-16. The cheap criteria in `mesh_stats.same_geometry` screen;
+    the sampled surface distance adjudicates when `samples` is non-zero. Volume and
+    bounding box can both agree while a surface has moved, so a part that passes the
+    cheap tier has been screened rather than cleared -- the distance is what turns that
+    into a measurement in millimeters. It is off by default because it costs roughly half
+    a minute per part at 4,000 samples, against well under a second for the cheap tier.
+    """
     by_name = {p.name: p for p in reference.rglob('*.stl')}
     mismatches, missing = [], []
 
@@ -119,11 +131,25 @@ def compare(reference: Path, scratch: Path, wanted: set[str], tol: float) -> int
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             mismatches.append((name, f'unreadable: {exc}'))
             continue
-        if mesh_stats.same_geometry(a, b, tol):
-            print(f'  OK    {name[:64]}')
+        u = mesh_stats.u_of_name(name)
+        cheap_ok = mesh_stats.same_geometry(a, b, tol, u)
+        detail = '' if cheap_ok else mesh_stats.describe_difference(a, b)
+
+        if samples:
+            d = surface_distance.surface_distance(by_name[name], produced, samples)
+            far = not surface_distance.within(d, u)
+            note = f"surface max {d['max']:.6f} mm vs {surface_distance.surface_tol(u):.6f}"
+            detail = f'{detail}; {note}' if detail else note
+            if far and cheap_ok:
+                # The case the cheap tier cannot see, and the reason this tier exists.
+                detail += ' -- volume and bbox agree but the surface moved'
+            cheap_ok = cheap_ok and not far
+
+        if cheap_ok:
+            print(f'  OK    {name[:64]}' + (f'   [{detail}]' if samples else ''))
         else:
             print(f'  DIFF  {name[:64]}')
-            mismatches.append((name, mesh_stats.describe_difference(a, b)))
+            mismatches.append((name, detail))
 
     print('-' * 72)
     for name, why in mismatches:
@@ -144,7 +170,11 @@ def main(argv=None) -> int:
     parser.add_argument('--per-kind', type=int, default=2)
     parser.add_argument('--workers', type=int, default=None)
     parser.add_argument('--scratch', type=Path, default=None)
-    parser.add_argument('--tol', type=float, default=1e-6)
+    parser.add_argument('--distance-samples', type=int, default=0,
+                        help='surface-distance sample points per part; 0 (default) skips '
+                             'the distance tier, which costs ~30 s per part at 4000')
+    parser.add_argument('--tol', type=float, default=mesh_stats.VOLUME_TOL,
+                        help="volume tolerance, relative to the part's own volume")
     args = parser.parse_args(argv)
 
     if not args.reference.is_dir():
@@ -159,7 +189,7 @@ def main(argv=None) -> int:
 
     def run(scratch: Path) -> int:
         build_sample(scratch, wanted, workers)
-        return compare(args.reference, scratch, wanted, args.tol)
+        return compare(args.reference, scratch, wanted, args.tol, args.distance_samples)
 
     if args.scratch:
         args.scratch.mkdir(parents=True, exist_ok=True)

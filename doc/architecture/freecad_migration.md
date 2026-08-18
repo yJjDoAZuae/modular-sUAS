@@ -2510,12 +2510,61 @@ the distance adjudicates: volume and bounding box within their scaled tolerances
 point further than the distance threshold means the same solid; anything else is reported with
 the number that failed.
 
-**Left to implementation.** The sample size and how points are drawn — uniform over area, per
-face, or weighted toward curvature — are not decided here, nor is the distance threshold, which
-must scale with `U` on the same reasoning as every other length in the project. Sampling makes
-the result a lower bound on the true maximum deviation: a sparse sample can miss a small
-displaced feature entirely, so the sample must be dense enough that the smallest feature worth
-catching is likely to be hit, and that tradeoff should be measured rather than guessed.
+**Left to implementation, then measured 2026-08-18.** How points are drawn was calibrated
+against **0.05 mm, the smallest linear dimension this project cares about**, and the
+measurement overturned the first implementation's default rather than confirming it.
+
+*Uniform area sampling cannot find a small feature, by three to four orders of magnitude.* A
+0.05 × 0.05 mm patch is 2.5×10⁻³ mm² against these measured surface areas, and a 95% chance
+of landing on it needs:
+
+| Part | Surface area | Samples for a 95% hit on a 0.05 mm patch |
+| --- | --- | --- |
+| corner, U = 0.5 | 1,174 mm² | 1.4 million |
+| bulkhead end anchor, U = 0.5 | 3,354 mm² | 4.0 million |
+| tail cowl, U = 0.5 | 13,541 mm² | 16.2 million |
+| corner, U = 4.0 | 47,551 mm² | 57.0 million |
+
+Uniform sampling scales with the **area a change affects, not its magnitude**. That is why it
+caught the corner's `panel_tolerance` fix at 400 samples — that moved an entire face — and
+why it would sail past an isolated feature. An elongated 0.05 × 20 mm slot is easier at
+3,500–142,000, but the worst case is the one that governs.
+
+*Vertices are where features are.* Tessellation places vertices on feature boundaries, so a
+displaced 0.05 mm feature has vertices on it, and sampling them spends the budget where detail
+lives instead of spreading it evenly over large flat faces. The sampler is therefore
+vertex-biased, with a minority of area samples retained to cover the one case vertices miss:
+two meshes whose vertices coincide but whose triangle interiors do not.
+
+*What a subset buys is exactly its coverage, and the tool now says so.* Choosing k of V
+vertices without replacement includes any particular one with probability k/V — arithmetic,
+not an estimate. A U = 0.5 corner has 8,664 unique vertices, so a 2,000-point sample covers
+17% and has a 17% chance of catching a single displaced vertex. Measured: with one vertex
+displaced by 0.05 mm, both a 2,000-point area sample and a 2,000-point vertex subset **missed
+it**, which is what 17% predicts. Full vertex coverage on the same mesh **found it**, at 67×
+the threshold. The tool reports coverage alongside the distance and states that a clean result
+means nothing was *found* to have moved, and offers `--all-vertices` to make the probability 1
+for a vertex displacement.
+
+*One number in that result is worth keeping, because it will otherwise be misread.* The 0.05 mm
+displacement registered as **0.0337 mm** of surface distance, not 0.05. Surface distance is the
+perpendicular distance to the nearest point of the other surface, so any part of a displacement
+that runs *along* the surface does not appear in it — the vertex slid as much as it lifted. A
+surface distance is therefore a lower bound on the displacement in two independent senses: the
+sample may miss the feature, and even when it hits, a tangential component reads as nothing.
+A threshold set from a physical dimension should allow for that gap rather than assume the two
+numbers are the same quantity.
+
+**The threshold was not changed and should not be.** At `5e-4 · max(u, 1)` mm it sits two
+orders of magnitude below the 0.05 mm that matters, which is the right relationship: it
+measures engine agreement rather than a fit, in the same sense `BBOX_TOL` does under
+[OQ-ARCH-12](#open-questions). Printed clearances on this airframe are around 0.1 mm; a
+verification tolerance is not one of them.
+
+**What follows for the review this baseline is frozen for.** Screening runs use the subset and
+report their coverage. The `PartDesign::` end-state sign-off in [OQ-ARCH-15](#open-questions)
+is the one that has to be conclusive, and at ~1 minute per part for full vertex coverage it is
+a run to schedule rather than one to take casually across 576 parts.
 
 The retirement argument raised against alternative 3 — that the OpenSCAD mesh path ends with
 IP-FC-34 — does not survive [OQ-ARCH-15](#open-questions)'s decision. A baseline frozen until

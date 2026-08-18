@@ -21,7 +21,7 @@ Usage, from the repository root:
     uv run python src/Fuselage/tools/sweep_check.py <output_dir> [options]
 
     --reference DIR   compare every part against the same part in DIR
-    --tol FLOAT       volume tolerance for the comparison (default 1e-6)
+    --tol FLOAT       volume tolerance, RELATIVE to each part's own volume (default 1e-6)
     --quiet           report only failures
 
 Originally written for a migration tool that has since been discarded. See the
@@ -156,7 +156,7 @@ def check_reference(stats, reference: Path, tol: float, quiet=False):
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             mismatches.append((rel, f"reference unreadable: {exc}"))
             continue
-        if not mesh_stats.same_geometry(measured, expected, tol):
+        if not mesh_stats.same_geometry(measured, expected, tol, mesh_stats.u_of_name(rel)):
             mismatches.append((rel, mesh_stats.describe_difference(expected, measured)))
 
     only_in_ref = sorted(set(ref_index) - set(stats))
@@ -178,7 +178,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path, help="sweep output directory to check")
     parser.add_argument("--reference", type=Path, default=None)
-    parser.add_argument("--tol", type=float, default=1e-6)
+    parser.add_argument("--tol", type=float, default=mesh_stats.VOLUME_TOL,
+                        help="volume tolerance, relative to the part's own volume")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 

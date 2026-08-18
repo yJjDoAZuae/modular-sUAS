@@ -24,6 +24,7 @@ guidelines on keeping capability in the durable code.
 
 from __future__ import annotations
 
+import re
 import struct
 from pathlib import Path
 
@@ -126,15 +127,68 @@ def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
     }
 
 
-def same_geometry(a: dict | None, b: dict | None, tol: float = 1e-6) -> bool:
-    """Whether two measurements describe the same solid, within `tol` on volume."""
+# A tolerance on a length or a volume scales with the part it measures. That is the
+# rule OQ-ARCH-12 settled and the FreeCAD-side checks already follow; until IP-FC-82
+# this file was the last place still comparing against absolute figures, which on a
+# 1092 mm^3 part meant 9e-10 relative -- bitwise equality by another name.
+VOLUME_TOL = 1e-6          # relative to the part's own volume, so it scales as U^3
+BBOX_TOL_PER_U = 5.0e-4    # mm at U = 1, the figure compare_backends.bbox_tol() uses
+BBOX_TOL_FLOOR_U = 1.0
+
+U_IN_NAME = re.compile(r"U_([0-9]+(?:\.[0-9]+)?)")
+
+
+def u_of_name(name: str | Path) -> float | None:
+    """The `U` a swept part was built at, read off its filename, or None.
+
+    Every part the sweep writes is named `U_<scale>__<panel>__<part>.stl`, so the
+    scale a tolerance has to follow is already carried by the thing being compared.
+    Returns None rather than guessing when the name carries no `U` -- a caller
+    without one gets the floor, not a fabricated scale.
+    """
+    m = U_IN_NAME.search(Path(name).name)
+    return float(m.group(1)) if m else None
+
+
+def bbox_tol(u: float | None = None) -> float:
+    """Bounding-box tolerance in mm for a part built at size `u`.
+
+    An unknown `u` falls back to the U = 1 figure, which is the floor OQ-ARCH-12
+    applies anyway: tight for a large part rather than silently loose.
+    """
+    return BBOX_TOL_PER_U * max(BBOX_TOL_FLOOR_U if u is None else u, BBOX_TOL_FLOOR_U)
+
+
+def same_geometry(a: dict | None, b: dict | None,
+                  tol: float = VOLUME_TOL, u: float | None = None) -> bool:
+    """Whether two measurements describe the same solid.
+
+    `tol` is *relative* to the part's own volume rather than an absolute mm^3 figure,
+    and the bounding box is compared against `bbox_tol(u)` rather than for exact float
+    equality -- neither mesh comes from a bit-reproducible kernel.
+
+    **Triangle count is deliberately not a criterion.** Two tessellations of one solid
+    are one solid, and disqualifying on the count rejects exactly the fillet, chamfer
+    and mask refactors this check exists to bless: the boom bulkhead measured on
+    2026-08-18 differed by 2,208 triangles with volumes agreeing to 8e-7 relative. The
+    count is still reported by `describe_difference()`, because mesh churn is worth
+    seeing -- it just no longer decides the answer. This is what the module docstring
+    above already claimed the comparison did. OQ-ARCH-16.
+
+    These are proxies for the question, not the question: volume and bounding box can
+    both agree while a surface has moved. The sampled surface distance of IP-FC-83
+    adjudicates that, with these criteria screening ahead of it.
+    """
     if a is None or b is None:
         return False
-    return (
-        a["triangles"] == b["triangles"]
-        and abs(a["volume"] - b["volume"]) <= tol
-        and a["bbox"] == b["bbox"]
-    )
+    if a["bbox"] is None or b["bbox"] is None:
+        return a["bbox"] == b["bbox"] and a["volume"] == b["volume"]
+    if abs(a["volume"] - b["volume"]) > tol * max(abs(a["volume"]), 1.0):
+        return False
+    # strict=True: both boxes are six floats, and a length mismatch would mean a
+    # malformed measurement rather than something to compare over a shorter list.
+    pairs = zip(a["bbox"], b["bbox"], strict=True)
+    return max(abs(x - y) for x, y in pairs) <= bbox_tol(u)
 
 
 def describe_difference(a: dict | None, b: dict | None) -> str:
@@ -144,14 +198,16 @@ def describe_difference(a: dict | None, b: dict | None) -> str:
     if b is None:
         return "missing on the right"
     parts = []
-    if a["triangles"] != b["triangles"]:
-        parts.append(f"triangles {a['triangles']:,} vs {b['triangles']:,}")
     if a["volume"] != b["volume"]:
         delta = a["volume"] - b["volume"]
         rel = abs(delta) / a["volume"] if a["volume"] else float("inf")
         parts.append(f"volume {a['volume']:.4f} vs {b['volume']:.4f} ({rel:.3%})")
     if a["bbox"] != b["bbox"]:
         parts.append(f"bbox {a['bbox']} vs {b['bbox']}")
+    # Reported last and marked, because it does not disqualify -- see same_geometry().
+    # Without the label a reader takes a retessellation for the reason a check failed.
+    if a["triangles"] != b["triangles"]:
+        parts.append(f"triangles {a['triangles']:,} vs {b['triangles']:,} (not disqualifying)")
     return "; ".join(parts) if parts else "identical"
 
 
