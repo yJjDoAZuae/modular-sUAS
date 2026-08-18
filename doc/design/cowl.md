@@ -370,10 +370,10 @@ interface, and it must stay a clean surface.
 
 ### 4.1 `buttress_shape` — the cutting profile
 
-Every buttress is a prism: a 2D profile extruded to `2·buttress_thickness`, centered — 0.1 mm.
-The doubling is deliberate but is being folded into the value, so this reads
-`buttress_cut_thickness` = 0.1 with no factor once IP-FC-29 lands, cutting the same 0.1 mm
-([OQ-DES-CW8](#open-questions), resolved 2026-08-18). The
+Every buttress is a prism: a 2D profile extruded to `buttress_cut_thickness`, centered —
+0.1 mm. Until IP-FC-43 this read `2·buttress_thickness` with the parameter at 0.05, which cut
+the same 0.1 mm by a route the parameter's name did not state; the factor was folded into the
+value on 2026-08-18 and no geometry moved ([OQ-DES-CW8](#open-questions)). The
 profile, in a plane whose axes are radius $r$ and axial station $\zeta$:
 
 $$P = \Big\{
@@ -447,7 +447,7 @@ The nose cowl uses exactly one side buttress at 0°, cut into the octant before 
 **Every literal in that table is either an angle or a fraction of `W = unit_width`**, so the
 buttress pattern already scales with the cowl, which is what was intended
 ([OQ-DES-CW4](#open-questions)). The one deliberate
-exception is `buttress.thickness`, which is a slicer tolerance rather than part geometry and
+exception is `buttress.cut_thickness`, which is a slicer tolerance rather than part geometry and
 is scale-independent for that reason. What is wrong here is not the scaling — it is that the
 numbers live in SCAD rather than in the JSON fields that already exist to hold them.
 
@@ -474,17 +474,19 @@ So three different unit conventions coexist in one JSON file:
 | --- | --- | --- |
 | Scaled | `cut_len`, `z_offset`, `r_inset`, `r_start`, `r_end`, `z_end`, `z_start`, `depth`, `diameter` | fraction of `unit_width` (dimensionless) |
 | Unscaled, angular | `cone_angle`, `angle` | degrees — and `cone_angle` is degrees **from the print bed** (§4.2) |
-| Unscaled, absolute | `thickness`, `tolerance`, `flange_inset` | **millimetres** |
+| Unscaled, absolute | `cut_thickness`, `tolerance`, `flange_inset` | **millimetres** |
 | Unscaled, OML | `length_m`, `offset_x_m`, `scale_m_per_mm` | **metres** (§1) — now stated in the names |
 
-`buttress.thickness = 0.05` is therefore 0.05 **mm** — an absolute value that does not
+`buttress.cut_thickness = 0.1` is therefore 0.1 **mm** — an absolute value that does not
 scale with the airframe — while `buttress.r_inset = 0.05` in the same object is 0.05 ×
-`unit_width`. Two identical numbers, two different meanings, one file.
+`unit_width`, which is 5 mm at U = 1. Two small decimals of the same order, two different
+meanings, one file. Before IP-FC-43 the two were *literally* the same number, 0.05 against
+0.05 in `tail_high_open.json`, which is how close this trap sits to the surface.
 
 *Inference:* the unscaled-absolute group are printer-process quantities and correctly do not
 scale, consistent with the greeble tolerance and `longeron_tolerance` elsewhere.
 
-`buttress.thickness` is **the thickness of the cut into the OML**, not a wall — the cut is
+`buttress.cut_thickness` is **the thickness of the cut into the OML**, not a wall — the cut is
 what produces the buttress, through slicing. The printed rib is far thicker than the cut,
 because the slicer walls both faces of it:
 
@@ -915,7 +917,7 @@ re-expressed in absolute millimetres would reproduce U = 1 exactly and be wrong 
 else, which is the failure mode this project has hit before and the reason the sweep is
 checked at four values of U rather than one.
 
-The single exception is `buttress.thickness`, which is scale-independent **because it is a
+The single exception is `buttress.cut_thickness`, which is scale-independent **because it is a
 slicer tolerance rather than a part geometry parameter** — the same reasoning that resolved
 [OQ-DES-CW3](#open-questions). That also settles
 the question CW3 left hanging: the rib's thickness being constant across airframe sizes while
@@ -1180,9 +1182,21 @@ the slicer profile, outside the repository.
 
 **Implementation.** Folded into **IP-FC-29**, which is already renaming `buttress.thickness` to
 `buttress_cut_thickness` across the JSON schema, `ButtressSet` and the SCAD signatures; the
-rename and this change are one edit to the same call sites. Verification is textual rather than
-geometric: capture the generated `.scad` before and after and confirm the only differences are
-the identifier and the removed `2*`, with every extruded height still reading 0.1 mm.
+rename and this change are one edit to the same call sites. **Done 2026-08-18.**
+
+*A textual check cannot verify this, and the reason is worth recording.* `scad_snapshot.py`
+compares generated `.scad` text, which names the library by path and contains none of its
+text — so the removal of the `2*` inside `cowl_geometry.scad` is invisible to it, while the
+rename changes the module signature and makes it report DIFF by construction. It is wrong in
+both directions at once. `verify_scad_change.py` is no better here: it re-renders the
+`.stl.scad` files already in the output tree, and those pin the *old* signature. Only
+`verify_sweep_change.py` reaches this class of change, because it runs the real sweep and
+compares measured geometry, letting signatures and generated text move freely while the solid
+must not. It reported both cowls identical against `variant_output_baseline`, and a control
+run with the change stashed reproduced its output exactly. `verify_drivers.py` covers the
+remaining gap — the hand drivers, which no other tool renders — and passed warning-free, a
+warning being the only signal a missed rename gives, since a bare identifier with no matching
+variable evaluates to `undef` rather than failing.
 
 ## See also
 

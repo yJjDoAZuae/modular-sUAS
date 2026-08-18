@@ -1,13 +1,13 @@
 include <shape_modifier_utils.scad>
 
-module nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
+module nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
 
     octant_to_full() {
-        nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
+        nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
     } 
 }
 
-module nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
+module nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
     
     ang = 0;
     buttress_z_end = cut_len + buttress_z_offset;
@@ -16,19 +16,19 @@ module nose_cowl_octant(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_len
     difference() {
         body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
         
-        side_buttress(ang, unit_width, body_len, buttress_thickness, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
+        side_buttress(ang, unit_width, body_len, buttress_cut_thickness, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
     }
 }
 
 
-module tail_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
+module tail_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
     
     mirror_y() {
-        tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle);
+        tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle);
     }
 }
 
-module tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
+module tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle) {
     
     
     tail_len = U*oml_length_m/oml_scale_m_per_mm;
@@ -40,36 +40,36 @@ module tail_cowl_half(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_lengt
             union() {
         
         translate([-unit_width*0.30,0,0]) {
-            side_buttress(5, unit_width, tail_len, buttress_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
+            side_buttress(5, unit_width, tail_len, buttress_cut_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
         }
 
         translate([-unit_width*0.00,0,0]) {
-            side_buttress(12.5, unit_width, tail_len, buttress_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
+            side_buttress(12.5, unit_width, tail_len, buttress_cut_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
         }
         
         translate([unit_width*0.30,0,0]) {
-            side_buttress(20, unit_width, tail_len, buttress_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
+            side_buttress(20, unit_width, tail_len, buttress_cut_thickness, side_buttress_z_end, buttress_z_offset, side_buttress_r_start, side_buttress_r_end, buttress_r_inset, cone_angle);
         }
 
         
         translate([0,unit_width*0.07,0]) {
-        top_buttress(15, unit_width, tail_len, buttress_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle);
+        top_buttress(15, unit_width, tail_len, buttress_cut_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle);
         }
-        top_buttress(0, unit_width, tail_len, buttress_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle);
+        top_buttress(0, unit_width, tail_len, buttress_cut_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle);
         
         translate([0,0,-tail_len+top_diag_buttress_z_start]) {
-            top_diag_buttress(30, unit_width, buttress_thickness, top_diag_buttress_depth);
-            top_diag_buttress(-30, unit_width, buttress_thickness, top_diag_buttress_depth);
+            top_diag_buttress(30, unit_width, buttress_cut_thickness, top_diag_buttress_depth);
+            top_diag_buttress(-30, unit_width, buttress_cut_thickness, top_diag_buttress_depth);
         }
         translate([0,0,-tail_len+top_diag_buttress_z_start+unit_width*sin(30)]) {
-            top_diag_buttress(30, unit_width, buttress_thickness, top_diag_buttress_depth);
-            top_diag_buttress(-30, unit_width, buttress_thickness, top_diag_buttress_depth);
+            top_diag_buttress(30, unit_width, buttress_cut_thickness, top_diag_buttress_depth);
+            top_diag_buttress(-30, unit_width, buttress_cut_thickness, top_diag_buttress_depth);
         }
 
         translate([0,unit_width*0.07,0]) {
-        bottom_buttress(15, unit_width, tail_len, buttress_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle);
+        bottom_buttress(15, unit_width, tail_len, buttress_cut_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle);
         }
-        bottom_buttress(0, unit_width, tail_len, buttress_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle);
+        bottom_buttress(0, unit_width, tail_len, buttress_cut_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle);
         
     }
     
@@ -300,14 +300,14 @@ module body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, 
 }
 
 
-module top_buttress(ang, unit_width, tail_len, buttress_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle) {
+module top_buttress(ang, unit_width, tail_len, buttress_cut_thickness, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle) {
     
     rotate([ang,0,0]) {
     rotate([0,0,0]) {
     translate([-unit_width/2,0,-tail_len]) {
     rotate([90,0,0]) {
     
-    linear_extrude(height=2*buttress_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
+    linear_extrude(height=buttress_cut_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
         buttress_shape(unit_width, tail_len, top_buttress_z_end, buttress_z_offset, top_buttress_r_start, top_buttress_r_end, buttress_r_inset, cone_angle);
     }
     }
@@ -316,26 +316,26 @@ module top_buttress(ang, unit_width, tail_len, buttress_thickness, top_buttress_
     }
 }
 
-module top_diag_buttress(ang, unit_width, buttress_thickness, top_diag_buttress_depth) {
+module top_diag_buttress(ang, unit_width, buttress_cut_thickness, top_diag_buttress_depth) {
     
     rotate([ang,0,0]) {
     translate([-unit_width/2,0,0]) {
     
-    linear_extrude(height=2*buttress_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
+    linear_extrude(height=buttress_cut_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
         diag_buttress_shape(unit_width, top_diag_buttress_depth);
     }
     }
     }
 }
 
-module side_buttress(ang, unit_width, body_len, buttress_thickness, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
+module side_buttress(ang, unit_width, body_len, buttress_cut_thickness, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle) {
     
     rotate([0,0,-90]) {
     translate([-unit_width/2,0,-body_len]) {
     rotate([ang,0,0]) {
     rotate([90,0,0]) {
     
-    linear_extrude(height=2*buttress_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
+    linear_extrude(height=buttress_cut_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
         buttress_shape(unit_width, body_len, buttress_z_end, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
     }
     }
@@ -344,14 +344,14 @@ module side_buttress(ang, unit_width, body_len, buttress_thickness, buttress_z_e
     }
 }
 
-module bottom_buttress(ang, unit_width, body_len, buttress_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle) {
+module bottom_buttress(ang, unit_width, body_len, buttress_cut_thickness, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle) {
     
     rotate([ang,0,0]) {
     rotate([0,0,180]) {
     translate([-unit_width/2,0,-body_len]) {
     rotate([90,0,0]) {
     
-    linear_extrude(height=2*buttress_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
+    linear_extrude(height=buttress_cut_thickness,center=true,convexity=2,twist=0,slices=1,scale=1.0) {
         buttress_shape(unit_width, body_len, bottom_buttress_z_end, buttress_z_offset, bottom_buttress_r_start, bottom_buttress_r_end, buttress_r_inset, cone_angle);
     }
     }
