@@ -102,8 +102,19 @@ def check_kind(kind, params_path):
             cells.append((alias, 'B%d' % row))
         row += 1
 
+    # **A row at a time, announced before it is tried and flushed immediately.**
+    # Perturbation drives the geometry into states no parameter set produces, and OCCT does
+    # not always survive them as a Python exception -- some kill the process outright. That is
+    # tolerable; what is not is losing the whole run's output when it happens, which is what
+    # buffering did: on 2026-08-17 this exited non-zero twice on the bulkhead at
+    # `1.5 end_anchor 0mm` after about forty minutes each time and printed nothing at all, so
+    # forty minutes of work could not say even which row it was on. Printing the row first
+    # costs one line per row and turns the next crash into a diagnosis. It goes to stderr so
+    # the report on stdout stays exactly as it was, and so it survives the same buffering.
     unread, skipped = [], []
     for alias, cell in cells:
+        sys.stderr.write('    ... %s\n' % alias)
+        sys.stderr.flush()
         original = sheet.getContents(cell)
         try:
             current = float(sheet.get(alias))
@@ -149,6 +160,9 @@ def main():
     print('  variant = U=%s %s panel=%s' % (v.get('U'), v.get('bulkhead_type_name'),
                                             v.get('panel_name')))
     print('  source  = %s\n' % path)
+    # Flushed here, not at the end of the first kind: a kind takes tens of minutes and can die
+    # inside, and a report that only appears if the run survives is no report.
+    sys.stdout.flush()
 
     total, checked_any, bad = 0, False, []
     for kind in wanted:
