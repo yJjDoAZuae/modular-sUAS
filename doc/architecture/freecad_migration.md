@@ -683,7 +683,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
 | ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
 | ARCH-13 | ~~decided~~ 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
-| ARCH-14 | ~~decided~~ 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Omitting the inactive greeble-to-web body changes 27 variants against the OpenSCAD reference (IP-FC-73) |
+| ARCH-14 | ~~decided~~ 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2048,19 +2048,59 @@ greeble-to-web fillet's `max(...)` clamp is that question answered badly, by rel
 instead of omitting it. One sketch that contains what is active states it once, in the place a
 reader would look.
 
-**What this commits to, stated plainly because it changes the flown part.** Omitting an inactive
-fillet means the 27 variants where the greeble-to-web clamp fires lose that body. Measured, that
-is at most 0.042 mm³ per variant — but it *is* a difference from the OpenSCAD reference and
-`compare_backends` will report it. It is the one conversion in this item that can move geometry,
-and it needs the whole-corpus treatment IP-FC-78 gets rather than the bit-identical check the
-other three get.
+**What this commits to, stated plainly because it looked like it changed the flown part.**
+Omitting an inactive fillet means the 27 variants where the greeble-to-web clamp fires lose that
+body. This section originally recorded that cost as *at most 0.042 mm³ per variant, a real
+difference from the OpenSCAD reference that `compare_backends` would report*, and accepted it.
+**Implementing it measured the figure properly and it is zero** — every one of the 27, to below
+1e-6 mm³, on 2026-08-17 (`fillet_scope_analysis/sweep_clamped_gtw.py`).
+
+The 0.042 mm³ was measured at the wrong stage, and the mistake is worth keeping because it is
+easy to repeat. A fillet is a *positive*, fused into the flange **before** the bolt hole, the
+corner socket and the octant mask are cut. 0.042 mm³ was this fillet's net share of the
+**positive** — material no other positive supplied. But the clamp parks the body on the bolt
+centerline, *inside the bolt hole*, so the hole cut then removes all of it. The material was
+never in the finished part to lose. Measuring by fusing the body into the finished octant
+instead makes the opposite error and reads 1.374 mm³, because at that stage the fuse fills the
+hole back in. The only measurement that answers the question is building the octant both ways.
+
+So the decision keeps its meaning and loses its cost: the port still agrees with OpenSCAD
+everywhere, and the omission removes a body that had no effect on any part that was ever built.
 
 **What decides "active" must not be the clamp wearing a different hat.** Deciding activity from
 the same `max` comparison would move the defect rather than remove it. The predicate is a stated
-geometric condition — for the greeble-to-web fillet, whether the web emerges from the corner
-block at all — and the sketch refusing to solve stays a *check* that the predicate was right,
-never the mechanism that produces it. That is the same branch-guard discipline IP-FC-76
+geometric condition and the sketch refusing to solve stays a *check* that the predicate was
+right, never the mechanism that produces it — the same branch-guard discipline IP-FC-76
 established, applied to existence instead of position.
+
+Implementation settled what that condition is, and it is **not** "whether the web emerges from
+the corner block", which is what this section first guessed. `greeble_web.py` builds the web as
+a 45° strip along the segment from the corner at the origin to the bolt center, and it stops
+there. The flange's inner face is the plane `x = flange_inner_x`. The corner the fillet rounds
+is where the two meet, so it exists exactly while that plane falls inside the segment's span —
+**the flange face is inboard of the bolt center**. That is the same inequality the `max` tested,
+and the honest description says so; what differs is what is done with it. The `max` used it to
+pick a different face to measure from, putting the fillet somewhere it is tangent to nothing.
+The predicate uses it to decide whether the corner is there.
+
+**One more thing implementation found, which the question never thought to ask.** This section
+argued at length about *which* of the four corners a variant has. It did not ask how often the
+swept corpus actually visits the configurations where that answer changes, and the answer is:
+almost never. Three switches decide what the sketch and the bodies look like —
+
+| switch | what it decides | how close the corpus gets |
+| --- | --- | --- |
+| `flange_inner_x` vs `bolt_c` | greeble-to-web corner exists; bolt-flange profile is a quad or a triangle | **crosses it**, 27 of 148 variants, and comes within 0.05 mm |
+| `bolt_boss_r` vs `flange_thickness / 2` | web-to-bolt fillet is placeable | never within a factor of **4.33** |
+| bolt-flange reach vs its offset | bolt-flange fillet is placeable | within 0.45 mm, never crosses |
+
+— so two of the three refusal paths were only ever reached by one synthetic edit, made from
+whichever seed a check happened to be handed. Walking them deliberately, with deliberately thin
+bolt bosses against thick greeble webs, found a band where the web-to-bolt tangency is
+satisfiable and the body still cannot be built, failing several features downstream with a
+message naming nothing. IP-FC-73 has the detail and the fix. The general lesson is worth
+stating here rather than there: **a swept corpus is not a test suite**, and "every variant we
+build works" says nothing about the configurations the sweep does not visit.
 
 Carried to IP-FC-73, which is unblocked and rescoped by this. The evidence that produced the
 decision follows.
@@ -2171,13 +2211,20 @@ one clamps a *reference* rather than a discriminant.
 Consistent with there being nothing for it to do, it contributes almost nothing anywhere. Over
 the 44 variants measured by `fillet_scope_analysis/sweep_fillet_share.py`:
 
-| variants | net material it contributes |
+| variants | net material it contributes to the **positive** |
 | --- | --- |
-| 33 of 44 variants | **exactly nothing** — the part is identical without it |
+| 33 of 44 variants | **exactly nothing** — the fuse is identical without it |
 | the other 11 | at most **0.042 mm³** |
 
 For scale, the outer corner fillet's smallest contribution anywhere is 0.75 mm³, eighteen times
 the greeble-to-web fillet's largest.
+
+**That table is about the positive, not about the part, and the difference turned out to matter.**
+The fillets are fused before the bolt hole and the corner socket are cut, so a body can be net
+new material in the fuse and still be gone from the finished octant. Measured at the finished
+stage after the decision was implemented, the clamped body's contribution is **zero in all 27
+variants that have it** — it lies inside the bolt hole, which is cut afterwards. See the
+correction at the head of this section.
 
 **Two thirds of the body is not a fillet.** The shape in the figure is not a drawing error and
 not a porting error — `fillets.py` reproduces the OpenSCAD polygon exactly, and that polygon is

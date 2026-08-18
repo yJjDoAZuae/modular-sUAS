@@ -68,16 +68,25 @@ def main():
 
     cells = doc.getObject('Params')
     P = {}
-    for key in ('unit_width', 'flange_inner_x', 'bolt_offset', 'gtw_start',
+    for key in ('unit_width', 'flange_inner_x', 'bolt_c', 'bolt_offset',
                 'flange_fillet_radius'):
         P[key] = float(cells.get(key))
-    P['branch'] = ('flange face' if abs(P['gtw_start'] - P['flange_inner_x']) < 1e-9
-                   else 'bolt center')
+    # `gtw_start` was the sheet row `max(flange_inner_x; -bolt_offset)` and OQ-ARCH-14 removed
+    # it, so it is reconstructed here: this script exists to measure what that clamp was
+    # worth, and reports both of its branches.
+    P['gtw_start'] = max(P['flange_inner_x'], P['bolt_c'])
+    P['branch'] = ('flange face' if P['flange_inner_x'] >= P['bolt_c'] else 'bolt center')
 
     shapes = {}
     for name in UNION:
         obj = doc.getObject(name)
         if obj is None:
+            # Since OQ-ARCH-14 the greeble-to-web fillet is absent wherever the web does not
+            # reach the flange face, which is the whole of the bolt-center branch. That is the
+            # answer to the question this script asks, not a missing body.
+            if name == 'GreebleToWebFillet' and P['branch'] == 'bolt center':
+                print('%-19s absent -- this variant has no such corner (OQ-ARCH-14)' % name)
+                continue
             print('NOT FOUND in the document: %s' % name)
             return 1
         shapes[name] = obj.Shape
@@ -116,7 +125,11 @@ def main():
 
     rows = {}
     for who in FILLETS:
-        rest = [shapes[n] for n in UNION if n != who]
+        if who not in shapes:
+            rows[who] = {'own': 0.0, 'shared': 0.0, 'net': 0.0, 'in_part': 0.0,
+                         'inert': True, 'absent': True, 'omitted': True}
+            continue
+        rest = [shapes[n] for n in UNION if n != who and n in shapes]
         merged = rest[0].fuse(rest[1:])
         own = shapes[who].Volume
         shared = shapes[who].common(merged).Volume
