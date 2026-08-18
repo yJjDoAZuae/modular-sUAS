@@ -614,9 +614,18 @@ def _fillet_tangency_sketch(doc):
     # than one solution and the solver converges on whichever the seed is nearest; the closed
     # forms are kept HERE, as a test of the solved positions rather than as their source,
     # because a wrong branch is geometry that builds happily and is simply in the wrong place.
+    #
+    # Scaled with `U`, for the reason `compare_backends.bbox_tol()` gives: this is a millimetre
+    # distance between two points whose coordinates are proportional to `U`, so a fixed figure
+    # is four times stricter at U = 4 than at U = 1. Floored at U = 1. It is nowhere near
+    # binding either way -- a wrong branch moves a center by millimetres, not by 1e-7 mm -- but
+    # an absolute tolerance sitting among scaled ones is how these get written wrong.
+    # `unit_width` is 100*U and is a row here; `U` itself is not, because the sheet carries
+    # only the rows this octant is built from.
+    branch_tol = 1e-7 * max(g('unit_width') / 100.0, 1.0)
     for s in subs:
         got, want = _solved(sk, s.tag), seeds[s.tag]
-        if max(abs(got[0] - want[0]), abs(got[1] - want[1])) > 1e-7:
+        if max(abs(got[0] - want[0]), abs(got[1] - want[1])) > branch_tol:
             raise RuntimeError(
                 '%s: the %s sub-system (%s) solved to (%.9f, %.9f) but its two tangencies '
                 'place the center at (%.9f, %.9f) -- the solver took the wrong branch.'

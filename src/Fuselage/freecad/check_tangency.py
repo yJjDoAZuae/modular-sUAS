@@ -52,8 +52,17 @@ import fillets
 import parameters
 from corner_common import is_entry_point, out_path, script_args
 
+# **Both tolerances are millimetre distances between a solved center and where its tangencies
+# put it, so both scale linearly with `U`** -- the same rule and the same shape as
+# `compare_backends.bbox_tol()`. A part's coordinates are proportional to `U` (`unit_width` is
+# 100*U), and the residual a solver stops on is proportional to the magnitude of the numbers it
+# is working in, so a fixed millimetre figure means something four times stricter at U = 4 than
+# at U = 1. Stated per unit U and floored at U = 1, because scaling below 1 would only tighten
+# a threshold that has never been the binding one down there -- delete the `max` in `_scaled`
+# to make it purely proportional.
+
 # What a freshly generated sketch must hold, where the generator has solved it explicitly.
-TOL = 1e-7
+TOL_PER_U = 1e-7
 
 # What a sketch must hold after a bare recompute, which is the state a delivered file is in
 # once someone edits a parameter. Since the four corners share one sketch the solver stops on
@@ -62,7 +71,36 @@ TOL = 1e-7
 # 1e-11 mm the separate sketches reached (`fillets._fillet_tangency_sketch()` has the
 # measurement). This is set two orders above that and is still four orders below any branch
 # jump, which is what the sweep exists to catch and which moves a center by millimeters.
-SWEEP_TOL = 1e-5
+SWEEP_TOL_PER_U = 1e-5
+
+TOL_FLOOR_U = 1.0
+
+
+def _scaled(per_u, u):
+    return per_u * max(u, TOL_FLOOR_U)
+
+
+def tol(u):
+    """What a freshly generated sketch must hold at size `u`, in mm."""
+    return _scaled(TOL_PER_U, u)
+
+
+def sweep_tol(u):
+    """What a sketch must hold after a bare recompute at size `u`, in mm."""
+    return _scaled(SWEEP_TOL_PER_U, u)
+
+
+def u_of(seed):
+    """The size multiplier the seed was built at.
+
+    Raises rather than defaulting, for the reason `compare_backends.u_of()` gives: a part whose
+    size is unknown cannot be checked at the right tolerance, and quietly assuming U = 1 would
+    apply a threshold too tight on the large parts -- reporting failures that are not real,
+    which is exactly what the scaling fixes.
+    """
+    if 'U' not in seed:
+        raise RuntimeError('the parameter file carries no U; no tolerance can be scaled to it')
+    return float(seed['U'])
 
 SQ2 = math.sqrt(2.0)
 SKETCH = 'FilletTangency'
@@ -409,7 +447,7 @@ def check_solves(case, seed, fail):
     print('  two tangencies require (%.9f, %.9f)' % want[:2])
     if not sk.FullyConstrained or sk.solve() != 0:
         fail.append('%s is not fully constrained' % SKETCH)
-    if max(abs(got[0] - want[0]), abs(got[1] - want[1])) > TOL:
+    if max(abs(got[0] - want[0]), abs(got[1] - want[1])) > tol(u_of(seed)):
         fail.append('%s/%s: solved center disagrees with the tangencies it states'
                     % (SKETCH, case.tag))
     if not tip.Shape.isValid() or len(tip.Shape.Solids) != 1:
@@ -451,15 +489,16 @@ def check_branch(case, seed, fail):
         if err > worst:
             worst, worst_at = err, base + step * 0.25
     print('  swept %s %.3f .. %.3f (%d solvable): worst |solved - tangency| = %.3e mm at %s '
-          '(read after a bare recompute, tolerance %.0e)'
-          % (case.driver, base - 3.5, base + 3.5, seen, worst, worst_at, SWEEP_TOL))
+          '(read after a bare recompute, tolerance %.0e at U = %s)'
+          % (case.driver, base - 3.5, base + 3.5, seen, worst, worst_at,
+             sweep_tol(u_of(seed)), u_of(seed)))
     if blocked:
         print('  %s step(s) skipped: the sketch as a whole is unsolvable there'
               % ', '.join('%d for %s' % (n, tag) for tag, n in sorted(blocked.items())))
     if seen == 0:
         fail.append('%s/%s: the sweep never reached a solvable configuration'
                     % (SKETCH, case.tag))
-    if worst > SWEEP_TOL:
+    if worst > sweep_tol(u_of(seed)):
         fail.append('%s/%s: the solver left the correct branch during the sweep'
                     % (SKETCH, case.tag))
     App.closeDocument(doc.Name)
@@ -569,7 +608,7 @@ def check_lines_are_arbitrary(seed, fail):
     doc.recompute()
     print('  reference lines stretched x0.25 and x4: worst center movement %.3e mm%s'
           % (worst, '' if worst_at is None else ' (%s)' % worst_at))
-    if worst > TOL:
+    if worst > tol(u_of(seed)):
         fail.append('%s: a solved center moved when the reference lines were stretched -- '
                     'something is constrained to an endpoint rather than to the line (%s)'
                     % (SKETCH, worst_at))
@@ -592,7 +631,8 @@ def check_editable(cases, seed, fail):
           % (tip.Shape.Volume, len(live), len(cases)))
     for c in live:
         print('    %s center (%.9f, %.9f)' % ((c.tag,) + before[c.tag]))
-        if max(abs(a - b) for a, b in zip(before[c.tag], c.closed_form(cells)[:2])) > TOL:
+        if (max(abs(a - b) for a, b in zip(before[c.tag], c.closed_form(cells)[:2]))
+                > tol(u_of(seed))):
             fail.append('%s/%s: the reloaded sketch does not agree with its own constraints'
                         % (SKETCH, c.tag))
 
@@ -610,7 +650,7 @@ def check_editable(cases, seed, fail):
             after, want = c.center(doc), c.closed_form(cells)
             print('    %s center (%.9f, %.9f), tangencies require (%.9f, %.9f)'
                   % ((c.tag,) + after + want[:2]))
-            if max(abs(a - b) for a, b in zip(after, want[:2])) > SWEEP_TOL:
+            if max(abs(a - b) for a, b in zip(after, want[:2])) > sweep_tol(u_of(seed)):
                 fail.append('%s/%s: did not re-solve after a parameter edit on the reloaded '
                             'file' % (SKETCH, c.tag))
         for c in follows:
