@@ -60,14 +60,17 @@ def emit(doc, seed=None):
 
 def flange_positive(doc):
     """Geometry only, against whatever sheet the document already has."""
-    parts = [flange_base.flange_base(doc),
-             fillets.flange_chamfer(doc),
-             flange_boss.flange_boss(doc),
-             fillets.outer_corner_fillet(doc),
-             greeble_web.greeble_bolt_web(doc),
-             fillets.greeble_to_web_fillet(doc),
-             fillets.web_to_bolt_fillet(doc),
-             fillets.bolt_flange_fillet(doc)]
+    # `greeble_to_web_fillet` is None where this variant has no such corner (OQ-ARCH-14), so
+    # the fuse is over seven pieces rather than eight. Filtering here rather than passing an
+    # empty solid keeps the node count honest: an absent corner leaves no trace in the tree.
+    parts = [p for p in (flange_base.flange_base(doc),
+                         fillets.flange_chamfer(doc),
+                         flange_boss.flange_boss(doc),
+                         fillets.outer_corner_fillet(doc),
+                         greeble_web.greeble_bolt_web(doc),
+                         fillets.greeble_to_web_fillet(doc),
+                         fillets.web_to_bolt_fillet(doc),
+                         fillets.bolt_flange_fillet(doc)) if p is not None]
 
     node = parts[0]
     for i, part in enumerate(parts[1:], start=1):
@@ -86,7 +89,8 @@ def main():
     d = s.Volume - REF
 
     print('PART:: CSG tree -- bulkhead_flange_positive assembled')
-    print('  constituents = %d, nodes = %d' % (8, len(doc.Objects)))
+    print('  constituents = %d, nodes = %d'
+          % (7 + (doc.getObject('GreebleToWebFillet') is not None), len(doc.Objects)))
     print('  volume  = %.7f' % s.Volume)
     print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
     print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))

@@ -51,8 +51,7 @@ def branch_of(params_path):
         p = json.load(f)['parameters']
     d = fillet_intent.derived(p)
     inner, bolt = d['flange_inner_x'], -p['bolt_offset']
-    return ('flange face' if abs(d['gtw_start'] - inner) < 1e-12 else 'bolt center',
-            inner, bolt)
+    return ('flange face' if inner >= bolt else 'bolt center', inner, bolt)
 
 
 def run_one(params_path, out_path):
@@ -117,11 +116,13 @@ def main(argv=None):
             continue
         nets = [f['net'] for f in sub]
         parts = [f['in_part'] for f in sub]
+        omitted = sum(1 for f in sub if f.get('omitted'))
         print('%-19s %2d variants:  net %8.5f to %9.5f (%d inert)   '
-              'in_part %8.5f to %9.5f (%d absent)'
+              'in_part %8.5f to %9.5f (%d absent)%s'
               % (who, len(sub), min(nets), max(nets),
                  sum(1 for f in sub if f['inert']), min(parts), max(parts),
-                 sum(1 for f in sub if f['absent'])))
+                 sum(1 for f in sub if f['absent']),
+                 '   %d not built at all' % omitted if omitted else ''))
     for branch in ('flange face', 'bolt center'):
         sub = [r for r in rows if r['branch'] == branch]
         if not sub:

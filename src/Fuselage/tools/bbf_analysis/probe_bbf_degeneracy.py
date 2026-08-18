@@ -46,10 +46,11 @@ TINY_FACE = 1e-4
 def make_broken(doc):
     """The construction as it stood before IP-FC-58: block left edge at the fillet center.
 
-    Since OQ-DES-B14 was implemented the center comes from the `BffTangency` sketch and the
-    block's extent is an expression on the block rather than a `bbf_bx` sheet row, so the
-    pre-fix state is restored by rewriting those two expressions. The fillet center itself is
-    untouched -- it was never what IP-FC-58 was about.
+    Since OQ-DES-B14 was implemented the center comes from a sketch -- `BffTangency` then,
+    `FilletTangency` since OQ-ARCH-14 merged the four rounded corners into one on 2026-08-17 --
+    and the block's extent is an expression on the block rather than a `bbf_bx` sheet row, so
+    the pre-fix state is restored by rewriting those two expressions. The fillet center itself
+    is untouched -- it was never what IP-FC-58 was about.
     """
     P, cx = 'Params.', fillets.BBF_CX
     block = doc.getObject('BffBlock')
@@ -59,7 +60,7 @@ def make_broken(doc):
 
 def center(doc):
     """The solved fillet center, as the sketch reports it."""
-    sk = doc.getObject('BffTangency')
+    sk = doc.getObject(fillets.SKETCH)
     return sk.getDatum('bbf_cx').Value, sk.getDatum('bbf_cy').Value
 
 
