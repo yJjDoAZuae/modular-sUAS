@@ -370,7 +370,10 @@ interface, and it must stay a clean surface.
 
 ### 4.1 `buttress_shape` — the cutting profile
 
-Every buttress is a prism: a 2D profile extruded to `2·buttress_thickness`, centred. The
+Every buttress is a prism: a 2D profile extruded to `2·buttress_thickness`, centered — 0.1 mm.
+The doubling is deliberate but is being folded into the value, so this reads
+`buttress_cut_thickness` = 0.1 with no factor once IP-FC-29 lands, cutting the same 0.1 mm
+([OQ-DES-CW8](#open-questions), resolved 2026-08-18). The
 profile, in a plane whose axes are radius $r$ and axial station $\zeta$:
 
 $$P = \Big\{
@@ -658,6 +661,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW5 | Are the OML sections rounded rectangles? | ~~Resolved 2026-08-07~~ — yes, 10 of 16 stations |
 | OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | ~~Resolved 2026-08-09~~ — modelled nominally; the notched blank stays the print export, because vase mode depends on it. **Unblocks IP-FC-17, IP-FC-23** |
 | OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
+| OQ-DES-CW8 | Is the factor of two in the buttress extrude a per-side convention or an error? | ~~Resolved 2026-08-18~~ — fold the doubling into the value: `buttress_cut_thickness = 0.1`, no `2*`, geometry unchanged. **Unblocks IP-FC-43** |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -841,9 +845,13 @@ linear_extrude(height=2*buttress_thickness, center=true, ...)
 so the cut actually taken out of the blank is **0.1 mm, twice the parameter**, and the rib
 built on it is `2·w·n + 2·t`. Under the definition above the factor of two is either a
 half-thickness-per-side convention that the parameter name does not state, or an error. It
-is not resolvable by measurement — the two readings differ by 0.05 mm on a 1.65 mm rib — so
-it is a question of intent for whoever set the value. Until it is settled, **the port must
-reproduce the doubling**, because that is what the printed parts were made from.
+is not resolvable by measurement — the two readings differ by 0.05 mm of rib thickness,
+whatever the extrusion width — so it is a question of intent for whoever set the value.
+*Split out as its own question and settled 2026-08-18 — see [OQ-DES-CW8](#open-questions).
+The doubling is kept and folded into the value: the parameter becomes
+`buttress_cut_thickness = 0.1` and the `2*` comes out of the four extrudes, so the cut stays
+0.1 mm and no geometry moves. `t` in the rib formula is therefore the stored number, and the
+printed parts remain reproducible from the files.*
 
 **The perimeter count is not a parameter anywhere in this project.** `PrinterSettings` carries
 `extrusion_width` and `layer_height` and nothing else; `n_perimeters` lives only in the slicer
@@ -1129,6 +1137,52 @@ Two properties of the check worth keeping:
 **One thing this does not yet close.** The 36 MB of `.stl` remains, because OpenSCAD cannot
 import STEP and the OpenSCAD path still consumes it. The meshes disappear at IP-FC-34, when
 that path is retired — not before.
+
+### ~~OQ-DES-CW8 — The factor of two in the buttress extrude~~ — RESOLVED 2026-08-18
+
+*Raised and resolved 2026-08-18, split out of [OQ-DES-CW3](#open-questions), which flagged the
+discrepancy rather than settling it.*
+
+**The problem.** `buttress.thickness` is `0.05` in both parameter files and as the literal
+default in both drivers, but all four modules that build a cutting prism extrude it as
+`linear_extrude(height=2*buttress_thickness, center=true, ...)` — `top_buttress` at
+`scad/cowl_geometry.scad:310`, `top_diag_buttress` at `:324`, `side_buttress` at `:338` and
+`bottom_buttress` at `:354`. No call site omits the doubling. So the groove cut into every
+cowl this repository has produced is **0.1 mm wide, twice what the parameter says**, and the
+rib the slicer builds on it is $2wn + 2t$ rather than $2wn + t$ — a difference of exactly
+0.05 mm of rib thickness, independent of extrusion width and perimeter count, because the cut
+and the perimeters are additive terms rather than factors. All lengths here are millimeters:
+the cowl generator is the OpenSCAD path, to which the project's SI convention does not apply.
+
+**Resolved: fold the doubling into the value.** The parameter becomes `0.1` and the four
+extrudes become `height=buttress_cut_thickness`. The extruded height is unchanged at 0.1 mm,
+so **no geometry moves** — every cowl the repository has ever produced still comes out
+identical, and the parts that were flown remain reproducible from the files.
+
+**Why this rather than keeping `0.05` with a `2*` and a `_half_thickness` name.** That
+alternative is equally geometry-preserving and equally honest about what the parameter denotes,
+so the choice does not turn on either. It turns on two narrower points. First, the rib formula
+is $t_{\text{rib}} = 2 w_{\text{extrusion}} n_{\text{perimeters}} + t_{\text{cut}}$, and
+`buttress_cut_thickness` at `0.1` **is** $t_{\text{cut}}$ — the formula can be evaluated
+straight from the parameter file, where a half-thickness cannot without knowing to double
+first. Second, it removes the factor of two from the code entirely rather than leaving it
+alive at four sites that must stay in step. The cost accepted in exchange is that the stored
+number changes, so any external note or slicer profile recording "0.05" as the buttress
+setting no longer matches the file.
+
+**What this does not decide.** It does not recover what the person who wrote `0.05` intended,
+and it does not claim the 0.1 mm cut is the *right* cut. It records what the tool has always
+cut, which is the one part that was never in doubt. Whether 0.1 mm is the correct groove width
+is a separate question, answerable only by printing a cowl each way and measuring rib
+stiffness, and worth reopening only if the rib turns out to govern a structural margin — which
+would also require `n_perimeters` to become a real parameter, since it currently lives only in
+the slicer profile, outside the repository.
+
+**Implementation.** Folded into **IP-FC-29**, which is already renaming `buttress.thickness` to
+`buttress_cut_thickness` across the JSON schema, `ButtressSet` and the SCAD signatures; the
+rename and this change are one edit to the same call sites. Verification is textual rather than
+geometric: capture the generated `.scad` before and after and confirm the only differences are
+the identifier and the removed `2*`, with every extruded height still reading 0.1 mm.
 
 ## See also
 
