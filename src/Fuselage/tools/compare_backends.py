@@ -213,6 +213,68 @@ def wanted_parts(per_kind: int | None, kinds: set[str] | None = None) -> dict[st
     return out
 
 
+def unusable_dirs(root: Path) -> list[Path]:
+    """Directories at or under `root` that exist but cannot be listed.
+
+    IP-FC-72: on Windows a directory with an open handle enters a *delete-pending* state when
+    something tries to remove it. The entry survives and its parent still lists it, but every
+    operation on it fails with `STATUS_DELETE_PENDING`, which Win32 surfaces as "Access is
+    denied". An Explorer window browsing the tree is enough to cause it.
+
+    That state is invisible from a part's point of view: the render writes no mesh, and a part
+    with no mesh is reported exactly like one whose geometry would not build. Those two want
+    opposite responses -- one is a defect in the model, the other is a stray file handle with
+    nothing wrong with the geometry at all -- so the difference is established here, where the
+    cause is still visible, rather than guessed at from the table afterwards.
+    """
+    bad = []
+    for d in [root, *(x for x in root.rglob('*') if x.is_dir())]:
+        try:
+            next(iter(d.iterdir()), None)
+        except OSError:
+            bad.append(d)
+    return bad
+
+
+def ensure_wiped(path: Path, what: str) -> None:
+    """Remove `path`, and refuse to continue if any of it survives.
+
+    `shutil.rmtree(..., ignore_errors=True)` cannot tell "removed" from "could not be removed",
+    and that is the whole of IP-FC-72: the wipe half-failed, rendering carried on into a tree
+    that could not be written, and 22 parts were silently dropped from a comparison that still
+    printed a verdict. This tree is wiped on the way in every run, so anything left behind is a
+    failure to remove it and never a legitimate state -- which makes "it still exists" an exact
+    test rather than a heuristic.
+    """
+    shutil.rmtree(path, ignore_errors=True)
+    if not path.exists():
+        return
+    stuck = unusable_dirs(path)
+    if stuck:
+        detail = 'These directories exist but cannot be listed:\n      ' + '\n      '.join(
+            str(d) for d in stuck[:8])
+    else:
+        detail = ('Every directory in it can still be listed, so this is not the '
+                  'delete-pending case -- look for a read-only attribute or a real '
+                  'permissions problem.')
+    raise SystemExit(
+        '\ncompare_backends: refusing to render.\n'
+        '  The %s tree at %s could not be removed, so parts would be written into a\n'
+        '  location that cannot hold them.\n\n  %s\n\n'
+        '  On Windows this is almost always a handle held open on the tree, and an Explorer\n'
+        '  window browsing it is enough: the delete is *pended*, the directory entry survives,\n'
+        '  and every later operation on it fails as "Access is denied". The tell that separates\n'
+        '  it from a real permissions problem is that reading the ACL fails too -- an owner can\n'
+        '  always read an ACL, so an object that cannot be opened for READ_CONTROL is dying\n'
+        '  rather than protected.\n\n'
+        '  Nothing needs repairing: the state clears itself when the handle closes. Close\n'
+        '  anything browsing the tree and run again, or pass --scratch to render somewhere\n'
+        '  nobody is looking.\n\n'
+        '  This used to be silent -- the parts came out missing and were reported as having\n'
+        '  failed to build, which is the opposite of what had happened (IP-FC-72).'
+        % (what, path, detail))
+
+
 def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
            kinds: set[str] | None = None, resume: bool = False) -> list:
     """Render exactly the wanted parts with `backend`, through the real sweep.
@@ -493,7 +555,7 @@ def main(argv=None) -> int:
     scratch = args.scratch or Path(tempfile.gettempdir()) / 'modular_suas_compare_backends'
     scratch.mkdir(parents=True, exist_ok=True)
     b_dir = scratch / 'freecad'
-    shutil.rmtree(b_dir, ignore_errors=True)
+    ensure_wiped(b_dir, 'freecad output')
 
     # A supplied reference is the caller's tree, not ours: never wiped going in, never deleted
     # coming out, and rendered with --resume so a part whose definition still matches byte for
@@ -502,7 +564,7 @@ def main(argv=None) -> int:
     # parameter change re-renders exactly the parts the change invalidated, and no others.
     a_dir = args.reference if args.reference else scratch / 'openscad'
     if args.reference is None:
-        shutil.rmtree(a_dir, ignore_errors=True)
+        ensure_wiped(a_dir, 'openscad reference')
     elif not a_dir.is_dir():
         parser.error('--reference %s is not a directory' % a_dir)
 
