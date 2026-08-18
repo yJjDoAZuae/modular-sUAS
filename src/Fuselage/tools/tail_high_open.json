@@ -11,6 +11,7 @@
             "z_end": 0.2,
             "z_start": 0
         },
+        "cut_thickness": 0.1,
         "r_inset": 0.05,
         "side": {
             "active": true,
@@ -22,7 +23,6 @@
             "z_end": 0.25,
             "z_start": 0
         },
-        "thickness": 0.05,
         "top": {
             "active": true,
             "angle": 0,

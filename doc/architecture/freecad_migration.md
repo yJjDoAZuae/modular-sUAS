@@ -684,6 +684,8 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
 | ARCH-13 | ~~decided~~ 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
 | ARCH-14 | ~~decided~~ 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
+| ARCH-15 | ~~decided~~ 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
+| ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2400,6 +2402,127 @@ The volumes come from `fillet_scope_analysis/sweep_fillet_share.py`. Re-run both
 moves.
 
 ---
+
+### ~~OQ-ARCH-15 — What is the reference corpus a reference *to*, and what keeps it current?~~ — DECIDED 2026-08-18: freeze the baseline, reason about the deltas
+
+**The problem.** `verify_sweep_change.py` compares a freshly built sample against
+`variant_output_baseline` (rendered 2026-08-02) and, run at HEAD on 2026-08-18 with no local
+changes, reported three of five sampled parts differing. All three were investigated and all
+three are intentional:
+
+| Part | Difference | Bisected to | Cause |
+| --- | --- | --- | --- |
+| `corner_FX_0.5` | bbox −6.15 → −6.25 mm in *x* and *y*; volume +0.021%; 8 fewer triangles | `299633c` 2026-08-14 | `- panel_tolerance` removed from the panel rectangular extension so it reaches `flat_x`; the tolerance had been leaking into a mating face, leaving the corner cut off and the bulkhead standing over it (OQ-DES-C5, OQ-DES-B13) |
+| `bulkhead_end_anchor` | volume −0.014%; 96 fewer triangles | `299633c` 2026-08-14 | the bulkhead eps notch fix the commit is named for |
+| `boom_bulkhead_center_single` | 2,208 fewer triangles; volume differs by 9×10⁻⁴ mm³ on 1092 mm³, or 8×10⁻⁷ relative | `e11d04a` 2026-08-10 | fillet refactor; **no geometry change at all**, only retessellation — reported by the criterion rather than by the corpus, see [OQ-ARCH-16](#open-questions) |
+
+The corner was bisected by extracting `src/Fuselage/scad/` at each candidate commit read-only
+and rendering the same generated call against it. `9bc386b` reproduces the baseline exactly —
+1202.6214 mm³, 17,324 triangles, bbox −6.15 — and `299633c`, the next commit to touch that
+file, gives 1202.8714 mm³, 17,316 triangles, bbox −6.25.
+
+**Decision: the baseline does not move.** `variant_output_baseline` stays the authority for
+the whole of the port, and differences against it are *reasoned about* rather than absorbed.
+
+**The reason is cumulative drift, and it rules out re-baselining outright.** Every alternative
+that re-establishes the reference as work proceeds — regenerating the trees, or deriving the
+reference on demand from the previous commit — compares each change against the state
+immediately before it. Every individual step then passes, because every individual step is
+small, while the total wanders arbitrarily far from the parts that were designed and flown.
+The drift is undetectable precisely because no single comparison ever sees it. A frozen
+reference is the only arrangement in which the accumulated distance from the original is
+visible at all, and it is the accumulated distance that matters: the question is never "did
+this commit move geometry" but "how far is the part now from the one that was reviewed".
+
+This overrides the recommendation the question carried, which was to derive the reference on
+demand from a named commit. That recommendation optimized for the comparison always being
+runnable and was wrong about what the comparison is *for*.
+
+**The baseline's known errors do not disqualify it.** It carries defects that have since been
+corrected — the corner's `panel_tolerance` leak above is one — and that is not a reason to
+replace it. A reference does not have to be right to be useful; it has to be *fixed*, so that
+every departure from it is a departure someone chose. The corrections are recorded as
+departures rather than folded silently into a new baseline.
+
+**What this requires, and it is the real cost.** Differences against the baseline must be
+enumerated and justified, not discovered one at a time by whoever next runs the tool. That
+means:
+
+- **A complete inventory, not a sample.** The three differences above come from a five-part
+  sample. There are 576 parts, and nothing yet says how many of them differ or by how much.
+  The inventory needs one full comparison run against the baseline.
+- **A ledger of accepted departures**, each carrying the part, the measured difference, the
+  commit that caused it, and why it is correct. Anything not in the ledger is a failure.
+- **The comparison tools reading that ledger**, so a run is green when the only differences
+  are accepted ones and red the moment a new one appears. Without this the tool stays unusable
+  as a gate, which is the state that raised this question.
+
+**When the baseline is retired.** Once the FreeCAD implementation is complete and the
+`PartDesign::` end state is reached ([OQ-ARCH-11](#open-questions)), the full sweep gets
+reviewed in detail — part by part, against the ledger — and only then is
+`variant_output_baseline` declared no longer the authority. Retirement is a reviewed event with
+a person signing off on the accumulated difference, not a side effect of a convenient moment.
+
+**One thing to fix regardless.** `variant_output_baseline` is not a render of this repository:
+its stored `.stl.scad` files name their library under the pre-migration
+`Archive\Alex\Designs\modular_sUAS\Fuselage\` tree, and no tree in the corpus records the
+commit that produced it. Freezing a reference makes recording its provenance more important
+rather than less, since the ledger's entries are meaningless without knowing what they are
+departures *from*. The manifest proposed as alternative 2 is therefore still wanted — not to
+gate on drift, which is now the ledger's job, but to state what the frozen baseline is.
+
+*Recorded as IP-FC-80 (inventory and ledger) and IP-FC-81 (baseline manifest).*
+
+### ~~OQ-ARCH-16 — Is `same_geometry` the right test for "the same solid"?~~ — DECIDED 2026-08-18: fix the tolerances, and add a sampled surface distance
+
+**The problem.** Every geometric comparison routes through `mesh_stats.same_geometry`, which
+requires exact triangle-count equality, an **absolute** 1e-6 mm³ volume tolerance, and exact
+float equality of the bounding box. Three criteria, three separate defects: the triangle count
+rejects retessellation that moves no geometry — measured on 2026-08-18, the boom bulkhead at
+22,680 against 20,472 triangles with volumes agreeing to 8×10⁻⁷ relative; the volume tolerance
+does not scale with `U`, contradicting [OQ-ARCH-12](#open-questions) and amounting to bitwise
+equality on a 1092 mm³ part; and the bounding box admits no tolerance at all on numbers from a
+kernel that is not bit-reproducible.
+
+**Decision: take both alternative 1 and alternative 3.** They answer different halves of the
+question and neither is sufficient alone.
+
+**Alternative 1 — bring the tolerances in line with the rest of the project.** Volume compared
+relatively, bounding box compared against the `U`-scaled tolerance OQ-ARCH-12 already defines,
+triangle count reported but not disqualifying. The constants exist already in
+`compare_backends.bbox_tol()` and `check_unread_rows.VOLUME_TOL`; this finishes a decision
+rather than making a new one, and it stops the tool rejecting the exact class of change —
+fillet, chamfer and mask refactors — that it exists to bless.
+
+**Alternative 3 — add a surface distance, computed on a sampled subset.** Volume and bounding
+box are proxies: they can agree while a surface has moved, which is the hole alternative 1
+leaves open. A distance in millimeters is the only measure on this list that can be compared
+against what a printer can hold. **It is not computed over every vertex.** A sample is taken
+from each mesh and each sampled point measured against the other surface, reporting the
+maximum and the mean. The cost is then set by the sample size rather than by the mesh, which
+matters directly here: cowls carry around 90,000 triangles and the full-sweep corpus is 576
+parts.
+
+**Why both.** Alternative 1 makes the existing criteria honest but leaves them proxies.
+Alternative 3 measures the real quantity but is the expensive one, and on its own it discards
+the cheap checks that catch gross errors instantly. Run together, the cheap criteria screen and
+the distance adjudicates: volume and bounding box within their scaled tolerances and no sampled
+point further than the distance threshold means the same solid; anything else is reported with
+the number that failed.
+
+**Left to implementation.** The sample size and how points are drawn — uniform over area, per
+face, or weighted toward curvature — are not decided here, nor is the distance threshold, which
+must scale with `U` on the same reasoning as every other length in the project. Sampling makes
+the result a lower bound on the true maximum deviation: a sparse sample can miss a small
+displaced feature entirely, so the sample must be dense enough that the smallest feature worth
+catching is likely to be hit, and that tradeoff should be measured rather than guessed.
+
+The retirement argument raised against alternative 3 — that the OpenSCAD mesh path ends with
+IP-FC-34 — does not survive [OQ-ARCH-15](#open-questions)'s decision. A baseline frozen until
+the `PartDesign::` end state means mesh comparison against `variant_output_baseline` is needed
+for the whole remaining life of the port, and it is the measure that review will rest on.
+
+*Recorded as IP-FC-82 (tolerances) and IP-FC-83 (sampled surface distance).*
 
 ## References
 
