@@ -24,7 +24,7 @@ Usage, from the repository root:
     --scratch DIR    where to write the re-rendered STLs (default: a temp directory)
     --per-kind N     parts to sample per part kind (default 2)
     --workers N      concurrent OpenSCAD renders
-    --tol FLOAT      volume tolerance for the comparison (default 1e-6)
+    --tol FLOAT      volume tolerance, RELATIVE to each part's own volume (default 1e-6)
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ def verify(output_dir: Path, scratch: Path, per_kind=2, workers=4, tol=1e-6) -> 
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             mismatches.append((name, f"unreadable: {exc}"))
             continue
-        if mesh_stats.same_geometry(a, b, tol):
+        if mesh_stats.same_geometry(a, b, tol, mesh_stats.u_of_name(name)):
             print(f"  OK    {name[:66]}")
         else:
             print(f"  DIFF  {name[:66]}")
@@ -154,7 +154,8 @@ def main(argv=None) -> int:
     parser.add_argument("--scratch", type=Path, default=None)
     parser.add_argument("--per-kind", type=int, default=2)
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--tol", type=float, default=1e-6)
+    parser.add_argument("--tol", type=float, default=mesh_stats.VOLUME_TOL,
+                        help="volume tolerance, relative to the part's own volume")
     args = parser.parse_args(argv)
 
     if not args.output.is_dir():
