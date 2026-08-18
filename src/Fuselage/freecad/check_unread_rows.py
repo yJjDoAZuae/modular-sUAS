@@ -93,15 +93,18 @@ def measure(tip):
 # 1e-9 mm^3 still sits above the floor. An absolute tolerance applied to parts of very
 # different sizes is the whole of the bug, and it cost two silent forty-minute runs.
 #
-# 1e-6 *relative* is 1.7e-2 mm^3 here, some 67 times the worst miss measured. That is a real
-# loosening and it is worth being plain about the cost: a row whose entire contribution to the
-# part is under 0.017 mm^3 would now read as unread. Two things make that acceptable. The
-# volume test was never the sensitive one -- IP-FC-55 is precisely the case of a row that moved
-# the volume by nothing at all and the face count by four, which is why there are three
-# measurements and not one -- and face count and bounding box are both still exact. And the
-# failure modes are not symmetric: too tight refuses loudly, as this did, while too loose
-# reports a read row as unread and invites its deletion. 67x is the margin that keeps the loud
-# failure from firing on kernel noise without making the quiet one plausible.
+# 1e-6 *relative* is 1.7e-2 mm^3 here, some 67 times the worst miss measured, and what that
+# gives up is negligible on a part at this scale. A row whose entire contribution is under
+# 0.017 mm^3 is a cube 0.26 mm on a side, or about 0.14 mm of a single extrusion bead at 0.6 mm
+# wide and 0.2 mm tall -- smaller than the printer's own quantum, on a bulkhead 100*U mm across.
+# No feature this port builds is that small, so no row that reaches the geometry hides under it.
+#
+# Two things back that up rather than resting on it. The volume test was never the sensitive one
+# -- IP-FC-55 is precisely the case of a row that moved the volume by nothing at all and the
+# face count by four, which is why there are three measurements and not one -- and face count
+# and bounding box are both still exact. And the failure modes are not symmetric: too tight
+# refuses loudly, as this did, while too loose reports a read row as unread and invites its
+# deletion. 67x keeps the loud failure off kernel noise without making the quiet one reachable.
 #
 # **Being relative is how this one scales with `U`.** Every tolerance here has to, for the
 # reason `compare_backends.bbox_tol()` states at length: a part's coordinates grow linearly

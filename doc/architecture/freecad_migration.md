@@ -1570,6 +1570,21 @@ handed nothing but names and two rendered trees. A name whose `U` cannot be read
 than defaulting, since assuming `U` = 1 would apply a threshold too tight for a large part and
 report a failure that is not real.
 
+**Extended 2026-08-18 to the FreeCAD-side checks, which had the same defect and had not been
+covered by this decision.** The rule here is about *any* tolerance on a length, not only the one
+in `compare_backends`: a part's coordinates are proportional to `U`, so a fixed millimetre figure
+means something four times stricter at `U` = 4 than at `U` = 1. Three had been left absolute —
+`check_tangency.TOL` and `SWEEP_TOL`, which measure how far a solved fillet center is from where
+its tangencies put it, and the branch guard inside `fillets._fillet_tangency_sketch()`. All three
+now scale linearly and are floored at `U` = 1, as `bbox_tol()` is, and `check_tangency.u_of()`
+refuses a seed carrying no `U` for the reason `compare_backends.u_of()` does. `fillets.py` reads
+the size as `unit_width / 100` because the octant's sheet carries only the rows it builds from and
+`U` is not among them. The same pass made `check_unread_rows` scale its bounding-box tolerance and
+made its *volume* tolerance relative to the part's own volume — which is this rule as `U`³, the
+form that reads correctly for a volume, a threshold linear in `U` being wrong for a cubic
+quantity. That one was not cosmetic: the absolute figure it replaced sat below the solid kernel's
+own reproducibility and made every bulkhead run refuse, which IP-FC-56 records in full.
+
 **Caveats attached to the choice, each of which is a thing this deliberately gives up.**
 
 - **The interface tier is now size-dependent**, which is the drawback recorded under
