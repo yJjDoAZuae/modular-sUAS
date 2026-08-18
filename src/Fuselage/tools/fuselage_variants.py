@@ -622,7 +622,7 @@ class ButtressSet:
     """
     z_offset: float = 0
     r_inset: float = 0
-    thickness: float = 0
+    cut_thickness: float = 0
     top: ButtressParameters = field(default_factory=ButtressParameters)
     top_diag1: ButtressParameters = field(default_factory=ButtressParameters)
     top_diag2: ButtressParameters = field(default_factory=ButtressParameters)
@@ -843,7 +843,7 @@ def read_param_json(file_path):
 #
 #     nose.flange_inset   0.5    -> nose_flange_inset  = 0.5    (unscaled)
 #     plate.tolerance     0.1    -> plate_tol          = 0.1    (unscaled)
-#     buttress.thickness  0.05   -> buttress_thickness = 0.05   (unscaled)
+#     buttress.cut_thickness 0.1 -> buttress_cut_thickness = 0.1    (unscaled)
 #     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METRES)
 #     cone_angle          35     -> cone_angle         = 35     (unscaled)
 #
@@ -915,7 +915,7 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
     c.plate.flange_height = user_parameters.get("plate_flange_height", 0)
 
     b_src = src["buttress"]
-    c.buttress.thickness = b_src["thickness"]
+    c.buttress.cut_thickness = b_src["cut_thickness"]
     c.buttress.z_offset = b_src["z_offset"] * unit_width
     c.buttress.r_inset = b_src["r_inset"] * unit_width
 
@@ -2470,7 +2470,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
 
     buttress_z_offset = dp.buttress.z_offset
     buttress_r_inset = dp.buttress.r_inset
-    buttress_thickness = dp.buttress.thickness
+    buttress_cut_thickness = dp.buttress.cut_thickness
     buttress_r_start = dp.buttress.top.r_start
     buttress_r_end = dp.buttress.top.r_end
 
@@ -2490,7 +2490,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             oml_offset_x_m=oml_offset_x_m,
             oml_reversed=oml_reversed,
             cut_len=cut_len,
-            buttress_thickness=buttress_thickness,
+            buttress_cut_thickness=buttress_cut_thickness,
             buttress_z_offset=buttress_z_offset,
             buttress_r_start=buttress_r_start,
             buttress_r_end=buttress_r_end,
@@ -2549,7 +2549,7 @@ def tail_render(U, dp, output_dir, filename):
 
     buttress_z_offset = b.z_offset
     buttress_r_inset = b.r_inset
-    buttress_thickness = b.thickness
+    buttress_cut_thickness = b.cut_thickness
 
     side_buttress_z_end = b.side.z_end
     side_buttress_r_start = b.side.r_start
@@ -2584,7 +2584,7 @@ def tail_render(U, dp, output_dir, filename):
         oml_offset_x_m=oml_offset_x_m,
         oml_reversed=oml_reversed,
         cut_len=cut_len,
-        buttress_thickness=buttress_thickness,
+        buttress_cut_thickness=buttress_cut_thickness,
         buttress_z_offset=buttress_z_offset,
         buttress_r_inset=buttress_r_inset,
         side_buttress_z_end=side_buttress_z_end,
