@@ -7,15 +7,15 @@ include <fuselage_corner_geometry.scad>
 // not carry. Until 2026-08-06 unit_length was threaded through all three modules here
 // and used by none of them, which quietly implied a dependency that does not exist.
 // See OQ-DES-C3 in doc/design/corner.md.
-module bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width) {
+module bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters) {
 
     octant_to_full() {
-        bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
+        bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters);
     }
     
 }
 
-module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width) {
+module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters) {
     
     if (is_interconnect) {
         
@@ -25,12 +25,12 @@ module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead
         
             // bottom section
             translate([unit_width/2-corner_radius,unit_width/2-corner_radius,0]) {
-                bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
+                bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters);
             }
                 
             mirror([0,0,-1]) {
                 translate([unit_width/2-corner_radius,unit_width/2-corner_radius,-2*bulkhead_thickness]) {
-                    bulkhead_section(false, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
+                    bulkhead_section(false, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters);
                 }
                 
             }
@@ -62,12 +62,12 @@ module bulkhead_section_octant(is_interconnect, is_cowling, unit_width, bulkhead
         
     } else {
         translate([unit_width/2-corner_radius,unit_width/2-corner_radius,0]) {
-            bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
+            bulkhead_section(true, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters);
         }
     }
 }
 
-module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width)
+module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters)
 {
     
     eps = geometry_eps();
@@ -130,14 +130,14 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkh
             translate([0,0,bulkhead_thickness]) {
         linear_extrude(height=cowl_flange_height, center=false, convexity=4,twist=0,slices=1,scale=1){
             
-            polygon([[0,corner_radius-extrusion_width-cowl_flange_tolerance],[0,corner_radius-flange_thickness],[corner_radius-unit_width/2,corner_radius-flange_thickness],[corner_radius-unit_width/2,corner_radius-extrusion_width-cowl_flange_tolerance]]);
+            polygon([[0,corner_radius-cowl_n_perimeters*extrusion_width-cowl_flange_tolerance],[0,corner_radius-flange_thickness],[corner_radius-unit_width/2,corner_radius-flange_thickness],[corner_radius-unit_width/2,corner_radius-cowl_n_perimeters*extrusion_width-cowl_flange_tolerance]]);
             
             intersection() {
                 
                 polygon([[0,0], [0, corner_radius], [corner_radius,corner_radius]]);
                 
                 difference() {
-                    circle(r = corner_radius - extrusion_width-cowl_flange_tolerance);
+                    circle(r = corner_radius - cowl_n_perimeters*extrusion_width-cowl_flange_tolerance);
                     circle(r = corner_radius - flange_thickness);
                 }
                 
