@@ -551,13 +551,21 @@ erosion of $t$ leaves a perpendicular wall of
 $$t_\perp = t\cos\alpha$$
 
 so the per-layer inset **thins toward horizontal surfaces**, reaching zero at a horizontal
-face. On a cowl that means the nose tip and the tail cap have vanishing wall by this rule.
+face.
 
-**That is correct**, because it is what the printer actually produces — and it is also why a
-slicer adds top and bottom solid layers rather than relying on perimeters alone. The CAD
-model needs the equivalent rule, or the generated interior will differ from the printed part
-exactly where the printed part is thickest. The method belongs in an algorithm document;
-this section states the requirement and the trap.
+**That is correct**, because it is what the printer actually produces, and **the cowl never
+reaches the degenerate end of it** — the design avoids near-horizontal geometry rather than
+accommodating it. The nose closure is split off as its own parts, `nose_nose` and
+`nose_plate`, so the body never turns over; the tail is open at both ends; and every internal
+relief is cut at `overhang_angle_from_bed`. The shallowest surface the design permits is 55°
+from vertical, which still leaves `0.6 × cos 55° = 0.344 mm` of wall — about seven times the
+0.05 mm floor. Nor is there a top or bottom skin here for a solid-layer rule to be the
+equivalent of: only the perimeters are printed.
+[OQ-ARCH-17](../architecture/freecad_migration.md#open-questions) settles this, and the
+algorithm carries it as a **precondition it asserts** rather than as a material rule.
+
+**The method is [cowl_interior_surface.md](cowl_interior_surface.md)** (IP-FC-16); this
+section states the requirement and the trap.
 
 ### 6.3 What the port should preserve
 
@@ -664,7 +672,9 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | ~~Resolved 2026-08-09~~ — modelled nominally; the notched blank stays the print export, because vase mode depends on it. **Unblocks IP-FC-17, IP-FC-23** |
 | OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
 | OQ-DES-CW8 | Is the factor of two in the buttress extrude a per-side convention or an error? | ~~Resolved 2026-08-18~~ — fold the doubling into the value: `buttress_cut_thickness = 0.1`, no `2*`, geometry unchanged. **Unblocks IP-FC-43** |
-| OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42**, except the nose base offset: `nose_flange_inset` is 0.5 mm against a 0.6 mm extrusion width, so tying it to the count moves a flown face by 0.1 mm and needs its own answer |
+| OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42 entirely**, the nose base offset included: 0.5 mm stays, written as `1 × 0.6 + (−0.1)`, and OQ-DES-CW10 confirms that is the correct built value |
+| OQ-DES-CW10 | Is the nose cowl's base offset a function of the nozzle? | ~~Resolved 2026-08-21~~ — **yes**: the nose shape seats on the cowl's perimeter shell and is bonded there, and the inset gives that joint both its alignment and its bonding surface. `nose_flange_tolerance = -0.1`, so the offset is 0.5 mm at the sweep's 0.6 — **the built value, unchanged**. The `0.4 + 0.1` decomposition that twice argued for 0.7 is void: the hand drivers' 0.4 is a development test value and was never a tuning |
+| OQ-DES-CW11 | Which group does the overhang angle belong in? | ~~Resolved 2026-08-21~~ — **`slicing`**: choosing an overhang angle is a slicing concern, and it fails `printer`'s own membership rule because it does not move with the nozzle. Renamed `cone_angle` → `overhang_angle_from_bed` and moved from four places to one. **Not a free parameter**: it has to agree with where the nose/cowl break line falls and changing it means adjusting the buttresses, neither of which is enforced in code. `slicing` gained a per-key validator, since a perimeter count and an angle cannot share one rule. **Unblocks IP-FC-28** |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -1238,45 +1248,34 @@ is sized around the wall of the cowl:
 3. **The nose cowl's base offset** — the `offset(r = -nose_flange_inset)` that insets the
    projected OML outline to form the base flange in `nose()`.
 
-**One sub-choice is left open, and it is the only thing blocking consumer 3.**
-`nose_flange_inset` is **0.5 mm**, and one extrusion width is **0.6 mm**. So unlike the flange
-radius — where substituting `cowl_n_perimeters = 1` is byte-identical and changes nothing —
-tying the base offset to the perimeter count *moves that face by 0.1 mm on a part that has
-flown*. The 0.5 matches neither nozzle in use: the sweep runs 0.6 and the hand drivers 0.4.
-Three readings are possible and they are not equivalent:
+**One sub-choice was left open, and it was the only thing blocking consumer 3. Settled
+2026-08-21, and the geometry did not move.** `nose_flange_inset` is **0.5 mm** and one
+extrusion width in the sweep is **0.6 mm**, so unlike the flange radius — where substituting
+`cowl_n_perimeters = 1` is byte-identical — the base offset had to be shown to be a function
+of the perimeter count before it could be written as one. It is: the nose shape seats on top
+of the cowl's perimeter shell and is bonded there, and the inset is what gives that joint its
+alignment and its bonding surface. The offset is therefore
+`cowl_n_perimeters * extrusion_width + nose_flange_tolerance` with
+**`nose_flange_tolerance = -0.1`**, which at the sweep's 0.6 returns exactly the 0.5 mm every
+nose cowl has been built with. The literal is gone, the parameterization now says what the
+number depends on, and **no face moved** — verified across all 576 variants with no existing
+parameter changing value. `design_constants.json`'s blanket refusal of negative tolerances was
+removed to allow it, on the grounds that the assumption behind the rule had never been checked.
+Recorded in full as [OQ-DES-CW10](#open-questions).
 
-- 0.5 was meant to be one perimeter and is stale, from a nozzle neither path now uses;
-- 0.5 is one perimeter plus or minus a deliberate clearance that was never written down;
-- 0.5 is an independent fit dimension that has nothing to do with wall thickness, and tying it
-  to the perimeter count would be wrong.
+**A wrong turn is recorded here because it was convincing and it was wrong.** This note
+originally argued that `0.5 = 0.4 + 0.1` — one perimeter at the hand drivers'
+`extrusion_width = 0.4`, plus the 0.1 mm `panel_tolerance` uses — and concluded from that
+apparent provenance that the sweep's offset "should" be `1 × 0.6 + 0.1 = 0.7 mm`, leaving the
+flown parts 0.2 mm tight. **The 0.4 is a development test value.** It was never a tuned
+parameterization, so an expression that lands exactly on it carries no information at all, and
+the whole inference was arithmetic dressed as evidence. The sweep's parameterization is the
+correct one and the only one any dimension here should be reasoned about through.
 
-**The arithmetic points hard at the first two, together.** The hand drivers run
-`extrusion_width = 0.4` — deliberately, and still — and the project's printed clearances are
-0.1 mm, which is exactly `panel_tolerance`. **0.4 + 0.1 = 0.5.** One perimeter at the nozzle
-this value was written for, plus one standard clearance. When the sweep moved to 0.6 the
-literal did not follow, because nothing said it was a function of the nozzle.
-
-A second observation is weaker than it first appears, and is recorded with its weakness
-because it would otherwise read as confirmation. Writing today's 0.5 in the form
-`n · w + tolerance` at the sweep's w = 0.6 requires **tolerance = −0.1**, which
-`design_constants.json` refuses outright: *"none of these joints is an interference fit."*
-That looks like the value failing the project's own convention — but **the convention is
-itself an unverified assumption, and for a printed joint a negative tolerance is entirely
-plausible.** FDM parts come off the bed with enough dimensional spread that a nominal
-interference can be the way to get a joint that actually grips, and tightening rather than
-loosening is a legitimate choice. So the refusal tells us the value disagrees with a rule
-somebody wrote; it does not tell us the value is wrong. Only the 0.4 + 0.1 arithmetic is
-actual evidence here.
-
-If that reading is right, the nose base offset should be `1 × 0.6 + 0.1 = 0.7` in the sweep, so
-today's parts carry **0.2 mm of interference** at the base flange, and the same formula
-reproduces 0.5 exactly at the hand drivers' 0.4 — which is the evidence, not a coincidence to
-be arranged.
-
-**It is still a decision, not a deduction**, because it changes a face on a part that has
-flown. Consumers 1 and 2 proceed now — consumer 2 is byte-identical. Consumer 3 waits on
-whether 0.7 is applied, 0.5 is kept as an independent dimension, or the discrepancy is
-something a print would show that this arithmetic cannot.
+The related temptation, equally wrong, was to reach for `cowl_flange_tolerance = 0.2` on the
+grounds that the cowl-to-bulkhead joint is the same kind of bonded lap. It is the same kind of
+joint and **not the same fit** — which is exactly why the two are separate parameters, and why
+neither one's value may be inferred from the other's.
 
 **What does not change.** The perimeter count for any solid part remains unrecorded and must
 not be invented — there is still no slicer profile in the repository. The `slicing` group gets
@@ -1284,10 +1283,98 @@ a cowl entry because the cowl's count has consumers; other kinds get entries whe
 
 *Implementation: IP-FC-42.*
 
+### ~~OQ-DES-CW10 — Is the nose cowl's base offset a function of the nozzle?~~ — RESOLVED 2026-08-21: yes, and the built value is correct
+
+**Answer: yes.** The nose shape seats on top of the cowl's perimeter shell and is bonded
+there — the same kind of lap joint the cowl makes when it slides onto the cowling bulkhead's
+flange. The inset is what gives that joint both its **alignment** and its **bonding surface**,
+so it is a function of the shell it lands on, and therefore of the perimeter count and the
+extrusion width. `cowl_n_perimeters * extrusion_width + nose_flange_tolerance` is the right
+form, which is what IP-FC-42 implemented.
+
+**The value is `nose_flange_tolerance = -0.1`, and the geometry does not move.** At the
+sweep's `extrusion_width = 0.6` and one perimeter that gives 0.5 mm, which is what every nose
+cowl has been built with and what it should be built with. **The sweep's parameterization is
+the correct one**; expressing the offset through it was the whole point, not a step toward
+changing it.
+
+**A negative fit and a bonded joint are not in conflict**, which is where this question went
+wrong. The alignment fit and the bond are not the same surface: the inset locates the parts,
+and the joint is glued on the face it seats against. Reading the sign of the fit as though it
+decided whether the joint could be bonded is the error, and it is recorded here because it is
+easy to make again.
+
+**Two things must not be carried forward from the analysis that produced this question.**
+
+1. **`0.5 = 0.4 + 0.1` is not provenance.** The hand drivers' `extrusion_width = 0.4` is a
+   **development test value**. It was never an official tuning, so a decomposition that lands
+   exactly on it is a coincidence of leftover test numbers. That arithmetic was treated here
+   as the strongest evidence available and it was worth nothing — it is the reason this
+   question twice concluded the sweep's offset should be 0.7 mm, which is wrong. No dimension
+   in this project should be reasoned about through the 0.4 figure.
+2. **`cowl_flange_tolerance` does not set this value.** The cowl-to-bulkhead joint and the
+   nose base joint are both glued, and their **fits are different**. That is precisely why
+   they are two parameters rather than one, and the 0.2 mm on the other joint says nothing
+   about this one.
+
+*Implementation: IP-FC-42, complete — no re-render, no baseline departure.*
+
+### ~~OQ-DES-CW11 — Which group does the overhang angle belong in?~~ — RESOLVED 2026-08-21: `slicing`
+
+**Decision: alternative 2, the `slicing` group.** Choosing an overhang angle is a slicing
+concern. It is not a property of the machine, so `printer` was wrong for it — that group's
+own rule is *"the same airframe printed on a different nozzle wants different numbers here and
+no other change"*, and this number does not move with the nozzle. `slicing` already exists for
+quantities that are neither machine nor design, which is what OQ-DES-CW9 created it for.
+
+**And it is not a free parameter, which matters more than the group does.** Being categorically
+a slicing setting does not make this one safe to re-tune whenever the material or the perimeter
+count changes:
+
+- **It has to agree with where the break line between the nose and the cowl falls.** The angle
+  and the split location are two halves of one decision about how the part comes off the bed.
+- **Changing it means adjusting the buttresses to match**, since `buttress_shape()` builds
+  every leading and trailing ramp from `r_inset * tan(angle)`.
+- **As the nose is currently designed, the angle is baked into the part.**
+
+**Nothing in the code enforces either coupling.** Both are geometry a person would have to
+move by hand, so editing this value alone yields a part that builds, renders, passes every
+check this project has, and is wrong. That is why the constant carries the warning rather than
+just the number — the group tells a reader what kind of thing it is, and only the entry can
+tell them what else has to move with it.
+
+**Two consequences for the schema, both landed.**
+
+1. **`slicing` is no longer one kind of quantity, so the validator is per key.** A perimeter
+   count is a whole number of loops; an overhang angle is continuous. One rule cannot serve
+   both — "positive number" would admit half a perimeter, "whole number" would refuse 35.5° —
+   so `_check_slicing` dispatches on the name, and a name with no rule is **refused** rather
+   than passed through unchecked. The angle is required to lie strictly between 0 and 90:
+   0 is a flat ceiling with no slope to print, the geometry divides by its tangent, and 90 is
+   a vertical wall needing no relief.
+2. **`slicing` is not uniformly per part.** A perimeter count is, because parts are sliced
+   independently. An overhang angle is a limit of the process and applies to whatever is being
+   printed. The group's `_about` says so rather than leaving the CW9 wording to be read as a
+   rule it was never meant to be.
+
+**Renamed, and moved from four places to one.** `cone_angle` said what it happened to build
+rather than what it means; it is now `overhang_angle_from_bed`, which states the reference
+frame OQ-DES-CW2 had to establish. It was written out four times — twice in the cowl parameter
+files and twice in the hand drivers — and is now a single entry in `design_constants.json`.
+
+**Verified geometry-neutral**, as a rename must be: all seven GUI drivers render the same
+131,506 triangles before and after, compared as sorted facet sets rather than bytes, and the
+sampled sweep agrees on every cowl. `audit_call_args.py` reports no positional mismatch across
+the renamed signatures.
+
+*Implementation: IP-FC-28, complete.*
+
 ## See also
 
+- [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
+  calls for, in full
 - [freecad_migration.md](../architecture/freecad_migration.md) — UC-9 (OML as a surface),
-  OQ-ARCH-5 (the interior-surface method)
+  OQ-ARCH-5 (the interior-surface method), OQ-ARCH-17 (the precondition)
 - [bulkhead.md](bulkhead.md) — the cowling bulkhead the cowl mates to
 - [corner.md](corner.md) — the other half of the fuselage joint
 - [freecad_migration.md](../implementation/freecad_migration.md) — IP-FC-4, IP-FC-7,

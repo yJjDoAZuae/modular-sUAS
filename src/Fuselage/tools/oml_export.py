@@ -121,6 +121,12 @@ USER_SET = 3
 # A consumer reading the STEP therefore sees 0.1 FOOT (30.48 mm) where the convention
 # means 100 mm. Rather than fight the exporter, the factor is stated here and the result
 # is checked after every export.
+# The 1000 here is NOT a stray copy of the project's metre-to-millimetre factor, which lives
+# in freecad/units.py (IP-FC-8). It is the composition of two separate statements that happen
+# to collapse to one number: the convention above, that one model unit is one metre, and that
+# factor. It is written out because this script runs under OpenVSP's Python rather than under
+# freecadcmd, so importing across for a constant would buy less than it risks. If the two ever
+# need to disagree -- a model authored in some other unit -- this is the line that changes.
 MODEL_UNIT_MM = 1000.0          # one model unit is one metre, by project convention
 _MM_PER_DECLARED_FOOT = 304.8   # what the header's FOOT label makes a consumer apply
 

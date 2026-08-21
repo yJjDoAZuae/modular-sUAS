@@ -38,7 +38,7 @@
   ],
 
   "tolerances": {
-    "_about": "Clearances between mating parts, measured against the parameterization the SWEEP actually uses -- extrusion_width 0.6, not the 0.4 the hand drivers carry. A positive value is spacing that is MEANT to be there: it accommodates manufacturing variation and adhesive bond thickness, so a joint built with no gap has nowhere for the bond to go and nothing to absorb print variation. A NEGATIVE value is an interference fit and is equally legitimate for a printed joint -- FDM parts carry enough dimensional spread that a nominal interference is often how a fit is made to grip, and tightening rather than loosening is a design choice. Negatives were refused here until 2026-08-18 on the assumption that none of these joints was an interference; nose_flange_tolerance is the counter-example that removed the rule.",
+    "_about": "Clearances between mating parts, measured against the parameterization the SWEEP actually uses -- extrusion_width 0.6, not the 0.4 the hand drivers carry. A positive value is spacing that is MEANT to be there: it accommodates manufacturing variation and adhesive bond thickness, so a joint built with no gap has nowhere for the bond to go and nothing to absorb print variation. A NEGATIVE value is an interference fit and is equally legitimate for a printed joint -- FDM parts carry enough dimensional spread that a nominal interference is often how a fit is made to grip, and tightening rather than loosening is a design choice. Negatives were refused here until 2026-08-18 on the assumption that none of these joints was an interference. That rule is gone because the assumption was never verified: nose_flange_tolerance is negative, deliberately, and OQ-DES-CW10 confirmed on 2026-08-21 that its joint is bonded and that the value is correct as built. A bonded joint does not have to have a positive fit -- the nose base lap gets its alignment from the fit and its bond from the seating face, and the two are not the same surface. Values here are per JOINT and are not interchangeable: nose_flange_tolerance and cowl_flange_tolerance describe two different glue joints with different fits, which is why they are two parameters and not one.",
 
     "longeron_tolerance": {
       "value": 0.05,
@@ -78,8 +78,8 @@
 
     "nose_flange_tolerance": {
       "value": -0.1,
-      "why": "Fit between the nose cowl's base flange and what it seats into. Sets the base offset at cowl_n_perimeters*extrusion_width + nose_flange_tolerance, so the flange is inset from the OML by the cowl's own wall thickness plus this. NEGATIVE, and deliberately: at the sweep's extrusion_width of 0.6 and one perimeter, 0.6 + -0.1 = 0.5, which is the inset the nose cowl has always been built with. Written down this way it is a 0.1 mm interference -- a joint that grips rather than one that is bonded. It was previously the bare literal 0.5, which only decomposes tidily as 0.4 + 0.1 against the hand drivers' extrusion width; that 0.4 is not the parameterization the sweep runs, so reading the value through it was reading it through a nozzle nothing uses. This value changes NO geometry.",
-      "see": "doc/design/cowl.md OQ-DES-CW9"
+      "why": "Fit at the nose cowl's base joint, where the nose shape seats on top of the cowl's perimeter shell and is bonded to it -- the same kind of lap joint the cowl makes when it slides onto the cowling bulkhead's flange, though NOT the same fit, which is why the two have separate parameters rather than sharing one. The inset is what gives that joint its alignment and its bonding surface. Sets the base offset at cowl_n_perimeters*extrusion_width + nose_flange_tolerance: the perimeter term is the cowl's own wall, so the offset is a function of the shell it lands on, and this term is the fit against it. The sweep's value is correct as built -- 1*0.6 + -0.1 = 0.5 mm -- and this parameterization was chosen to express that, not to change it. Do NOT read the old 0.5 = 0.4 + 0.1 decomposition as provenance: the hand drivers' 0.4 extrusion width was a development test value and was never the tuned parameterization, so that arithmetic is a coincidence of test numbers and is not evidence of anything. Resolved by OQ-DES-CW10 on 2026-08-21.",
+      "see": "doc/design/cowl.md OQ-DES-CW9, OQ-DES-CW10"
     }
   },
 
@@ -268,7 +268,7 @@
 
     "extrusion_width": {
       "value": 0.6,
-      "why": "Nozzle width the sweep sizes printed features against -- the greeble wall, the bulkhead flange and the cowl flange are all whole multiples of it. Was written out seven separate times across three files, each overriding a PrinterSettings default of 0.4 that nothing wanted; the default now comes from here and the overrides are gone. The hand drivers in scad/ are still at 0.4 and that is deliberate, not drift.",
+      "why": "Nozzle width the sweep sizes printed features against -- the greeble wall, the bulkhead flange and the cowl flange are all whole multiples of it. Was written out seven separate times across three files, each overriding a PrinterSettings default of 0.4 that nothing wanted; the default now comes from here and the overrides are gone. 0.6 is the tuned parameterization and the only one the design is dimensioned against. The hand drivers in scad/ still say 0.4, and that number is a DEVELOPMENT TEST VALUE -- it was never an official tuning, and no dimension should be reasoned about through it. Arithmetic that decomposes tidily against 0.4 is a coincidence of leftover test numbers, not provenance; OQ-DES-CW10 records one such decomposition that read convincingly and was worth nothing.",
       "see": "src/Fuselage/docs/fuselage_folder_summary.md"
     },
 
@@ -280,12 +280,18 @@
   },
 
   "slicing": {
-    "_about": "How a part is SLICED, which is neither a property of the machine nor of the design. Separate from 'printer' deliberately: the same nozzle prints a vase-mode cowl at one perimeter and a solid corner at several, so a perimeter count cannot live beside extrusion_width without claiming to be a machine setting. Per part, because parts are sliced independently and nothing requires a corner's count to match a cowl's. Refused if not a positive whole number. Decided in OQ-DES-CW9.",
+    "_about": "How a part is SLICED, which is neither a property of the machine nor of the design. Separate from 'printer' deliberately: the same nozzle prints a vase-mode cowl at one perimeter and a solid corner at several, so a perimeter count cannot live beside extrusion_width without claiming to be a machine setting. Decided in OQ-DES-CW9, and extended by OQ-DES-CW11 to the overhang angle, which fails 'printer's membership rule for the same reason -- change the nozzle and it need not move at all. NOT all one kind of quantity: a perimeter count is a whole number of loops and an overhang angle is a continuous angle, so the validity rule is per key rather than per group and a name with no rule is refused rather than passed through. NOT all per part either -- a perimeter count is, because parts are sliced independently, while the overhang angle is a limit of the process that applies to whatever is being printed. Being a slicing setting does NOT mean a value here is freely tunable: read each entry's own note for what else has to move with it.",
 
     "cowl_n_perimeters": {
       "value": 1,
       "why": "How many perimeters a COWL is printed with. 1 is spiral vase mode, which these cowls support and which OQ-DES-CW6 decided to keep -- but vase is not the only way they can be printed, so this is a stated configuration rather than a property of the part. Three dimensions are functions of it, and in all three it is the COWL's count even where the geometry belongs to another part: the rib thickness 2*w*n + t_cut (OQ-DES-CW3), the cowling bulkhead's flange radius, which leaves this much radial room for the cowl wall so the cowl's outer surface lands on the mold line, and the nose cowl's base offset. Change it and the mating bulkhead must be rebuilt with it: at 0.6 mm extrusion width, printing a cowl at 3 perimeters against a flange cut for 1 is 1.2 mm of interference.",
       "see": "doc/design/cowl.md OQ-DES-CW9"
+    },
+
+    "overhang_angle_from_bed": {
+      "value": 35,
+      "why": "Degrees FROM THE PRINT BED -- the shallowest a face may lean and still print unsupported, so 0 is a flat ceiling and 90 is a vertical wall (OQ-DES-CW2 settled which way round it is measured; the two complementary spellings in the code meet the same face). Was named cone_angle, which said what it happened to build rather than what it means, and was written out four times: twice in the cowl parameter files and twice in the hand drivers. Consumed in three places, all of them the same instruction to slope a face enough to print: the relief cone under the nose plate pocket in nose(), the two flange cones and the undercut relief in nose_plate(), and the leading and trailing ramps of every buttress via buttress_shape(). DO NOT TREAT THIS AS A FREE PARAMETER. It is a slicing concern by category, but it is not one to re-tune whenever the material or the perimeter count changes: as the nose is currently designed the angle is baked into the part. It has to agree with where the break line between the nose and the cowl falls, and changing it means adjusting the buttresses to match. Nothing in the code enforces either coupling -- both are geometry a person would have to move by hand -- so changing this value alone produces a part that builds, renders and is wrong. Decided in OQ-DES-CW11.",
+      "see": "doc/design/cowl.md OQ-DES-CW2, OQ-DES-CW11"
     }
   }
 }

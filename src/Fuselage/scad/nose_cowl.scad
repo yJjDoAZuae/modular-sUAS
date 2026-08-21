@@ -14,7 +14,7 @@ plate_diam = U*60;
 plate_tol = 0.1;
 plate_thickness = 0.8;
 plate_flange_width = 2;
-cone_angle = 35;
+overhang_angle_from_bed = 35;
 
 nose_len = U*50;
 cut_len = U*6;
@@ -43,13 +43,13 @@ oml_reversed = false;
 //body_blank_octant_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len);
 //body_blank_full_lower(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len);
 
-//nose(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, cone_angle);
+//nose(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, nose_flange_height, nose_flange_inset, plate_diam, plate_thickness, plate_tol, overhang_angle_from_bed);
 
 //mirror([0,0,-1]) {
-//nose_plate(plate_diam, plate_thickness, plate_flange_width, plate_flange_height, cone_angle);
+//nose_plate(plate_diam, plate_thickness, plate_flange_width, plate_flange_height, overhang_angle_from_bed);
 //}
 
-nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, cone_angle);
+nose_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_start, buttress_r_end, buttress_r_inset, overhang_angle_from_bed);
 
 //assembly_tool(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_offset_x_m, oml_reversed, cut_len, plate_diam, plate_tol);
 

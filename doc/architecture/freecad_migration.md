@@ -123,9 +123,16 @@ face.
 That is correct and intended: it reproduces what the printer actually lays down, which is
 the whole point of modeling the interior rather than assuming a uniform shell. It will
 nonetheless look like a defect to anyone who expects constant wall thickness, so it is
-recorded here as designed behavior. Where a real part needs material at a near-horizontal
-surface, a slicer supplies it with top and bottom solid layers, and the CAD model needs
-the equivalent rule rather than relying on the inset alone.
+recorded here as designed behavior.
+
+**The thinning never reaches the degenerate end, because the cowl has no near-horizontal
+surfaces to reach it at.** They are avoided deliberately — the nose closure is split off as
+its own parts so the body never turns over, the tail is open at both ends, and every internal
+relief is cut at `overhang_angle_from_bed`. The shallowest surface the design permits is 35°
+from the bed, or 55° from vertical, which still leaves `0.6 × cos 55° = 0.344 mm` of wall.
+Nor is there a top or bottom skin to supply material the way a slicer would: only the
+perimeters are printed. [OQ-ARCH-17](#open-questions) settles this; IP-FC-16 states it as a
+precondition and asserts it rather than relying on it silently.
 
 **The parameter already exists — it was misnamed.** `PrinterSettings` carried a field
 called `nozzle_diameter`, but every use of it in the codebase was extrusion-width
@@ -686,6 +693,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-14 | ~~decided~~ 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
 | ARCH-15 | ~~decided~~ 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
 | ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
+| ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -979,8 +987,11 @@ near-horizontal surfaces where a horizontal inset leaves none.
 horizontal insets, matching the slicer — while avoiding a per-layer loft that no downstream
 consumer needs at full resolution. Alternative 3 is the tempting one and should be
 resisted: a normal offset is the exact error mode this use case was raised to prevent.
-The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
-decision as the top-and-bottom-solid-layers rule a slicer applies.
+~~The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
+decision as the top-and-bottom-solid-layers rule a slicer applies.~~ **Not so, and settled
+2026-08-21 by [OQ-ARCH-17](#open-questions):** the cowl is printed as perimeters only, with no
+top or bottom solid layers to be the equivalent of, and its design avoids near-horizontal
+geometry rather than accommodating it. No rule is needed under any of these alternatives.
 
 **The full method belongs in an algorithm document**, not here — see IP-FC-16.
 
@@ -1022,8 +1033,13 @@ between the fitted surface and the true per-layer offset falls below tolerance. 
 spacing a derived quantity rather than a tuning knob, and gives the algorithm document a
 convergence criterion to state.
 
-The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
-layers — remains the main undecided item inside IP-FC-16.
+~~The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
+layers — remains the main undecided item inside IP-FC-16.~~ **Settled 2026-08-21 by
+[OQ-ARCH-17](#open-questions): there is no such rule, because the design has no
+near-horizontal geometry and the cowl has no top or bottom skin.** It had stood here as the
+main undecided item since 2026-08-07 without ever being filed as a question, so it blocked
+IP-FC-16 while reading as prose. What IP-FC-16 carries instead is the precondition, asserted
+rather than assumed.
 
 **Amended 2026-08-09 by OQ-DES-CW6: this surface is not what gets printed.** Cowls are
 printable in **spiral vase mode**, which permits one contour per layer and no interior
@@ -2572,6 +2588,72 @@ the `PartDesign::` end state means mesh comparison against `variant_output_basel
 for the whole remaining life of the port, and it is the measure that review will rest on.
 
 *Recorded as IP-FC-82 (tolerances) and IP-FC-83 (sampled surface distance).*
+
+### ~~OQ-ARCH-17 — What supplies material where a horizontal inset leaves none?~~ — RESOLVED 2026-08-21: nothing, because the design has no such region
+
+**Answer: the rule is not needed.** Not deferred — not needed. The question assumed the cowl
+has near-horizontal surfaces that a horizontal inset would fail to give material to, and that
+a slicer would fill them with top and bottom solid layers. **Both halves are false for this
+part.**
+
+**1. The cowl design takes great pains to avoid near-horizontal geometry.** That is what
+`overhang_angle_from_bed` is *for*, and it is enforced structurally rather than by convention:
+
+- **The nose never turns over, because the closure is split off as its own parts.** The nose
+  assembly is **three** separately rendered kinds, not one: `nose_cowl` (the body),
+  **`nose_nose`** (the closure that caps it) and **`nose_plate`**. The cowl body is cut where
+  the OML would start turning over, and the closure is the part that carries the rest — which
+  is why `nose()` is cut *to the plate* rather than to a length, and why it cuts a cylinder of
+  `plate_diam/2 + plate_tol` clean through and relieves the resulting pocket with a cone at
+  `tan(overhang_angle_from_bed)`. Each of the three is a shape that prints without needing
+  material at a near-horizontal surface.
+- **The tail is open at both ends.** `tail_high_open` carries `plate.active = false`,
+  `nose.active = false` and `cut_len = 0`.
+- **Every internal relief is cut at the overhang angle**, including all three buttress ramp
+  families via `r_inset * tan(overhang_angle_from_bed)` in `buttress_shape()`.
+
+So the OML turnover — the only place a cowl section could go horizontal — is designed out of
+both cowls rather than being a case the interior algorithm has to survive.
+
+**2. The cowl has no top or bottom skin to find an equivalent for.** Only the perimeters are
+printed, as is usual in spiral vase mode, and that holds at more than one perimeter too: the
+part is an open shell at both ends. A rule modelled on "the equivalent of a slicer's top and
+bottom solid layers" was modelling a feature this part does not have.
+
+**The worst case is bounded, and it is comfortable.** The thinning is real and stays real —
+a horizontal inset `t` still leaves `t·cos α` of perpendicular wall — but α never reaches the
+degenerate end. The design's shallowest permitted surface is `overhang_angle_from_bed = 35°`
+from the bed, which is **55° from vertical**, so at the sweep's `extrusion_width = 0.6 mm` and
+one perimeter the thinnest wall the design admits is
+
+    0.6 × cos 55° = 0.344 mm
+
+— 57 % of nominal, and about seven times this project's 0.05 mm floor. The table in the
+original question ran to 80°, 85° and 90° from vertical, which are 10°, 5° and 0° from the
+bed: the exact overhangs the design forbids. **The degenerate rows were outside the domain,
+which is why they looked so alarming.**
+
+**What IP-FC-16 must carry instead of a material rule.** The absence of a rule is only safe
+while the premise holds, so the algorithm document states it as a **precondition on its input**
+rather than leaving it as a property nobody wrote down:
+
+> Every section presented to the inset is steeper than `overhang_angle_from_bed`. The
+> algorithm does not supply material at near-horizontal surfaces, and does not need to,
+> because the design does not produce them.
+
+and the implementation **checks it** rather than assuming it. If a section ever appears whose
+local slope is shallower than `overhang_angle_from_bed`, that is a design violation upstream,
+and the right behaviour is to say so and stop — not to emit a knife edge that renders, exports,
+passes `isValid()`, and turns up later as a stress singularity in an FEM result nobody
+questions. A precondition that is asserted is a decision; one that is merely true today is an
+accident waiting to be inherited.
+
+That check has a second use: it is what would catch the design drifting. `overhang_angle_from_bed`
+has to agree with where the nose/cowl break line falls and with the buttress ramps, and
+**nothing enforces those couplings** (OQ-DES-CW11). An assertion inside the interior algorithm
+is one of the few places a violation would actually surface.
+
+*Implementation: IP-FC-16, unblocked.*
 
 ## References
 
