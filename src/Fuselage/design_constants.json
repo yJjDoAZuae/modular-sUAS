@@ -38,7 +38,7 @@
   ],
 
   "tolerances": {
-    "_about": "Clearances between mating parts. Every one is spacing that is MEANT to be there: it accommodates manufacturing variation and adhesive bond thickness, so a joint built with no gap has nowhere for the bond to go and nothing to absorb print variation. Refused if negative -- none of these joints is an interference fit.",
+    "_about": "Clearances between mating parts, measured against the parameterization the SWEEP actually uses -- extrusion_width 0.6, not the 0.4 the hand drivers carry. A positive value is spacing that is MEANT to be there: it accommodates manufacturing variation and adhesive bond thickness, so a joint built with no gap has nowhere for the bond to go and nothing to absorb print variation. A NEGATIVE value is an interference fit and is equally legitimate for a printed joint -- FDM parts carry enough dimensional spread that a nominal interference is often how a fit is made to grip, and tightening rather than loosening is a design choice. Negatives were refused here until 2026-08-18 on the assumption that none of these joints was an interference; nose_flange_tolerance is the counter-example that removed the rule.",
 
     "longeron_tolerance": {
       "value": 0.05,
@@ -72,8 +72,14 @@
 
     "cowl_flange_tolerance": {
       "value": 0.2,
-      "why": "Clearance between the bulkhead's cowl-mounting flange and the cowl that slides over it. Sets the flange's outer radius at corner_radius - extrusion_width - cowl_flange_tolerance. Applies only to a cowling bulkhead; every other type takes 0, and that zero is structural -- there is no cowl flange on a bulkhead that mounts no cowl.",
-      "see": "doc/design/cowl.md"
+      "why": "Clearance between the bulkhead's cowl-mounting flange and the cowl that slides over it. Sets the flange's outer radius at corner_radius - cowl_n_perimeters*extrusion_width - cowl_flange_tolerance: the perimeter term is the radial room the COWL's wall occupies, so the cowl's outer surface still lands on the mold line. Applies only to a cowling bulkhead; every other type takes 0, and that zero is structural -- there is no cowl flange on a bulkhead that mounts no cowl.",
+      "see": "doc/design/cowl.md OQ-DES-CW9"
+    },
+
+    "nose_flange_tolerance": {
+      "value": -0.1,
+      "why": "Fit between the nose cowl's base flange and what it seats into. Sets the base offset at cowl_n_perimeters*extrusion_width + nose_flange_tolerance, so the flange is inset from the OML by the cowl's own wall thickness plus this. NEGATIVE, and deliberately: at the sweep's extrusion_width of 0.6 and one perimeter, 0.6 + -0.1 = 0.5, which is the inset the nose cowl has always been built with. Written down this way it is a 0.1 mm interference -- a joint that grips rather than one that is bonded. It was previously the bare literal 0.5, which only decomposes tidily as 0.4 + 0.1 against the hand drivers' extrusion width; that 0.4 is not the parameterization the sweep runs, so reading the value through it was reading it through a nozzle nothing uses. This value changes NO geometry.",
+      "see": "doc/design/cowl.md OQ-DES-CW9"
     }
   },
 
@@ -270,6 +276,16 @@
       "value": 0.2,
       "why": "Layer height the sweep sizes printed features against. Only plate_thickness = ceil(4*U) * layer_height reads it today. Unlike extrusion_width this was never overridden anywhere -- it sat as a dataclass default -- so the two halves of one machine profile were configured in opposite ways.",
       "see": "src/Fuselage/docs/fuselage_folder_summary.md"
+    }
+  },
+
+  "slicing": {
+    "_about": "How a part is SLICED, which is neither a property of the machine nor of the design. Separate from 'printer' deliberately: the same nozzle prints a vase-mode cowl at one perimeter and a solid corner at several, so a perimeter count cannot live beside extrusion_width without claiming to be a machine setting. Per part, because parts are sliced independently and nothing requires a corner's count to match a cowl's. Refused if not a positive whole number. Decided in OQ-DES-CW9.",
+
+    "cowl_n_perimeters": {
+      "value": 1,
+      "why": "How many perimeters a COWL is printed with. 1 is spiral vase mode, which these cowls support and which OQ-DES-CW6 decided to keep -- but vase is not the only way they can be printed, so this is a stated configuration rather than a property of the part. Three dimensions are functions of it, and in all three it is the COWL's count even where the geometry belongs to another part: the rib thickness 2*w*n + t_cut (OQ-DES-CW3), the cowling bulkhead's flange radius, which leaves this much radial room for the cowl wall so the cowl's outer surface lands on the mold line, and the nose cowl's base offset. Change it and the mating bulkhead must be rebuilt with it: at 0.6 mm extrusion width, printing a cowl at 3 perimeters against a flange cut for 1 is 1.2 mm of interference.",
+      "see": "doc/design/cowl.md OQ-DES-CW9"
     }
   }
 }

@@ -133,9 +133,15 @@ def example_design_tool(**params):
 # is, which is the whole reason they are separate rather than one flat table.
 CONSTANT_GROUPS = {
     'tolerances': ('longeron_tolerance', 'greeble_tolerance', 'corner_tolerance',
-                   'panel_tolerance', 'boom_tolerance', 'cowl_flange_tolerance'),
+                   'panel_tolerance', 'boom_tolerance', 'cowl_flange_tolerance',
+                   'nose_flange_tolerance'),
     'geometry': ('greeble_opening_angle', 'boom_key_angle'),
     'printer': ('extrusion_width', 'layer_height'),
+    # Separate from 'printer' on purpose: a perimeter count is how a part is SLICED, not a
+    # property of the machine. The same nozzle prints a vase-mode cowl at one perimeter and
+    # a solid corner at several, so putting it beside extrusion_width would claim it is a
+    # machine setting and make one of the two cases wrong. OQ-DES-CW9.
+    'slicing': ('cowl_n_perimeters',),
     'standard': ('unit_width', 'unit_length', 'corner_radius', 'longeron_radius',
                  'bolt_offset'),
     'scaling': ('greeble_wall_extrusions', 'panel_overlap_min_mm',
@@ -155,9 +161,20 @@ def _check_tolerance(name, value, path):
     # These are clearances between parts that are bonded, not press fits, so a negative is
     # a sign error. Relaxing it is a deliberate design decision, not something to slip past
     # a loader.
-    if value < 0:
-        raise ValueError('%s: %s is %g. A negative clearance is an interference fit, and '
-                         'none of these joints is one.' % (path, name, value))
+    #
+    # That premise was wrong as a general rule, and the refusal it justified is gone.
+    #
+    # A negative tolerance is an interference fit, and an interference fit is a legitimate
+    # choice for a printed joint: FDM parts carry enough dimensional spread that a nominal
+    # interference is often how a fit is made to actually grip. Tightening rather than
+    # loosening is a design decision, not a sign error, and refusing it here meant a real
+    # design could not be written down. `nose_flange_tolerance` is the first one: -0.1 mm,
+    # which is what the nose cowl's base offset has always been once it is measured against
+    # the extrusion width the sweep really uses.
+    #
+    # What is still refused is a value that cannot be a length at all.
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError('%s: %s is %r, which is not a length.' % (path, name, value))
 
 
 def _check_printer(name, value, path):
@@ -185,9 +202,20 @@ def _check_scaling(name, value, path):
                          'cannot be negative.' % (path, name, value))
 
 
+def _check_slicing(name, value, path):
+    # A perimeter count is a count of whole loops the slicer walks. A fraction cannot be
+    # printed, and zero perimeters is not a thinner wall but no wall -- both would sail
+    # through a "positive number" rule while producing geometry nobody could make.
+    if int(value) != value or value < 1:
+        raise ValueError('%s: %s is %g, and a perimeter count must be a whole number of at '
+                         'least 1. There is no such thing as half a perimeter, and zero is '
+                         'not a thin wall -- it is no wall.' % (path, name, value))
+
+
 # Angles are unconstrained on purpose: a negative boom_key_angle is a legal rotation.
 _GROUP_RULES = {'tolerances': _check_tolerance, 'printer': _check_printer,
-                'standard': _check_standard, 'scaling': _check_scaling}
+                'standard': _check_standard, 'scaling': _check_scaling,
+                'slicing': _check_slicing}
 
 
 def load_constants(path=None):
@@ -258,12 +286,17 @@ CORNER_TOLERANCE_MM = _CONSTANTS['corner_tolerance']
 PANEL_TOLERANCE_MM = _CONSTANTS['panel_tolerance']
 BOOM_TOLERANCE_MM = _CONSTANTS['boom_tolerance']
 COWL_FLANGE_TOLERANCE_MM = _CONSTANTS['cowl_flange_tolerance']
+# Negative on purpose -- an interference fit. See design_constants.json. OQ-DES-CW9.
+NOSE_FLANGE_TOLERANCE_MM = _CONSTANTS['nose_flange_tolerance']
 
 GREEBLE_OPENING_ANGLE_DEG = _CONSTANTS['greeble_opening_angle']
 BOOM_KEY_ANGLE_DEG = _CONSTANTS['boom_key_angle']
 
 EXTRUSION_WIDTH_MM = _CONSTANTS['extrusion_width']
 LAYER_HEIGHT_MM = _CONSTANTS['layer_height']
+# The COWL's perimeter count, read by the cowling bulkhead as well as by the cowl -- the
+# flange radius leaves this much radial room for the cowl's wall. OQ-DES-CW9.
+COWL_N_PERIMETERS = _CONSTANTS['cowl_n_perimeters']
 
 # The parametric standard -- what 1U is, in millimeters.
 UNIT_WIDTH_MM = _CONSTANTS['unit_width']
@@ -492,6 +525,9 @@ class BulkheadFlangeParameters:
 class CowlFlangeParameters:
     height: float = 0
     tolerance: float = 0
+    # The COWL's perimeter count, not the bulkhead's. The flange leaves this much radial
+    # room for the cowl wall so the cowl's outer surface lands on the mold line. OQ-DES-CW9.
+    cowl_n_perimeters: int = 1
 
 
 @dataclass(slots=True)
@@ -798,6 +834,10 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
     if is_cowling:
         c.cowl_flange.height=COWL_FLANGE_HEIGHT_PER_U*U;
         c.cowl_flange.tolerance=COWL_FLANGE_TOLERANCE_MM;
+        # Unlike height and tolerance, this takes NO structural zero on the else branch:
+        # zero perimeters is not "no flange", it is a nonsense wall thickness. The flange
+        # itself vanishes because its height is 0. OQ-DES-CW9.
+        c.cowl_flange.cowl_n_perimeters=COWL_N_PERIMETERS;
         c.bulkhead_flange.thickness=max(math.ceil(COWL_BULKHEAD_FLANGE_EXTRUSIONS*U)*c.printer.extrusion_width,
                                         COWL_BULKHEAD_FLANGE_EXTRUSIONS*c.printer.extrusion_width)
     else:
@@ -841,7 +881,7 @@ def read_param_json(file_path):
 #     buttress.top.r_end  0.066  -> buttress_r_end     = U*6.6
 #     nose.flange_height  0.01   -> nose_flange_height = 1.0
 #
-#     nose.flange_inset   0.5    -> nose_flange_inset  = 0.5    (unscaled)
+#     nose.flange_inset          -> nose_flange_inset  = 0.5    (DERIVED, see below)
 #     plate.tolerance     0.1    -> plate_tol          = 0.1    (unscaled)
 #     buttress.cut_thickness 0.1 -> buttress_cut_thickness = 0.1    (unscaled)
 #     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METRES)
@@ -851,7 +891,7 @@ def read_param_json(file_path):
 # different units entirely: the oml.*_m fields are metres (see OmlParameters), and
 # cone_angle is degrees from the print bed (OQ-DES-CW2). Being in this tuple means
 # only that unit_width does not touch them.
-NOSE_UNSCALED = ("cone_angle", "tolerance", "flange_inset", "thickness",
+NOSE_UNSCALED = ("cone_angle", "tolerance", "thickness",
                  "active", "angle", "filename", "scale_m_per_mm", "length_m",
                  "offset_x_m", "reversed")
 
@@ -904,7 +944,13 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
     # requiring them of a tail would be demanding dimensions for parts it does
     # not have.
     c.nose.active = src["nose"]["active"]
-    c.nose.flange_inset = src["nose"]["flange_inset"]
+    # Derived, not read from the parameter file. It is the cowl's own wall thickness plus
+    # a fit: cowl_n_perimeters*extrusion_width + nose_flange_tolerance. The file used to
+    # carry a bare 0.5, which is only tidy as 0.4 + 0.1 -- the hand drivers' extrusion
+    # width, not the sweep's. Measured against the 0.6 the sweep actually runs, the same
+    # 0.5 is one perimeter and a -0.1 interference, which is what it now says. OQ-DES-CW9.
+    c.nose.flange_inset = (COWL_N_PERIMETERS * c.printer.extrusion_width
+                           + NOSE_FLANGE_TOLERANCE_MM)
     c.nose.flange_height = user_parameters.get("nose_flange_height", 0)
 
     c.plate.active = src["plate"]["active"]
@@ -2343,6 +2389,7 @@ def bulkhead_parameters(dp):
         'flange_chamfer': dp.bulkhead_flange.chamfer,
         'cowl_flange_height': dp.cowl_flange.height,
         'cowl_flange_tolerance': dp.cowl_flange.tolerance,
+        'cowl_n_perimeters': dp.cowl_flange.cowl_n_perimeters,
         'extrusion_width': dp.printer.extrusion_width,
     }
 
