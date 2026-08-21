@@ -276,7 +276,7 @@ def main(argv):
 
     text = json.dumps(doc, indent=2, sort_keys=False)
     if out:
-        with open(out, 'w') as f:
+        with open(out, 'w', newline='\n') as f:
             f.write(text + '\n')
         print('wrote %s' % os.path.normpath(os.path.abspath(out)))
     else:

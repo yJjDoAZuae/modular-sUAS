@@ -131,7 +131,7 @@ def main(argv=None):
         print('capturing .scad text for every variant (nothing is rendered)')
         snapshot = capture()
         args.path.write_text(json.dumps(snapshot, indent=0, sort_keys=True),
-                             encoding='utf-8')
+                             encoding='utf-8', newline='\n')
         print('captured %d part(s) -> %s' % (len(snapshot), args.path))
         return 0
 

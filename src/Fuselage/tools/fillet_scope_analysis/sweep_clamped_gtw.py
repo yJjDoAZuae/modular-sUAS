@@ -106,7 +106,7 @@ def main(argv=None):
         print('%d variant(s) failed to build: %s' % (len(failed), ', '.join(failed)))
 
     if args.out:
-        with open(args.out, 'w') as f:
+        with open(args.out, 'w', newline='\n') as f:
             json.dump(rows, f, indent=1)
         print('wrote %s' % args.out)
     return 1 if failed else 0

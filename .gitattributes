@@ -1,0 +1,36 @@
+# Line endings.
+#
+# Every text file in this project is stored and checked out with Unix endings, so
+# a file's bytes do not depend on which machine last touched it. That is not
+# cosmetic here: tools/geometry_version.py fingerprints geometry sources by
+# reading them in binary mode, so a file that arrives as CRLF on one machine and
+# LF on another produces two different digests for identical geometry, and every
+# part built from it re-renders for no reason.
+#
+# `eol=lf` governs checkout, `text=auto` governs commit -- so a CRLF file written
+# by an editor or by a tool is normalized on the way into the index rather than
+# being caught later by a reader.
+#
+# core.autocrlf is false on this machine, which means nothing here is being
+# undone by a global setting. These rules travel with the repository and do not
+# depend on that staying true.
+* text=auto eol=lf
+
+# Exports from tools we do not control, and do not edit by hand.
+#
+# OpenVSP writes CRLF; OpenSCAD and FreeCAD write whatever the platform hands
+# them. Normalizing these would rewrite close to a million lines across the
+# meshes alone, and the next export would put it straight back. They are read by
+# machine, never opened in an editor, and their diffs are not meaningful to a
+# person, so git is told to treat them as opaque and leave the bytes alone.
+*.stl   -text
+*.obj   -text
+*.step  -text
+*.csg   -text
+*.vsp3  -text
+
+# Binary. `text=auto` would detect these from their NUL bytes anyway; naming them
+# means the classification is a decision rather than a heuristic.
+*.jpg    binary
+*.png    binary
+*.blend  binary

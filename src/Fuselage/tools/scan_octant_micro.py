@@ -108,7 +108,7 @@ def main(argv=None):
             export_parameters.main([str(U), type_name, panel, path])
             manifest.append({'name': name, 'params': path})
         manifest_path = os.path.join(scratch, 'manifest.json')
-        with open(manifest_path, 'w') as f:
+        with open(manifest_path, 'w', newline='\n') as f:
             json.dump(manifest, f)
 
         out_path = os.path.join(scratch, 'results.json')
