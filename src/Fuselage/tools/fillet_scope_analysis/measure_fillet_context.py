@@ -221,7 +221,7 @@ def main():
         print('NOT FOUND in the document: %s' % ', '.join(sorted(set(missing))))
         return 1
 
-    with open(out, 'w') as f:
+    with open(out, 'w', newline='\n') as f:
         json.dump(res, f)
     print('wrote %s (%d bytes)' % (out, os.path.getsize(out)))
     return 0

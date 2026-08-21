@@ -80,7 +80,7 @@ def capture(root: Path, out: Path) -> int:
         snap[d.relative_to(root).as_posix()] = {"brep_members": count, "digest": dg,
                                                 "members": brep_members(d)}
     out.write_text(json.dumps({"root": root.name, "documents": snap}, indent=2,
-                              sort_keys=True) + "\n", encoding="utf-8")
+                              sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     print(f"captured {len(snap)} document(s) -> {out}")
     return 0
 

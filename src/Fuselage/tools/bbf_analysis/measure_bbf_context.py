@@ -103,7 +103,7 @@ def main():
         print('%-7s z=%6.3f  %s' % (tag, z, '  '.join(
             '%s:%d' % (k, len(v)) for k, v in cur.items() if k != 'z')))
 
-    with open(out, 'w') as f:
+    with open(out, 'w', newline='\n') as f:
         json.dump(res, f)
     print('wrote %s (%d bytes)' % (out, os.path.getsize(out)))
     return 0

@@ -145,7 +145,7 @@ def main():
           % (P['gtw_start'], P['flange_inner_x'], -P['bolt_offset'], P['branch']))
 
     if len(args) > 1:
-        with open(args[1], 'w') as f:
+        with open(args[1], 'w', newline='\n') as f:
             json.dump({'params': P, 'fillets': rows}, f, indent=1)
         print('wrote %s' % args[1])
     return 0
