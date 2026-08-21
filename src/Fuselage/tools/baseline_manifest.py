@@ -111,7 +111,7 @@ def capture(tree: Path, out: Path) -> int:
         "unreadable": bad,
         "parts": parts,
     }
-    out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     print(f"captured {len(parts)} part(s) -> {out}")
     if bad:
         print(f"  {len(bad)} unreadable, recorded in the manifest:")

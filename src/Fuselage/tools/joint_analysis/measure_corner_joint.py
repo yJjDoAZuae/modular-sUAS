@@ -84,7 +84,7 @@ D = {
     'corner': corner0, 'corner_fixed': corner_t,
     'tool_built': tool, 'tool_fixed': tool,
 }
-json.dump(D, open(out, 'w'))
+json.dump(D, open(out, 'w', newline='\n'))
 print('%-9s bulkhead sees corner_tolerance=%.3f (must be 0)   sweep=%.3f test=%.3f\n'
       '          flat_x %8.4f -> %8.4f   flat_offset %8.4f -> %8.4f\n'
       '          corner %11.4f -> %11.4f (%+.4f)  valid=%s'

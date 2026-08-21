@@ -126,7 +126,7 @@ def main():
           % (with_, without, net, 100 * net / with_ if with_ else 0.0))
 
     if len(args) > 1:
-        with open(args[1], 'w') as f:
+        with open(args[1], 'w', newline='\n') as f:
             json.dump({'flange_inner_x': inner, 'bolt_c': bolt, 'corner': inner >= bolt,
                        'built': built, 'own': own, 'net': net,
                        'octant': without, 'octant_clamped': with_}, f, indent=1)

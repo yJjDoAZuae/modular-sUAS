@@ -121,7 +121,7 @@ def main():
             print('  %3d/%d %-34s FAILED: %s' % (i, len(entries), r['name'], r['error']))
         sys.stdout.flush()
 
-    with open(out, 'w') as f:
+    with open(out, 'w', newline='\n') as f:
         json.dump({'tol': tol, 'results': results}, f)
     print('wrote %s' % out)
     return 0

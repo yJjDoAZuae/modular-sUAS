@@ -2198,7 +2198,7 @@ def freecad_render(kind, params, output_dir, filename, variant=None):
     producing the wrong artifact.
     """
     def write_params(path):
-        with open(path, 'w') as f:
+        with open(path, 'w', newline='\n') as f:
             f.write(freecad_render_backend.definition_text(kind, params, variant))
 
     def make_command(params_path, stl_path, sidecars):

@@ -241,7 +241,7 @@ def write_provenance(out_dir, written):
         'files': sorted(p.name for p in written),
     }
     path = Path(out_dir) / PROVENANCE
-    path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
+    path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8', newline='\n')
     return path
 
 

@@ -133,7 +133,7 @@ def main():
     print('run      z=%7.3f  %d face(s)' % (z_low, len(res['run'])))
     print('section  x=%7.3f  %d face(s)' % (x_cut, len(res['section'])))
     print('piece    x=%7.3f  %d outline(s)' % (x_cut, len(res['piece'])))
-    with open(out, 'w') as f:
+    with open(out, 'w', newline='\n') as f:
         json.dump(res, f)
     print('wrote %s (%d bytes)' % (out, os.path.getsize(out)))
     return 0
