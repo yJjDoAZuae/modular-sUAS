@@ -140,8 +140,10 @@ CONSTANT_GROUPS = {
     # Separate from 'printer' on purpose: a perimeter count is how a part is SLICED, not a
     # property of the machine. The same nozzle prints a vase-mode cowl at one perimeter and
     # a solid corner at several, so putting it beside extrusion_width would claim it is a
-    # machine setting and make one of the two cases wrong. OQ-DES-CW9.
-    'slicing': ('cowl_n_perimeters',),
+    # machine setting and make one of the two cases wrong. OQ-DES-CW9. The overhang angle
+    # joined it for the same reason (OQ-DES-CW11) -- it is a slicing choice, and it fails
+    # 'printer's own membership rule because it does not move with the nozzle.
+    'slicing': ('cowl_n_perimeters', 'overhang_angle_from_bed'),
     'standard': ('unit_width', 'unit_length', 'corner_radius', 'longeron_radius',
                  'bolt_offset'),
     'scaling': ('greeble_wall_extrusions', 'panel_overlap_min_mm',
@@ -203,13 +205,38 @@ def _check_scaling(name, value, path):
 
 
 def _check_slicing(name, value, path):
-    # A perimeter count is a count of whole loops the slicer walks. A fraction cannot be
-    # printed, and zero perimeters is not a thinner wall but no wall -- both would sail
-    # through a "positive number" rule while producing geometry nobody could make.
-    if int(value) != value or value < 1:
-        raise ValueError('%s: %s is %g, and a perimeter count must be a whole number of at '
-                         'least 1. There is no such thing as half a perimeter, and zero is '
-                         'not a thin wall -- it is no wall.' % (path, name, value))
+    # Per key rather than per group, because 'slicing' holds two kinds of quantity and one
+    # rule cannot serve both: a perimeter count is a whole number of loops, an overhang
+    # angle is a continuous angle. A single "positive number" rule would admit half a
+    # perimeter; a single "whole number" rule would refuse 35.5 degrees. Both are wrong in
+    # the direction that matters, so the group dispatches and an unrecognized name is a
+    # refusal rather than an unchecked value.
+    if name == 'cowl_n_perimeters':
+        # A count of whole loops the slicer walks. A fraction cannot be printed, and zero
+        # perimeters is not a thinner wall but no wall -- both would sail through a
+        # "positive number" rule while producing geometry nobody could make.
+        if int(value) != value or value < 1:
+            raise ValueError('%s: %s is %g, and a perimeter count must be a whole number '
+                             'of at least 1. There is no such thing as half a perimeter, '
+                             'and zero is not a thin wall -- it is no wall.'
+                             % (path, name, value))
+    elif name == 'overhang_angle_from_bed':
+        # Measured FROM THE BED (OQ-DES-CW2), so it is the angle a face leans away from
+        # horizontal: 0 is a flat unsupported ceiling and 90 is a vertical wall. Both
+        # endpoints are excluded because the geometry divides by tan() of this -- at 0 the
+        # cone that carries the relief becomes infinitely long, and the open interval is
+        # what keeps that from reaching OpenSCAD as an infinity.
+        if not 0 < value < 90:
+            raise ValueError('%s: %s is %g. It is measured from the BED, so it must lie '
+                             'strictly between 0 and 90 degrees -- 0 is a flat ceiling '
+                             'with no slope to print and the geometry divides by its '
+                             'tangent, and 90 is a vertical wall that needs no relief at '
+                             'all. If this was meant as the angle from vertical, it is '
+                             'the complement.' % (path, name, value))
+    else:
+        raise ValueError('%s: %s has no validity rule in _check_slicing. Add one rather '
+                         'than letting a slicing setting through unchecked.'
+                         % (path, name))
 
 
 # Angles are unconstrained on purpose: a negative boom_key_angle is a legal rotation.
@@ -297,6 +324,12 @@ LAYER_HEIGHT_MM = _CONSTANTS['layer_height']
 # The COWL's perimeter count, read by the cowling bulkhead as well as by the cowl -- the
 # flange radius leaves this much radial room for the cowl's wall. OQ-DES-CW9.
 COWL_N_PERIMETERS = _CONSTANTS['cowl_n_perimeters']
+# Degrees from the print bed (OQ-DES-CW2), moved here from the two cowl parameter files by
+# OQ-DES-CW11. Not a free parameter despite being a slicing setting: it has to agree with
+# where the nose/cowl break line falls, and changing it means moving the buttresses to
+# match. Neither coupling is enforced in code, so see the note in design_constants.json
+# before touching it.
+OVERHANG_ANGLE_FROM_BED_DEG = _CONSTANTS['overhang_angle_from_bed']
 
 # The parametric standard -- what 1U is, in millimeters.
 UNIT_WIDTH_MM = _CONSTANTS['unit_width']
@@ -675,7 +708,7 @@ class NoseParameters:
     unit_width: float = 0
 
     cut_len: float = 0
-    cone_angle: float = 0
+    overhang_angle_from_bed: float = 0
 
     oml: OmlParameters = field(default_factory=OmlParameters)
     plate: NosePlateParameters = field(default_factory=NosePlateParameters)
@@ -885,13 +918,17 @@ def read_param_json(file_path):
 #     plate.tolerance     0.1    -> plate_tol          = 0.1    (unscaled)
 #     buttress.cut_thickness 0.1 -> buttress_cut_thickness = 0.1    (unscaled)
 #     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METRES)
-#     cone_angle          35     -> cone_angle         = 35     (unscaled)
+#     overhang_angle_from_bed    -> overhang_angle_from_bed = 35 (CONSTANT, see below)
 #
 # Two of the unscaled names are not merely "not multiplied by unit_width" but are in
 # different units entirely: the oml.*_m fields are metres (see OmlParameters), and
-# cone_angle is degrees from the print bed (OQ-DES-CW2). Being in this tuple means
-# only that unit_width does not touch them.
-NOSE_UNSCALED = ("cone_angle", "tolerance", "thickness",
+# the overhang angle is degrees from the print bed (OQ-DES-CW2). Being in this tuple
+# means only that unit_width does not touch them.
+#
+# The overhang angle is no longer read from the cowl files at all -- OQ-DES-CW11 moved
+# it into the slicing constants, where it is written once instead of four times -- so
+# it is not listed here. A name in this tuple is a name the JSON supplies.
+NOSE_UNSCALED = ("tolerance", "thickness",
                  "active", "angle", "filename", "scale_m_per_mm", "length_m",
                  "offset_x_m", "reversed")
 
@@ -922,7 +959,7 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
     c.unit_width = unit_width
     c.printer = printer_settings
 
-    c.cone_angle = src["cone_angle"]
+    c.overhang_angle_from_bed = OVERHANG_ANGLE_FROM_BED_DEG
     c.cut_len = src["cut_len"] * unit_width
 
     # Driven by the declared fields, not by whatever the JSON happens to carry:
@@ -2503,7 +2540,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     # derived_nose_parameters(), rather than being hard-coded to the U=1
     # nose_round_plate case as it was before.
     unit_width = dp.unit_width
-    cone_angle = dp.cone_angle
+    overhang_angle_from_bed = dp.overhang_angle_from_bed
     cut_len = dp.cut_len
 
     plate_diam = dp.plate.diameter
@@ -2542,7 +2579,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             buttress_r_start=buttress_r_start,
             buttress_r_end=buttress_r_end,
             buttress_r_inset=buttress_r_inset,
-            cone_angle=cone_angle)
+            overhang_angle_from_bed=overhang_angle_from_bed)
     elif is_nose_nose:
         # Note this one takes no oml_length_m -- the nose is cut to the plate rather
         # than to a length. Easy to miss positionally, since every neighbouring
@@ -2560,7 +2597,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             plate_diam=plate_diam,
             plate_thickness=plate_thickness,
             plate_tol=plate_tol,
-            cone_angle=cone_angle)
+            overhang_angle_from_bed=overhang_angle_from_bed)
     elif is_nose_plate:
         scadobj = solid2.mirror(v=(0, 0, -1))(
             cgeom.nose_plate(
@@ -2568,7 +2605,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
                 plate_thickness=plate_thickness,
                 plate_flange_width=plate_flange_width,
                 plate_flange_height=plate_flange_height,
-                cone_angle=cone_angle))
+                overhang_angle_from_bed=overhang_angle_from_bed))
 
     else:
         return
@@ -2592,7 +2629,7 @@ def tail_render(U, dp, output_dir, filename):
 
     unit_width = dp.unit_width
     cut_len = dp.cut_len
-    cone_angle = dp.cone_angle
+    overhang_angle_from_bed = dp.overhang_angle_from_bed
 
     buttress_z_offset = b.z_offset
     buttress_r_inset = b.r_inset
@@ -2645,7 +2682,7 @@ def tail_render(U, dp, output_dir, filename):
         bottom_buttress_r_end=bottom_buttress_r_end,
         top_diag_buttress_depth=top_diag_buttress_depth,
         top_diag_buttress_z_start=top_diag_buttress_z_start,
-        cone_angle=cone_angle)
+        overhang_angle_from_bed=overhang_angle_from_bed)
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 

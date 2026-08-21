@@ -15,7 +15,7 @@ unit_width = U*100;
 //tail_len = U*100;
 cut_len = 0;
 
-cone_angle = 35;
+overhang_angle_from_bed = 35;
 flange_inset = 0.5;
 tail_flange_height = 1.0;
 
@@ -47,4 +47,4 @@ oml_length_m = 0.1;
 oml_offset_x_m = -0.25;
 oml_reversed = true;
 
-tail_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, cone_angle);
+tail_cowl(U, unit_width, oml_filename, oml_scale_m_per_mm, oml_length_m, oml_offset_x_m, oml_reversed, cut_len, buttress_cut_thickness, buttress_z_offset, buttress_r_inset, side_buttress_z_end, side_buttress_r_start, side_buttress_r_end, top_buttress_z_end, top_buttress_r_start, top_buttress_r_end, bottom_buttress_z_end, bottom_buttress_r_start, bottom_buttress_r_end, top_diag_buttress_depth, top_diag_buttress_z_start, overhang_angle_from_bed);

@@ -55,7 +55,6 @@
         },
         "z_offset": 0.02
     },
-    "cone_angle": 35,
     "cut_len": 0,
     "nose": {
         "active": false
