@@ -44,6 +44,7 @@ flange_thickness=2*extrusion_width;
 flange_chamfer=1;
 cowl_flange_height=0;
 cowl_flange_tolerance=0;
+cowl_n_perimeters=1;   // the COWL's perimeter count; the flange leaves room for its wall (OQ-DES-CW9)
 
 // These are based on the standard, don't change these
 unit_width=100*U;
@@ -52,7 +53,7 @@ corner_radius = 10*U;
 longeron_radius = 2*U;
 bolt_offset=8*U;
 
-bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width);
+bulkhead_section_full(is_interconnect, is_cowling, unit_width, bulkhead_thickness, corner_radius, panel_thickness, panel_offset, panel_overlap, panel_tolerance, longeron_radius, longeron_tolerance, bolt_hole_radius, bolt_thickness, bolt_offset, greeble_opening_angle, greeble_thickness, greeble_nub_thickness, plate_thickness, web_fillet_radius, web_width, flange_fillet_radius, flange_thickness, flange_chamfer, cowl_flange_height, cowl_flange_tolerance, extrusion_width, cowl_n_perimeters);
 
 //if (U==2) {
 //    

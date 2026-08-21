@@ -664,6 +664,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | ~~Resolved 2026-08-09~~ — modelled nominally; the notched blank stays the print export, because vase mode depends on it. **Unblocks IP-FC-17, IP-FC-23** |
 | OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
 | OQ-DES-CW8 | Is the factor of two in the buttress extrude a per-side convention or an error? | ~~Resolved 2026-08-18~~ — fold the doubling into the value: `buttress_cut_thickness = 0.1`, no `2*`, geometry unchanged. **Unblocks IP-FC-43** |
+| OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42**, except the nose base offset: `nose_flange_inset` is 0.5 mm against a 0.6 mm extrusion width, so tying it to the count moves a flown face by 0.1 mm and needs its own answer |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -1197,6 +1198,91 @@ run with the change stashed reproduced its output exactly. `verify_drivers.py` c
 remaining gap — the hand drivers, which no other tool renders — and passed warning-free, a
 warning being the only signal a missed rename gives, since a bare identifier with no matching
 variable evaluates to `undef` rather than failing.
+
+### ~~OQ-DES-CW9 — Where does `n_perimeters` belong, and what is it for a part that is not vase-printed?~~ — DECIDED 2026-08-18: a per-part `slicing` group
+
+**The problem.** `n_perimeters` sets how many loops a slicer walks around a contour, and this
+project's geometry depends on it in three places. It could not go into `PrinterSettings`, which
+declares itself *"properties of the machine, not of the design"* — a perimeter count is neither.
+Nor is it a property of a part: **spiral vase is a mode these cowls support, not the only way
+they are printed**, so the same cowl is 1 perimeter on one build and 3 on another. And parts are
+sliced independently, so a corner's count has nothing to do with a cowl's.
+
+**It also already had a consumer, unnamed.** The cowling bulkhead's flange radius is written
+
+```openscad
+circle(r = corner_radius - extrusion_width - cowl_flange_tolerance)
+```
+
+in `fuselage_bulkhead_geometry.scad`. That lone `extrusion_width` is the radial room left for
+the cowl's wall so the cowl's outer surface lands on the mold line — so the bulkhead hard-codes
+**the cowl's** count at 1, with the `1` written nowhere. At 0.6 mm extrusion width a cowl
+printed at three perimeters puts an 1.8 mm wall into a 0.6 mm gap: **1.2 mm of interference**,
+six times the `cowl_flange_tolerance` that exists to absorb print variation.
+
+**Decision: a `slicing` group, holding a perimeter count per part.** Not one figure for the
+airframe — that would assert a constraint between independently sliced parts that does not
+exist. The group names a count for each part kind, and the couplings are expressed where they
+actually are and in the direction they actually run.
+
+**`cowl_n_perimeters` has three consumers, and it is the *cowl's* count in all three** — the
+bulkhead's own perimeter count is irrelevant to any of them, because each of these dimensions
+is sized around the wall of the cowl:
+
+1. **The cowl's rib thickness**, $2 w n + t_{\text{cut}}$ (OQ-DES-CW3), for whenever the rib is
+   modelled (IP-FC-17, IP-FC-23). Until a count is fixed the rib has no single thickness: 1.3 mm
+   at one perimeter against 3.7 mm at three, on the only stiffening structure the part has.
+2. **The cowling bulkhead's flange radius**, which becomes
+   `corner_radius - cowl_n_perimeters * extrusion_width - cowl_flange_tolerance`. Named for
+   whose count it is, so nobody later reads it as the bulkhead's own.
+3. **The nose cowl's base offset** — the `offset(r = -nose_flange_inset)` that insets the
+   projected OML outline to form the base flange in `nose()`.
+
+**One sub-choice is left open, and it is the only thing blocking consumer 3.**
+`nose_flange_inset` is **0.5 mm**, and one extrusion width is **0.6 mm**. So unlike the flange
+radius — where substituting `cowl_n_perimeters = 1` is byte-identical and changes nothing —
+tying the base offset to the perimeter count *moves that face by 0.1 mm on a part that has
+flown*. The 0.5 matches neither nozzle in use: the sweep runs 0.6 and the hand drivers 0.4.
+Three readings are possible and they are not equivalent:
+
+- 0.5 was meant to be one perimeter and is stale, from a nozzle neither path now uses;
+- 0.5 is one perimeter plus or minus a deliberate clearance that was never written down;
+- 0.5 is an independent fit dimension that has nothing to do with wall thickness, and tying it
+  to the perimeter count would be wrong.
+
+**The arithmetic points hard at the first two, together.** The hand drivers run
+`extrusion_width = 0.4` — deliberately, and still — and the project's printed clearances are
+0.1 mm, which is exactly `panel_tolerance`. **0.4 + 0.1 = 0.5.** One perimeter at the nozzle
+this value was written for, plus one standard clearance. When the sweep moved to 0.6 the
+literal did not follow, because nothing said it was a function of the nozzle.
+
+A second observation is weaker than it first appears, and is recorded with its weakness
+because it would otherwise read as confirmation. Writing today's 0.5 in the form
+`n · w + tolerance` at the sweep's w = 0.6 requires **tolerance = −0.1**, which
+`design_constants.json` refuses outright: *"none of these joints is an interference fit."*
+That looks like the value failing the project's own convention — but **the convention is
+itself an unverified assumption, and for a printed joint a negative tolerance is entirely
+plausible.** FDM parts come off the bed with enough dimensional spread that a nominal
+interference can be the way to get a joint that actually grips, and tightening rather than
+loosening is a legitimate choice. So the refusal tells us the value disagrees with a rule
+somebody wrote; it does not tell us the value is wrong. Only the 0.4 + 0.1 arithmetic is
+actual evidence here.
+
+If that reading is right, the nose base offset should be `1 × 0.6 + 0.1 = 0.7` in the sweep, so
+today's parts carry **0.2 mm of interference** at the base flange, and the same formula
+reproduces 0.5 exactly at the hand drivers' 0.4 — which is the evidence, not a coincidence to
+be arranged.
+
+**It is still a decision, not a deduction**, because it changes a face on a part that has
+flown. Consumers 1 and 2 proceed now — consumer 2 is byte-identical. Consumer 3 waits on
+whether 0.7 is applied, 0.5 is kept as an independent dimension, or the discrepancy is
+something a print would show that this arithmetic cannot.
+
+**What does not change.** The perimeter count for any solid part remains unrecorded and must
+not be invented — there is still no slicer profile in the repository. The `slicing` group gets
+a cowl entry because the cowl's count has consumers; other kinds get entries when theirs do.
+
+*Implementation: IP-FC-42.*
 
 ## See also
 

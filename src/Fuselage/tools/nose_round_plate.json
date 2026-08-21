@@ -58,8 +58,7 @@
     "cone_angle": 35,
     "cut_len": 0.06,
     "nose": {
-        "active": true,
-        "flange_inset": 0.5
+        "active": true
     },
     "oml": {
         "filename": "vsp_nose.stl",
