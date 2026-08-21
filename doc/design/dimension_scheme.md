@@ -133,15 +133,122 @@ happens the dimension moves into the register and the drawing gains it.
 
 ---
 
-## 5. Scope
+## 5. Placing the dimensions
 
-This document owns the enumeration and the test. It does not own drawing layout, sheet size,
-projection convention, or standards compliance, none of which are decided.
+Knowing *which* dimensions to carry is half the problem. A drawing whose dimensions overlap
+each other, sit on top of an edge, or run off the sheet is not a drawing — and unlike a wrong
+model, nothing downstream catches it. It renders, it exports, it prints, and then someone reads
+`12.5` as `12.6` and makes a part.
 
-**It is a placeholder for a section of a document that does not exist.** OQ-ARCH-7 assigns
-interface conventions to `doc/architecture/overview.md`. When that is written, §1 and §2 belong
-in its interface-conventions section, and what remains here is the drawing-specific part: §3's
-test and §4's reference-geometry rule.
+**These cannot be hand-placed.** Placement has to be a rule set with a machine-checkable
+outcome, for the same reason the rest of this project's decisions are: taste does not survive
+regeneration.
+
+### 5.1 Placement is solved once per family, not per variant
+
+[OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) chose **lettered callouts plus
+a per-variant value table**, and that choice does most of the work here: the letters are placed
+once against the drawn representative view, and the table carries the numbers. One solve per
+drawing, not 576.
+
+**But the family must be partitioned by topology, not by size.** A no-panel variant and a
+panelled one cannot share a sheet, because a callout pointing at a feature that is not there is
+worse than no drawing at all — the reader trusts it. This is §2's structural-zero rule
+reappearing at the sheet level: where a dimension is absent because the *joint* is absent, that
+is a different drawing, not a blank cell in the table. Size, by contrast, changes only the
+values, which is exactly what the table is for.
+
+### 5.2 Hard constraints — violation fails the build
+
+Every one of these is checkable on the produced drawing. None is a preference.
+
+| | Constraint | Why it is hard rather than soft |
+| --- | --- | --- |
+| **H1** | **Containment.** The full extent of every dimension — text box, dimension line, arrowheads, witness lines, any leader — lies inside the view frame and inside the sheet's printable area. | A dimension partly off-sheet is not a dimension. |
+| **H2** | **Text does not touch text.** No two dimension text boxes intersect, and the clear gap between them is at least one text height. | A smaller gap reads as a single block of digits. |
+| **H3** | **Text does not touch geometry.** No text box intersects a visible edge, a hidden edge, a centre line, or a hatch region. | Text over a line is the most common way a digit is misread. |
+| **H4** | **A witness line does not cross a dimension line.** Crossing another *witness* line is conventional and permitted. | At the crossing the reader cannot tell which extension belongs to which measurement. |
+| **H5** | **No structurally-zero dimension is placed at all.** | §2. A dimensioned zero asserts an inspectable coincident fit; where the joint is absent there is nothing to inspect. |
+
+### 5.3 Soft costs, minimized in this order
+
+1. **Nest by magnitude — smaller dimensions inboard, larger outboard.** This heads the list
+   because it is not aesthetic: it is the arrangement under which witness lines do not *need*
+   to cross dimension lines, so it is what makes **H4** satisfiable rather than a constraint to
+   fight. Get this wrong and the solver spends its effort escaping a problem it created.
+2. **Fewest witness-line crossings with geometry edges.**
+3. **Fewest lanes.** Dimensions sharing an offset share a lane; fewer lanes means shorter
+   witness lines and a tighter drawing.
+4. **Text nearest the feature it dimensions**, subject to everything above.
+5. **Balance across the sides of the view**, rather than stacking on one.
+
+### 5.4 Two numbers, and everything else derived
+
+Lanes are regular: the first dimension line stands off the outline by a gap `g`, and successive
+lanes are spaced by `s`. **`g` and `s` are the only tunables in the whole placement scheme** —
+every other position is derived from the geometry, the lane index, and the rules above. Keeping
+it to two is deliberate and follows the same reasoning as the interior surface's single
+tolerance ([cowl_interior_surface.md §5](cowl_interior_surface.md)): a scheme with a dozen
+knobs is a scheme nobody can reason about, and the knobs get tuned per drawing until the rules
+no longer mean anything.
+
+Both scale with text height, not with `U`. The reader's eye does not get bigger when the part
+does.
+
+### 5.5 Determinism
+
+**The same family produces byte-identical placement on every run.** No unseeded randomness, no
+dependence on dictionary or set iteration order, and every tie broken by a stated total order —
+callout letter is the obvious one.
+
+This is not fastidiousness. A generator whose output moves between runs makes *"did this
+drawing change?"* unanswerable, and a drawing set that cannot be diffed cannot be reviewed. The
+same problem already bites elsewhere in this project: OpenSCAD emits the same mesh with a
+different facet order on every run, so STL bytes are not a comparison basis on that path. Do
+not introduce a second instance of it somewhere a human is the consumer.
+
+### 5.6 Fail rather than emit an unreadable drawing
+
+If the hard constraints cannot all be satisfied, **the build fails and names the dimensions
+that could not be placed.** It does not relax a constraint, shrink the text, or emit the
+overlap.
+
+The escape hatch when a view genuinely cannot hold its dimensions is to **split the view or add
+a detail view** — a drafting decision, made deliberately — not to accept a worse drawing.
+
+**The checker is independent of the placer.** It reads the produced drawing, re-derives every
+constraint in §5.2 from the placed annotations and the projected geometry, and fails on
+violation. Independent because a placer that certifies its own output has only proved it is
+self-consistent, which is not the claim anyone needs.
+
+### 5.7 What to test it against
+
+Not "does it look right". Every constraint in §5.2 is machine-checkable, so the acceptance test
+is that the checker passes over a corpus — and the corpus is chosen for difficulty rather than
+for coverage:
+
+- **The smallest variant**, where there is least room and the drawing is densest.
+- **The largest**, where witness lines are longest and containment binds first.
+- **Each topology class** — no-panel, anchor versus bolt, cowling versus not — since §5.1 makes
+  each of these a separate sheet, and the sparse ones are where a stale callout would survive.
+
+Sweeping the size axis alone will not reach the cases that break this. The topology boundaries
+have to be walked deliberately, from both sides.
+
+---
+
+## 6. Scope
+
+This document owns the enumeration (§2), the completeness test (§3), the reference-geometry
+rule (§4), and the placement rules and their acceptance test (§5).
+
+It does not own sheet size, title block, projection convention (first or third angle), line
+weights, or standards compliance — none of which are decided.
+
+**§1 and §2 are a placeholder for a section of a document that does not exist.** OQ-ARCH-7
+assigns interface conventions to `doc/architecture/overview.md`. When that is written they
+belong in its interface-conventions section, and what stays here is the drawing-specific part:
+§3's completeness test, §4's reference-geometry rule, and §5's placement rules.
 
 ## See also
 
