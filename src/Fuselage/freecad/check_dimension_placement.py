@@ -26,6 +26,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import dimension_placement as dp
+
+NEWLINE = chr(10)
 import drawing_standard as std
 
 from corner_common import is_entry_point
@@ -76,6 +78,14 @@ def case_dense():
     return dims
 
 
+def case_four_interleaved():
+    """Four spans that pairwise interleave. Two sides cannot separate four of them."""
+    return [_dim('A', (-30, -20), (0, -20), dp.HORIZONTAL, 30.0),
+            _dim('B', (-10, -20), (30, -20), dp.HORIZONTAL, 40.0),
+            _dim('C', (-25, -20), (5, -20), dp.HORIZONTAL, 30.0),
+            _dim('D', (-5, -20), (25, -20), dp.HORIZONTAL, 30.0)]
+
+
 CASES = (('nested from a datum', case_nested),
          ('interleaved spans', case_interleaved),
          ('equal magnitudes', case_coincident_magnitudes),
@@ -98,7 +108,7 @@ def main():
     for name, build in CASES:
         dims = build()
         try:
-            placed = dp.place(dims, BBOX, FRAME)
+            placed = dp.place(dims, BBOX, FRAME, EDGES)
         except dp.PlacementError as exc:
             print('  %-26s PLACEMENT REFUSED: %s' % (name, exc))
             fail.append('%s: refused, %s' % (name, exc))
@@ -113,26 +123,33 @@ def main():
 
         # Section 5.5: the same input produces the same output regardless of the order it
         # arrived in. Reversal is the cheapest input permutation that is not the identity.
-        again = dp.place(list(reversed(dims)), BBOX, FRAME)
+        again = dp.place(list(reversed(dims)), BBOX, FRAME, EDGES)
         if _placement_signature(placed) != _placement_signature(again):
             fail.append('%s: placement depends on input order, so it is not reproducible'
                         % name)
 
     print('  --- refusals, which must happen ---')
-    for label, dims, frame in (
+    for label, dims, frame, edges in (
             ('structurally-zero value',
-             [_dim('A', (0, 0), (0, 0), dp.HORIZONTAL, 0.0)], FRAME),
+             [_dim('A', (0, 0), (0, 0), dp.HORIZONTAL, 0.0)], FRAME, EDGES),
             ('repeated callout letter',
              [_dim('A', (-30, -20), (0, -20), dp.HORIZONTAL, 30.0),
-              _dim('A', (-30, -20), (10, -20), dp.HORIZONTAL, 40.0)], FRAME),
+              _dim('A', (-30, -20), (10, -20), dp.HORIZONTAL, 40.0)], FRAME, EDGES),
             ('frame too small to contain',
-             case_nested(), (-35.0, -25.0, 35.0, 25.0))):
+             case_nested(), (-35.0, -25.0, 35.0, 25.0), EDGES),
+            # Four mutually interleaved spans. Two sides hold two each, and the two sharing a
+            # side interleave, so no lane order avoids H4 -- the case section 5.6 exists for.
+            ('unavoidable H4 crossing', case_four_interleaved(), FRAME, EDGES),
+            # An edge lying exactly where the only available callout position falls.
+            ('callout on a projected edge',
+             [_dim('A', (-30, -20), (30, -20), dp.HORIZONTAL, 60.0)], FRAME,
+             EDGES + [((-40.0, -28.4), (40.0, -28.4))])):
         try:
-            dp.place(dims, BBOX, frame)
+            dp.place(dims, BBOX, frame, edges)
             print('  %-26s NOT REFUSED' % label)
             fail.append('%s was placed when it should have been refused' % label)
         except dp.PlacementError as exc:
-            print('  %-26s refused: %s' % (label, str(exc).split('.')[0]))
+            print('  %-26s refused: %s' % (label, str(exc).split('.')[0].split(NEWLINE)[0]))
 
     for label, letter in (('I reads as 1', 'I'), ('O reads as 0', 'O'),
                           ('Q reads as 0', 'Q')):

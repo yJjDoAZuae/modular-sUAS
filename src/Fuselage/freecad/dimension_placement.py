@@ -53,6 +53,10 @@ ARROWHEAD_LENGTH_HEIGHTS = 1.0
 # a question about the design, not about manufacturing.
 ZERO_MM = 1.0e-9
 
+# Written as a name because a literal escape does not survive every route this file has
+# been edited through. It is one character either way.
+NEWLINE = chr(10)
+
 HORIZONTAL = 'horizontal'
 VERTICAL = 'vertical'
 
@@ -72,11 +76,12 @@ class Dimension(object):
     `letter`  the callout letter, from `drawing_standard.CALLOUT_ALPHABET`
     `p1, p2`  the two referenced points, in view coordinates (mm)
     `axis`    HORIZONTAL for a DistanceX, VERTICAL for a DistanceY
-    `value`   the model value in mm -- what the table will carry, used here only for
-              magnitude ordering and the H5 zero test
+    `value`   the model value in mm -- used here for magnitude ordering and the H5 zero test
+    `text`    None on a family sheet, where the view shows `letter`; the rendered value string
+              on a single-variant sheet, where the view shows the number
     """
 
-    def __init__(self, letter, p1, p2, axis, value):
+    def __init__(self, letter, p1, p2, axis, value, text=None):
         if letter not in std.CALLOUT_ALPHABET:
             raise ValueError(
                 '%r is not a callout letter. The alphabet is %s -- I, O and Q are omitted '
@@ -89,6 +94,11 @@ class Dimension(object):
         self.p2 = (float(p2[0]), float(p2[1]))
         self.axis = axis
         self.value = float(value)
+        # None means a family sheet: the view shows the callout letter and the value lives in
+        # the table, so every annotation is the same width. A string means a single-variant
+        # sheet, where the view carries the value itself and annotations differ in width by up
+        # to 5x. The two products place differently for exactly this reason.
+        self.text = text
 
     def span(self):
         """The interval the dimension covers along its own axis, in view coordinates."""
@@ -156,28 +166,48 @@ def _segments_cross(a, b):
     return (d1 * d2 < 0.0) and (d3 * d4 < 0.0)
 
 
-def _text_box(centre, text_height_mm):
-    """The bound on a lettered callout's text, centred on a point.
+def _text_box(centre, text_height_mm, text=None):
+    """The rectangle an annotation's text occupies, centred on a point.
 
-    Every callout is one character from `CALLOUT_ALPHABET`, so this is the same size for all
-    of them -- section 5.2's uniform bound. Being uniform is what makes it safe to be
-    conservative: it shifts the layout without distorting it.
+    With `text` None this is the family sheet's uniform callout bound: every callout is one
+    character from `CALLOUT_ALPHABET`, so the widest letter bounds all of them, and being
+    uniform is what makes it safe to be conservative -- it shifts the layout without
+    distorting it.
+
+    With `text` given this is a single-variant sheet, and the width is *measured* rather than
+    bounded, because a conservative bound over value strings is the thing that does distort a
+    layout. `112.50 mm` is 5.3 times the width of `W`, and value strings differ from each
+    other, so there is no uniform number that is both safe and useful.
     """
-    half_w = std.callout_width_mm(text_height_mm) / 2.0
+    width = (std.callout_width_mm(text_height_mm) if text is None
+             else std.text_width_mm(text, text_height_mm))
+    half_w = width / 2.0
     half_h = text_height_mm / 2.0
     return (centre[0] - half_w, centre[1] - half_h,
             centre[0] + half_w, centre[1] + half_h)
 
 
-def place(dimensions, geometry_bbox, frame=None, text_height_mm=std.TEXT_HEIGHT_MM):
+def place(dimensions, geometry_bbox, frame=None, geometry_edges=None,
+          text_height_mm=std.TEXT_HEIGHT_MM):
     """Place every dimension, or raise `PlacementError` naming the ones that would not go.
 
-    `geometry_bbox`  (x_min, y_min, x_max, y_max) of the projected view, in view coordinates
-    `frame`          the same, for the region placements must stay inside (H1). None skips
-                     the containment check, which is only correct in a test.
+    `geometry_bbox`   (x_min, y_min, x_max, y_max) of the projected view, in view coordinates
+    `frame`           the same, for the region placements must stay inside (H1). None skips
+                      the containment check, which is only correct in a test.
+    `geometry_edges`  the projected edges, for H3. None skips it -- again, tests only.
 
     Returns a list of `Placed`, ordered by (axis, side, lane, letter) so the result is a
     stable sequence rather than whatever order the input arrived in.
+
+    **The result is checked before it is returned.** H5 and the duplicate-letter rule are
+    enforced on the way in, and H2 holds by construction from the lane rule -- but H3 and H4
+    are properties of the finished layout and cannot be established while building it. Without
+    this final pass a layout with a witness line through a dimension line would be returned
+    without complaint, and section 5.6 says fail rather than emit.
+
+    Running the checker here does not make it dependent on the placer: it re-derives every
+    constraint from the produced coordinates and takes nothing on trust. Who calls it is not
+    what independence means.
     """
     zero = [d.letter for d in dimensions if abs(d.value) < ZERO_MM]
     if zero:
@@ -234,6 +264,17 @@ def place(dimensions, geometry_bbox, frame=None, text_height_mm=std.TEXT_HEIGHT_
         _require_containment(placed, frame, text_height_mm)
 
     placed.sort(key=lambda p: (p.dimension.axis, p.side, p.lane, p.letter))
+
+    if frame is not None:
+        complaints = check_placement(placed, geometry_edges or [], frame, text_height_mm)
+        if complaints:
+            raise PlacementError(
+                'the layout violates constraints the solver cannot resolve by lane '
+                'assignment:' + NEWLINE
+                + NEWLINE.join('  - ' + c for c in complaints)
+                + NEWLINE + 'The remedy is to split the view or add a detail view -- a '
+                  'drafting decision made deliberately -- not to relax a constraint.')
+
     return placed
 
 
@@ -264,25 +305,27 @@ def _place_one(dimension, side, lanes, geometry_bbox, gap, pitch, clearance, tex
         if side == 'below':
             line_y = y_min - offset
             line = ((lo, line_y), (hi, line_y))
-            text = _text_box((midpoint, line_y + text_height_mm * 0.6), text_height_mm)
+            text = _text_box((midpoint, line_y + text_height_mm * 0.6), text_height_mm,
+                              dimension.text)
             witnesses = [((dimension.p1[0], dimension.p1[1]), (dimension.p1[0], line_y)),
                          ((dimension.p2[0], dimension.p2[1]), (dimension.p2[0], line_y))]
         elif side == 'above':
             line_y = y_max + offset
             line = ((lo, line_y), (hi, line_y))
-            text = _text_box((midpoint, line_y + text_height_mm * 0.6), text_height_mm)
+            text = _text_box((midpoint, line_y + text_height_mm * 0.6), text_height_mm,
+                              dimension.text)
             witnesses = [((dimension.p1[0], dimension.p1[1]), (dimension.p1[0], line_y)),
                          ((dimension.p2[0], dimension.p2[1]), (dimension.p2[0], line_y))]
         elif side == 'left':
             line_x = x_min - offset
             line = ((line_x, lo), (line_x, hi))
-            text = _text_box((line_x, midpoint), text_height_mm)
+            text = _text_box((line_x, midpoint), text_height_mm, dimension.text)
             witnesses = [((dimension.p1[0], dimension.p1[1]), (line_x, dimension.p1[1])),
                          ((dimension.p2[0], dimension.p2[1]), (line_x, dimension.p2[1]))]
         else:
             line_x = x_max + offset
             line = ((line_x, lo), (line_x, hi))
-            text = _text_box((line_x, midpoint), text_height_mm)
+            text = _text_box((line_x, midpoint), text_height_mm, dimension.text)
             witnesses = [((dimension.p1[0], dimension.p1[1]), (line_x, dimension.p1[1])),
                          ((dimension.p2[0], dimension.p2[1]), (line_x, dimension.p2[1]))]
 
