@@ -11,6 +11,42 @@ It named one prerequisite — *"agreement on what belongs to the interface"* —
 from the design authorities that do exist, so the prerequisite is met by enumeration rather
 than by waiting.
 
+## 0. Who the drawing is for
+
+Stated 2026-08-22, and everything below is judged against it:
+
+> **The drawing user wants to understand the impact of the part design on their integration
+> with the structure.** What size longerons are used, and what are the tolerances on that
+> dimension? What size panels, and what are its tolerances? What size bolts and bolt anchors?
+> What is the interior dimension of the structural cell — the bulkhead interior aperture? How
+> much volume does each part use, which translates to mass?
+
+**This is an integration drawing, not an inspection drawing**, and the distinction is not
+cosmetic. An inspector wants the feature as built — the 4.10 mm bore. An integrator wants the
+hardware the feature is cut for — the 4.00 mm longeron and the 0.10 mm of clearance. The design
+puts the whole fit clearance inside the mating face, so those are different numbers *by
+construction*.
+
+**[OQ-DES-D2](#open-questions) decided how one annotation carries both, on 2026-08-22: the
+dimension gives the feature as built and a callout beside it names the hardware.** So the bore
+reads `⌀4.10 BORE / FOR ⌀4.00 LONGERON / 0.10 DIA CLEARANCE`, and the two numbers cannot drift
+apart because both come from the same expression.
+
+Two of the five questions above are not answered by any dimension as the rule stood, because
+the cell aperture is a hole nothing in the model mates with and material is not a distance at
+all. **[OQ-DES-D3](#open-questions) decided both on 2026-08-22**: the aperture *is* a dimension
+— the span between two real interior faces — so the rule gains a clause for it below, and
+volume goes in a data block rather than being annotated at all.
+
+**Panel dimensions are a stated requirement, 2026-08-22**, and they reach further than the
+frame. Panels are to be given their own OML allocation with panel shapes designed inside it, so
+that designs can be interchanged. Every boundary of that allocation is determined by the frame
+and verified, and it is in §2's register — including the length, which is the full bay: the
+bulkhead is cut back by exactly the panel pocket so the panel runs over it unbroken.
+**[OQ-DES-D4](#open-questions) decided on 2026-08-22 that the OML itself becomes a part**, so a
+candidate panel can be checked against it by containment rather than against transcribed
+numbers.
+
 ---
 
 ## 1. The membership test
@@ -18,8 +54,8 @@ than by waiting.
 A part has hundreds of dimensionable edges and a useful drawing carries a dozen. The question
 is not "which are interesting" — that is taste, and taste does not scale to 576 variants.
 
-> **A dimension belongs to the interface set if and only if another part's geometry depends
-> on it.**
+> **A dimension belongs to the interface set if another part's geometry depends on it, or if
+> it bounds a space the airframe encloses.**
 
 That is mechanical, not aesthetic. It also has a convenient property in this project:
 **the clearance parameters already enumerate the joints.** Every entry in
@@ -28,6 +64,33 @@ That is mechanical, not aesthetic. It also has a convenient property in this pro
 
 The register below is therefore not a new list to be maintained beside the code — it is a
 reading of a file the sweep already validates on every run.
+
+**The second clause was added on 2026-08-22 and it is deliberately narrow.** The first clause
+is a test about *joints*, and it misses the one thing that decides whether anything fits inside
+the airframe: the bulkhead's interior aperture. Nothing in the model mates with that opening —
+it is what is left after the ring and the webs — so the joint test cannot see it, while a
+battery, a wiring loom, a servo and a hand with a nut driver all depend on it and none of them
+is a part in this model.
+
+The clause is a **closed list, not an open invitation**, and that is what keeps the completeness
+test a lookup rather than a judgment. It admits exactly the enclosed span of each part that has
+one, by name:
+
+| Part | Enclosed span | Value at 1U, 3/16 in |
+| --- | --- | --- |
+| frame bulkhead | `unit_width − 2·(panel_thickness + panel_tolerance) − 2·flange_thickness` | 87.875 |
+| boom bulkhead | `unit_width − 2·(panel_thickness + panel_tolerance) − 2·web_width` | 78.275 |
+
+Both are the distance between a real pair of parallel planar faces — 247.3 mm² each on the
+frame bulkhead, 93.7 mm² on the boom — so each dimensions like any other and needs no new
+convention. The last term differs because the ring's inner boundary is set by the flange on a
+frame bulkhead and by the web on a boom bulkhead.
+
+**On a boom bulkhead the span and the clear opening are two different numbers.** The span
+between the interior faces is 78.275 both ways; the clear opening is 78.275 × 66.402, because
+the boom collet intrudes from one side. The dimension is the span, and the obstruction is
+visible in the view — but a reader asking "what fits through" has to look at the view and not
+only at the number, and this is the one part where those differ.
 
 ---
 
@@ -47,6 +110,67 @@ reading of a file the sweep already validates on every run.
 | 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure |
 | 9 | nose plate → nose closure | pocket radius = `plate_diam/2 + plate_tol`, relieved at `overhang_angle_from_bed` | `plate.tolerance` 0.1 | nose closure |
 | 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bulkhead |
+
+### The panel allocation, which joints 4 and 5 pin without stating
+
+Panel dimensions have to be on the drawings, and the frame determines all of them. Joints 4 and
+5 give the *interface* — the slot, the seat, the clearance — but not the panel's own size, and
+the panel's own size is what a panel designer needs. It falls out of the same parameters:
+
+| | Expression | At 1U, 3/16 in |
+| --- | --- | --- |
+| width, corner to corner | `unit_width − 2·(corner_radius + panel_offset)` | 75.000 |
+| exposed span between corners | `width − 2·panel_overlap` | 65.475 |
+| entry into each corner | `panel_overlap` | 4.7625 |
+| thickness | `panel_thickness` | 4.7625 |
+| pocket it seats in | `panel_thickness + panel_tolerance` | 4.8625 |
+| inner face, from the airframe axis | `unit_width/2 − panel_thickness − panel_tolerance` | 45.1375 |
+| outer face | the mold line, `unit_width/2` | 50.000 |
+| length along the bay | `unit_length`, the full bay | 100.000 |
+
+**The width expression is confirmed by a clearance, not by a face, and that is the stronger
+check.** Take the panel to be 75.000 wide and its edge lands at corner-local x = −2.5000
+against a slot bottom at −2.4000. The gap is 0.1000 — `panel_tolerance` exactly. No other width
+fits the slot the corner was actually cut with.
+
+**The panel runs the full bay length, and the bulkhead is cut out to let it.** That was settled
+on 2026-08-22 and the geometry states it twice over. The bulkhead's outer profile sits at
+45.1375 from the airframe axis, which is 4.8625 inboard of the mold line — exactly
+`panel_thickness + panel_tolerance`, the panel pocket. And one of its outer flat faces measures
+**392.850 mm²**, which is `65.475 × 6`: the panel's exposed span times the bulkhead thickness.
+So the bulkhead's outer flat face *is* the panel's seating surface, cut back by precisely the
+panel it seats and running precisely as far.
+
+That is the reason a panel is not interrupted at a station: the bulkhead gives way to it rather
+than the other way round. `unit_length − 2·bulkhead_thickness` = 88.000 was the alternative
+reading, and it is wrong.
+
+**The envelope becomes a part**, decided in [OQ-DES-D4](#open-questions) on 2026-08-22, so a
+candidate panel design is checked against it by containment rather than by someone comparing it
+against the expressions above.
+
+### What the assembly drawing carries
+
+Stated 2026-08-22, and it is a requirement rather than a preference: **the assembly drawings
+show the projection of the panel and the corner onto the bulkhead top view.** On that view,
+
+- the **panel width** and the **panel thickness** are dimensions;
+- **`panel_tolerance`** and **`corner_tolerance`** are dimension callouts.
+
+The bulkhead top view is the right carrier for this and not an arbitrary choice: it is the one
+view where all three parts appear in the same plane. The bulkhead's outer flat face *is* the
+panel's seating surface, and the corner's panel extension lands on that same view as a real
+feature — the corner's extension face sits at 32.7375 from the airframe axis and the bulkhead
+has a face there too. So the projection is of parts that genuinely share the plane rather than
+a construction.
+
+**The `corner_tolerance` callout will read 0.00, and that is the point of putting it there.**
+[OQ-DES-C5](corner.md#open-questions) resolved on 2026-08-14 by creating the parameter and
+holding it at 0, and recorded the residual plainly: *"if these faces are bonded, 0 leaves no
+bond line."* A callout naming the clearance and showing 0.00 puts that in front of whoever is
+assembling the airframe. This is **not** §2's structural-zero case — the joint exists and the
+clearance was chosen — so the rule about omitting a dimensioned zero does not apply, and
+omitting it would hide a live question rather than avoid a false claim.
 
 ### Three things the drawing has to say that a dimension alone does not
 
@@ -81,11 +205,17 @@ wrong design intent away from a correct number.
 ## 3. The completeness test
 
 > **The set is complete when, for every entry in `design_constants.json`'s `tolerances` group,
-> the drawing carries every dimension that entry's expression consumes.**
+> the drawing carries every dimension that entry's expression consumes — and, for a part that
+> encloses a space, the span §1 names for it.**
 
 Mechanical, and checkable against a file that already exists and is already validated —
 `load_constants()` refuses a missing name and refuses an unrecognized one, so the group cannot
 silently drift out from under the test.
+
+The second clause was added with §1's on 2026-08-22 and costs the test nothing, because §1's
+list is closed: two parts have an enclosed span, both are named there with their expressions,
+and a part not on that list is not asked for one. What the clause buys is that a bulkhead
+drawing missing its aperture now *fails* the test rather than passing it.
 
 Worked: joint 7's expression consumes `corner_radius`, `n_p`, `w` and `cowl_flange_tolerance`.
 The drawing carries the resulting flange radius and the clearance. `n_p·w` is the radial room
@@ -93,13 +223,15 @@ the **cowl's** wall occupies, so a drawing of the *bulkhead* that dimensions the
 saying what the subtraction is for leaves its most important number unexplained — the reason
 the flange is where it is lives in another part.
 
-> **A fourth gap, and it is larger than the three below: [OQ-DES-D2](#open-questions)
-> asks whether this test is satisfiable at all.** Measured on the built parts on
-> 2026-08-22, **6 of 22 interface parameters exist as a distance anywhere on their own
-> part** — and one of those six is a value-matching coincidence. The rest are off by
-> exactly a clearance, because §2's own principle puts the whole fit clearance inside
-> the mating face. "Carries every dimension the expression consumes" therefore cannot
-> be met by dimension lines, and what replaces it is the open question.
+> **A fourth gap, and it is larger than the three below.** Measured on the built
+> parts on 2026-08-22, **6 of 22 interface parameters exist as a distance anywhere
+> on their own part** — and one of those six is a value-matching coincidence. The
+> rest are off by exactly a clearance, because §2's own principle puts the whole fit
+> clearance inside the mating face. So "carries every dimension the expression
+> consumes" is not satisfiable by dimension *lines*, and
+> [OQ-DES-D2](#open-questions) settled what satisfies it instead: the dimension
+> carries the feature and its callout carries the parameter, so the sheet states
+> both and the test reads the pair rather than the dimension alone.
 
 **Three known gaps in the test, stated rather than left to be discovered.**
 
@@ -368,9 +500,7 @@ belong in its interface-conventions section, and what stays here is the drawing-
 
 ## Open questions
 
-| ID | Status | Question |
-| --- | --- | --- |
-| D2 | open | §3's completeness test obliges the drawing to carry every dimension a joint's expression consumes, but **6 of 22 interface parameters exist as a distance on their own part** — the clearances are baked into the mating faces. What does the drawing carry instead? *Blocking IP-FC-21's `drawing.py`* |
+None open.
 
 ### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
 
@@ -460,140 +590,154 @@ actually has.
 
 *Implementation: IP-FC-21 (family drawings), IP-FC-84 (single-variant sets).*
 
-### OQ-DES-D2 — Most interface parameters are not distances on the part. What does the drawing dimension?
+### ~~OQ-DES-D2 — How does a dimension state a joint, when the reader is integrating rather than inspecting?~~ — DECIDED 2026-08-22: the dimension is the feature as built, and a callout beside it names the hardware
 
-**The problem.** §3 states the completeness test as: *the set is complete when, for every entry
-in `design_constants.json`'s `tolerances` group, the drawing carries every dimension that
-entry's expression consumes.* A drawing carries a dimension by drawing a dimension line
-between two things — two faces, a face and an axis, an arc and its center. So the test is only
-satisfiable for a parameter that **is** such a separation.
+**Chosen: alternative 3.** A dimension gives the feature the way the part actually is, and the
+callout beside it says what the feature is for:
 
-Measured on the built parts on 2026-08-22, most are not. Each of the three ported kinds was
-built at `U` = 1.0 with a 3/16 in panel, every planar face reduced to its axis-aligned
-position and every cylindrical and conical face to its radius, and each interface parameter
-tested against every face-to-face separation, every face-to-datum distance, and every radius:
+```
+⌀4.10 BORE
+FOR ⌀4.00 LONGERON
+0.10 DIA CLEARANCE
+```
 
-| Part | Interface parameters | Exist as a distance on the part |
+Both readers are served by one annotation, and the two numbers cannot drift apart, because the
+callout and the dimension are generated from the same expression.
+
+**Why the other three lost, which the drawings made plain in a way the prose had not.**
+Dimensioning only the features as built states none of the three hardware sizes and not by
+arithmetic either — the clearance is the term that would let a reader work backwards, and it
+never appears on the sheet. Dimensioning the nominals instead, to the mating parts drawn as
+reference geometry, states every hardware size and leaves every dimension disagreeing with the
+part: a caliper on the bore reads 4.10 against a drawing that says 4.00. Moving the hardware
+into a schedule beside the view works, and it costs table rows the sheets do not have — five of
+the thirteen family sheets measure 19 of 19 available rows with nothing spare (§5.1a). The
+callout costs nothing off the view.
+
+**The risk this takes on, stated because it is real and not yet measured.** §5.2's hard
+constraints are about the rectangle an annotation occupies, and a three-line callout is several
+times a bare dimension's extent. Whether a whole part's worth of them places without collision
+is measurable with what is already built — `drawing_standard.text_width_mm` measures arbitrary
+strings from the pinned font — and has not been measured. **If they do not place, alternative 4
+becomes the answer and the sheet size becomes the question**, which is the right order: a larger
+sheet is a smaller decision than a drawing that does not say what it is for.
+
+**A finding this surfaced that the decision does not fix.** The bolt hole is ⌀4.00 for a
+nominal 4 mm bolt — a line-to-line fit with no clearance at all, because joint 10 is the one
+interface in the register with no clearance parameter (§3, gap 2). What the callout does is
+make that *visible*: it prints the fastener beside the hole, where a bare `⌀4.00` says nothing
+and a reader has no way to notice the bolt will not pass.
+
+*The alternatives as drawn are in
+[`draw_dimension_alternatives.py`](../../src/Fuselage/tools/draw_dimension_alternatives.py),
+which annotates the corner's mid-bay section four ways from geometry traced off the built
+solid. Implementation: IP-FC-21.*
+
+### ~~OQ-DES-D3 — The drawing's rule for what to dimension can only see parts that are in the model~~ — DECIDED 2026-08-22: the aperture is a dimension and goes on the drawings; volume goes in a data block
+
+**The aperture span is a dimension, and it is worth having on the drawings.** It is not a
+special case needing a new kind of annotation: it is the distance between two real, parallel,
+planar faces, and it dimensions exactly like the bore or the panel pocket does.
+
+Measured on the built parts to confirm that before generating it, because a dimension across a
+bounding box that merely touches at some corner feature would not be one:
+
+| Part | Interior faces | Area of each | Span |
+| --- | --- | --- | --- |
+| frame bulkhead | ±43.9375 in **both** axes | 247.3 mm² | **87.875** |
+| boom bulkhead | ±39.1375 in both axes | 93.7 mm² | **78.275** |
+
+**And it is an expression over the parameters, not a measurement** — which matters, because a
+dimension bound to a measured face is bound to the topology, and IP-FC-5 established that face
+counts move with `U`. Both check exactly against the faces above:
+
+```
+frame bulkhead   unit_width - 2*(panel_thickness + panel_tolerance) - 2*flange_thickness
+                 100 - 2*(4.7625 + 0.1) - 2*1.2   = 87.875
+boom bulkhead    unit_width - 2*(panel_thickness + panel_tolerance) - 2*web_width
+                 100 - 2*(4.7625 + 0.1) - 2*6.0   = 78.275
+```
+
+The two differ in their last term because the ring's inner boundary is set by the flange on a
+frame bulkhead and by the web on a boom bulkhead. That is a real difference between the parts,
+not a naming inconsistency.
+
+**A caveat the boom bulkhead needs and the frame bulkhead does not.** On a boom bulkhead the
+span between the interior faces is 78.275 in both axes, but the *clear* opening is
+78.275 × 66.402, because the boom collet intrudes from one side. The dimension is the span; the
+obstruction is visible in the view. A reader asking "what fits through" needs to look at the
+view and not only at the number, and on this part alone those are two different answers.
+
+**What this changes in §1.** The membership test was *dimension it if another part's geometry
+depends on it*, which is a test about joints. The aperture has no joint — nothing in the model
+mates with it — and everything the airframe carries depends on it. The rule gains a second
+clause and stays closed rather than open-ended: the enclosed span of each part that has one, by
+name, so the completeness test remains a lookup rather than a judgment.
+
+**Volume goes in a data block.** Either a data area or a callout was acceptable; the block is
+chosen because a callout points *at* a feature and volume is a property of the whole part, so a
+leader would have nothing to land on. It carries the solid volume and the wall area, which are
+the two numbers that let a reader work out material for their own slicing — and neither of them
+depends on a slicing choice, which is what makes them safe to print. **Mass stays off**: it
+needs a filament density and the reader's perimeter count, and the design constrains neither.
+
+On a single-variant sheet the block is three lines. On a family sheet, volume and wall area vary
+with every size axis, so they become two more columns in the factored tables — which costs sheet
+*width* rather than rows, and width has not been budgeted the way §5.1a budgeted rows.
+
+*Implementation: IP-FC-21.*
+
+### ~~OQ-DES-D4 — Panels are to get their own OML allocation, and nothing in the model owns one~~ — DECIDED 2026-08-22: the panel OML becomes a part
+
+**Chosen: the allocated envelope itself becomes a part, and panel designs are then made to fit
+within it.** That is not one of the four alternatives as filed — those offered a derivation, a
+*panel* part, a data file, or nothing — and it is better than any of them for one reason: an
+envelope that is a part can be checked against **geometrically**, by containment, rather than
+by a person comparing a candidate against numbers somebody transcribed. Interchange is the
+stated purpose, and a containment test is what interchange actually needs.
+
+It also keeps the panel itself out of the printed-part pipeline, which was the real cost of
+making the *panel* a sweep part: a panel is cut sheet, not a print, and it does not fit the
+assumptions the rest of the sweep carries. The OML part is not a manufactured object at all —
+it is the space a panel is allowed to occupy.
+
+**The envelope is complete and every boundary of it is verified.** All of it is in §2's
+register, and each figure is an expression over parameters that a built face confirms:
+
+| | Expression | At 1U, 3/16 in |
 | --- | --- | --- |
-| corner | 10 | 1 — `corner_radius` |
-| bulkhead | 6 | 2 — `bolt_offset`, `cowl_n_perimeters` |
-| boom bulkhead | 6 | 3 — `bolt_offset`, `boom_diameter`, `corner_radius` |
+| width, corner to corner | `unit_width − 2·(corner_radius + panel_offset)` | 75.000 |
+| exposed span between corners | `width − 2·panel_overlap` | 65.475 |
+| entry into each corner | `panel_overlap` | 4.7625 |
+| thickness | `panel_thickness` | 4.7625 |
+| pocket | `panel_thickness + panel_tolerance` | 4.8625 |
+| inner face from the airframe axis | `unit_width/2 − panel_thickness − panel_tolerance` | 45.1375 |
+| outer face | the mold line, `unit_width/2` | 50.000 |
+| length along the bay | `unit_length`, the full bay | 100.000 |
 
-**6 of 22, and one of the six is a coincidence**: `cowl_n_perimeters` is a *count* of extruded
-perimeters, not a length, and it matched a 1.0 mm radius because the value-matching test
-cannot tell a count from a millimeter. So the real figure is 5 of 22 or fewer.
+**A claim made twice while this was open, and wrong both times.** It was asserted here that the
+four faces of a bay are not alike — that a boom passes through one and a cowling station closes
+an end. Neither holds, and both were checked only after being written down:
 
-**Why this is a consequence of the design rather than an oversight.** The corner shows it
-plainly. Its faces sit at x = −7.2625, −2.4, 0, 5.1375 and 10.0 mm, and the near misses are
-exact:
+- **The cowl closes an end of the airframe**, perpendicular to the fuselage axis. It never
+  touches a side face where a panel sits. That was a confusion between the end of the fuselage
+  and a face of a bay.
+- **The boom runs parallel to the fuselage axis, inside the airframe.** `boom_key_shape` is
+  inside the `linear_extrude`, so the boom hole is a 2D feature extruded through the bulkhead's
+  thickness. It reaches 32.20 mm off-axis against a panel inner face at 45.1375 — it clears the
+  panel by **12.94 mm** and never reaches a side face at all.
 
-| Parameter | Value | The nearest thing the part has |
-| --- | --- | --- |
-| `panel_thickness` | 4.7625 | 4.8625 = `panel_thickness + panel_tolerance`, from the slot's lower face to the mold line |
-| `panel_offset` | 2.5 | 2.4 = `panel_offset − panel_tolerance`, from the corner axis to the slot's inner face |
-| `longeron_radius` | 2.0 | 2.05 = `longeron_radius + longeron_tolerance`, the bore |
-| `panel_overlap` | 4.7625 | 9.525 = `2 · panel_overlap`, the slot width |
+**So there is no evidence the four faces of a bay differ**, and the allocation is one envelope.
+That is also what the decision implies: the OML is a part, and what differs between faces is the
+*panel design* fitted into it, which is exactly the interchange the allocation exists to allow.
 
-Every one is off by exactly the clearance. That is §2's own principle working: *the corner
-carries the whole fit clearance* — so the clearance is **inside every mating face**, and the
-nominal parameter is precisely the number the part deliberately does not measure. A drawing
-cannot dimension `panel_thickness` on a corner because the corner has no `panel_thickness`
-anywhere in it; it has a slot cut to hold a panel of that thickness with room to bond.
+**One real difference between stations, which is not a difference between faces.** The boom
+bulkhead presents a 75.000 mm seating face to the panel where the frame bulkhead presents
+65.475 mm — measured as 150.000 mm² and 392.850 mm² over thicknesses of 2 and 6. Different
+stations give the same panel different amounts of seat. Worth knowing; it does not bear on the
+envelope, which is set by the corner.
 
-**Which use cases are affected.** All of them, both products. The family sheet's callouts and
-the single-variant sheet's values point at the same places; only the annotation text differs.
-It affects the *completeness check* as much as the drawing: as written the check can never
-pass, so either it is unsatisfiable or it means something other than what it says.
-
-**What is not affected.** The factoring, the partition, the placement solver and the sheet
-pinning are all independent — they operate on whatever set of dimensions is chosen. IP-FC-21's
-`drawing_families.py` is unaffected; `drawing.py` cannot be written until this is settled,
-because what it draws is exactly what is in question.
-
-**Alternatives**
-
-1. **Dimension the parameters to constructed reference geometry.** Draw nominal planes the
-   part does not have — the mold line, the nominal seat plane, the longeron centerline — and
-   dimension the parameters between them, with the real faces shown but not dimensioned.
-   *Benefits:* §3's test passes verbatim, with no restatement. The drawing states design
-   intent directly, and the note explaining which term binds (§2's third point) attaches
-   naturally to a nominal dimension. It is also how a bonded assembly is often drawn.
-   *Drawbacks:* **nothing on the drawing is inspectable.** A shop measuring a printed corner
-   has no feature at the nominal seat plane to put a caliper on, and every dimension it can
-   measure is absent. It inverts the failure §2 warns about — instead of dimensioning a
-   clearance the part does not have, it dimensions everything the part does not have.
-   *Prerequisites:* a convention for marking reference dimensions, which §6 lists as
-   undecided.
-
-2. **Dimension the faces the part has, and restate the test as recoverability.** The drawing
-   carries the real feature dimensions — the corner's slot width, slot depth, slot position,
-   panel extension, bore radius, mold-line radius — and the completeness test becomes: *for
-   every register expression, its value is computable from the dimensions carried plus the
-   clearance note.* Clearances move into a note block keyed to the joint, which is where a
-   clearance normally lives on a drawing.
-   *Benefits:* every dimension on the sheet is one a shop can measure on the part, which is
-   what a part drawing is for. The check stays mechanical — recoverability is a solvability
-   question over the register's own expressions, no less checkable than the current test.
-   Nothing is drawn that does not exist.
-   *Drawbacks:* it changes §3, which is a decided section, and the change is not cosmetic:
-   *complete* stops meaning "carries these parameters" and starts meaning "determines them".
-   A reader who wants the nominal parameter must do arithmetic, which is what §2's
-   worked-expression note exists to avoid. It also needs the recoverability solver written,
-   where the present test is a set intersection.
-   *Prerequisites:* none — the register's expressions are already parsed by
-   `drawing_families.py`.
-
-3. **Both, on one sheet: real dimensions on the view, parameters in the table.** The view
-   carries only measurable dimensions; the value table gains a block of the design parameters
-   as *reference*, marked as such and not dimensioned on any view.
-   *Benefits:* the shop reads the view and the designer reads the table, each getting the
-   numbers they need in the form they need them. §3's test passes as written, since the
-   drawing does carry every consumed parameter — just not as a dimension line.
-   *Drawbacks:* the sheet now carries two numbers for the same feature that differ by a
-   clearance — 4.7625 in the table and 4.8625 on the view — with nothing but a label to say
-   which is which. That is the most likely misreading on the whole drawing, and its
-   consequence is a part made to the nominal instead of the clearance. It also costs table
-   rows on families that measured at 19 of 19 with none spare (§5.1a).
-   *Prerequisites:* a reference-dimension convention, as in alternative 1.
-
-4. **Dimension the faces, and carry each clearance as a tolerance on the dimension it is
-   inside.** The slot's lower face is dimensioned at 5.1375 from the axis with `panel_tolerance`
-   shown as a directional tolerance on that dimension rather than as a separate number.
-   *Benefits:* the clearance appears exactly where it acts, which is the most faithful
-   statement of the joint and the most familiar to a reader. No second number for the same
-   feature. It also makes §2's "which part carries the clearance" visible without a note —
-   the bulkhead's matching dimension simply has no tolerance on it.
-   *Drawbacks:* a printed clearance is not a manufacturing tolerance, and drawing it as one
-   asserts something false — it says the feature may be anywhere in that band, when the design
-   says it is at a specific place chosen to leave a bond line. A shop reading it as a
-   tolerance would be entitled to print at either limit. This is a real risk rather than a
-   pedantic one: FDM parts already carry dimensional spread of the same order.
-   *Prerequisites:* a tolerancing convention, which §6 lists as undecided.
-
-**Recommendation**
-
-**Alternative 2, with the clearance note taken from alternative 4's placement idea but not
-its semantics** — that is, the note names the joint and says which dimension the clearance is
-inside, without drawing it as a tolerance band.
-
-The measurement is what decides it. 5 of 22 parameters are drawable as they stand; the other
-17 are not near misses that better drafting would fix, they are quantities the part was
-deliberately built not to contain. A drawing scheme that requires them either draws to
-geometry the part does not have (alternative 1) or prints two numbers for one feature
-(alternative 3). Alternative 2 is the only one where every line on the sheet corresponds to
-something a caliper can reach.
-
-The cost is honest and should be stated plainly: **§3's completeness test has to be rewritten**,
-and *complete* changes meaning from "carries the parameters" to "determines the parameters".
-That is a weaker-sounding claim and it is not weaker — determining a value from measurable
-dimensions plus a stated clearance is strictly more useful to both readers than printing the
-value in a form neither can check. But it is a change to a decided section, which is why this
-is filed rather than implemented.
-
-Alternative 4 should be rejected rather than deferred, on the same reasoning §2 gives for
-structural zeros: a drawing must not assert a fit that was not designed. A designed clearance
-drawn as a manufacturing tolerance says the feature may be anywhere in the band, and the design
-says it is at one place.
+*Implementation: IP-FC-85 for the OML part, IP-FC-22 for the assembly drawings it appears on.*
 
 ---
 

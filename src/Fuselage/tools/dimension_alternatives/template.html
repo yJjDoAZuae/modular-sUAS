@@ -1,0 +1,454 @@
+<title>Four Ways to Dimension a Corner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --paper:      #f6f4f0;
+  --card:       #fffefb;
+  --ink:        #141a1d;
+  --muted:      #5d6f79;
+  --rule:       #ddd8ce;
+  --dim:        #b8372a;
+  --oml:        #1c7a54;
+  --mate:       #7a5ea8;
+  --body-fill:  rgba(20, 26, 29, .10);
+  --body-line:  #141a1d;
+  --axis:       #b3aca0;
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --disp: "Archivo", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:     #0e1316;
+    --card:      #141a1e;
+    --ink:       #dce6ea;
+    --muted:     #8ea3ad;
+    --rule:      #26313a;
+    --dim:       #ff6f5e;
+    --oml:       #4fd39b;
+    --mate:      #b39ae0;
+    --body-fill: rgba(220, 230, 234, .10);
+    --body-line: #dce6ea;
+    --axis:      #46545e;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:     #0e1316;
+  --card:      #141a1e;
+  --ink:       #dce6ea;
+  --muted:     #8ea3ad;
+  --rule:      #26313a;
+  --dim:       #ff6f5e;
+  --oml:       #4fd39b;
+  --mate:      #b39ae0;
+  --body-fill: rgba(220, 230, 234, .10);
+  --body-line: #dce6ea;
+  --axis:      #46545e;
+}
+:root[data-theme="light"] {
+  --paper:     #f6f4f0;
+  --card:      #fffefb;
+  --ink:       #141a1d;
+  --muted:     #5d6f79;
+  --rule:      #ddd8ce;
+  --dim:       #b8372a;
+  --oml:       #1c7a54;
+  --mate:      #7a5ea8;
+  --body-fill: rgba(20, 26, 29, .10);
+  --body-line: #141a1d;
+  --axis:      #b3aca0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0 20px 96px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+.measure { max-width: 68ch; }
+
+header { padding: 72px 0 34px; border-bottom: 2px solid var(--ink); margin-bottom: 40px; }
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin: 0 0 14px;
+}
+h1 {
+  font-family: var(--disp); font-weight: 700; font-size: clamp(30px, 5vw, 50px);
+  line-height: 1.04; letter-spacing: -.02em; margin: 0 0 18px; text-wrap: balance;
+}
+.standfirst { font-size: 19px; color: var(--muted); margin: 0; max-width: 62ch; }
+
+h2 {
+  font-family: var(--disp); font-weight: 600; font-size: 24px; letter-spacing: -.01em;
+  margin: 56px 0 4px; text-wrap: balance;
+}
+h2 + .sub { color: var(--muted); margin: 0 0 24px; max-width: 62ch; }
+h3 { font-family: var(--disp); font-weight: 600; font-size: 17px; margin: 0; }
+p { margin: 0 0 16px; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .num { font-family: var(--mono); font-size: .92em; }
+
+.asked { display: grid; gap: 10px; margin: 0 0 8px; padding: 0; list-style: none; }
+.asked li {
+  display: flex; gap: 14px; align-items: baseline;
+  padding: 12px 16px; background: var(--card);
+  border: 1px solid var(--rule); border-left: 3px solid var(--dim);
+}
+.asked b {
+  font-family: var(--mono); font-size: 12px; color: var(--dim);
+  letter-spacing: .08em; text-transform: uppercase; flex: 0 0 auto;
+}
+
+.grid {
+  display: grid; gap: 26px; margin: 30px 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
+}
+.scheme {
+  margin: 0; background: var(--card); border: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+.scheme figcaption {
+  display: flex; gap: 14px; align-items: baseline;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--rule);
+}
+.key {
+  font-family: var(--disp); font-weight: 700; font-size: 13px; letter-spacing: .1em;
+  color: var(--paper); background: var(--ink);
+  padding: 3px 9px; flex: 0 0 auto;
+}
+.plate { padding: 10px 14px 4px; }
+.plate svg { display: block; width: 100%; height: auto; }
+.blurb { padding: 4px 20px 20px; margin: 0; font-size: 15px; color: var(--muted); }
+
+/* the drawing vocabulary, shared with draw_corner_joint.py */
+.body   { fill: var(--body-fill); stroke: var(--body-line); stroke-width: 1.3; }
+.oml    { fill: none; stroke: var(--oml); stroke-width: 2.4; }
+.mate   { fill: none; stroke: var(--mate); stroke-width: 1.5; stroke-dasharray: 9 3 2 3; }
+.proj   { fill: none; stroke: var(--oml); stroke-width: 1.4; opacity: .85; }
+.axis   { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 12 3 2 3; }
+.dimline { stroke: var(--dim); stroke-width: 1.1; }
+.dimwit  { stroke: var(--dim); stroke-width: .9; opacity: .75; }
+.ldr     { fill: none; stroke: var(--dim); stroke-width: 1.1; }
+.dimhead { fill: var(--dim); stroke: none; }
+.dimtext { font-family: var(--mono); font-size: 11.5px; font-weight: 600; fill: var(--dim); }
+.dimnote { font-family: var(--mono); font-size: 10px; font-weight: 400; fill: var(--dim); }
+text.lbl  { font-family: var(--mono); font-size: 10.5px; fill: var(--muted); }
+text.mlbl { font-family: var(--mono); font-size: 10.5px; fill: var(--mate); font-weight: 600; }
+.tagring { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+.tagtext { font-family: var(--mono); font-size: 11px; font-weight: 600; fill: var(--ink); }
+
+.scroll { overflow-x: auto; margin: 22px 0 0; border: 1px solid var(--rule); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; background: var(--card); }
+caption {
+  caption-side: top; text-align: left; padding: 14px 18px 12px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--rule);
+}
+th, td { padding: 11px 18px; text-align: left; border-bottom: 1px solid var(--rule); }
+thead th {
+  font-family: var(--disp); font-weight: 600; font-size: 13px;
+  letter-spacing: .04em; white-space: nowrap;
+}
+tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+td { font-variant-numeric: tabular-nums; }
+td:nth-child(n+3) { font-family: var(--mono); font-size: 13px; }
+.tagcell { font-family: var(--mono); font-weight: 600; text-align: center; width: 3em; }
+.score th[scope="row"] { font-weight: 400; font-size: 15px; max-width: 30ch; }
+.score td { text-align: center; }
+.s {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  padding: 3px 9px; white-space: nowrap; display: inline-block;
+}
+.s.yes   { background: color-mix(in srgb, var(--oml) 16%, transparent); color: var(--oml); }
+.s.arith { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted); }
+.s.no    { background: color-mix(in srgb, var(--dim) 14%, transparent); color: var(--dim); }
+
+.facts { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); margin: 26px 0 0; }
+.fact { background: var(--card); border: 1px solid var(--rule); padding: 18px 20px; }
+.fact dt {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted); margin: 0 0 8px;
+}
+.fact dd {
+  font-family: var(--disp); font-weight: 600; font-size: 26px;
+  margin: 0; letter-spacing: -.01em; font-variant-numeric: tabular-nums;
+}
+.fact .unit { font-size: 14px; font-weight: 500; color: var(--muted); }
+.fact .gloss { font-family: var(--sans); font-size: 13.5px; font-weight: 400; color: var(--muted); margin-top: 8px; line-height: 1.45; }
+
+.callout {
+  border-left: 3px solid var(--dim); background: var(--card);
+  padding: 18px 22px; margin: 26px 0 0; max-width: 72ch;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+.verdict {
+  margin: 22px 0 0; padding: 12px 18px; max-width: 62ch;
+  background: color-mix(in srgb, var(--oml) 12%, transparent);
+  border-left: 3px solid var(--oml); font-size: 15.5px;
+}
+.verdict b { font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--oml); }
+.scheme.wide { margin: 26px 0 0; }
+h3.minor {
+  font-family: var(--disp); font-weight: 600; font-size: 19px;
+  margin: 40px 0 12px; letter-spacing: -.01em;
+}
+.pc { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+tbody th[scope="row"] { font-weight: 500; }
+
+footer {
+  margin-top: 68px; padding-top: 22px; border-top: 1px solid var(--rule);
+  font-size: 13.5px; color: var(--muted);
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">OQ-DES-D2 &middot; decision aid &middot; drawn from built geometry</p>
+  <h1>Four ways to dimension a corner</h1>
+  <p class="standfirst">The same section, traced from the solid FreeCAD built, annotated four
+  ways. Every number below is measured or resolved &mdash; none is drawn to illustrate a
+  point. Variant {{variant}}.</p>
+  <p class="verdict"><b>Decided 2026&#8209;08&#8209;22</b> &mdash; scheme&nbsp;C. The dimension
+  gives the feature as built; the callout beside it names the hardware.</p>
+</header>
+
+<section>
+  <h2>What the drawing user came to find out</h2>
+  <p class="sub">These are the questions the sheet has to answer. A scheme that cannot answer
+  them is not a candidate, however well drafted it is.</p>
+  <ul class="asked">
+    <li><b>Longeron</b><span>What size longeron is used, and what is the tolerance on that
+      dimension?</span></li>
+    <li><b>Panel</b><span>What size panel is used, and what is its tolerance?</span></li>
+    <li><b>Fasteners</b><span>What size bolts and bolt anchors are used?</span></li>
+    <li><b>Cell</b><span>What is the interior dimension of the structural cell &mdash; the
+      bulkhead interior aperture?</span></li>
+    <li><b>Mass</b><span>How much volume does each part use, which translates to
+      mass?</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>The four schemes</h2>
+  <p class="sub">The outline is the corner at mid&#8209;bay. Green is the mold line, purple is
+  geometry that is referenced but not present in the part, red is a dimension. The bore opens
+  onto the diagonal seating face rather than closing into a hole, which is why it reads as a
+  concave arc.</p>
+  <div class="grid">
+    {{panels}}
+  </div>
+</section>
+
+<section>
+  <h2>What each scheme actually answers</h2>
+  <p class="sub">Read down a column. The first three rows are the drawing user&rsquo;s
+  questions; the last two are what answering them costs. &ldquo;Absent&rdquo; is literal
+  &mdash; not recoverable by arithmetic either, because the clearance is the missing term and
+  it is not on the sheet in scheme&nbsp;A at all.</p>
+  <div class="scroll">
+    <table class="score">
+      <caption>Three questions, and what each scheme spends on them</caption>
+      <thead><tr><th scope="col">&nbsp;</th>{{heads}}</tr></thead>
+      <tbody>{{score}}</tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>Scheme A is not a near miss, it is a different document.</strong> R2.05 and a
+    4.86&thinsp;mm pocket are both true and both inspectable, and there is no route from
+    either to &ldquo;4.00&thinsp;mm longeron, 0.10 clearance&rdquo;. The clearance is the term
+    that would let a reader work backwards and scheme&nbsp;A never prints it. It answers an
+    inspector completely and an integrator not at all.</p>
+    <p><strong>Scheme B fails the opposite way, and more quietly.</strong> Every hardware size
+    is right there &mdash; and a caliper on the bore reads 4.10 against a drawing that says
+    4.00, with nothing on the sheet to explain the difference. A drawing whose every dimension
+    disagrees with the part is worse than one that omits them.</p>
+    <p><strong>So the choice is between C and D, and it is about where the hardware lives,
+    not whether it appears.</strong> C puts it in a callout beside the dimension; D moves it
+    into a schedule and tags the dimension. C costs nothing off the view. D costs table rows
+    &mdash; and five of the thirteen family sheets already measure 19 rows of 19 available,
+    with nothing spare.</p>
+  </div>
+</section>
+
+<section>
+  <h2>The aperture, and what it is not</h2>
+  <p class="sub">Decided 2026&#8209;08&#8209;22: the span between the interior faces is a
+  dimension and belongs on the drawings. It is a distance between two real parallel faces, so
+  it dimensions like anything else.</p>
+
+  <figure class="scheme wide">
+    <figcaption><span class="key">D3</span><h3>The bulkhead, with one joint and one span</h3></figcaption>
+    <div class="plate">{{bulkhead_view}}</div>
+    <p class="blurb">The bolt hole is a joint &mdash; something mates with it &mdash; so it gets
+    the callout scheme&nbsp;C decided on. The opening through the middle is not a joint, and
+    nothing in the model mates with it, but everything the airframe carries depends on it. The
+    rule that picks dimensions gained a second clause for exactly this, and the clause is a
+    closed list of two parts rather than an open invitation, so the completeness check stays a
+    lookup.</p>
+  </figure>
+
+  <div class="callout">
+    <p><strong>It is an expression, not a measurement</strong>, which is what makes it
+    generable: <code>unit_width &minus; 2&middot;(panel_thickness + panel_tolerance) &minus;
+    2&middot;flange_thickness</code> = {{aperture_w}}. The boom bulkhead uses
+    <code>web_width</code> in place of <code>flange_thickness</code> and comes to 78.275,
+    because its inner boundary is set by the web rather than the flange.</p>
+    <p><strong>On a boom bulkhead the span and the clear opening differ.</strong> The span is
+    78.275 both ways; the clear opening is 78.275 &times; 66.402, because the boom collet
+    intrudes from one side. The dimension is the span and the obstruction is visible in the
+    view &mdash; but this is the one part where &ldquo;what fits through&rdquo; is not the
+    number on the drawing.</p>
+  </div>
+</section>
+
+<section>
+  <h2>The panel allocation</h2>
+  <p class="sub">Panels are to get their own OML allocation, with shapes designed inside it so
+  designs can be interchanged. The frame determines every boundary of it, and the bulkhead
+  section is the one view that can carry them &mdash; because its outer profile <em>is</em> the
+  panel&rsquo;s seating surface.</p>
+
+  <figure class="scheme wide">
+    <figcaption><span class="key">D4</span><h3>What the frame allocates to a panel</h3></figcaption>
+    <div class="plate">{{panel_view}}</div>
+    <p class="blurb">The panel is drawn as reference geometry, because there is no panel part in
+    the sweep &mdash; <code>panel_variants.csv</code> carries a thickness and nothing else. Its
+    envelope is drawn from expressions over the frame&rsquo;s own parameters, every one of which
+    a corner face confirms.</p>
+  </figure>
+
+  <div class="callout">
+    <p><strong>The width is confirmed by a clearance rather than by a face, which is the
+    stronger check.</strong> Take the panel to be {{panel_width}} wide and its edge lands at
+    corner&#8209;local x&nbsp;=&nbsp;&minus;2.5000, against a slot bottom at &minus;2.4000. The
+    gap is 0.1000 &mdash; <code>panel_tolerance</code> exactly. No other width fits the slot the
+    corner was actually cut with.</p>
+    <p><strong>The panel runs the full bay, and the bulkhead is cut out to let it.</strong>
+    The geometry says so twice. The bulkhead&rsquo;s outer profile sits 4.8625&thinsp;mm inboard
+    of the mold line &mdash; exactly the panel pocket &mdash; and one of its outer flat faces
+    measures 392.850&thinsp;mm&sup2;, which is 65.475&nbsp;&times;&nbsp;6: the panel&rsquo;s
+    exposed span times the bulkhead thickness. <strong>The bulkhead&rsquo;s outer flat face
+    <em>is</em> the panel&rsquo;s seating surface</strong>, cut back by precisely the panel it
+    seats and running precisely as far. So a panel is not interrupted at a station; the
+    bulkhead gives way to it rather than the other way round.</p>
+    <p>What is left open is what <em>owns</em> the envelope. Interchange needs something a panel
+    designer can be handed and a check can read against, and today it exists only as these
+    expressions inside a generator.</p>
+  </div>
+</section>
+
+<section>
+  <h2>The assembly view</h2>
+  <p class="sub">Required 2026&#8209;08&#8209;22: the panel and the corner projected onto the
+  bulkhead top view, with the panel width and thickness as dimensions and the two clearances as
+  callouts.</p>
+
+  <figure class="scheme wide">
+    <figcaption><span class="key">ASM</span><h3>Panel and corner on the bulkhead</h3></figcaption>
+    <div class="plate">{{assembly_view}}</div>
+    <p class="blurb">The corner is the same traced mid&#8209;bay section as the four scheme
+    drawings above, placed at the corner&rsquo;s own origin in the airframe frame and mirrored
+    into the four quadrants &mdash; a transform of measured geometry, not a redrawing of it.</p>
+  </figure>
+
+  <div class="callout">
+    <p><strong>The bulkhead top view is the carrier because it is the only view where all three
+    parts share a plane.</strong> The bulkhead&rsquo;s outer flat face is the panel&rsquo;s
+    seating surface, and the corner&rsquo;s panel extension ends at 32.7375&thinsp;mm from the
+    airframe axis &mdash; a position the bulkhead carries a face at as well. Nothing here is
+    constructed onto the view; the parts are where they are.</p>
+    <p><strong>The corner tolerance callout reads 0.00, and that is the reason to put it
+    there.</strong> OQ&#8209;DES&#8209;C5 held the parameter at 0 and wrote down the residual:
+    <em>if these faces are bonded, 0 leaves no bond line.</em> Printing it puts a live question
+    in front of whoever assembles the airframe. This is not the structural&#8209;zero case the
+    scheme warns about &mdash; that rule is for a joint the part does not have, and this joint
+    exists with a clearance somebody chose.</p>
+    <p><strong>It also needs both parts&rsquo; parameter tables.</strong> <code>corner_tolerance</code>
+    is not in the bulkhead&rsquo;s table at all, because the corner carries the whole of that
+    clearance and the bulkhead passes zero. Needing two tables is what makes this an assembly
+    drawing rather than two part drawings on one sheet.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Material, in a data block</h2>
+  <p class="sub">Not a dimension and not a callout: a callout points <em>at</em> a feature, and
+  volume is a property of the whole part.</p>
+
+  <p class="measure">It is also not a property of the design. <strong>The corner does not change
+  shape to suit a slicing choice the way the cowl does</strong> &mdash; the cowl&rsquo;s wall
+  thickness reaches its geometry, and the corner is the same solid at one perimeter or five. So
+  a sheet stating a mass would state something the design does not determine. What it carries
+  instead is the two numbers that let a reader work out material for their own settings, neither
+  of which depends on a slicing choice. Measured on the built solids, walls only, no caps, no
+  infill:</p>
+
+  <div class="scroll">
+    <table>
+      <caption>Material against solid volume, {{variant}}</caption>
+      <thead><tr><th scope="col">Part</th><th scope="col">Solid volume</th><th scope="col">Wall area</th><th scope="col">1 perimeter</th><th scope="col">2 perimeters</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">corner</th><td>{{corner_v}} mm&sup3;</td><td>{{corner_wall}} mm&sup2;</td><td>{{corner_p1}} mm&sup3; <span class="pc">{{corner_p1pc}}&#8239;%</span></td><td>{{corner_p2}} mm&sup3; <span class="pc">{{corner_p2pc}}&#8239;%</span></td></tr>
+        <tr><th scope="row">bulkhead</th><td>{{bulkhead_v}} mm&sup3;</td><td>{{bulkhead_wall}} mm&sup2;</td><td>{{bulkhead_p1}} mm&sup3; <span class="pc">{{bulkhead_p1pc}}&#8239;%</span></td><td>{{bulkhead_p2}} mm&sup3; <span class="pc">{{bulkhead_p2pc}}&#8239;%</span></td></tr>
+        <tr><th scope="row">boom bulkhead</th><td>{{boom_v}} mm&sup3;</td><td>{{boom_wall}} mm&sup2;</td><td>{{boom_p1}} mm&sup3; <span class="pc">{{boom_p1pc}}&#8239;%</span></td><td>{{boom_p2}} mm&sup3; <span class="pc">{{boom_p2pc}}&#8239;%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>Solid volume overstates a two&#8209;perimeter corner by about
+    1.8&times;</strong>, less than it looks like it should, because the corner&rsquo;s section
+    is chunky: 145&thinsp;mm&sup2; of area behind only about 55&thinsp;mm of perimeter. The
+    bulkhead is nearly solid at two perimeters because it is already a thin ring. The estimate
+    is wall area &times; perimeters &times; 0.6&thinsp;mm, capped at the solid volume where the
+    part is thinner than two walls and the two walls are the same material.</p>
+    <p><strong>Mass stays off the sheet.</strong> It needs a filament density and the
+    reader&rsquo;s perimeter count, and the design constrains neither.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What the runner-up would have looked like</h2>
+  <p class="sub">Scheme&nbsp;D lost on sheet space, not on merit: five of the thirteen
+  family sheets already measure 19 table rows of 19 available. Its schedule is worth recording
+  because it becomes the answer if scheme&nbsp;C&rsquo;s three&#8209;line callouts turn out not
+  to place &mdash; which is measurable and has not been measured.</p>
+  <div class="scroll">
+    <table>
+      <caption>Interface schedule &mdash; corner, {{variant}}</caption>
+      <thead><tr><th scope="col">Tag</th><th scope="col">Joint</th><th scope="col">Mates with</th><th scope="col">Clearance</th><th scope="col">Feature as built</th></tr></thead>
+      <tbody>{{rows}}</tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <p><strong>The bolt hole is the row worth looking at twice.</strong> It is
+    &#216;{{bolt_bare}} for a nominal 4&thinsp;mm bolt &mdash; a line&#8209;to&#8209;line fit
+    with no clearance at all, because joint&nbsp;10 is the one interface in the register with
+    no clearance parameter. The anchor variant bores &#216;5.50 for a heat&#8209;set insert
+    instead. No scheme here fixes that; what B, C and D do is make it <em>visible</em>, by
+    printing the fastener size beside the hole size. Scheme&nbsp;A prints &#216;{{bolt_bare}}
+    and says nothing, and a reader has no way to notice that the bolt will not pass.</p>
+  </div>
+</section>
+
+<footer>
+  Outlines traced from solids built by <code>build_part.py</code> and sectioned by
+  <code>dimension_alternatives/measure_sections.py</code>; drawn by
+  <code>draw_dimension_alternatives.py</code>. Regenerate the section snapshot before reading
+  these as current &mdash; it is a snapshot of built geometry, not a live query.
+</footer>
+
+</div>
