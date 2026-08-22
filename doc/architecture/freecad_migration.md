@@ -694,6 +694,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-15 | ~~decided~~ 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
 | ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 | ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
+| ARCH-18 | ~~withdrawn~~ 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2654,6 +2655,62 @@ has to agree with where the nose/cowl break line falls and with the buttress ram
 is one of the few places a violation would actually surface.
 
 *Implementation: IP-FC-16, unblocked.*
+
+### ~~OQ-ARCH-18 — What measures a dimension's annotation extent, when nothing headless renders it?~~ — WITHDRAWN 2026-08-22: filed on strings the drawing does not carry
+
+**The question was posed against per-variant value text, and this project decided in 2026-08-07
+not to put value text on the view.** OQ-ARCH-7's decision is a **family drawing** — *"lettered
+callouts (A, B, C …) on the views and a table of values per variant"*, and explicitly *"with
+values in a table rather than on the view."* The annotation on a view is therefore a **single
+letter**, not `20.00 mm`.
+
+The measurement that made the question look serious was taken on the wrong strings. Redone on
+the strings the view actually carries, at a 3.5 mm text height:
+
+| | `20.00 mm` (as posed) | one capital letter (as decided) |
+| --- | --- | --- |
+| osifont | 13.263 mm | 0.772 mm (`I`) – 2.664 mm (`W`) |
+| Y14.5-2018 | 11.812 mm | 0.875 mm – 2.188 mm |
+| DejaVu Sans | 17.951 mm | 1.032 mm – 3.461 mm |
+| **worst spread across fonts** | **6.139 mm** | **1.270 mm** (`M`) |
+
+Against §5.4's lane spacing near 8 mm, the uncertainty falls from about half a lane to about a
+sixth of one — but the size is the smaller half of the correction. **The character of the
+problem changes.** Every callout is now the same string length, so the conservative bound the
+question dismissed becomes nearly free: model every letter as the widest one in the widest
+candidate font — `W` at 3.461 mm — and the bound is uniform across every annotation on the
+sheet. A uniform over-estimate shifts a layout; it does not distort it. That is the whole
+objection to alternative 1, and it applied only to variable-length value strings.
+
+**What was actually right in the question, and where it went instead of here.**
+
+- **The font and the template are not project data.** TechDraw's `Labels`, `Dimensions` and
+  `General` preference groups are empty on this machine, and the template resolves through
+  `App.getResourceDir()` into the FreeCAD installation. Both still have to be pinned before the
+  first drawing is generated. That is not a decision between alternatives — it is work, and it
+  belongs to IP-FC-21, which now carries it.
+- **`getArrowPositions()` returns the origin for both arrowheads headless.** True and unchanged,
+  and the question itself already set it aside: arrowhead extent is the same on every annotation
+  and a fixed multiple of the text height, which is more obviously the right treatment now that
+  the text is one character.
+- **The measurement method.** `fontTools 4.61.1` imports inside `freecadcmd` and TechDraw ships
+  `osifont-lgpl3fe.ttf`, `osifont-italic.ttf`, `Y14.5-2018.ttf` and `Y14.5-FreeCAD.ttf`, so
+  exact advance widths are reachable if they are ever wanted. Recorded because it took a probe
+  to establish, not because it is needed.
+
+**What this leaves genuinely open is smaller and is not this question.** The value table has to
+be laid out, and its column widths do depend on the rendered width of variant values. That is a
+grid-sizing problem — size each column to its widest cell, which is computable — not the
+collision-avoidance problem §5.2 is about, and it is recorded as scope in
+[dimension_scheme.md §5](../design/dimension_scheme.md) rather than as an open question.
+
+**Withdrawn rather than resolved, because there was never a decision to make.** The premise was
+checkable against a decision this document already carried, and checking it was the whole of the
+work. Recorded in full rather than deleted: the same failure produced
+[OQ-ARCH-17](#open-questions) the day before, and the pattern — a well-argued question resting
+on a premise nobody verified — is worth being able to point at twice.
+
+*Implementation: IP-FC-21, unblocked.*
 
 ## References
 

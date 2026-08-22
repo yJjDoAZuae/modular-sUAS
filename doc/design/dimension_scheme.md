@@ -170,6 +170,33 @@ Every one of these is checkable on the produced drawing. None is a preference.
 | **H4** | **A witness line does not cross a dimension line.** Crossing another *witness* line is conventional and permitted. | At the crossing the reader cannot tell which extension belongs to which measurement. |
 | **H5** | **No structurally-zero dimension is placed at all.** | §2. A dimensioned zero asserts an inspectable coincident fit; where the joint is absent there is nothing to inspect. |
 
+**How an annotation's extent is known, since nothing headless renders it.** H1, H2 and H3
+all test the rectangle an annotation occupies. Measured 2026-08-21 under `freecadcmd`
+([`spike_techdraw.py`](../../src/Fuselage/freecad/spike_techdraw.py)): the dimension line
+reads back exactly, but `getArrowPositions()` returns the origin for both arrowheads, and
+no call reports the text's rendered width — both are computed by the GUI-side view
+provider. **§5.1 is what makes this a bound rather than a problem.** The text on a view is
+a single lettered callout, so the set of strings the drawing can contain is 26 items known
+before any variant is built. Measured across the three candidate fonts at a 3.5 mm text
+height, a capital spans 0.772 mm (`I` in osifont) to 3.461 mm (`W` in DejaVu Sans), and the
+worst spread for any one letter is 1.270 mm. So **every callout is bounded by the widest
+letter in the widest font**, and because they are all the same length that bound is uniform
+— it shifts the layout without distorting it, which a bound on variable-length value text
+would not. Arrowheads take a fixed multiple of the text height, being identical on every
+annotation. Witness-line extent is exact, from `getLinearPoints()` and the referenced
+points.
+
+Two conditions ride on that bound and neither is automatic. **The font and its size must be
+project data** — TechDraw's preference groups are empty, so today the text is drawn with a
+compiled-in default a user setting can silently change, and a bound taken from a font the
+reader's machine does not use is not a bound. And **the value table is not covered by
+it**: its columns hold variant values, whose widths do vary. That is a grid-sizing problem
+— each column as wide as its widest cell — and not the collision problem this section is
+about, but it is the one place on the sheet where value text still has to be measured.
+
+This was filed as a blocking open question (OQ-ARCH-18) and withdrawn on 2026-08-22: the
+question had measured `20.00 mm` and `112.50 mm`, which §5.1 had already moved off the view.
+
 ### 5.3 Soft costs, minimized in this order
 
 1. **Nest by magnitude — smaller dimensions inboard, larger outboard.** This heads the list
