@@ -30,6 +30,37 @@ KINDS = {
 }
 
 
+# **Which type names each kind's builder actually implements.** A kind absent from this has
+# no type axis, so every variant of it is buildable.
+#
+# It lives here for the reason the table above does: both sides of the FreeCAD boundary need
+# it and neither can import the other. `drawing.py` needs it to refuse a family sheet it
+# cannot draw; `tools/drawing_families.py` needs it to say which of the thirteen family sheets
+# the port can actually produce, and that runs in the virtualenv.
+#
+# **What it prevents is a plausible wrong drawing.** `bulkhead_full.emit()` implements the
+# plain end type and nothing else (IP-FC-9), and it takes no type flag -- so handing it an
+# interconnect variant does not fail, it returns an end bulkhead. Measured 2026-08-27: at 1U
+# with the 0 mm panel the interconnect and `end_bolt` variants have **identical parameter
+# values**, differing only in the `is_interconnect` boolean, which is not a parameter and never
+# reaches this backend. That boolean is not cosmetic -- in `fuselage_bulkhead_geometry.scad` it
+# removes the bolt flange, its fillet, its web and the bolt hole. A drawing made without it
+# shows four bolt bosses and four bolt holes the part does not have, dimensioned, under the
+# interconnect's title and beside a table of the interconnect's own values.
+#
+# `fuselage_variants.bulkhead_render` already routes these types to OpenSCAD rather than to a
+# builder that would ignore the distinction. This is that judgement applied to the drawing.
+BUILT_TYPES = {'bulkhead': ('end_anchor', 'end_bolt')}
+
+
+def unbuilt_types(kind, type_names):
+    """Which of a family's type names this backend cannot build. Empty means it can."""
+    built = BUILT_TYPES.get(kind)
+    if built is None:
+        return []
+    return sorted(name for name in type_names if name not in built)
+
+
 def geometry_roots(kind):
     """The modules the IP-FC-11 digest walks from, for `kind`.
 

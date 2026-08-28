@@ -73,6 +73,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'freecad'))
 
 import fuselage_variants as fv
 import drawing_standard as ds
+import part_kinds
+import sheet_annotations as sa
 
 from render_variant import settings
 
@@ -110,6 +112,40 @@ TOPOLOGY_FIELDS = ('bulkhead.type',
 # cut-out behind a branch, and a callout pointing at a rebate a part does not have is exactly
 # the failure section 5.1 exists to prevent.
 PRESENCE_FIELDS = ('panel.thickness',)
+
+
+def _corner_seating_flat(flat, mapped):
+    """Whether the corner seating flat exists on this variant -- register joint 3's face.
+
+    **The condition lives in `sheet_annotations.corner_seat_span`**, which is the same function
+    `bulkhead_annotations` dimensions the flat from. Two implementations of one rule is a part
+    whose sheet dimensions a face its own family signature says is absent.
+
+    The span is exactly zero when the panel interface already puts the flat's inboard end
+    further out than the bore and its lead-in need, and the face is then gone rather than
+    narrow: measured 2026-08-28, the corner goes from 54 faces to 52 and the bulkhead from 187
+    to 179, losing four flats of 3.15 mm2 each.
+
+    **This is a feature, so section 5.1 puts it in the partition.** Before it was added, three
+    of the thirteen families held both kinds of part -- 24 of the panelled corner's 216, 8 of
+    the panelled end bulkhead's 72, and 4 of the panelled interconnect's 36 -- so their sheets
+    showed an outline a twelfth of their own variants do not have. Splitting them takes the
+    drawing set from 13 family sheets to 16.
+
+    Read from `mapped`, the part's own parameter mapping, rather than from the resolved
+    object: every kind's flat parameters carry `printer.extrusion_width` including kinds whose
+    geometry never sees it, and gating on that split the boom bulkhead's four families into
+    eight for a distinction its parts do not have.
+    """
+    span = sa.corner_seat_span(mapped or {})
+    return None if span is None else span > 0.0
+
+
+# A feature whose presence is a *condition over several parameters* rather than one being
+# zero. Each entry is (the name the signature carries, a predicate on the flat parameters and
+# the part's own mapping, returning True, False, or None where this kind of part has no such
+# feature to have).
+PRESENCE_CONDITIONS = (('corner seating flat', _corner_seating_flat),)
 
 
 # ----------------------------------------------------------------------------------------
@@ -208,10 +244,24 @@ DIMENSION_SCHEME = os.path.join(
 # "bulkhead" for both bulkhead families because it is describing a joint, not a sweep; which
 # of the two actually carries it falls out of the mapping intersection, since a boom collet's
 # names exist only in the boom mapping.
+#
+# **A row may name a type instead of a part**, decided in OQ-DES-D6 on 2026-08-28. The mapping
+# intersection cannot separate the frame bulkhead's five types, because they share one
+# parameter mapping -- so a joint that only one type has was being demanded of all five. Row 7
+# is the case: the cowl flange is a `linear_extrude` of zero height on the end and interconnect
+# types, and `cowl_n_perimeters` is not even a row on their parameter sheet, so their drawings
+# were carrying an obligation no correct drawing could discharge.
 CARRIED_BY = {
     'corner': ('corner',),
     'bulkhead': ('bulkhead', 'boom_bulkhead'),
     'nose closure': ('nose', 'tail'),
+    'cowling bulkhead': ('bulkhead',),
+}
+
+# The type names a carried-by entry is restricted to. Absent means every type of the kinds
+# above, which is the ordinary case; an entry here is a joint one type of a part has.
+CARRIED_BY_TYPES = {
+    'cowling bulkhead': ('cowling_anchor', 'cowling_bolt'),
 }
 
 
@@ -272,17 +322,26 @@ def read_register(path=None):
     return rows
 
 
-def interface_fields(kind, mapping_keys, register=None):
+def interface_fields(kind, mapping_keys, register=None, type_names=None):
     """The dimensions section 3 obliges `kind`'s drawing to carry.
 
     Restricted to names the part is actually driven by, so a register row carried by "the
     bulkhead" contributes the boom collet's names to a boom bulkhead and nothing to a frame
     one.
+
+    `type_names` restricts it further, for a row the register attributes to a *type*. Passing
+    none keeps every row the kind carries, which is what a caller asking about the kind as a
+    whole wants; passing a family's type names asks what that family's sheet owes.
     """
     wanted = set()
     for _number, names, _clearance, part in (register or read_register()):
-        if kind in CARRIED_BY.get(part, ()):
-            wanted |= names
+        if kind not in CARRIED_BY.get(part, ()):
+            continue
+        only = CARRIED_BY_TYPES.get(part)
+        if only is not None and type_names is not None:
+            if not set(type_names) & set(only):
+                continue
+        wanted |= names
     return sorted(wanted & set(mapping_keys))
 
 
@@ -359,7 +418,7 @@ def check_topology_fields():
     return problems
 
 
-def topology_of(flat):
+def topology_of(flat, mapped=None):
     """A variant's family signature: its features, and nothing about its size.
 
     A field the part does not have at all reads as `absent` rather than as a missing key. The
@@ -377,6 +436,9 @@ def topology_of(flat):
     for name in PRESENCE_FIELDS:
         key.append((name + ' != 0',
                     'absent' if name not in flat else float(flat[name]) != 0.0))
+    for name, predicate in PRESENCE_CONDITIONS:
+        present = predicate(flat, mapped)
+        key.append((name, 'absent' if present is None else present))
     return tuple(key)
 
 
@@ -540,6 +602,54 @@ def _sort_key(item):
     return tuple((0, v, '') if isinstance(v, float) else (1, 0.0, str(v)) for v in item[0])
 
 
+def block_columns(axis, group, interface=None):
+    """The printed columns of one block, in order, as the sheet lays them out.
+
+    A block's *rows* were already derived by `sheet_blocks`; this is the other half, and until
+    2026-08-22 nothing derived it. Each column is
+
+        `field`       the dimension it carries, or None for the key column
+        `heading`     what is written above it -- the axis name for the key column, the second
+                      axis's value for a column inside a coupled band, and otherwise the
+                      callout letter, which is not known here and comes back as None
+        `cells`       every string that has to fit, so a measurement can size the column
+                      without re-deriving which variant lands where
+        `keys`        the leading axis's value for each of those cells, in step with them.
+                      Not redundant: a coupled band holds a cell only where the combination
+                      is valid, so `panel_offset` at `U` = 0.5 has two cells where the key
+                      column has eight values, and anything reading the two together without
+                      this pairs the wrong number with the wrong size
+
+    **A coupled field is a band of columns, and that is where the width goes.** One field on
+    `U` x `panel` is eight columns, not one, because the panel axis is spent across the page --
+    which is the whole of what makes the merged block cost only its `U` rows. The rows were
+    counted with that in mind and the columns never were.
+
+    `interface` restricts the block to section 3's floor when given, so the two contents a
+    sheet might carry can be measured against each other.
+    """
+    keys = sorted({str(row[0]) for t in group for row in t['rows']})
+    columns = [{'field': None, 'heading': axis, 'cells': keys, 'keys': keys}]
+    for table in group:
+        for field in table['columns']:
+            if interface is not None and field not in interface:
+                continue
+            index = table['columns'].index(field)
+            if len(table['axes']) == 1:
+                columns.append({
+                    'field': field, 'heading': None,
+                    'cells': [str(row[1 + index]) for row in table['rows']],
+                    'keys': [str(row[0]) for row in table['rows']]})
+                continue
+            for value in sorted({row[1] for row in table['rows']}):
+                rows = [row for row in table['rows'] if row[1] == value]
+                columns.append({
+                    'field': field, 'heading': str(value),
+                    'cells': [str(row[2 + index]) for row in rows],
+                    'keys': [str(row[0]) for row in rows]})
+    return columns
+
+
 def sheet_blocks(tables):
     """The tables grouped into what the sheet actually prints, and what each block costs.
 
@@ -554,6 +664,10 @@ def sheet_blocks(tables):
     band of columns needs the field named above the values of the axis it spans. A block with
     no coupled field needs only the one row, since the key column's own heading names the axis
     it is read on.
+
+    **Blocks print abreast, so a sheet is as deep as its deepest block** -- OQ-DES-D5, and it
+    halves what the panelled families cost. Two blocks led by different axes have nothing to do
+    with each other, so stacking them adds their row counts for no reason but habit.
 
     Returns a list of (leading axis, tables, printed rows).
     """
@@ -574,6 +688,83 @@ def sheet_blocks(tables):
     return out
 
 
+def quantity_members(members, kind):
+    """One family's members re-expressed as the quantities its sheet actually states.
+
+    **The table tabulates what the view points at.** OQ-DES-D5 turned on a column being
+    addressable -- headed by a callout letter that points at an annotation -- so tabulating the
+    raw parameter mapping and annotating the part separately produces columns nothing on the
+    view refers to. The annotation set is read from `sheet_annotations`, which is the same
+    module `drawing.py` draws from, so the two cannot describe different sheets.
+
+    A **constant** quantity is dropped here rather than tabulated: section 5.1 puts it on the
+    view, and a column repeating 0.10 nine times is a column spent saying nothing. The
+    annotation writes it as itself, so nothing points at a column that is not there.
+    """
+    out = []
+    for axis_values, mapped in members:
+        quantities = sa.quantities_for(kind, mapped)
+        out.append((axis_values,
+                    {q.name: q.value for q in quantities if not q.constant}))
+    return out
+
+
+def quantity_interface(kind, members, register, type_names=None):
+    """Which quantities section 3 obliges the sheet to carry, and which parameters go unstated.
+
+    Returns (interface quantity names, unstated interface parameters). **The second is section
+    3's completeness test, executable**: a quantity declares the interface parameters it
+    carries, so the union over a sheet's quantities is what the sheet states, and anything in
+    the interface set outside that union is a parameter the drawing does not say. Reading the
+    pair -- the dimension and its callout -- rather than the dimension alone is what
+    OQ-DES-D2's resolution made possible.
+    """
+    quantities = sa.quantities_for(kind, members[0][1])
+    interface = set(interface_fields(kind, members[0][1], register, type_names))
+    stated = set()
+    names = []
+    for quantity in quantities:
+        if set(quantity.carries) & interface:
+            names.append(quantity.name)
+        stated |= set(quantity.carries)
+    return names, sorted(interface - stated)
+
+
+def family_key(kind, type_names, signature):
+    """A stable, readable name for one family sheet.
+
+    **A family needs a name because a sheet is drawn per family and a variant only tells you
+    which one it belongs to.** `drawing.py` is handed one member's parameters -- it has to
+    build a solid to draw, and a solid is a variant -- and the table it prints is the whole
+    family's. Nothing in the exported parameter file says which family that is: the corner's
+    two families differ by whether the part has a panel slot, which is a topology question
+    answered here and nowhere the FreeCAD side can reach.
+
+    So the key is written down. Kind and type names carry the readable part; the digest of the
+    topology signature carries the rest, because two families of the same kind and type names
+    are exactly the case that needs telling apart. Deterministic across runs and machines --
+    `hash()` is not, and using it would have given a drawing set whose sheet names changed
+    between sessions.
+    """
+    import hashlib
+
+    text = repr([list(pair) for pair in signature]).encode('utf-8')
+    digest = hashlib.sha1(text).hexdigest()[:6]
+    return '%s-%s-%s' % (kind, '_'.join(type_names) or 'all', digest)
+
+
+def family_letters(kind, params):
+    """The callout letter each quantity carries on this kind's sheets.
+
+    Constant across a family and across every family of a kind, because
+    `sheet_annotations.issue_letters` issues them in the annotation set's declaration order
+    and skips the quantities section 5.1 prints on the view. That is why one member's
+    parameters are enough to compute them, and why they can be written once into the family
+    record for both `drawing.py` and `check_table_width.py` to read.
+    """
+    return {q.name: q.letter for q in sa.quantities_for(kind, params) if q.letter}
+
+
 def families():
     """Every family sheet the drawing set needs, with its factored tables."""
     register = read_register()
@@ -582,19 +773,41 @@ def families():
         axes = [label for label, _ in spec['axes']]
         buckets = {}
         for axis_values, flat, mapped, type_name in resolve(kind):
-            buckets.setdefault(topology_of(flat), []).append(
+            buckets.setdefault(topology_of(flat, mapped), []).append(
                 (axis_values, mapped, type_name))
 
         for signature, rows in sorted(buckets.items(), key=lambda kv: str(kv[0])):
             members = [(a, m) for a, m, _ in rows]
             names = sorted({t for _, _, t in rows})
-            interface = set(interface_fields(kind, members[0][1], register))
+            interface = set(interface_fields(kind, members[0][1], register, names))
             factored = factor(members, axes, interface)
+
+            # The sheet's own table, where the part has an annotation set to draw one from.
+            quantities = None
+            unstated = None
+            if kind in sa.ANNOTATIONS:
+                # Not `names` -- that is the family's type names two lines up, and shadowing it
+                # here put quantity names in the report's `types` column.
+                stated, unstated = quantity_interface(kind, members, register, names)
+                quantities = factor(quantity_members(members, kind), axes, set(stated))
+                # Section 2: a parameter that is zero across the whole family is the *absence*
+                # of the joint, not a dimension the sheet is missing. `corner_tolerance` is the
+                # case -- demanding it would ask the drawing to state a joint the part does not
+                # have, which is the same error as printing a dimensioned zero.
+                unstated = [f for f in unstated if f not in factored['structural_zeros']]
 
             tables = factored['tables']
             required = [t for t in tables if t['interface']]
             out.append({
                 'kind': kind,
+                'key': family_key(kind, names, signature),
+                # Which of this family's types the FreeCAD builder cannot make. Empty is the
+                # normal case; anything in it means the sheet exists on paper and cannot be
+                # drawn from this backend, which `drawing.py` refuses rather than drawing a
+                # different part under this family's title.
+                'unbuilt_types': part_kinds.unbuilt_types(kind, names),
+                'letters': (family_letters(kind, members[0][1])
+                            if kind in sa.ANNOTATIONS else {}),
                 'ported': spec['ported'],
                 'topology': [list(pair) for pair in signature],
                 'type_names': names,
@@ -607,10 +820,24 @@ def families():
                 'precision_only': [[f, list(w), list(e)]
                                    for f, w, e in factored['precision_only']],
                 'cells': sum(len(t['rows']) for t in tables),
-                'blocks': [[axis, [t['axes'] for t in group], rows]
+                'quantities': quantities,
+                'unstated_interface': unstated,
+                'quantity_blocks': ([{'axis': axis, 'tables': [t['axes'] for t in group],
+                                      'rows': rows, 'columns': block_columns(axis, group)}
+                                     for axis, group, rows
+                                     in sheet_blocks(quantities['tables'])]
+                                    if quantities and quantities['tables'] else []),
+                'blocks': [{'axis': axis, 'tables': [t['axes'] for t in group],
+                            'rows': rows, 'columns': block_columns(axis, group)}
                            for axis, group, rows in sheet_blocks(tables)],
-                'sheet_rows': sum(r for _a, _g, r in sheet_blocks(tables)),
-                'interface_sheet_rows': sum(r for _a, _g, r in sheet_blocks(required)),
+                # **The deepest block, not the sum of them**, since OQ-DES-D5 decided the
+                # blocks print side by side. Summing was right while they were stacked in one
+                # column, and it is what made the panelled families cost 19 rows; abreast they
+                # cost 10, and the two numbers differ by a layout choice rather than by
+                # anything about the part.
+                'sheet_rows': max([r for _a, _g, r in sheet_blocks(tables)] or [0]),
+                'interface_sheet_rows': max([r for _a, _g, r in sheet_blocks(required)]
+                                            or [0]),
             })
     return out
 
@@ -627,9 +854,14 @@ def families():
 # somewhere.
 ROWS_PER_SHEET = ds.table_rows_available()
 
-# How much spare column a family should have before it is called comfortable. One row
-# for a title over the table and one for a note under it is the least a real sheet
-# spends, so a family with less than that fits only in the arithmetic.
+# How much spare a family should have before it is called comfortable. One row for a title
+# over the table and one for a note under it is the least a real sheet spends, so a family
+# with less than that fits only in the arithmetic.
+#
+# **Every family is currently at 10 of 10**, which is worth reporting as the tight fit it is
+# rather than as a pass: an eleventh row deepens the band past the quarter of the frame the
+# view can spare and drops the view to 73.3 %, so the next dimension the design needs is a
+# sheet-layout question and not a table question.
 MARGIN_ROWS = 2
 
 
@@ -644,8 +876,8 @@ def report(data):
         % ('kind', 'types', 'vars', 'const', 'zero', 'tables', 'floor', 'rows',
            'axis sets'))
     for f in data:
-        sets = ' '.join('[%s: %s]' % (axis, ' '.join('+'.join(a) for a in group))
-                        for axis, group, _rows in [(b[0], b[1], b[2]) for b in f['blocks']])
+        sets = ' '.join('[%s: %s]' % (b['axis'], ' '.join('+'.join(a) for a in b['tables']))
+                        for b in f['blocks'])
         say('%-14s %-26s %6d %5d %5d %6d %6d %6d  %s'
             % (f['kind'], ','.join(f['type_names'])[:26], f['variants'],
                len(f['constants']), len(f['structural_zeros']), len(f['tables']),
@@ -655,10 +887,13 @@ def report(data):
     say('         to carry; rows  the same for every dimension the part is driven by.')
     say('         Tables sharing a leading axis print as one block with the key column')
     say('         written once, and a coupled field is a band of columns inside it.')
-    say('  The sheet holds %d rows: %.1f mm of column between the frame and the title'
-        % (ROWS_PER_SHEET, ds.table_column_height_mm()))
-    say('  block on the pinned template, at a %.1f mm row pitch.'
-        % (ds.TABLE_ROW_PITCH_HEIGHTS * ds.TEXT_HEIGHT_MM))
+    say('  The sheet holds %d rows: the band beside the title block is %.1f mm deep, which'
+        % (ROWS_PER_SHEET, ds.table_band_depth_mm()))
+    # `table_row_pitch_mm`, not the row pitch times the *view's* text height. The two
+    # were the same number until the table got a size of its own, and the report was
+    # printing a 4.90 mm pitch beside a 13-row budget that 4.90 mm does not produce.
+    say('  is the quarter of the frame the drawn view does not get, at a %.2f mm row pitch.'
+        % ds.table_row_pitch_mm())
 
     for label, key in (('every dimension', 'sheet_rows'),
                        ('the interface dimensions alone', 'interface_sheet_rows')):
@@ -704,6 +939,22 @@ def report(data):
     for kind, name, wrote, exact in residue:
         say('  %-14s %-22s written %-10s exact %s'
             % (kind, name, '+'.join(wrote) or 'constant', '+'.join(exact) or 'constant'))
+
+    drawn = [f for f in data if f['quantities'] is not None]
+    say('')
+    say('families with an annotation set: %d of %d' % (len(drawn), len(data)))
+    for f in drawn:
+        blocks = f['quantity_blocks']
+        say('  %-22s %d quantity columns in %d block(s), %d rows'
+            % (f['key'],
+               sum(len(b['columns']) for b in blocks), len(blocks),
+               max([b['rows'] for b in blocks] or [0])))
+        if f['unbuilt_types']:
+            say('    this backend does not build %s, so the sheet cannot be drawn from it '
+                '(IP-FC-12)' % ', '.join(f['unbuilt_types']))
+        if f['unstated_interface']:
+            say('    section 3: the sheet does not state %s'
+                % ', '.join(f['unstated_interface']))
 
     unresolved = unresolved_register_names()
     say('')
