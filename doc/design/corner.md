@@ -180,14 +180,25 @@ enforces their equality.
 with `mirror_xy()` and extrudes. Built as a difference:
 
 **Added** — a circle of `corner_radius`, plus a rectangular extension reaching out by
-`panel_overlap + panel_offset - panel_tolerance` to give the panel something to sit
-against.
+`panel_overlap + panel_offset` to give the panel something to sit against. **Corrected
+2026-08-28:** this said `panel_overlap + panel_offset - panel_tolerance` until then, which is
+the form [OQ-DES-B13](bulkhead.md) removed from the geometry — short, the extension stopped
+inboard of the corner's own mating plane. The code has reached `panel_overlap + panel_offset`
+since; the sentence was stale, not the part.
 
-**Removed** —
+**Removed** — these are the *cutting primitives*, not the features. Two of them are
+deliberately larger than what they leave behind, and that overshoot is an **implementation
+artifact**: it exists because a boolean needs it, and it is not a design dimension at any
+level. See [derivation.md section 7](derivation.md#7-what-is-neither-implementation-artifacts).
 
 - the longeron bore, `longeron_radius + longeron_tolerance`;
 - the panel slot, `2·panel_thickness + 2·panel_tolerance` deep, positioned so its outer
-  face lands at `corner_radius - panel_thickness - panel_tolerance`;
+  face lands at `corner_radius - panel_thickness - panel_tolerance`. The square is twice
+  the pocket tall so that it overshoots; since the material ends at the mold line, **the
+  feature it leaves is a rebate `panel_thickness + panel_tolerance` deep**, open to the
+  outside, with the panel's own face exposed as airframe surface. Because the overshoot is
+  the feature's own dimension doubled, it is indistinguishable from intent — which is how
+  the interface register came to carry it as joint 4's depth until 2026-08-28. IP-FC-88;
 - a half-plane mask that trims the drawing to its octant;
 - the diagonal mirror-line mask;
 - a chamfer along the longeron opening.
@@ -574,6 +585,9 @@ it a function of `U`.
 
 - [corner_bulkhead_joint.md](corner_bulkhead_joint.md) — the joint drawn from the built
   solids: six cases, four views each, with the clearance dimensioned normal to both faces.
+- [derivation.md](derivation.md) — joints 1, 3 and 4 derived from the design principles, with
+  each face measured on the built corner; `panel_offset`'s two requirements and which one
+  governs.
 - [bulkhead.md](bulkhead.md) — the mating half, and the pocket that receives the greeble.
 - [geometry_refactor.md](../implementation/geometry_refactor.md) — IP-GEO-3 (the thickness
   formula), IP-GEO-7 (the dimension functions), OQ-GEO-1 (why the parameters are grouped
