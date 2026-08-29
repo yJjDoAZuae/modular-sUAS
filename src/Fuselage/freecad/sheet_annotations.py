@@ -193,8 +193,16 @@ def corner_annotations(params, product=FAMILY):
     # register**: the corner has a planar face normal to X at x = -7.2625 at U = 1 with 3/16 in
     # panel, and `panel_overlap + panel_offset` is 7.2625 -- so the extension runs from the
     # longeron axis to exactly that face, and the expression is the distance rather than
-    # something the clearance has already been folded into. The slot mouth sits at
-    # `-(panel_offset - panel_tolerance)`, which makes the slot itself
+    # something the clearance has already been folded into.
+    #
+    # **Measuring rather than reading is what caught the register being wrong.** Section 2's
+    # row 4 said `panel_overlap + panel_offset - panel_tolerance` until 2026-08-28 -- one
+    # clearance short, 7.1625 against the part's 7.2625, and 14.2500 against 14.3500 at 4U with
+    # 1/4 in panel. Section 3's completeness test could never have found it: both forms name
+    # the same parameters. Corrected under OQ-DES-D8, on OQ-DES-D9's finding that section 2 is
+    # an analysis of the implementation, so where it and a part disagree the part is right.
+    #
+    # The slot mouth sits at `-(panel_offset - panel_tolerance)`, which makes the slot itself
     # `panel_overlap + panel_tolerance` deep: the panel's entry plus its fit.
     extension = params['panel_overlap'] + params['panel_offset']
 
