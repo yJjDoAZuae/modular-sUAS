@@ -59,11 +59,40 @@ is not "which are interesting" — that is taste, and taste does not scale to 57
 
 That is mechanical, not aesthetic. It also has a convenient property in this project:
 **the clearance parameters already enumerate the joints.** Every entry in
-`design_constants.json`'s `tolerances` group exists because two parts meet somewhere, and its
-`why` names the joint and gives the expression. There are seven, and there are seven joints.
+`design_constants.json`'s `tolerances` group exists because two parts meet somewhere. There are
+seven, and there are seven joints.
 
-The register below is therefore not a new list to be maintained beside the code — it is a
-reading of a file the sweep already validates on every run.
+**What section 2 is, decided in [OQ-DES-D9](#open-questions) on 2026-08-28: it is an analysis
+of the implementation, not a specification the implementation is built to.** The sentence that
+stood here until then said the register *"is a reading of a file the sweep already validates on
+every run"*, and that is true of three of its rows. Measured 2026-08-28, `design_constants.json`
+carries a governing expression in its `why` field for **three of the seven joints** —
+`boom_tolerance`, `cowl_flange_tolerance` and `nose_flange_tolerance`, which rows 6, 7 and 8
+quote verbatim. For the other four the `why` is prose: rows 2, 3 and 5 faithfully reproduce that
+prose, and **rows 1 and 4 carry expressions that appear in no design document at all** — they
+were written by reading the parts. Not one term of rows 1 to 5's expressions appears in the
+corresponding `why`.
+
+So the register's authority is the geometry, and **where the register and a part disagree, the
+part is right and the register is corrected.** That is what makes
+[OQ-DES-D8](#open-questions) a transcription fix rather than a defect in every corner.
+
+**This is a statement of what the document is, not of what the project needs.** What is needed
+is a derivation of the fundamental design relationships, written so that the implementation —
+the OpenSCAD geometry, together with the corrections the FreeCAD migration turned up — *follows
+from* it. **That document was written on 2026-08-28 under IP-FC-87 and is
+[derivation.md](derivation.md).** It is the prerequisite
+[OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named; it is filed in
+`doc/design/` rather than at the `doc/architecture/overview.md` OQ-ARCH-7 assigned, for the
+reason its section 8 gives.
+
+**What that changes for this section, and what it does not.** No reading of the register
+establishes that a part is built as intended; it establishes that a drawing states what the
+part measures, which is what it is for. The other claim now has somewhere to be made: the
+derivation states each relationship as a requirement and checks it, over every variant for the
+parameters and by sample for the faces. Where the two disagree the derivation is the one that
+says a part is wrong — and where it and the register disagree, as they did over row 4, the part
+settles it.
 
 **The second clause was added on 2026-08-22 and it is deliberately narrow.** The first clause
 is a test about *joints*, and it misses the one thing that decides whether anything fits inside
@@ -112,13 +141,29 @@ meaning.
 | 1 | longeron tube → corner bore | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` | `longeron_tolerance` 0.05 | corner |
 | 2 | bulkhead greeble post → corner socket | socket opened out by the clearance; **post stays nominal** | `greeble_tolerance` 0.05 | corner |
 | 3 | corner seating faces → bulkhead | `flat_x += corner_tolerance`, `flat_offset += corner_tolerance·√2` | `corner_tolerance` 0.0 | corner |
-| 4 | panel → corner | slot `2·panel_thickness + 2·panel_tolerance` deep, outer face at `corner_radius − panel_thickness − panel_tolerance`; extension `panel_overlap + panel_offset − panel_tolerance` | `panel_tolerance` 0.1 | corner |
+| 4 | panel → corner | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep from the mold line; end stop at `panel_offset − panel_tolerance`; extension `panel_overlap + panel_offset` | `panel_tolerance` 0.1 | corner |
 | 5 | panel → bulkhead flange | standoff so the panel's outer surface lands on the mold line at `corner_radius` | `panel_tolerance` 0.1 | bulkhead |
 | 6 | boom tube → boom bulkhead collet | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | `boom_tolerance` 0.2 | bulkhead |
 | 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead |
 | 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure |
 | 9 | nose plate → nose closure | pocket radius = `plate_diam/2 + plate_tol`, relieved at `overhang_angle_from_bed` | `plate.tolerance` 0.1 | nose closure |
 | 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bulkhead |
+
+**Row 4 was corrected on 2026-08-28, and it was not a wrong requirement — it was not a
+requirement at all.** It read *"slot `2·panel_thickness + 2·panel_tolerance` deep"*, which is
+the size of the **cutting primitive**: the square is drawn twice the pocket tall so that it
+overshoots the material, and twice the overlap long so it opens through the end of the arm. The
+material it is cut from ends at the mold line, so what is left is a rebate
+`panel_thickness + panel_tolerance` deep with the panel's outer face exposed. Measured on the
+built corner at 1U with a 3/16 in panel: the seat is a face at 5.1375 of 486.2500 mm², which is
+`panel_overlap + panel_tolerance` times the part length, and no material stands outboard of it.
+
+**An overshoot is an implementation artifact, and this one is sized from the feature it cuts**,
+which is why it scaled convincingly across 264 variants and got recorded here as the joint's own
+dimension. [derivation.md section 7](derivation.md#7-what-is-neither-implementation-artifacts)
+states the rule that keeps the two apart and lists the artifacts the project already handles
+correctly; IP-FC-88 is the change that stops this one reading like a design quantity. The
+register carries **requirements**, so what belongs in this row is the rebate.
 
 ### The panel allocation, which joints 4 and 5 pin without stating
 
@@ -528,8 +573,8 @@ belong in its interface-conventions section, and what stays here is the drawing-
 
 | ID | Question | Blocking |
 | --- | --- | --- |
-| OQ-DES-D7 | Section 2's *Governing expression* column means two different things in different rows — the whole nominal in some, only the clearance in others — and section 3's completeness test reads it | Not blocking — it under-demands three parameters that the sheets already state |
-| OQ-DES-D8 | Section 2's row 4 says the corner's panel extension is `panel_overlap + panel_offset − panel_tolerance`; the built corner's end face is at `panel_overlap + panel_offset`, 0.1 mm further out | Not blocking — the parts are self-consistent; the register and the geometry disagree |
+| OQ-DES-D7 | Section 2's *Governing expression* column means two different things in different rows — the whole nominal in some, only the clearance in others — and section 3's completeness test reads it | Not blocking — the register reaches no drawing; it under-demands three parameters the sheets already state, and leaves joint 3 covered only by coincidence. OQ-DES-D9 has since settled that completing the expressions is finishing the analysis, not changing its provenance |
+
 
 ### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
 
@@ -949,12 +994,40 @@ Some rows give the **whole nominal**, so the test demands everything that sets t
 | Row | Expression as written |
 | --- | --- |
 | 1 | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` |
-| 4 | slot `2·panel_thickness + 2·panel_tolerance` deep, outer face at `corner_radius − panel_thickness − panel_tolerance` … |
+| 4 | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep … |
 | 6 | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` |
 | 7 | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance` |
 
 Others give **only the clearance, or only the adjustment the clearance makes**, and the nominal
-the clearance is applied to is described in prose rather than written:
+the clearance is applied to is described in prose rather than written.
+
+**The split is inherited rather than careless, which was not obvious when this was filed.**
+Section 1 says the register is *"a reading of a file the sweep already validates on every
+run"* — `design_constants.json`'s `tolerances` group, whose `why` field is said to name the
+joint and give the expression. Checked on 2026-08-28, that file carries a governing expression
+for **three of the seven joints** and prose for the other four:
+
+| Joint | `why` carries | Register row |
+| --- | --- | --- |
+| `boom_tolerance` | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | row 6 quotes it **verbatim** |
+| `cowl_flange_tolerance` | `corner_radius - cowl_n_perimeters*extrusion_width - cowl_flange_tolerance` | row 7 quotes it **verbatim** |
+| `nose_flange_tolerance` | `cowl_n_perimeters*extrusion_width + nose_flange_tolerance` | row 8 quotes it |
+| `longeron_tolerance` | prose only | row 1 supplies an expression from elsewhere |
+| `greeble_tolerance` | prose only | row 2 reproduces the prose |
+| `corner_tolerance` | prose only | row 3 reproduces the prose |
+| `panel_tolerance` | prose only | rows 4 and 5 — row 5 reproduces the prose, row 4 supplies an expression from elsewhere |
+
+So **rows 2, 3 and 5 are the faithful ones** and rows 1 and 4 are the ones that went past the
+stated source. Not one term of rows 1–5's expressions appears in the corresponding `why`. That
+inverts the obvious reading of this question — the register is not inconsistent where its
+author was careless, it is inconsistent where its *source* is — and it raised the question
+[OQ-DES-D9](#open-questions) asked, which is where rows 1 and 4's expressions came from and what
+authority they carry. **That was decided on 2026-08-28: section 2 is an analysis of the
+implementation.** So "state the whole nominal" is *finishing the analysis* rather than promoting
+it to a specification, and the recommendation below is not waiting on anything. What section 2
+cannot become by being completed is a derivation — that is IP-FC-87, and it is separate work.
+
+The rows that give only the clearance:
 
 | Row | Expression as written | What the geometry actually consumes |
 | --- | --- | --- |
@@ -962,34 +1035,50 @@ the clearance is applied to is described in prose rather than written:
 | 3 | `flat_x += corner_tolerance`, `flat_offset += corner_tolerance·√2` | `−max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance))` |
 | 5 | *standoff so the panel's outer surface lands on the mold line at `corner_radius`* | `unit_width/2 − panel_thickness − panel_tolerance` — measured 45.1375 mm on the built bulkhead at 1U with 3/16 in panel |
 
-**So the test demands less than the design does, and it is specific.** Comparing each kind's
-current floor against what the full expressions would name:
+**The register is a verification product and reaches no drawing, which is what is and is not
+at stake.** Nothing that draws a sheet reads it: `sheet_annotations.py` declares the annotation
+sets by hand, and `factor`'s `interface` argument only *marks* fields — it never filters the
+tables the renderer draws. Demonstrated 2026-08-28 by mutating the parsed register and diffing
+the drawn output — every family's table columns and callout letters:
 
-| Kind | Floor now | Would gain |
+| Register mutated to | Drawn output | Report |
 | --- | --- | --- |
-| corner | 10 parameters | `greeble_thickness` |
-| bulkhead | 6 | `panel_thickness`, `unit_width` |
-| boom bulkhead | 6 | `panel_thickness`, `unit_width` |
+| row 3 given its full nominal | identical | identical |
+| **every row emptied** | **identical** | changes |
+| **every row given every parameter name** | **identical** | changes |
 
-**Row 3 is the sharpest case, because it names nothing that survives.** Its two identifiers are
-`flat_x` and `flat_offset`, which are derived names in `corner_tree` and reach no parameter
-mapping, and `corner_tolerance`, which is zero across every family and is therefore excluded by
-section 2's own absence rule. **Joint 3 is consequently demanded of nobody.** It was stated on
-the bulkhead in [OQ-DES-D6](#open-questions) because the part needs it said, not because the
-test asked — and nothing would have reported its absence.
+So no error in this column can produce a wrong drawing. What it can do is make the completeness
+test agree with a drawing set for the wrong reasons, and that is the whole of the damage.
+
+**What the fuller expressions would demand, measured row by row.** Each row's *unique*
+contribution is what the floor would lose if the row were deleted:
+
+| Row | Names now | Unique to it | Full form would add |
+| --- | --- | --- | --- |
+| 2, corner | `greeble_tolerance` | `greeble_tolerance` | **`greeble_thickness`** |
+| 3, corner | `corner_tolerance` | `corner_tolerance` — a structural zero, so excluded | **nothing** |
+| 5, bulkheads | `corner_radius`, `panel_tolerance` | `panel_tolerance` | **`panel_thickness`, `unit_width`** |
+
+Three names in total, and all three are already stated on the sheets that would owe them: the
+corner's socket callout is computed from `greeble_thickness`, and the bulkhead states
+`panel_thickness` and dimensions `unit_width/2` as its mold line. **No drawing changes under
+any answer to this question.**
+
+**Row 3 is the sharpest case and not for the reason it first appears.** Its identifiers are
+`flat_x` and `flat_offset` — derived names in `corner_tree` that reach no parameter mapping —
+and `corner_tolerance`, which is zero across every family and is therefore excluded by section
+2's own absence rule. **Joint 3 is demanded of nobody.** But writing its full expression out
+would change *nothing*, because rows 1 and 4 happen to name every parameter it would name.
+**Joint 3's coverage is a coincidence of two other rows**, and that is the failure mode worth
+naming: the completeness test would report no gap today and would go on reporting none if joint
+3 were deleted from the register entirely. Joint 3 was stated on the bulkhead in
+[OQ-DES-D6](#open-questions) because the part needs it said, not because the test asked, and
+nothing would have reported its absence.
 
 **Row 3's attribution is doubtful as well.** It reads *carried by: corner*, and the seating
 faces exist on both parts: the bulkhead carries four of them, measured at 3.15 mm² each at 1U
 with 3/16 in panel. Whether a joint whose faces are on two parts is carried by one drawing or
 both is the same column [OQ-DES-D6](#open-questions) has just changed once.
-
-**Impact.** No drawing changes: all three names the fuller expressions would demand are already
-stated on the sheets that would owe them — the corner's socket callout is computed from
-`greeble_thickness`, and the bulkhead states `panel_thickness` and dimensions `unit_width/2` as
-its mold line. What changes is that the test would be checking them. The cost of leaving it is
-not a wrong drawing today; it is that the completeness test's passes are worth less than they
-read, and that a joint can go unstated on every sheet without a word from it, which is what
-happened to joint 3.
 
 **Alternatives.**
 
@@ -1020,89 +1109,107 @@ happened to joint 3.
 
 4. **Accept the column as it is.** Record that a row may state only its clearance, and that
    section 3's floor is correspondingly the clearance set. *Benefits:* no work. *Drawbacks:*
-   joint 3 remains demanded of nobody, and joint 2 never demands the wall thickness that sets
-   the socket the corner is bored to. It also makes the completeness test's name misleading.
-   *Needs:* nothing.
+   joint 3 remains demanded of nobody, joint 2 never demands the wall thickness that sets the
+   socket the corner is bored to, and joint 3's coverage stays a coincidence of rows 1 and 4.
+   It also makes the completeness test's name misleading. *Needs:* nothing.
 
-**Recommendation.** **Alternative 1.** The column is already the test's input, so the choice is
-between making it say what the test reads it to say and adding a second thing to keep in step;
-one column that must be complete is easier to trust than two that must agree. The check is the
-part that matters — without it this recurs the first time a row is added in a hurry, which is
-how rows 2, 3 and 5 came to differ from 1, 4, 6 and 7 in the first place. Alternative 3 is the
-better long-run answer for *reachability* and does not compete: it cannot say which joint a
-parameter belongs to, which is the register's real job. Row 3's attribution should be settled at
-the same time, since it is the same row and the seating faces are demonstrably on both parts.
+5. **Make the expressions executable and check them against the built part.** If every row
+   states its whole nominal, the row can be *evaluated* on a variant's parameters and compared
+   with a measured feature, the way `check_drawing` already compares a dimension against the
+   parameters. *Benefits:* it turns the register from a list the test scrapes names out of into
+   a statement the parts are checked against — the strongest thing this column could be, and it
+   would have caught [OQ-DES-D8](#open-questions) the day the expression was written rather
+   than three weeks later. *Drawbacks:* it needs a way to say *which feature* each expression
+   is the size of, which the register does not have; and an expression like row 3's nested
+   `max` is real work to evaluate and to locate on a part. It also cannot be done at all while
+   rows state only their clearance, so it presupposes alternative 1. *Needs:* alternative 1
+   first, and a per-row statement of the feature the expression measures.
+
+**Recommendation.** **Alternative 1**, understood as the step alternative 5 needs rather than as
+a destination. The column is already the test's input, so the choice is between making it say
+what the test reads it to say and adding a second thing to keep in step; one column that must be
+complete is easier to trust than two that must agree. The check is the part that matters —
+without it this recurs the first time a row is added in a hurry, which is how rows 2, 3 and 5
+came to differ from 1, 4, 6 and 7.
+
+**And the register being verification-only cuts both ways here.** It means no answer to this
+question can break a drawing, so the change is cheap and safe to make; it also means the column
+has exactly one job, and a column with one job that it does inconsistently should be fixed
+rather than worked around. Alternative 3 is the better long-run answer for *reachability* and
+does not compete: it cannot say which joint a parameter belongs to, which is the register's real
+job. Row 3's attribution should be settled at the same time, since it is the same row and the
+seating faces are demonstrably on both parts.
 
 *Implementation: `tools/drawing_families.read_register` and `check_register`; the floors are
 reported by `tools/drawing_families.py`.*
 
-### OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance
+### ~~OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance~~ — DECIDED 2026-08-28: the register is corrected; the part is right
 
-**The problem.** Section 2's register, row 4, states the corner's panel joint and ends with
+**Resolution note.** Determined by [OQ-DES-D9](#open-questions) rather than decided separately:
+section 2 is an analysis of the implementation, so where it and a part disagree the part is
+right and the register is corrected. Alternative 1.
 
-> extension `panel_overlap + panel_offset − panel_tolerance`
+Row 4's expression read `panel_overlap + panel_offset − panel_tolerance`. The built corner's end
+face is at `panel_overlap + panel_offset` — measured **7.2625 against 7.1625** at 1U with 3/16 in
+panel and **14.3500 against 14.2500** at 4U with 1/4 in, one `panel_tolerance` out on both. The
+geometry is self-consistent: the slot mouth is at `panel_offset − panel_tolerance`, the slot
+bottom at `panel_overlap + panel_offset`, and the slot is therefore
+`panel_overlap + panel_tolerance` deep — the panel's entry plus its fit. The register's shorter
+extension would have put the end face inside the slot bottom and opened the slot through the end
+of the part.
 
-The built corner's end face is not there. Measured 2026-08-28 on two variants, taking every
-planar face normal to X:
+**What this does not settle, and where it goes instead.** Whether that 0.1 mm *should* be there
+is a question about intent, and correcting an analysis to match a part cannot answer it. It is
+one of the relationships **IP-FC-87** has to derive: if the design says the corner ends at the
+slot bottom, the geometry follows and the register was a transcription slip; if it says the
+corner should stop a clearance short, the part is wrong and this closure will need reopening
+against the derivation rather than against the part.
 
-| Variant | Register expression | Built face |
-| --- | --- | --- |
-| 1U, 3/16 in panel | 7.1625 | **7.2625** |
-| 4U, 1/4 in panel | 14.2500 | **14.3500** |
+*Implementation: section 2's register table. No code depends on the difference — both forms name
+the same parameters, which is why section 3's completeness test could never have caught it.*
 
-The difference is 0.1000 mm on both, which is exactly `panel_tolerance`. The register's value
-appears on neither part.
+### ~~OQ-DES-D9 — Is section 2 the interface design, or an analysis of the implementation?~~ — DECIDED 2026-08-28: it is analysis, and the derivation it is not is now tracked work
 
-**The geometry is self-consistent, which is what makes this a question about the register.** At
-1U with 3/16 in panel the corner's planar faces normal to X sit at −7.2625, −2.4000, 0, 5.1375
-and 10.0000. The slot mouth is at −2.4000, which is `panel_offset − panel_tolerance`; the slot
-bottom is at −7.2625, which is `panel_overlap + panel_offset`; and the slot is therefore
-7.2625 − 2.4000 = **4.8625** deep, which is `panel_overlap + panel_tolerance` — the panel's
-entry plus its fit. The end face coincides with the slot bottom. Shortening the extension by a
-clearance, as the register says, would put the end face 0.1 mm inside the slot bottom and open
-the slot through the end of the part.
+**Resolution note.** Section 2 **is** an analysis of the implementation as written, and section
+1 now says so instead of claiming to be a reading of `design_constants.json`. Measured
+2026-08-28: that file carries a governing expression for **three of the seven joints** — rows 6,
+7 and 8 quote theirs verbatim — and prose for the other four, of which rows 2, 3 and 5
+faithfully reproduce the prose while **rows 1 and 4 carry expressions that appear in no design
+document at all**, having been written by reading the parts. Not one term of rows 1 to 5's
+expressions appears in the corresponding `why`.
 
-**Why it matters even though no part is wrong.** The register is the authority section 3's
-completeness test is computed from and the document a reader checks a drawing against. A drawing
-that states 7.2625 — which is what the corner's sheet states, because it is what the part
-measures — disagrees with the register by a clearance, and a reader who trusts the register
-would read that as a fault in the drawing. The identifiers are the same in both forms, so the
-completeness test cannot see the difference and never will.
+The consequences are taken rather than left implicit: the register's authority is the geometry,
+so where the two disagree the part is right and the register is corrected — which determines
+[OQ-DES-D8](#open-questions) — and completing rows 2, 3 and 5's expressions under
+[OQ-DES-D7](#open-questions) is *finishing the analysis*, not promoting it to a specification.
 
-**Alternatives.**
+**What the project actually needs, and this is the substance of the decision rather than a
+footnote to it.** A derivation of the fundamental design relationships, documented so that
+**the implementation follows from it** — the OpenSCAD geometry as it stands, together with the
+corrections the FreeCAD migration turned up. The test of that document is derivability: if a
+relationship in it cannot produce the part, one of the two is wrong and the disagreement is
+visible. That is a different and much stronger thing than either alternative this question
+offered, both of which took the existing rows as the material to be relabelled. **Ratifying an
+expression read off the geometry as design intent was the move to avoid**, and deriving the
+relationship instead is what avoids it.
 
-1. **The register has a transcription error; correct it to `panel_overlap + panel_offset`.**
-   *Benefits:* it makes the document agree with two independent readings of the part, and with
-   the rest of row 4, which is otherwise exact. Nothing else changes — no geometry, no baseline,
-   no drawing. *Drawbacks:* it assumes the part is right, and the part being self-consistent is
-   evidence for that but not proof of intent. *Needs:* confirmation that the extension was meant
-   to reach the slot bottom.
+It is tracked as **IP-FC-87**, and until it exists no reading of section 2 establishes that a
+part is built as intended — only that a drawing states what the part measures. This is the
+prerequisite [OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named on
+2026-08-07 and assigned to `doc/architecture/overview.md`, which section 1 met "by enumeration
+rather than by waiting". The enumeration was the right thing to do at the time and it is not the
+derivation.
 
-2. **The part is wrong; the extension should be a clearance shorter.** Change `corner_end` so
-   the end face sits at `panel_overlap + panel_offset − panel_tolerance`. *Benefits:* if the
-   intent was that the corner stop short of the slot bottom, this is the fix. *Drawbacks:* it
-   opens the panel slot at the end of the corner unless the slot is shortened with it, so it is
-   not a one-line change; and it moves every corner in the sweep, which invalidates the
-   baselines and every comparison against them. *Needs:* a statement of what the 0.1 mm is for.
+**The loop this closes.** For rows 1 and 4 the chain was: the OpenSCAD geometry → section 2 (by
+reading) → section 3's completeness test → the drawings, which are generated from
+`freecad/sheet_annotations.py`, written by measuring the same geometry. Two readings of one
+source, compared. That catches a transcription slip and cannot in principle catch the geometry
+departing from intent — which is exactly why the test could not see OQ-DES-D8. Declaring what
+section 2 is does not remove the loop; it stops the loop being read as evidence it never was.
+**IP-FC-87 is what breaks it**, by giving the geometry something to be derived from.
 
-3. **They describe different things and both are right.** The register's expression may be
-   about the *panel's* reach into the corner rather than the corner's own end face, in which
-   case the row needs its wording fixed rather than its arithmetic. *Benefits:* if true, it is
-   the smallest correction. *Drawbacks:* section 2's panel allocation already gives the panel's
-   entry as `panel_overlap` on its own, so a second expression for the same thing would be
-   redundant, and the row calls the quantity an *extension*, which is the corner's. *Needs:* a
-   reading of what row 4's last clause was meant to describe.
-
-**Recommendation.** **Alternative 1**, and the reasoning is the slot rather than the face. The
-slot's depth works out to `panel_overlap + panel_tolerance` exactly — entry plus fit — only if
-the end face is at `panel_overlap + panel_offset`; the register's shorter extension would cut
-into the slot. Two of the row's own quantities therefore agree with the part and the third does
-not, which is the shape of a transcription error rather than a design difference. That said,
-this is a 0.1 mm statement about a panel joint in the document that defines the joint, so it is
-put rather than taken.
-
-*Implementation: section 2's register table; no code depends on the difference, since both
-forms name the same parameters.*
+*Implementation: IP-FC-87 for the derivation; section 1 carries the statement of what section 2
+is.*
 
 ---
 
@@ -1110,6 +1217,8 @@ forms name the same parameters.*
 
 - [freecad_migration.md](../architecture/freecad_migration.md) — OQ-ARCH-7, the decision this
   implements; UC-7, the use case it serves
+- [derivation.md](derivation.md) — what the interfaces are *meant* to be, which this section
+  analyzes rather than specifies; OQ-DES-D9's answer
 - [corner.md](corner.md) — the cross-section, the panel offset derivation, OQ-DES-C5
 - [bulkhead.md](bulkhead.md) — derived dimensions, bolts and anchors
 - [cowl.md](cowl.md) — OQ-DES-CW9 through CW11, joints 7 and 8

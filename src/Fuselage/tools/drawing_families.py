@@ -295,6 +295,20 @@ def read_register(path=None):
     *which joints exist*, because `load_constants` validates its membership on every sweep
     run, and the register is the authority on *what each joint consumes*. A tolerance in the
     group with no row here fails, which is what keeps the document from going stale silently.
+
+    **What "authority" means here was narrowed by OQ-DES-D9 on 2026-08-28: the register is an
+    analysis of the implementation, not a specification the parts are built to.** Measured that
+    day, `design_constants.json` carries a governing expression for three of the seven
+    joints -- rows 6, 7 and 8 quote theirs verbatim -- and prose for the other four; rows 2,
+    3 and 5 reproduce that prose, and rows 1 and 4 carry expressions found in no design
+    document at all, written by reading the parts. So this function's output says what each
+    joint consumes *as
+    built*. Section 3's completeness test is therefore a check that a drawing states what its
+    part measures, and **not** a check that the part is what was intended: for rows 1 and 4
+    it
+    compares two readings of one geometry, since the annotation sets in
+    `freecad/sheet_annotations.py` were written by measuring the same parts. IP-FC-87 is the
+    derivation that would give the geometry something to be checked against.
     """
     with open(path or DIMENSION_SCHEME, encoding='utf-8') as f:
         text = f.read()
