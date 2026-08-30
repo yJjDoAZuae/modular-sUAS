@@ -531,6 +531,13 @@ no wall to analyse, and cannot be assembled.
 > closed contour per layer and no interior geometry whatsoever, so a cowl that has been given
 > a modelled wall **is no longer vase-mode printable**. The interior surface described below
 > therefore serves UC-2, UC-3, UC-4 and UC-8; it must not become what UC-1 exports. See §6.4.
+>
+> **This is `DES-12` in
+> [system_requirements.md](system_requirements.md#4-design-requirements)** as of 2026-08-29 —
+> this paragraph is its source, and the requirement restates it rather than deciding anything
+> new. It went into the register because **nothing verifies it**: a modelling change that gives
+> the cowl a wall destroys the capability, and the part still builds, still exports, and still
+> measures correctly. That is [OQ-DES-SR2](system_requirements.md#open-questions).
 
 **The interior must be generated as a per-layer 2D inset, not a 3D shell offset.** Those are
 different surfaces, and the difference is not small.

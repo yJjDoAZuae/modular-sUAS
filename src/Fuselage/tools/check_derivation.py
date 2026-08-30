@@ -27,11 +27,12 @@ relation surfaces in the later ones too. That is intended; the chain is the desi
 geometry -- the corner's bore, its seating faces, the panel groove, the bulkhead's flange face,
 the cowl flange's outer radius -- are checked against built solids elsewhere
 (`freecad/check_drawing.py`, `tools/joint_analysis/`, `doc/design/corner_bulkhead_joint.md`)
-and are derived in `doc/design/derivation.md` section 4 with the measurement beside each.
+and are derived in `doc/design/design_basis.md` section 4 with the measurement beside each.
 
     python check_derivation.py                 # check every variant of every sweep
     python check_derivation.py corner          # one sweep
     python check_derivation.py --report        # print the derivation, one line per relation
+    python check_derivation.py --requirements  # delegates to requirements.py, the register
 
 Millimeters and degrees, as the OpenSCAD path uses them.
 """
@@ -63,17 +64,23 @@ TOL = 1e-9
 
 # A field here is a number the design *picks*, and the note says where it is picked and why
 # there is no rule to derive it from. Several of these notes are findings rather than
-# explanations -- see doc/design/derivation.md section 6, which lists the ones nothing on
+# explanations -- see doc/design/design_basis.md section 6, which lists the ones nothing on
 # record justifies.
 GIVENS = {
     'bulkhead.U': 'the size axis itself (bulkhead_size_variants.csv)',
     'corner.FX': 'the bay-length axis (corner_size_variants.csv)',
     'printer.extrusion_width': 'a slicing setting (design_constants.json printer)',
     'printer.layer_height': 'a slicing setting (design_constants.json printer)',
-    'bulkhead.thickness': 'tabulated per size step in bulkhead_size_variants.csv; no rule '
-                          'relates it to U and none is on record',
+    'bulkhead.thickness': 'tabulated per size step in bulkhead_size_variants.csv. OQ-DES-DB2, '
+                          '2026-08-29: a design choice made on a tradeoff of several factors '
+                          'and objectives, tracing to no formula and to no higher requirement. '
+                          'Airframe size is a DISCRETE SERIES OF EIGHT and a ninth step means '
+                          'choosing again. 4*U fits six of the eight rows and must not be '
+                          'adopted -- the small sizes are thicker than proportion because they '
+                          'were chosen to be',
     'bolt.diameter': 'tabulated per size step in bulkhead_size_variants.csv; a standard '
-                     'fastener series, not a formula',
+                     'fastener series, not a formula. OQ-DES-DB2, 2026-08-29: chosen per step '
+                     'on the same tradeoff as bulkhead.thickness',
     'panel.thickness': 'stock: the panel is bought, so its thickness is a supplier size '
                        '(panel_variants.csv)',
     'greeble.opening_angle': 'tuned by experiment (design_constants.json geometry); the file '
@@ -84,187 +91,53 @@ GIVENS = {
     'longeron.tolerance': 'a clearance, chosen (design_constants.json tolerances)',
 }
 
-
 # ------------------------------------------------------------------------------------------
-# Originating requirements
-# ------------------------------------------------------------------------------------------
-
-# **These come from outside the design and are traceable to nothing below them.** They are the
-# axiomatic source the rest of the structure hangs from -- once they are reviewed and accepted.
-# Until then they are PROPOSED, and this table is a reading of what the project has recorded
-# rather than a statement anybody has ratified. `doc/design/derivation.md` section 2 gives each
-# one its source and its argument.
-#
-# Nothing here is checkable by this module or by any other. An originating requirement is
-# accepted by review; what the checkers verify is that the implementation satisfies the
-# level-1 requirements, and that each of those either traces to one of these or is flagged as
-# derived.
-ORIGINATING = {
-    'OR-1': 'one parametric standard produces the whole family of sizes',
-    'OR-2': 'the airframe is modular: bays of four corners and two bulkheads, joined end '
-            'to end',
-    'OR-3': 'the outer surface is an aerodynamic mold line, continuous across every part '
-            'that reaches it',
-    'OR-4': 'panels are designed by others inside an allocated envelope, and interchange',
-    'OR-5': 'structural parts are FDM printed; longerons, booms, panels, fasteners and '
-            'inserts are bought',
-    'OR-6': 'joints are bonded or fastened, and must accommodate print variation and bond '
-            'thickness',
-    'OR-7': 'the airframe assembles by hand, without jigs',
-    'OR-8': 'the volume the airframe encloses is usable -- payload, wiring, and a hand',
-    'OR-9': 'the drawing user is integrating with the structure, not inspecting a part',
-}
-
-
-# ------------------------------------------------------------------------------------------
-# Level-1 system requirements
+# The requirements
 # ------------------------------------------------------------------------------------------
 
-# **A level below the originating requirements. Most of these are DECOMPOSED from a parent;
-# three are DERIVED, and the two words are not interchangeable.**
+# **The register lives in `requirements.py`, not here.** It used to be three tables in this
+# file, which made this module two things -- a derivation of the parameters and a register of
+# the requirements they serve -- and put a second copy of every statement beside the one in
+# `doc/design/system_requirements.md`. Two copies of a requirement is the failure the register
+# exists to prevent, so keeping one here would have been the register contradicting itself.
 #
-# A decomposed requirement is obtained by allocating a parent requirement to the system, and it
-# traces to that parent. A **derived** requirement, in the sense INCOSE and ARP4754A/DO-178C
-# both use, is one that is **not traceable to any higher-level requirement** -- it arises from
-# the design solution itself, from a technology or implementation choice. That is a narrower
-# narrower thing than "obtained by decomposition", and it matters: a derived requirement has no
-# parent to validate it against, so it has to be reviewed and accepted on its own, exactly like
-# an originating requirement. This table said "derived" of all ten and then checked that every
-# one traced upward -- which, in the standard sense of the word, is a contradiction.
-#
-# `parents` is empty exactly when `derived` is True, and `check_traceability` enforces that in
-# both directions: a requirement with no parent that is not flagged is an untraced requirement,
-# and a flagged one with a parent is not derived. `rationale` is required on a derived
-# requirement, because with nothing above it that sentence is the whole of its justification.
-#
-# Argued in `doc/design/derivation.md` section 4.
+# What stays here is the half of the trace that is about *relations*: every relation names a
+# design requirement, and that id has to resolve. `requirements.py` owns the other half -- do
+# citations resolve to a tier above, does anything skip a tier, does the document state the
+# same set -- and running it is a separate check with its own exit code.
 
+import requirements as rq
 
-class Requirement(object):
-    def __init__(self, statement, parents=(), derived=False, rationale=None):
-        self.statement = statement
-        self.parents = parents
-        self.derived = derived
-        self.rationale = rationale
-
-
-SYSTEM = {
-    'SR-1': Requirement(
-        'airframe dimensions are proportional to U, and scale freely with it -- including '
-        'below their 1U value on a sub-unit airframe',
-        parents=('OR-1',)),
-    'SR-2': Requirement(
-        'a feature whose size the print process governs is sized in whole extrusions or whole '
-        'layers',
-        parents=('OR-5',)),
-    'SR-3': Requirement(
-        'every part reaching the outer surface lands on the mold line, and a joint\'s '
-        'clearance is taken inboard of it',
-        parents=('OR-3', 'OR-6')),
-    'SR-4': Requirement(
-        'a JOINT\'s clearance appears once, on one named side; the other side is nominal -- '
-        'which is not the same as a clearance PARAMETER appearing on one part',
-        derived=True,
-        rationale='OR-6 requires that a joint accommodate print variation and bond thickness. '
-                  'It does not say the accommodation is single-sided -- splitting it across '
-                  'both halves would satisfy OR-6 equally. Putting it on one side is a design '
-                  'decision, and its reason IS recorded (the joint would otherwise take '
-                  'the clearance twice), which is what makes this a clean example of the two '
-                  'axes being independent: recorded, and still derived. **The unit is the '
-                  'joint, not the parameter.** `panel_tolerance` is carried by BOTH the corner '
-                  '(register row 4) and the bulkhead (row 5), and that is not a violation: '
-                  'those are two different joints with the same bought panel, and each takes '
-                  'its own clearance once on its own printed side. SR-3 in fact requires it -- '
-                  'the panel lies across both seats, so both must be set back by the same '
-                  'pocket or it cannot sit flat on the mold line. Measured at 1U with a 3/16 '
-                  'in panel: the corner seats at 5.1375 corner-local and the bulkhead at '
-                  '45.1375 airframe, both mold line less 4.8625.'),
-    'SR-5': Requirement(
-        'the bought part is nominal and the printed part carries the fit',
-        derived=True,
-        rationale='follows from no parent. OR-5 says which parts are bought and OR-6 says the '
-                  'joint needs clearance; neither implies the clearance goes on the printed '
-                  'side. It is an allocation decision, and no reason for it is on record.'),
-    'SR-6': Requirement(
-        'at the corner/bulkhead interface the corner carries the clearance, so that the '
-        'bulkhead\'s dimensions stay consistent across variants',
-        derived=True,
-        rationale='**Rationale stated 2026-08-29, so this is no longer inferred:** the corner '
-                  'is less likely to have integrated components interfacing it than the '
-                  'bulkhead, so the bulkhead is the part whose dimensions should stay '
-                  'consistent, and the variation is allocated to the corner. **Both of this '
-                  'module\'s earlier reconstructions were wrong** -- neither "four corners to '
-                  'one bulkhead" nor "the corner is the part that is pressed in" is the '
-                  'reason, and both read plausibly. It stays flagged derived pending '
-                  'OQ-DES-DV5: a parent very likely exists in the project wiki, whose '
-                  'Modularity4 says interchange must not affect fuselage structure and whose '
-                  'objectives include facilitating system integration.'),
-    'SR-7': Requirement(
-        'where a joint does not exist its clearance is zero, and that zero is the absence of '
-        'the joint rather than a fit set to nothing',
-        parents=('OR-6', 'OR-9')),
-    'SR-8': Requirement(
-        'no part may intrude on the volume swept by another part\'s assembly motion',
-        parents=('OR-7',)),
-    'SR-9': Requirement(
-        'a drawing states which of several competing requirements produced a dimension',
-        parents=('OR-9',)),
-    'SR-10': Requirement(
-        'the panel envelope is fixed by the frame and stated without reference to any panel '
-        'design',
-        parents=('OR-4',)),
-    'SR-11': Requirement(
-        'where a feature\'s function is set by something that does not scale with the '
-        'airframe, its size is floored at what that function requires',
-        parents=('OR-5', 'OR-6')),
-}
+ARCHITECTURE = rq.ARCHITECTURE
+DESIGN = rq.DESIGN
+INTERFACE = rq.INTERFACE          # re-exported for readers that had it from here
 
 
 def check_traceability():
-    """Every level-1 requirement either traces to a parent or is flagged derived, never both.
+    """Every relation names a design requirement that exists.
 
-    A requirement with no parent that is not flagged is an *untraced* requirement: a design
-    decision justified by nothing, and indistinguishable at a glance from one that follows from
-    something. A requirement flagged derived that has a parent is mislabeled the other way, and
-    that matters: a derived requirement carries a review obligation a decomposed one does
-    not. Both are structural defects rather than wording problems, and both are invisible to a
-    reader.
+    The requirement register's own structure -- citations resolving to a tier above, level
+    skips, sources, verifiers, and agreement with `doc/design/system_requirements.md` -- is
+    checked by `requirements.py`. This is the part only this module can check: a relation is
+    justified by naming a `DES-` id rather than by describing its reason in prose, and an id
+    that resolves to nothing means a number is justified by something that is not a
+    requirement.
 
-    Returns (complaints, notes). A note is not a failure: a requirement governing the drawing
-    or the panel envelope reaches no parameter, so it is stated here and checked elsewhere.
-    Reporting it keeps that gap visible instead of letting an unenforced requirement sit in the
-    table looking enforced.
+    Returns (complaints, notes). A note is not a failure: it reports a design requirement that
+    reaches no parameter relation, so a rule nothing enforces cannot sit in the table looking
+    enforced.
     """
     complaints = []
-    for name in sorted(SYSTEM):
-        req = SYSTEM[name]
-        if req.derived:
-            if req.parents:
-                complaints.append('%s is flagged derived but has parents %s -- a derived '
-                                  'requirement is one that traces to NO higher-level '
-                                  'requirement' % (name, ', '.join(req.parents)))
-            if not req.rationale:
-                complaints.append('%s is derived and carries no rationale; with no parent '
-                                  'above it, that sentence is its whole justification' % name)
-        elif not req.parents:
-            complaints.append('%s traces to no originating requirement and is not flagged '
-                              'derived' % name)
-        for origin in req.parents:
-            if origin not in ORIGINATING:
-                complaints.append('%s traces to %s, which is not an originating requirement'
-                                  % (name, origin))
-
     used = set()
     for relation in RELATIONS + COWL_RELATIONS:
         for name in relation.serves:
             used.add(name)
-            if name not in SYSTEM:
-                complaints.append('%s names %s, which is not a level-1 requirement'
+            if name not in DESIGN:
+                complaints.append('%s names %s, which is not a design requirement'
                                   % (relation.field, name))
     notes = ['%s reaches no parameter relation; it is checked elsewhere or not at all' % name
-             for name in sorted(set(SYSTEM) - used)]
+             for name in sorted(set(DESIGN) - used)]
     return complaints, notes
-
 
 class Relation(object):
     """One design relationship: what it produces, which requirements it serves, and how.
@@ -272,8 +145,8 @@ class Relation(object):
     `serves` is a tuple of level-1 requirement ids, not prose. That is what makes the trace a
     structure rather than a habit of wording: each id either resolves or the run says so. A
     tuple rather than one id because a feature commonly answers to more than one -- a printed
-    wall is sized in whole extrusions (SR-2) *and* floored where its function does not scale
-    (SR-11), and naming only the first would hide half of why it is what it is.
+    wall is sized in whole extrusions (DES-2) *and* floored where its function does not scale
+    (DES-11), and naming only the first would hide half of why it is what it is.
     """
 
     def __init__(self, field, serves, requirement, derive):
@@ -287,9 +160,9 @@ class Relation(object):
 
 
 def _floored(coefficient, U):
-    """`SR-11`: a feature that must not shrink with the airframe, held at its 1U size below 1U.
+    """`DES-11`: a feature that must not shrink with the airframe, held at its 1U size below 1U.
 
-    **This is the exception, not the rule.** Most airframe dimensions are SR-1 and scale
+    **This is the exception, not the rule.** Most airframe dimensions are DES-1 and scale
     freely: at U=0.5 the corner radius is 5 against 10, the web 1.5 against 3, the flange
     fillet 1 against 2, the plate 0.4 against 0.8. Only four derived quantities floor --
     `bolt.thickness`, `bulkhead_flange.thickness`, `greeble.thickness` and its nub -- plus the
@@ -298,7 +171,7 @@ def _floored(coefficient, U):
     Written as a helper because `max(n*U, n)` read as a bare expression looks like a
     coincidence of two literals, and because the floor's *reason* differs per feature: recorded
     for the greeble wall (a one-extrusion wall has no interior), unrecorded for the bolt boss
-    and the boom key. See derivation.md section 8.
+    and the boom key. See design_basis.md section 8.
     """
     return max(coefficient * U, coefficient)
 
@@ -306,9 +179,9 @@ def _floored(coefficient, U):
 def _extrusions(count, U, w):
     """A wall of `count` extrusions at 1U, widened in whole extrusions as the airframe grows.
 
-    `ceil` because a wall is printed in whole passes (SR-2): two and a half extrusion widths is
+    `ceil` because a wall is printed in whole passes (DES-2): two and a half extrusion widths is
     not a thing a slicer can lay down, so the count rounds up and the wall takes the width that
-    produces. Floored at the 1U wall under SR-11 -- a wall thin enough to stop printing has
+    produces. Floored at the 1U wall under DES-11 -- a wall thin enough to stop printing has
     stopped being a wall, whatever the airframe is doing.
     """
     return max(math.ceil(count * U) * w, count * w)
@@ -342,7 +215,7 @@ def _panel_offset(g, d):
     panel width on a readable grid.
     """
     if g['is_cowling']:
-        return 0.0                               # SR-7: no panel, so no edge to stand off
+        return 0.0                               # DES-7: no panel, so no edge to stand off
 
     greeble_outer = (d['longeron.radius'] + g['longeron_tolerance']
                      + d['greeble.thickness'] + d['greeble.nub_thickness'])
@@ -360,9 +233,12 @@ def _panel_offset(g, d):
 
     offset = max(r1, r2, 0.0)
 
-    # The corner's extension cannot reach past the diagonal that mirrors the quarter section.
-    # NOTE: the clamp is applied before the rounding, so the rounding can carry the result
-    # back over it -- see doc/design/derivation.md section 6.
+    # A GUARD against an excessively large panel offset, recorded 2026-08-29 under OQ-DES-DB1.
+    # It has never fired: zero of the 528 non-cowling variants reach it, and at 1U the
+    # requirements produce 2.5 against a clamp at 14.14. **The ordering is deliberate** -- the
+    # guard bounds the requirement-driven value and the quantum is applied last, so whatever
+    # leaves this expression sits on the 0.25 mm grid. Clamping after the rounding would return
+    # an off-grid offset in exactly the case the guard fires.
     offset = min(offset, math.sqrt(2) * d['corner.radius'])
 
     quantum = g['panel_offset_quantum_mm']
@@ -383,135 +259,135 @@ def _bolt_radius(g, d):
 
 RELATIONS = (
     # -- the standard, scaled -------------------------------------------------------------
-    Relation('bulkhead.width', 'SR-1',
+    Relation('bulkhead.width', 'DES-1',
              'the fuselage is unit_width across flats at 1U',
              lambda g, d: g['unit_width'] * g['U']),
-    Relation('corner.length', 'SR-1',
+    Relation('corner.length', 'DES-1',
              'a bay is unit_length long at 1U, and FX is the bay-length axis',
              lambda g, d: g['unit_length'] * g['U'] * g['FX']),
-    Relation('corner.radius', 'SR-1',
+    Relation('corner.radius', 'DES-1',
              'the mold line turns each corner on an arc of corner_radius at 1U',
              lambda g, d: g['corner_radius'] * g['U']),
-    Relation('longeron.radius', 'SR-1',
+    Relation('longeron.radius', 'DES-1',
              'the longeron tube is longeron_radius at 1U',
              lambda g, d: g['longeron_radius'] * g['U']),
-    Relation('bolt.offset', 'SR-1',
+    Relation('bolt.offset', 'DES-1',
              'the bolt axis sits bolt_offset from the corner arc center at 1U',
              lambda g, d: g['bolt_offset'] * g['U']),
 
     # -- printed features -----------------------------------------------------------------
-    Relation('greeble.thickness', ('SR-2', 'SR-11'),
+    Relation('greeble.thickness', ('DES-2', 'DES-11'),
              'the greeble wall is a printed feature sized to survive a snap fit, so it '
              'scales in extrusions and as sqrt(U) rather than as a fraction of the airframe; '
              'a one-extrusion wall has no interior, which is the floor',
              lambda g, d: max(g['greeble_wall_extrusions'] * math.sqrt(g['U']) * g['w'],
                               g['greeble_wall_extrusions'] * g['w'])),
-    Relation('greeble.nub_thickness', 'SR-2',
+    Relation('greeble.nub_thickness', 'DES-2',
              'the snap rib and the seat wall it stands on are one wall thickness, related by '
              'a formula rather than two independent parameters -- identity today',
              lambda g, d: fv.greeble_nub_thickness_of(d['greeble.thickness'])),
-    Relation('bulkhead_flange.thickness', ('SR-2', 'SR-11'),
+    Relation('bulkhead_flange.thickness', ('DES-2', 'DES-11'),
              'the flange wall is printed in whole perimeters; a cowling bulkhead gets one '
              'more than the rest because it carries the cowl',
              lambda g, d: _extrusions(g['cowl_bulkhead_flange_extrusions'] if g['is_cowling']
                                       else g['bulkhead_flange_extrusions'], g['U'], g['w'])),
-    Relation('bolt.thickness', 'SR-11',
+    Relation('bolt.thickness', 'DES-11',
              'the boss around the bolt scales with the airframe but never below its 1U value',
              lambda g, d: _floored(g['bolt_thickness_per_u'], g['U'])),
-    Relation('plate.thickness', 'SR-2',
+    Relation('plate.thickness', 'DES-2',
              'the plate is a printed skin and wants to come out an exact number of passes, '
              'so it is a count of layer heights and not a length',
              lambda g, d: math.ceil(g['plate_layers'] * g['U']) * g['h']),
-    Relation('web.width', 'SR-1',
+    Relation('web.width', 'DES-1',
              'a boom bulkhead\'s web is twice a frame bulkhead\'s: it carries the boom',
              lambda g, d: (g['boom_web_width_per_u'] if g['is_boom']
                            else g['frame_web_width_per_u']) * g['U']),
-    Relation('web.fillet_radius', 'SR-1',
+    Relation('web.fillet_radius', 'DES-1',
              'the fillet where the web meets the ring scales with the airframe',
              lambda g, d: g['web_fillet_radius_per_u'] * g['U']),
-    Relation('bulkhead_flange.fillet_radius', 'SR-1',
+    Relation('bulkhead_flange.fillet_radius', 'DES-1',
              'the fillet at the flange root scales with the airframe',
              lambda g, d: g['bulkhead_flange_fillet_per_u'] * g['U']),
-    Relation('bulkhead_flange.chamfer', 'SR-1',
+    Relation('bulkhead_flange.chamfer', 'DES-1',
              'the chamfer on the flange\'s leading edge scales with the airframe',
              lambda g, d: g['bulkhead_flange_chamfer_per_u'] * g['U']),
 
     # -- the panel ------------------------------------------------------------------------
-    Relation('panel.tolerance', 'SR-7',
+    Relation('panel.tolerance', 'DES-7',
              'the gap the panel stands off the flange face by. A cowling bulkhead and a 0 mm '
              'panel take 0, and that zero is the absence of the joint rather than a fit set '
              'to nothing',
              lambda g, d: (0.0 if (g['is_cowling'] or g['panel_thickness'] == 0)
                            else g['panel_tolerance'])),
-    Relation('panel.overlap', 'SR-11',
+    Relation('panel.overlap', 'DES-11',
              'the length of panel captured in the corner\'s groove: at least one panel '
              'thickness, and never less than panel_overlap_min_mm of bond area, which is an '
              'absolute minimum and so does not scale',
              lambda g, d: (0.0 if (g['is_cowling'] or g['panel_thickness'] == 0)
                            else max(g['panel_thickness'], g['panel_overlap_min_mm']))),
-    Relation('panel.offset', 'SR-8',
+    Relation('panel.offset', 'DES-8',
              'how far the panel\'s inboard edge stands off the longeron axis: far enough that '
              'it clears the greeble, and that the corner can still snap onto the longeron',
              _panel_offset),
 
     # -- who carries the clearance --------------------------------------------------------
-    Relation('greeble.tolerance', 'SR-4',
+    Relation('greeble.tolerance', 'DES-4',
              'the snap fit\'s clearance is carried entirely on the corner: its socket is '
              'opened out and the bulkhead\'s post stays nominal, so the joint takes the '
              'clearance once',
              lambda g, d: 0.0 if g['is_bulkhead'] else g['greeble_tolerance']),
-    Relation('corner.tolerance', 'SR-6',
+    Relation('corner.tolerance', 'DES-6',
              'the two corner faces that seat against the bulkhead carry their clearance on '
              'the corner too -- the bulkhead cuts its socket from the same shape at 0',
              lambda g, d: g['corner_tolerance']),
-    Relation('bolt.radius', 'SR-5',
+    Relation('bolt.radius', 'DES-5',
              'the hole is sized to the bought fastener: a bolt to its own nominal, an anchor '
              'to the insert bore from the supplier table',
              _bolt_radius),
 
     # -- the cowl mount -------------------------------------------------------------------
-    Relation('cowl_flange.height', 'SR-7',
+    Relation('cowl_flange.height', 'DES-7',
              'the flange stands cowl_flange_height_per_u off the bulkhead face per U; a '
              'bulkhead that mounts no cowl has no flange, and that zero is structural',
              lambda g, d: g['cowl_flange_height_per_u'] * g['U'] if g['is_cowling'] else 0.0),
-    Relation('cowl_flange.tolerance', 'SR-7',
+    Relation('cowl_flange.tolerance', 'DES-7',
              'the fit between the flange and the cowl that slides over it, on a cowling '
              'bulkhead only',
              lambda g, d: g['cowl_flange_tolerance'] if g['is_cowling'] else 0.0),
 
     # -- the boom -------------------------------------------------------------------------
-    Relation('boom_bulkhead.diameter', 'SR-1',
+    Relation('boom_bulkhead.diameter', 'DES-1',
              'the boom tube is bought; the sweep states its size as a fraction of unit_width '
              'so a whole airframe scales together',
              lambda g, d: d['bulkhead.width'] * g['boom_diameter'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.y_position', 'SR-1',
+    Relation('boom_bulkhead.y_position', 'DES-1',
              'the boom\'s position across the fuselage, as a fraction of unit_width',
              lambda g, d: d['bulkhead.width'] * g['y_position'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.z_position', 'SR-1',
+    Relation('boom_bulkhead.z_position', 'DES-1',
              'the boom\'s position up the fuselage, as a fraction of unit_width',
              lambda g, d: d['bulkhead.width'] * g['z_position'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.thickness', 'SR-1',
+    Relation('boom_bulkhead.thickness', 'DES-1',
              'the boom bulkhead\'s own wall scales with the airframe',
              lambda g, d: g['boom_wall_per_u'] * g['U'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.collet_thickness', 'SR-1',
+    Relation('boom_bulkhead.collet_thickness', 'DES-1',
              'the collet wall that grips the boom scales with the airframe',
              lambda g, d: g['boom_collet_thickness_per_u'] * g['U'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.key_width', 'SR-11',
+    Relation('boom_bulkhead.key_width', 'DES-11',
              'the anti-rotation key never shrinks below its 1U size',
              lambda g, d: (_floored(g['boom_key_width_per_u'], g['U'])
                            if g['is_boom'] else 0)),
-    Relation('boom_bulkhead.key_height', 'SR-11',
+    Relation('boom_bulkhead.key_height', 'DES-11',
              'the key\'s height is an independent dimension that happens to equal its width',
              lambda g, d: (_floored(g['boom_key_height_per_u'], g['U'])
                            if g['is_boom'] else 0)),
-    Relation('boom_bulkhead.key_radius', 'SR-11',
+    Relation('boom_bulkhead.key_radius', 'DES-11',
              'the radius on the key never shrinks below its 1U size either',
              lambda g, d: (_floored(g['boom_key_radius_per_u'], g['U'])
                            if g['is_boom'] else 0)),
-    Relation('boom_bulkhead.key_web_width', 'SR-1',
+    Relation('boom_bulkhead.key_web_width', 'DES-1',
              'the web that carries the key scales with the airframe',
              lambda g, d: g['boom_key_web_width_per_u'] * g['U'] if g['is_boom'] else 0),
-    Relation('boom_bulkhead.tolerance', 'SR-7',
+    Relation('boom_bulkhead.tolerance', 'DES-7',
              'the boom tube\'s clearance in the collet, on a boom bulkhead only',
              lambda g, d: g['boom_tolerance'] if g['is_boom'] else 0),
 )
@@ -521,7 +397,7 @@ RELATIONS = (
 # are largely shape control points rather than interfaces. One relation is derived here because
 # it is a joint: the nose closure's seat on the cowl shell, register row 8.
 COWL_RELATIONS = (
-    Relation('nose.flange_inset', 'SR-3',
+    Relation('nose.flange_inset', 'DES-3',
              'the nose seats on top of the cowl\'s perimeter shell, so the inset is the '
              'cowl\'s own wall -- cowl_n_perimeters extrusions -- plus the fit against it, '
              'which is negative because the joint is bonded and grips',
@@ -732,24 +608,27 @@ def check(kind):
 
 
 def report():
-    """The requirement tree: L0, L1, and the relations under each."""
-    print('L0 ORIGINATING -- proposed; accepted by review, checkable by nothing')
-    for name in sorted(ORIGINATING):
-        print('  %-6s %s' % (name, ORIGINATING[name]))
+    """The requirement tree: architecture, design, and the relations under each."""
+    print('ARCHITECTURAL REQUIREMENTS -- doc/architecture/requirements.md is the authority')
+    for name in sorted(ARCHITECTURE):
+        print('  %-10s %s' % (name, ARCHITECTURE[name]))
     print('')
-    print('L1 SYSTEM -- decomposed from a parent, or DERIVED with its own justification')
+    print('DESIGN REQUIREMENTS -- citing architecture is optional; a requirement that cites')
+    print('nothing carries its own rationale instead')
     under = {}
     for relation in RELATIONS + COWL_RELATIONS:
         for name in relation.serves:
             under.setdefault(name, []).append(relation)
-    for name in sorted(SYSTEM, key=lambda k: int(k.split('-')[1])):
-        req = SYSTEM[name]
-        print('  %-6s %s' % (name, req.statement))
-        if req.derived:
-            print('  %-6s DERIVED -- traces to no higher-level requirement' % '')
-            print('  %-6s %s' % ('', req.rationale))
+    for name in sorted(DESIGN, key=lambda k: int(k.split('-')[1])):
+        req = DESIGN[name]
+        print('  %-7s %s' % (name, req.statement))
+        if req.cites:
+            print('  %-7s cites %s' % ('', ', '.join(req.cites)))
         else:
-            print('  %-6s decomposed from %s' % ('', ', '.join(req.parents)))
+            print('  %-7s cites nothing -- design-level, and derived in the INCOSE sense'
+                  % '')
+        if req.rationale:
+            print('  %-7s %s' % ('', req.rationale))
         for relation in under.get(name, ()):
             print('           %-30s %s' % (relation.field, relation.requirement))
         if name not in under:
@@ -765,6 +644,12 @@ def main(argv):
         report()
         return 0
 
+    if '--requirements' in argv:
+        # Delegated rather than removed: the flag was here first, and a flag that quietly
+        # stops doing anything is worse than one that says where the work went.
+        print('requirements -- delegated to requirements.py, which owns the register')
+        return rq.main([])
+
     kinds = [a for a in argv if a in df.SWEEPS] or list(df.SWEEPS)
     failed = 0
 
@@ -777,11 +662,12 @@ def main(argv):
         for line in broken:
             print('    ' + line)
     else:
-        derived = sorted(n for n in SYSTEM if SYSTEM[n].derived)
-        print('traceability -- %d L1 requirements: %d decomposed from %d L0, %d DERIVED (%s), '
-              'each carrying its own justification'
-              % (len(SYSTEM), len(SYSTEM) - len(derived), len(ORIGINATING), len(derived),
-                 ', '.join(derived)))
+        derived = sorted((n for n in DESIGN if DESIGN[n].derived),
+                         key=lambda k: int(k.split('-')[1]))
+        print('traceability -- every relation names one of the %d design requirements; %d of '
+              'them cite architecture, %d carry their own rationale (%s)'
+              % (len(DESIGN), len(DESIGN) - len(derived), len(derived), ', '.join(derived)))
+        print('             the register itself is checked by requirements.py')
     for line in notes:
         print('    note: ' + line)
 

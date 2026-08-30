@@ -843,6 +843,9 @@ def derived_parameters(U,FX,user_parameters,printer_settings,is_bulkhead):
         
         panel_offset = max(panel_offset, (panel_clearance_radius - GREEBLE_MARGIN_EXTRUSIONS*c.printer.extrusion_width)/math.sqrt(2) + GREEBLE_MARGIN_EXTRUSIONS*c.printer.extrusion_width + greeble_clearance_width - c.panel.overlap)
         panel_offset = max(panel_offset, 0)
+        # A guard against an excessively large panel offset (OQ-DES-DB1, recorded 2026-08-29).
+        # It has never fired on any variant the sweep produces. The quantum below is applied
+        # AFTER it deliberately, so the value that leaves here is always on the quantum grid.
         panel_offset = min(panel_offset, math.sqrt(2)*c.corner.radius)
         panel_offset = PANEL_OFFSET_QUANTUM_MM*math.ceil(panel_offset/PANEL_OFFSET_QUANTUM_MM) # inflate to the next whole quantum
 

@@ -6,14 +6,14 @@ stop, the faces the bulkhead mates against -- where an expression and the solid 
 to produce can disagree without any parameter being wrong. This is that half.
 
 **The direction matters.** Nothing here measures the part and writes down what it finds. Each
-entry states, from `doc/design/derivation.md`, a face the design *requires*: its normal, where
+entry states, from `doc/design/design_basis.md`, a face the design *requires*: its normal, where
 it must sit, how big it must be, and whether it exists at all on this variant. Then the solid
 is built and asked. A face that is missing, mispositioned or the wrong size is a disagreement
 between the derivation and the implementation, and the run says which.
 
 **Structural absence is part of the prediction, not an exemption.** A 0 mm panel variant has no
 panel seat because there is no panel -- so the derivation predicts the face is *absent*, and a
-face found there would be as much a failure as a missing one. That is SR-7 tested rather than
+face found there would be as much a failure as a missing one. That is DES-7 tested rather than
 asserted: on a variant with no panel the seat merges into the mold line, and on the 24 corner
 variants where the longeron branch stops governing the seating flat vanishes entirely.
 
@@ -62,7 +62,7 @@ class Face(object):
 
 
 def corner_faces(p):
-    """The corner's interface faces, derived. See derivation.md section 4, joints 1 and 4.
+    """The corner's interface faces, derived. See design_basis.md section 5, INT-1 and INT-4.
 
     Corner-local: the arc center at the origin, the mold line at `corner_radius`, the arm
     running out along -x toward the panel. The part is mirrored about x = y, so every face
@@ -75,7 +75,7 @@ def corner_faces(p):
     offset = p['panel_offset']
     length = p['unit_length'] * p['FX']
 
-    # SR-3: the panel's outer surface IS the mold line, so its seat is set back from the mold
+    # DES-3: the panel's outer surface IS the mold line, so its seat is set back from the mold
     # line by the panel and its fit, and no material stands outboard of the panel at all.
     seat_y = radius - thickness - fit
 
@@ -83,7 +83,7 @@ def corner_faces(p):
     # lands on clearance rather than on the stop.
     stop_x = -(offset - fit)
 
-    # SR-9 on the seating flat: the diagonal is placed one longeron_chamfer outside the bore
+    # DES-9 on the seating flat: the diagonal is placed one longeron_chamfer outside the bore
     # where it crosses the axis, unless the panel interface has been pushed further out, in
     # which case the flat closes up entirely and the diagonal meets the seat.
     bore_branch = p['longeron_radius'] + p['longeron_tolerance'] + p['extrusion_width']
@@ -94,20 +94,20 @@ def corner_faces(p):
 
     return [
         Face('mold line', 'Y', radius, (offset - fit) * length, True,
-             'SR-3: the corner meets the panel at the mold line and stops there'),
+             'DES-3: the corner meets the panel at the mold line and stops there'),
         Face('panel seat', 'Y', seat_y, (overlap + fit) * length, panelled,
-             'SR-3: the seat is set back by the panel and its fit, so the panel lands flush'),
+             'DES-3: the seat is set back by the panel and its fit, so the panel lands flush'),
         Face('panel end stop', 'X', stop_x, (thickness + fit) * length, panelled,
-             'SR-5: the panel bottoms out on clearance, not on the stop'),
+             'DES-5: the panel bottoms out on clearance, not on the stop'),
         Face('bulkhead seating flat', 'X', -(overlap + offset) + p['corner_tolerance'],
              seat_span * length, seat_span > 0,
-             'SR-9: what the bore branch has left above the panel interface, and nothing '
+             'DES-9: what the bore branch has left above the panel interface, and nothing '
              'when the panel branch governs'),
     ]
 
 
 def bulkhead_faces(p):
-    """The bulkhead's panel seat, derived. See derivation.md section 4, joint 5.
+    """The bulkhead's panel seat, derived. See design_basis.md section 5, INT-5.
 
     The bulkhead's outer flat face *is* the panel's seating surface: set back from the mold
     line by the panel pocket, and running exactly the panel's exposed span. That is why a
@@ -127,7 +127,7 @@ def bulkhead_faces(p):
 
     return [
         Face('outer face', 'Y', half - pocket, exposed * p['bulkhead_thickness'], True,
-             'SR-3: the mold line less the panel pocket, running the panel\'s exposed span'),
+             'DES-3: the mold line less the panel pocket, running the panel\'s exposed span'),
     ]
 
 
