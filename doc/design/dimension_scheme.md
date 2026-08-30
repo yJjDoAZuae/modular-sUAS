@@ -81,10 +81,26 @@ part is right and the register is corrected.** That is what makes
 is a derivation of the fundamental design relationships, written so that the implementation —
 the OpenSCAD geometry, together with the corrections the FreeCAD migration turned up — *follows
 from* it. **That document was written on 2026-08-28 under IP-FC-87 and is
-[derivation.md](derivation.md).** It is the prerequisite
-[OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named; it is filed in
-`doc/design/` rather than at the `doc/architecture/overview.md` OQ-ARCH-7 assigned, for the
-reason its section 8 gives.
+[design_basis.md](design_basis.md)**, which holds the argument.
+
+**The requirements themselves are stated in
+[system_requirements.md](system_requirements.md)**, written 2026-08-29 — each once, with its
+parent, its verification method, and whether that verification has been run. Two groups of it
+come from this document. **The ten joints this section's register enumerates are `INT-1` …
+`INT-10` there**, in the same order, so a row of the register and a requirement now share an id.
+And **section 5.2's five hard constraints are `DRW-1` … `DRW-5`**, with the rest of section 5 —
+the fail-loud rule, determinism, the independent checker — as `DRW-6` through `DRW-8`, and
+section 3's completeness test as `DRW-12`. Section 5.3's soft costs are ranked preferences and
+are deliberately **not** requirements.
+
+**The architectural requirements are a separate document and a separate level**, adopted into
+this repository on 2026-08-29 under OQ-DES-DB5 as
+[doc/architecture/requirements.md](../architecture/requirements.md). An architectural
+requirement constrains any compliant implementation; a design requirement constrains this one.
+Together they are the prerequisite
+[OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named — *"agreement on what
+belongs to the interface"* — with the architectural half in `doc/architecture/` and the design
+half here.
 
 **What that changes for this section, and what it does not.** No reading of the register
 establishes that a part is built as intended; it establishes that a drawing states what the
@@ -160,7 +176,7 @@ built corner at 1U with a 3/16 in panel: the seat is a face at 5.1375 of 486.250
 
 **An overshoot is an implementation artifact, and this one is sized from the feature it cuts**,
 which is why it scaled convincingly across 264 variants and got recorded here as the joint's own
-dimension. [derivation.md section 7](derivation.md#7-what-is-neither-implementation-artifacts)
+dimension. [design_basis.md section 7](design_basis.md#7-what-is-neither-implementation-artifacts)
 states the rule that keeps the two apart and lists the artifacts the project already handles
 correctly; IP-FC-88 is the change that stops this one reading like a design quantity. The
 register carries **requirements**, so what belongs in this row is the rebate.
@@ -433,6 +449,11 @@ against; the sheet is laid out to OQ-DES-D5.
 
 Every one of these is checkable on the produced drawing. None is a preference.
 
+**These are `DRW-1` … `DRW-5` in
+[system_requirements.md section 6](system_requirements.md#6-drawing-requirements)**, where H1 is
+DRW-1 and so on in order. They were unnumbered here until 2026-08-29, and a hard constraint that
+fails the build is a requirement whether or not it has an id.
+
 | | Constraint | Why it is hard rather than soft |
 | --- | --- | --- |
 | **H1** | **Containment.** The full extent of every dimension — text box, dimension line, arrowheads, witness lines, any leader — lies inside the view frame and inside the sheet's printable area. | A dimension partly off-sheet is not a dimension. |
@@ -573,7 +594,7 @@ belong in its interface-conventions section, and what stays here is the drawing-
 
 | ID | Question | Blocking |
 | --- | --- | --- |
-| OQ-DES-D7 | Section 2's *Governing expression* column means two different things in different rows — the whole nominal in some, only the clearance in others — and section 3's completeness test reads it | Not blocking — the register reaches no drawing; it under-demands three parameters the sheets already state, and leaves joint 3 covered only by coincidence. OQ-DES-D9 has since settled that completing the expressions is finishing the analysis, not changing its provenance |
+| OQ-DES-D7 | The interface register's *Governing expression* column gives the whole size of a fit in some rows and only the clearance gap in others, and one automatic check reads them all the same way | Not blocking — no drawing changes under any answer. Three parameter names go undemanded, all three already printed on the sheets that owe them; two joints are covered only by coincidence |
 
 
 ### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
@@ -982,166 +1003,364 @@ as well as the adjustment is a question this resolution does not settle.
 `freecad/sheet_annotations.corner_seat_span`, read from both sides; the reachability record is
 `freecad/check_unread_rows.py` (IP-FC-56).*
 
-### OQ-DES-D7 — The register's expression column means two different things, and the completeness test reads it
+### OQ-DES-D7 — Some register rows give the whole size of a fit, others only the clearance gap, and one check reads them all the same way
 
-**The problem.** Section 2's interface register has a *Governing expression* column, and section
-3's completeness test is built on it: `drawing_families.read_register` takes the parameter names
-out of that column's code spans, and a drawing is obliged to state every name its part's joints
-consume. The column is doing two different jobs in different rows.
+**The problem.**
 
-Some rows give the **whole nominal**, so the test demands everything that sets the feature:
+*This description assumes no knowledge of the rest of this document. Everything it relies on is
+defined here.*
 
-| Row | Expression as written |
-| --- | --- |
-| 1 | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` |
-| 4 | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep … |
-| 6 | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` |
-| 7 | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance` |
+#### What the register is, and what reads it
 
-Others give **only the clearance, or only the adjustment the clearance makes**, and the nominal
-the clearance is applied to is described in prose rather than written.
+Section 2 of this document is a table called the **interface register**. It has one row for each
+of the ten places where two parts of the airframe have to fit together — a carbon tube going
+into a bore, a panel edge sliding into a slot, a cowl seating on a flange. Each row names the two
+parts, gives the **clearance** (the deliberate gap that makes the fit work — 0.05 mm on the
+longeron, 0.2 mm on the boom), and says which part's drawing is responsible for the joint.
 
-**The split is inherited rather than careless, which was not obvious when this was filed.**
+Each row also has a column called **Governing expression**. It is meant to say *how the fit is
+sized*: the arithmetic that turns airframe parameters into the actual dimension of the feature.
+
+One thing reads that column: an automated check called the **completeness test**. It works like
+this.
+
+1. It pulls every name out of the column — the names in `code font` — for each row.
+2. For a given part, it collects the names from all the rows that part is responsible for.
+3. It **drops any name that is not an airframe parameter**. Some expressions name intermediate
+   results — `collet_radius` in row 6, `flat_offset` in row 3 — and those are the names *of*
+   the answer rather than inputs to it, so they are discarded here. It also drops any parameter
+   that is zero across the whole family, on the rule that a zero-valued clearance means the
+   joint is *absent* rather than tight, and there is nothing to inspect.
+4. It then requires that the engineering drawing of that part **state every surviving name**,
+   either as a dimension or as a callout beside one.
+
+Step 3 is easy to skip over and it does a lot of work below.
+
+The point is to stop a drawing from going out that leaves a fit unexplained. If the boom collet's
+size depends on the wall thickness of the collet, and the drawing never says what that thickness
+is, the person machining or inspecting from that drawing cannot check the fit.
+
+**Nothing else reads the column.** It does not feed the drawings themselves. This matters and is
+demonstrated below.
+
+#### The inconsistency, in two rows side by side
+
+**Row 6 — the boom tube going into its collet.** The column reads:
+
+```
+collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance
+```
+
+That is the whole size of the feature. Four names come out of it, one of which —
+`collet_radius` — is the name of the result and is dropped at step 3. The remaining three,
+`boom_diameter`, `boom_collet_thickness` and `boom_tolerance`, are all obligations on the boom
+bulkhead's drawing. If the collet wall thickness changed and the drawing did not say so, the
+check would catch it.
+
+**Row 2 — the bulkhead's greeble post going into the corner's socket.** The column reads:
+
+> *socket opened out by the clearance; post stays nominal*
+
+That is not a size. It is a sentence about what the clearance does. One name comes out of it —
+`greeble_tolerance` — and that is the entire obligation this joint places on the corner's
+drawing.
+
+The socket's actual radius is:
+
+```
+longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance   = 3.3000 mm at 1U
+```
+
+So `greeble_thickness` — the wall thickness of the post, which is the term that actually decides
+how big the socket has to be — **is never demanded of any drawing**. A corner drawing could omit
+it entirely and the completeness test would report the set complete.
+
+Same column, two different jobs. Rows 1, 4, 6 and 7 give the whole size. Rows 2, 3 and 5 give
+only the clearance, or only the adjustment the clearance makes, and describe the size in prose.
+
+#### The three rows that fall short, and by how much
+
+| Row | What the column says now | What the geometry actually is |
+| --- | --- | --- |
+| 2 — greeble post → corner socket | *socket opened out by the clearance; post stays nominal* | `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance` — measured **3.3000 mm** on the built corner at 1U |
+| 3 — corner seating faces → bulkhead | `flat_x += corner_tolerance`, `flat_offset += corner_tolerance·√2` | `−max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance))` |
+| 5 — panel → bulkhead flange | *standoff so the panel's outer surface lands on the mold line at `corner_radius`* | `unit_width/2 − panel_thickness − panel_tolerance` — measured **45.1375 mm** on the built bulkhead at 1U with a 3/16 in panel |
+
+**Three parameter names are missing in total**, and this is the whole quantified impact on what
+drawings must say:
+
+| Row | Names demanded now | Full expression would also demand |
+| --- | --- | --- |
+| 2, corner | `greeble_tolerance` | **`greeble_thickness`** |
+| 3, corner | `corner_tolerance` | **nothing** |
+| 5, bulkheads | `corner_radius`, `panel_tolerance` | **`panel_thickness`, `unit_width`** |
+
+**All three are already printed on the sheets that would owe them.** The corner's socket callout
+is computed from `greeble_thickness`; the bulkhead states `panel_thickness` and dimensions
+`unit_width/2` as its mold line. So **no drawing changes under any answer to this question.**
+What changes is whether the check would notice if one of them stopped being stated.
+
+#### Two failure modes, and the second is the one that should worry us
+
+**Under-naming** is what rows 2 and 5 do: the check asks for less than the joint needs. It is
+unpleasant but it is visible — anyone comparing the column against the geometry can see the
+missing terms, which is how this question came to be written.
+
+**Being satisfied for the wrong reason** is the other one, and a check cannot report it about
+itself. Two instances:
+
+*Row 3 is demanded of nobody.* Its column names three things, and step 3 discards all
+three: `flat_x` and `flat_offset` are intermediate values inside the corner's construction and
+are not airframe parameters at all, and `corner_tolerance` is 0.0 on every part, so it goes as a
+structural zero. The row contributes **nothing** to any drawing's obligation.
+Writing out its full expression would also change nothing, because every parameter in it is
+already named by rows 1 and 4. **The joint is covered by coincidence.** The check reports no gap
+today, and it would go on reporting no gap if row 3 were deleted from the register outright.
+Joint 3 got stated on the bulkhead drawing under [OQ-DES-D6](#open-questions) because the part
+needs it said — not because anything asked.
+
+*Row 5 names the right parameter for the wrong reason.* Its prose reads *"so the panel's outer
+surface lands on the mold line at `corner_radius`"*, which makes `corner_radius` one of the names
+the bulkhead owes. But that sentence is about **where the face sits**, and the position uses no
+`corner_radius` at all — the face is on the flat part of the mold line, which runs at
+`unit_width/2`, while `corner_radius` shapes the rounded corner that starts where this face ends.
+`corner_radius` *is* genuinely consumed by this joint, but by the face's **width** rather than
+its position: the exposed span is `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap`,
+and the built face measures 392.8500 mm², which is that span times the bulkhead thickness. So the
+check demands `corner_radius`, the bulkhead does owe it, **and the reason the register gives is
+not the reason it is owed.** Replace that sentence with a different wrong one that happens to
+mention `corner_radius` and nothing would report a change.
+
+#### The geometry, drawn
+
+Drawn on 2026-08-30, because the question cannot be answered without seeing what *"the whole
+size"* would actually be for each row. Generated by
+[`tools/draw_register_rows.py`](../../src/Fuselage/tools/draw_register_rows.py). These are
+**diagrams of the arithmetic, not tracings of a built solid**, and each reproduces the measured
+value quoted above.
+
+![row 2, the greeble socket as four radial terms](img/register_rows/row2_greeble_socket.svg)
+
+**Row 2 is the simple case: four terms stack outward from the center, and the register names one
+of them.** The drawing exists to show the size of the objection in alternative 1 below — that
+full expressions get unwieldy. Here, it amounts to four terms on one line.
+
+![row 5, the bulkhead outer face against the flat mold line](img/register_rows/row5_bulkhead_face.svg)
+
+**Row 5 shows the position and the extent are different things**, which is what makes the
+"right parameter, wrong reason" problem visible rather than a matter of wording.
+
+**Row 3 needs no figure of its own.** It is `flat_offset`, drawn in
+[design_basis.md INT-3](design_basis.md#int-3--corner-seating-faces--bulkhead) with both branches
+of its `max`. That figure is also the clearest statement of why row 3's full expression would add
+no names: everything it would name, rows 1 and 4 already name.
+
+#### Why the column ended up this way — it was inherited, not careless
+
 Section 1 says the register is *"a reading of a file the sweep already validates on every
-run"* — `design_constants.json`'s `tolerances` group, whose `why` field is said to name the
-joint and give the expression. Checked on 2026-08-28, that file carries a governing expression
-for **three of the seven joints** and prose for the other four:
+run"* — the `tolerances` group in `design_constants.json`, where each entry has a `why` field
+said to name the joint and give its expression. Checked on 2026-08-28, that file carries a real
+expression for **three of the seven** joints and prose for the other four:
 
-| Joint | `why` carries | Register row |
+| Joint | What `design_constants.json` carries | What the register row did |
 | --- | --- | --- |
 | `boom_tolerance` | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | row 6 quotes it **verbatim** |
 | `cowl_flange_tolerance` | `corner_radius - cowl_n_perimeters*extrusion_width - cowl_flange_tolerance` | row 7 quotes it **verbatim** |
 | `nose_flange_tolerance` | `cowl_n_perimeters*extrusion_width + nose_flange_tolerance` | row 8 quotes it |
-| `longeron_tolerance` | prose only | row 1 supplies an expression from elsewhere |
-| `greeble_tolerance` | prose only | row 2 reproduces the prose |
-| `corner_tolerance` | prose only | row 3 reproduces the prose |
-| `panel_tolerance` | prose only | rows 4 and 5 — row 5 reproduces the prose, row 4 supplies an expression from elsewhere |
+| `longeron_tolerance` | prose only | row 1 supplied an expression from elsewhere |
+| `greeble_tolerance` | prose only | row 2 reproduced the prose |
+| `corner_tolerance` | prose only | row 3 reproduced the prose |
+| `panel_tolerance` | prose only | row 5 reproduced the prose; row 4 supplied an expression from elsewhere |
 
-So **rows 2, 3 and 5 are the faithful ones** and rows 1 and 4 are the ones that went past the
-stated source. Not one term of rows 1–5's expressions appears in the corresponding `why`. That
-inverts the obvious reading of this question — the register is not inconsistent where its
-author was careless, it is inconsistent where its *source* is — and it raised the question
-[OQ-DES-D9](#open-questions) asked, which is where rows 1 and 4's expressions came from and what
-authority they carry. **That was decided on 2026-08-28: section 2 is an analysis of the
-implementation.** So "state the whole nominal" is *finishing the analysis* rather than promoting
-it to a specification, and the recommendation below is not waiting on anything. What section 2
-cannot become by being completed is a derivation — that is IP-FC-87, and it is separate work.
+**So rows 2, 3 and 5 are the faithful ones**, and rows 1 and 4 are the ones that went beyond the
+stated source — not one term of their expressions appears in the corresponding `why`. That
+inverts the obvious reading of this question: the register is not inconsistent where its author
+was careless, it is inconsistent where its **source** is.
 
-The rows that give only the clearance:
+That raised a separate question about where rows 1 and 4's expressions came from and what
+authority they carry, which was [OQ-DES-D9](#open-questions), **decided on 2026-08-28: section 2
+is an analysis of the implementation.** The consequence for this question is that filling in the
+missing expressions is *finishing the analysis*, not promoting it into a specification — so
+nothing here is waiting on that. What section 2 cannot become by being completed is a
+*derivation* of why the geometry is what it is; that is separate work, tracked as IP-FC-87.
 
-| Row | Expression as written | What the geometry actually consumes |
+#### What is and is not at stake
+
+**No answer to this question can produce a wrong drawing.** Nothing that renders a sheet reads
+the register: `sheet_annotations.py` declares the annotation sets by hand, and the `interface`
+argument on a field only *marks* it — it never filters what gets drawn. Demonstrated on
+2026-08-28 by mutating the parsed register and diffing every family's drawn output, table
+columns and callout letters:
+
+| Register mutated to | Drawn output | Completeness report |
 | --- | --- | --- |
-| 2 | *socket opened out by the clearance; post stays nominal* | `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance` — measured 3.3000 mm on the built corner at 1U |
-| 3 | `flat_x += corner_tolerance`, `flat_offset += corner_tolerance·√2` | `−max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance))` |
-| 5 | *standoff so the panel's outer surface lands on the mold line at `corner_radius`* | `unit_width/2 − panel_thickness − panel_tolerance` — measured 45.1375 mm on the built bulkhead at 1U with 3/16 in panel |
-
-**The register is a verification product and reaches no drawing, which is what is and is not
-at stake.** Nothing that draws a sheet reads it: `sheet_annotations.py` declares the annotation
-sets by hand, and `factor`'s `interface` argument only *marks* fields — it never filters the
-tables the renderer draws. Demonstrated 2026-08-28 by mutating the parsed register and diffing
-the drawn output — every family's table columns and callout letters:
-
-| Register mutated to | Drawn output | Report |
-| --- | --- | --- |
-| row 3 given its full nominal | identical | identical |
+| row 3 given its full expression | identical | identical |
 | **every row emptied** | **identical** | changes |
 | **every row given every parameter name** | **identical** | changes |
 
-So no error in this column can produce a wrong drawing. What it can do is make the completeness
-test agree with a drawing set for the wrong reasons, and that is the whole of the damage.
+So the damage is bounded: the column can make the completeness test agree with a drawing set for
+the wrong reasons, and that is all it can do. That cuts both ways — it makes any change here
+cheap and safe, and it also means the column has exactly one job, which it currently does
+inconsistently.
 
-**What the fuller expressions would demand, measured row by row.** Each row's *unique*
-contribution is what the floor would lose if the row were deleted:
-
-| Row | Names now | Unique to it | Full form would add |
-| --- | --- | --- | --- |
-| 2, corner | `greeble_tolerance` | `greeble_tolerance` | **`greeble_thickness`** |
-| 3, corner | `corner_tolerance` | `corner_tolerance` — a structural zero, so excluded | **nothing** |
-| 5, bulkheads | `corner_radius`, `panel_tolerance` | `panel_tolerance` | **`panel_thickness`, `unit_width`** |
-
-Three names in total, and all three are already stated on the sheets that would owe them: the
-corner's socket callout is computed from `greeble_thickness`, and the bulkhead states
-`panel_thickness` and dimensions `unit_width/2` as its mold line. **No drawing changes under
-any answer to this question.**
-
-**Row 3 is the sharpest case and not for the reason it first appears.** Its identifiers are
-`flat_x` and `flat_offset` — derived names in `corner_tree` that reach no parameter mapping —
-and `corner_tolerance`, which is zero across every family and is therefore excluded by section
-2's own absence rule. **Joint 3 is demanded of nobody.** But writing its full expression out
-would change *nothing*, because rows 1 and 4 happen to name every parameter it would name.
-**Joint 3's coverage is a coincidence of two other rows**, and that is the failure mode worth
-naming: the completeness test would report no gap today and would go on reporting none if joint
-3 were deleted from the register entirely. Joint 3 was stated on the bulkhead in
-[OQ-DES-D6](#open-questions) because the part needs it said, not because the test asked, and
-nothing would have reported its absence.
-
-**Row 3's attribution is doubtful as well.** It reads *carried by: corner*, and the seating
-faces exist on both parts: the bulkhead carries four of them, measured at 3.15 mm² each at 1U
-with 3/16 in panel. Whether a joint whose faces are on two parts is carried by one drawing or
-both is the same column [OQ-DES-D6](#open-questions) has just changed once.
+**One more thing this row should settle while it is open.** Row 3 says it is *carried by: corner*,
+but the seating faces exist on both parts — the bulkhead carries four of them, measured at
+3.15 mm² each at 1U with a 3/16 in panel. Whether a joint whose faces are on two parts is the
+responsibility of one drawing or both is the same column [OQ-DES-D6](#open-questions) has already
+changed once.
 
 **Alternatives.**
 
-1. **Require the whole nominal in every row's expression, and check it.** Rewrite rows 2, 3 and
-   5 to state the expression the geometry evaluates, and add a refusal to `check_register` for a
-   row whose expression names no parameter beyond its own clearance. *Benefits:* the column then
-   means one thing, and the check makes it stay that way; the three names above start being
-   demanded and are already satisfied, so nothing has to be drawn differently. *Drawbacks:* the
-   expressions get long — row 3's is a nested `max` — and the register is read by people as well
-   as by the test; a column of dense expressions is harder to scan than the prose it replaces.
-   *Needs:* nothing.
+**1. Write the whole size in every row, and add a check that keeps it that way.**
 
-2. **Leave the prose and add a machine-read column.** The register grows a *Consumes* column
-   listing the parameter names, and the test reads that instead of scraping the expression.
-   *Benefits:* the prose stays readable and the test gets an unambiguous input. *Drawbacks:*
-   two statements of one fact, and nothing makes them agree — a row whose prose changes and
-   whose list does not would pass every check while describing a different joint. That is the
-   failure the current arrangement at least cannot have, since there is only one column.
-   *Needs:* nothing.
+Rewrite rows 2, 3 and 5 so the column states the arithmetic the geometry actually evaluates, and
+add a refusal to `check_register` for any row whose expression names no parameter beyond its own
+clearance.
 
-3. **Stop reading the register for this and ask the geometry.** [OQ-DES-D6](#open-questions)'s
-   alternative 1: intersect the obligation with the parameters that actually move the part,
-   measured by `check_unread_rows.py` (IP-FC-56). *Benefits:* the strongest form — it cannot be
-   out of date with the code, because it is a measurement of the code. *Drawbacks:* it answers
-   *which parameters reach the part*, not *which joint each one belongs to*, so the register is
-   still needed for attribution; and a run takes tens of minutes per kind, so it is a periodic
-   input. *Needs:* the union-or-intersection decision OQ-DES-D6 left open.
+*What it looks like.* Row 2's column changes from
 
-4. **Accept the column as it is.** Record that a row may state only its clearance, and that
-   section 3's floor is correspondingly the clearance set. *Benefits:* no work. *Drawbacks:*
-   joint 3 remains demanded of nobody, joint 2 never demands the wall thickness that sets the
-   socket the corner is bored to, and joint 3's coverage stays a coincidence of rows 1 and 4.
-   It also makes the completeness test's name misleading. *Needs:* nothing.
+> *socket opened out by the clearance; post stays nominal*
 
-5. **Make the expressions executable and check them against the built part.** If every row
-   states its whole nominal, the row can be *evaluated* on a variant's parameters and compared
-   with a measured feature, the way `check_drawing` already compares a dimension against the
-   parameters. *Benefits:* it turns the register from a list the test scrapes names out of into
-   a statement the parts are checked against — the strongest thing this column could be, and it
-   would have caught [OQ-DES-D8](#open-questions) the day the expression was written rather
-   than three weeks later. *Drawbacks:* it needs a way to say *which feature* each expression
-   is the size of, which the register does not have; and an expression like row 3's nested
-   `max` is real work to evaluate and to locate on a part. It also cannot be done at all while
-   rows state only their clearance, so it presupposes alternative 1. *Needs:* alternative 1
-   first, and a per-row statement of the feature the expression measures.
+to
 
-**Recommendation.** **Alternative 1**, understood as the step alternative 5 needs rather than as
-a destination. The column is already the test's input, so the choice is between making it say
-what the test reads it to say and adding a second thing to keep in step; one column that must be
-complete is easier to trust than two that must agree. The check is the part that matters —
-without it this recurs the first time a row is added in a hurry, which is how rows 2, 3 and 5
-came to differ from 1, 4, 6 and 7.
+```
+socket radius = longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance
+```
 
-**And the register being verification-only cuts both ways here.** It means no answer to this
-question can break a drawing, so the change is cheap and safe to make; it also means the column
-has exactly one job, and a column with one job that it does inconsistently should be fixed
-rather than worked around. Alternative 3 is the better long-run answer for *reachability* and
-does not compete: it cannot say which joint a parameter belongs to, which is the register's real
-job. Row 3's attribution should be settled at the same time, since it is the same row and the
-seating faces are demonstrably on both parts.
+Row 5's from
 
-*Implementation: `tools/drawing_families.read_register` and `check_register`; the floors are
-reported by `tools/drawing_families.py`.*
+> *standoff so the panel's outer surface lands on the mold line at `corner_radius`*
+
+to
+
+```
+outer face at unit_width/2 − panel_thickness − panel_tolerance;
+exposed span unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap
+```
+
+Row 3's becomes the nested `max` shown in the table above — 146 characters, genuinely the
+longest line in the register.
+
+*Benefits.* The column then means one thing everywhere, and the new refusal makes it stay that
+way rather than drifting again. The three missing names start being demanded, and since all three
+are already on the sheets, the completeness test goes green without anybody redrawing anything.
+Row 5's expression states the position and the span separately, so `corner_radius` is demanded
+for the reason it is actually owed.
+
+*Drawbacks.* The expressions get long, and the register is read by people as well as by the test;
+a column of dense arithmetic is harder to skim than the prose it replaces. Note that the length
+cost and the benefit land on **different rows** — row 3 is the long one and it gains no names;
+rows 2 and 5 gain the names and are short.
+
+*Needs.* Nothing. It can be done today.
+
+**2. Keep the prose, and add a separate machine-readable column.**
+
+The register grows a *Consumes* column listing the parameter names outright, and the completeness
+test reads that instead of scraping the prose.
+
+*What it looks like.* Row 2 keeps *"socket opened out by the clearance; post stays nominal"* and
+gains a second cell reading `longeron_radius, longeron_tolerance, greeble_thickness,
+greeble_tolerance`.
+
+*Benefits.* The prose stays readable for a human, and the test gets an unambiguous input instead
+of having to parse English.
+
+*Drawbacks.* Two statements of one fact, with nothing forcing them to agree. A row whose prose is
+edited and whose name list is not would pass every check while describing a different joint than
+it lists — and that is a failure the present arrangement, whatever else is wrong with it, cannot
+have, because there is only one column to be wrong.
+
+*Needs.* Nothing.
+
+**3. Stop reading the register for this, and measure the parts instead.**
+
+This is [OQ-DES-D6](#open-questions)'s alternative 1: instead of asking the register what a joint
+consumes, ask the geometry which parameters actually move the part, measured by perturbing each
+parameter and looking for a change — `check_unread_rows.py`, tracked as IP-FC-56.
+
+*What it looks like.* Nudge `greeble_thickness`, rebuild the corner, see the socket move,
+conclude the corner consumes `greeble_thickness`. No table involved.
+
+*Benefits.* The strongest form available, because it cannot go stale — it is a measurement of the
+code rather than a description of it.
+
+*Drawbacks.* It answers *which parameters reach this part*, not *which joint each one belongs
+to*, so the register is still needed to attribute a parameter to a fit. And a run takes tens of
+minutes per part kind, so it is a periodic audit rather than a check that runs with every build.
+
+*Needs.* The union-or-intersection decision that [OQ-DES-D6](#open-questions) left open.
+
+**4. Accept the column as it stands, and write down that it is allowed to state only a
+clearance.**
+
+Record in section 3 that a row may give only its clearance, and that the completeness test's
+floor is correspondingly the clearance set rather than the full parameter set.
+
+*What it looks like.* Nothing in the register moves. Section 3 gains a sentence saying the test
+is weaker than its name suggests.
+
+*Benefits.* No work at all.
+
+*Drawbacks.* Row 3 remains demanded of nobody. Row 2 never demands the wall thickness that sets
+the socket. Row 3's coverage stays a coincidence of two other rows, and row 5's stays a
+coincidence of a wrong sentence — and *"satisfied for the wrong reason"* is exactly the condition
+no test can report about itself, so accepting it means accepting a check that will keep saying
+"complete" whether or not it should. Also makes the name *completeness test* misleading.
+
+*Needs.* Nothing.
+
+**5. Make the expressions executable, and check them against the built parts.**
+
+If every row states the whole size, the row can be *evaluated* on a variant's parameters and
+compared with a measured feature on the built part — the way `check_drawing` already compares a
+dimension against the parameters that produced it.
+
+*What it looks like.* Row 2 evaluates to 3.3000 at 1U; a measurement of the built corner's socket
+returns 3.3000; the check passes. If someone changed the socket construction and not the
+register, the two would diverge and the check would say so — on the next build, not three weeks
+later.
+
+*Benefits.* This turns the register from a list of names into a claim the parts are tested
+against, which is the strongest thing this column could be. Concretely: it would have caught
+[OQ-DES-D8](#open-questions) — where the register and the built corner disagreed by one 0.1 mm
+clearance — on the day the expression was written, instead of three weeks afterward.
+
+*Drawbacks.* It needs a way to say **which feature** on the part each expression is the size of,
+and the register has no such column today. Row 3's nested `max` is real work both to evaluate and
+to locate on a solid. And it cannot be done at all while rows state only their clearance, so it
+is not an alternative to option 1 so much as a thing option 1 unlocks.
+
+*Needs.* Alternative 1 first, plus a new per-row statement of which measured feature the
+expression corresponds to.
+
+**Recommendation.**
+
+**Alternative 1**, understood as the step alternative 5 needs rather than as a destination.
+
+The column is already the test's input, so the real choice is between making it say what the test
+reads it to say (alternative 1) and adding a second thing that has to be kept in step with the
+first (alternative 2). One column that must be complete is easier to trust than two that must
+agree.
+
+**The added check is the part that matters**, more than the three rewritten rows. Without it this
+recurs the first time a row is added under time pressure — which is exactly how rows 2, 3 and 5
+came to differ from 1, 4, 6 and 7 in the first place.
+
+Alternative 4 looks free and is not: it locks in two joints whose coverage is coincidental, and
+coincidental coverage is the one defect a completeness test cannot surface itself. A row that
+states the whole size cannot be right by accident, because the expression is then the thing the
+geometry evaluates rather than a sentence about it.
+
+Alternative 3 is the better long-run answer for a **different** question — which parameters reach
+a part — and does not compete with this one, because it cannot say which fit a parameter belongs
+to, and attribution is the register's actual job. The two are complementary and can both be done.
+
+**Row 3's *carried by* attribution should be settled at the same time**, since it is the same row
+and the seating faces are demonstrably on both parts.
+
+*Implementation: `tools/drawing_families.read_register` and `check_register`; the completeness
+floors are reported by `tools/drawing_families.py`.*
 
 ### ~~OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance~~ — DECIDED 2026-08-28: the register is corrected; the part is right
 
@@ -1217,7 +1436,10 @@ is.*
 
 - [freecad_migration.md](../architecture/freecad_migration.md) — OQ-ARCH-7, the decision this
   implements; UC-7, the use case it serves
-- [derivation.md](derivation.md) — what the interfaces are *meant* to be, which this section
+- [system_requirements.md](system_requirements.md) — the requirement set: section 2's ten
+  joints as INT-1 … INT-10, section 5's hard constraints as DRW-1 … DRW-5, and the verification
+  status of each; OQ-DES-SR2, which asks what verifies DRW-7
+- [design_basis.md](design_basis.md) — what the interfaces are *meant* to be, which this section
   analyzes rather than specifies; OQ-DES-D9's answer
 - [corner.md](corner.md) — the cross-section, the panel offset derivation, OQ-DES-C5
 - [bulkhead.md](bulkhead.md) — derived dimensions, bolts and anchors

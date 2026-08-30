@@ -189,7 +189,7 @@ since; the sentence was stale, not the part.
 **Removed** — these are the *cutting primitives*, not the features. Two of them are
 deliberately larger than what they leave behind, and that overshoot is an **implementation
 artifact**: it exists because a boolean needs it, and it is not a design dimension at any
-level. See [derivation.md section 7](derivation.md#7-what-is-neither-implementation-artifacts).
+level. See [design_basis.md section 7](design_basis.md#7-what-is-neither-implementation-artifacts).
 
 - the longeron bore, `longeron_radius + longeron_tolerance`;
 - the panel slot, `2·panel_thickness + 2·panel_tolerance` deep, positioned so its outer
@@ -210,11 +210,32 @@ flat_offset = -max(longeron_radius + longeron_tolerance + longeron_chamfer,
                    (panel_overlap + panel_offset) - (corner_radius - panel_thickness - panel_tolerance));
 ```
 
-This is a two-sided constraint written as a `max()`. The flat face where the corner meets
-the bulkhead must clear the longeron bore *and* its chamfer, and it must also sit outside
-wherever the panel interface has been pushed to. Whichever constraint binds, wins.
-`longeron_chamfer` is `extrusion_width` — one extrusion — which is *inferred* to be the
-smallest chamfer worth printing rather than a structural requirement.
+This is a two-sided constraint written as a `max()`. The corner's inboard boundary must clear
+the longeron bore, and it must also sit outside wherever the panel interface has been pushed to.
+Whichever constraint binds, wins.
+
+> **This paragraph was "corrected" on 2026-08-30 and the correction was withdrawn the same day.
+> The original wording — *"must clear the longeron bore and its chamfer"* — was right.**
+>
+> **The corner snaps onto the longeron.** It wraps 270° of the bore and opens toward the fuselage
+> interior through a mouth narrower than the rod: 2.8991 mm of clear opening against a 4 mm
+> longeron at 1U. The two walls of that mouth stand at 45° to the direction the rod is pressed
+> in, and they are the lead-in that spreads the arms. **That is the chamfer, and
+> `longeron_chamfer` bounds it** — each face is at least that wide, so the mouth wall never runs
+> tangent to the bore and the arm tip is never a knife edge. The third-quadrant mask that cuts
+> the mouth is the one the source labels `// longeron chamfer`, at
+> `fuselage_corner_geometry.scad:258`.
+>
+> The withdrawn revision claimed the parameter chamfers nothing and set a "standoff" instead. It
+> was a reconstruction from the expressions, it overwrote wording that was closer to right, and
+> it was one of three such readings. What it did establish, and what stands, is that the value is
+> a **minimum**: each chamfer face equals `longeron_chamfer` only when the bore branch governs,
+> and measures 1.80 against the same 0.60 minimum at 0.5U with a 1 mm panel. Both branches, and
+> the mouth, are drawn in
+> [design_basis.md INT-3](design_basis.md#int-3--corner-seating-faces--bulkhead).
+>
+> What was *"inferred"* in the original — that 0.6 mm is the smallest chamfer worth printing — is
+> still an inference about the **size**. That it is a chamfer at all is recorded.
 
 ## Panel offset
 
@@ -293,8 +314,22 @@ for the bed. System-wide, model `+z` is the build direction and corresponds to t
 either end may go down.
 
 So the corner **prints standing on end**, and the reading the geometry suggested is the
-right one: the longeron bore is vertical — no bridging, no support, a round hole — and
-`longeron_chamfer = extrusion_width` at the bore mouth is a lead-in for that vertical hole.
+right one for the bore itself: it is vertical — no bridging, no support, a round hole.
+
+> **Half-corrected 2026-08-30, and the half that was right is restated here.** This sentence used
+> to finish *"and `longeron_chamfer = extrusion_width` at the bore mouth is a lead-in for that
+> vertical hole."* **`longeron_chamfer` is a lead-in** — that much was right, and a revision that
+> denied it has been withdrawn. What the sentence had wrong is *which mouth*: it is not an axial
+> chamfer at the top and bottom of the printed hole, easing entry along the build direction. It
+> is the **lateral** mouth — the 270° C in the cross-section opens sideways, narrower than the
+> longeron, and the chamfer is the ramp the rod rides as it snaps in. Being in the cross-section,
+> it runs the **full length** of the corner rather than sitting at the ends, which is why the
+> constant profile hides it rather than excluding it.
+>
+> **There is also a real axial taper at the bore**, in `corner_end` rather than `corner_middle`:
+> `cylinder(r1 = greeble_radius, r2 = longeron_radius + longeron_tolerance)`. That one is the
+> greeble socket's taper and is sized by neither of these. Two different lead-ins, on two
+> different axes, and the sentence conflated them.
 
 **The structural consequence, read against the load path.** Layers stack **along the
 corner's length**, so every layer interface is a plane normal to the axis between
@@ -585,7 +620,7 @@ it a function of `U`.
 
 - [corner_bulkhead_joint.md](corner_bulkhead_joint.md) — the joint drawn from the built
   solids: six cases, four views each, with the clearance dimensioned normal to both faces.
-- [derivation.md](derivation.md) — joints 1, 3 and 4 derived from the design principles, with
+- [design_basis.md](design_basis.md) — joints 1, 3 and 4 derived from the design principles, with
   each face measured on the built corner; `panel_offset`'s two requirements and which one
   governs.
 - [bulkhead.md](bulkhead.md) — the mating half, and the pocket that receives the greeble.

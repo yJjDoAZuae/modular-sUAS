@@ -19,7 +19,7 @@ section and the open questions here become system-level OQs.
 **The interface conventions are the one part of it that now exists elsewhere.** OQ-ARCH-7
 named *"agreement on what belongs to the interface"* as a prerequisite and assigned it to this
 document's interface-conventions section. That agreement was written on 2026-08-28 under
-IP-FC-87 as [doc/design/derivation.md](../design/derivation.md), which derives all ten joints
+IP-FC-87 as [doc/design/design_basis.md](../design/design_basis.md), which derives all ten joints
 from nine stated principles and checks them against the sweep and the built solids. It is filed
 in `doc/design/` because it is design intent rather than system structure; if `overview.md` is
 written and wants it, that is a move, not a rewrite.
