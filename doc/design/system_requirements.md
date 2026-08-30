@@ -253,17 +253,33 @@ requirements.
 | **DRW-9** | The drawn view **shall** occupy at least three quarters of the sheet frame | DES-9 | A | `check_dimension_placement.py` | verified — 75.4 % against the pinned title block |
 | **DRW-10** | The sheet **shall** state its units, as fixed text rather than an editable field | DES-9 | A | `check_sheet_standard.py` | verified — the check fails a template with the statement removed |
 | **DRW-11** | The sheet template and the font **shall** be project data, pinned by id, and a build against a substituted one **shall** fail loudly | DES-9 | A | `check_sheet_standard.py` | verified — five refusals, each exercised against a deliberately broken copy |
-| **DRW-12** | For every clearance in the register, the drawing **shall** carry every dimension that entry's governing expression consumes | DES-9, DES-10 | A | `check_drawing.py` | **partial** — [OQ-DES-D7](dimension_scheme.md#open-questions) |
+| **DRW-12** | For every clearance in the register, the drawing **shall** carry every dimension that entry's governing expression consumes | DES-9, DES-10 | A | `check_drawing.py` | **partial** — the register was completed 2026-08-30 (IP-FC-107); two of the five names it now demands are on no sheet, IP-FC-109 and IP-FC-110 |
 
 *(h)* **DRW-8 is why DRW-4 is trustworthy.** The placer's original lane rule let a small
 dimension and a larger one containing it share lane 0, because their *text* did not collide —
 drawing two collinear dimension lines with a witness line through one. The independent checker
 named it as H4. A placer certifying its own output would have reported success.
 
-**DRW-12 is partial by a known cause.** The register's *governing expression* column means two
-different things in different rows — the whole nominal in some, only the clearance in others —
-so the completeness test under-demands three parameters and covers joint 3 only by coincidence.
-That is OQ-DES-D7, already open.
+**DRW-12 is partial, the cause was decided, and building the fix moved where the partiality
+lives.** The register's *governing expression* column used to mean two different things in
+different rows — the whole size of the fit in some, only the clearance gap in others — so the
+completeness test under-demanded parameters and covered two joints only by coincidence.
+**OQ-DES-D7 decided on 2026-08-30** that every row states the whole size, and **IP-FC-107 built
+it the same day**: rows 2, 3 and 5 rewritten, and `check_register` now refuses a row that names
+nothing beyond its own clearance.
+
+**Five names became newly demanded, not the three that were estimated.** Three of them were
+already on the sheets and needed only to be declared — the corner's socket and post are both
+computed from `greeble_thickness`, and the bulkhead's mold half width **is** `unit_width / 2`.
+**Two are on no sheet at all**: `panel_offset` and `panel_overlap`, which row 5 now demands
+because it states the seating face's width and not only its position. So DRW-12 stays *partial*,
+and the reason has changed from *the register under-asks* to *two sheets do not answer*. That is
+a better failure: it names four specific family sheets rather than a whole column, and closing it
+is **IP-FC-109** and **IP-FC-110**, both blocked on drawing decisions
+([OQ-DES-D11](dimension_scheme.md#open-questions), [OQ-DES-D12](dimension_scheme.md#open-questions)).
+
+**No drawn sheet changed**, verified by comparing every family's quantity column count, block
+count and row count before and after.
 
 ---
 
@@ -397,7 +413,7 @@ decided 2026-08-30 under [OQ-DES-SR2](#open-questions) and
 | Verified, sampled by construction | 9 | the geometry and drawing checkers, on corpora chosen for difficulty |
 | Verified by demonstration | 8 | MDL-1 to MDL-4, EQV-5, EQV-6 |
 | Held by review | 2 | DRW-8; **DES-13**, whose remaining half needs stress analysis the project has no tools for |
-| **Partial or violated** | 2 | **DRW-12** (OQ-DES-D7), **MDL-7** (IP-FC-56) |
+| **Partial or violated** | 2 | **DRW-12** (IP-FC-109, IP-FC-110), **MDL-7** (IP-FC-56) |
 | **Verified by nothing, work item raised** | 5 | **DRW-7** (IP-FC-97), **DES-12** (IP-FC-98), **DES-9** (IP-FC-99), **DES-14** (IP-FC-95), **DES-15** (IP-FC-100) |
 
 **The last two rows are the whole value of writing the set down**, and as of 2026-08-30 the last
@@ -468,10 +484,17 @@ All three are now requirements with named checks that **have not been written**:
 edge between them. That is a better state than three open questions and a worse state than a
 green run, and the table says which it is.
 
-**The live question elsewhere:** [OQ-DES-D7](dimension_scheme.md#open-questions), the register's
-*governing expression* column meaning two different things, which is why DRW-12 is partial.
-OQ-DES-DB7 was withdrawn on 2026-08-30: it asked whether `longeron_chamfer` should be renamed
-because it chamfers nothing, and it does chamfer something.
+**The live questions elsewhere are all in
+[dimension_scheme.md](dimension_scheme.md#open-questions).** **OQ-DES-D11** and **OQ-DES-D12**
+both hold DRW-12 at *partial*: no bulkhead sheet says how wide the panel's seating surface is,
+and a bulkhead with no panel is nonetheless asked to explain the panel joint. **OQ-DES-D10**, the
+*Carried by* column meaning two things, affects no requirement's status.
+
+Two closed on 2026-08-30. **OQ-DES-D7** — the *governing expression* column meaning two things,
+which is why DRW-12 is partial — was decided: every row states the whole size, then the
+expressions become executable and are checked against the parts. **OQ-DES-DB7** was withdrawn:
+it asked whether `longeron_chamfer` should be renamed because it chamfers nothing, and it does
+chamfer something.
 
 ### ~~OQ-DES-SR1 — Two printability requirements have nothing above the joint~~ — DECIDED 2026-08-30: two requirements, DES-13 and DES-14, kept separate
 
@@ -597,7 +620,8 @@ the comparison by the requirement itself.
   the measurements; the givens; the implementation artifacts. It has **no open questions left**
   as of 2026-08-30; what remains in its section 8 is a queue of things to ask, not to decide
 - [dimension_scheme.md](dimension_scheme.md) — where DRW-1 … DRW-12 are argued: the interface
-  register, the completeness test, the placement rules and their acceptance corpus; OQ-DES-D7
+  register, the completeness test, the placement rules and their acceptance corpus; OQ-DES-D10,
+  D11 and D12
 - [doc/architecture/requirements.md](../architecture/requirements.md) — the architectural
   requirements, and the cross-section trade
 - [cowl.md](cowl.md) — DES-12's source, and the interior surface that must not become the print

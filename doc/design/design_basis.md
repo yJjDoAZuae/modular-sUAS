@@ -1181,7 +1181,7 @@ the way they do.
 [system_requirements.md](system_requirements.md#open-questions) holds OQ-DES-SR1, SR2 and SR3 —
 the printability requirement with no design-tier parent, the three requirements verified by
 nothing, and interchange being delivered but not required.
-[dimension_scheme.md](dimension_scheme.md#open-questions) holds OQ-DES-D7.
+[dimension_scheme.md](dimension_scheme.md#open-questions) holds OQ-DES-D10, D11 and D12.
 
 **What is left *here* is not a question but a queue.**
 [Section 8](#8-what-could-not-be-derived) lists what still rests on something nobody wrote down,
@@ -1511,7 +1511,7 @@ and x↔y but not z. Under [OQ-DES-DB3](#open-questions)'s decision that is sett
 - [doc/architecture/requirements.md](../architecture/requirements.md) — the architectural
   requirements, and the cross-section trade
 - [dimension_scheme.md](dimension_scheme.md) — section 2's register, which this derives rather than
-  restates; OQ-DES-D7, D8 and D9
+  restates; OQ-DES-D10, D11 and D12, and the decided D7, D8 and D9
 - [corner.md](corner.md) — the cross-section, joint 3's `max`, OQ-DES-C5
 - [bulkhead.md](bulkhead.md) — the greeble, the flange, OQ-DES-B13 and B14
 - [corner_bulkhead_joint.md](corner_bulkhead_joint.md) — joint 3 drawn from the built solids

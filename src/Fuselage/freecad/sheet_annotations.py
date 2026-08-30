@@ -215,9 +215,14 @@ def corner_annotations(params, product=FAMILY):
         Quantity('longeron_clearance', 2.0 * longeron_fit, ('longeron_tolerance',),
                  constant=True),
         Quantity('lead_in_chamfer', chamfer, ('extrusion_width',), constant=True),
+        # `greeble_thickness` is in both sums and was in neither `carries` tuple until
+        # 2026-08-30. The values were always right; what was missing was the declaration, so
+        # section 3 could not demand the wall thickness that sets the socket. IP-FC-107.
         Quantity('socket_diameter', 2.0 * socket,
-                 ('longeron_radius', 'longeron_tolerance', 'greeble_tolerance')),
-        Quantity('post_diameter', 2.0 * post, ('longeron_radius', 'longeron_tolerance')),
+                 ('longeron_radius', 'longeron_tolerance', 'greeble_thickness',
+                  'greeble_tolerance')),
+        Quantity('post_diameter', 2.0 * post,
+                 ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
         Quantity('greeble_clearance', 2.0 * greeble_fit, ('greeble_tolerance',),
                  constant=True),
     ]
@@ -359,13 +364,16 @@ def bulkhead_annotations(params, product=FAMILY):
     bolt_axis = axis - offset
 
     declared = [
-        Quantity('mold_half_width', half, ()),
+        # `half` is `unit_width / 2`, so this states `unit_width` -- declared as of
+        # 2026-08-30, IP-FC-107. Register row 5 locates the panel's seating face from it.
+        Quantity('mold_half_width', half, ('unit_width',)),
         Quantity('longeron_offset', axis, ('corner_radius',)),
         Quantity('bore_diameter', 2.0 * bore, ('longeron_radius', 'longeron_tolerance')),
         Quantity('longeron_diameter', 2.0 * longeron, ('longeron_radius',)),
         Quantity('longeron_clearance', 2.0 * longeron_fit, ('longeron_tolerance',),
                  constant=True),
-        Quantity('post_diameter', 2.0 * post, ('longeron_radius', 'longeron_tolerance')),
+        Quantity('post_diameter', 2.0 * post,
+                 ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
         Quantity('nub_diameter', 2.0 * nub_radius, ()),
         Quantity('bolt_offset', offset, ('bolt_offset',)),
         Quantity('bolt_diameter', 2.0 * bolt, ('bolt_offset',)),

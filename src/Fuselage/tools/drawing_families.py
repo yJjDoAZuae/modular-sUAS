@@ -373,6 +373,34 @@ def check_register(register=None):
         covered |= clearance
 
     problems = []
+
+    # OQ-DES-D7, decided 2026-08-30: every row states the whole size of its fit, not only the
+    # gap. A row that names nothing but its own clearance is describing what the clearance does
+    # rather than how the feature is sized, and the completeness test then demands only the
+    # clearance of a drawing -- which is how rows 2 and 3 came to be satisfied by nothing.
+    #
+    # Resolved against the parameter mapping rather than the raw code spans, because that is
+    # what the completeness test itself does: `flat_offset` and `collet_radius` are names of
+    # results, not inputs, and a row carried by them alone is exactly the case this refuses.
+    # Old row 3 named `corner_tolerance`, `flat_x` and `flat_offset`, of which only the
+    # clearance survives the mapping, so it would have tripped this and the raw form would not.
+    #
+    # **What this cannot catch**, stated because the gap matters: a row that names a real
+    # parameter for the wrong reason. Old row 5 named `corner_radius` in a sentence about where
+    # the face sits, and the position does not use it; the parameter is owed for the face's
+    # extent instead. That is why the rule is *state the expression the geometry evaluates* --
+    # an expression cannot be right by accident and a sentence about one can.
+    known = set()
+    for kind in sorted({k for kinds in CARRIED_BY.values() for k in kinds}):
+        for _axis_values, _flat, mapped, _type_name in resolve(kind):
+            known |= set(mapped)
+            break
+    for number, names, clearance, _part in register:
+        if not (names & known) - clearance:
+            problems.append(
+                'register row %s names no parameter beyond its own clearance, so it states '
+                'the gap rather than the size of the fit and no drawing is obliged to explain '
+                'how the feature is dimensioned (OQ-DES-D7)' % number)
     for name in sorted(fv.CONSTANT_GROUPS['tolerances']):
         if name not in covered:
             problems.append(

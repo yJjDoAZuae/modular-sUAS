@@ -1,5 +1,8 @@
 """What OQ-DES-D7's three prose rows would have to say, drawn.
 
+The question was decided on 2026-08-30 -- every row states the whole size -- and these
+figures are what it was decided against, so they stay with the resolution note.
+
 `dimension_scheme.md` section 2's *Governing expression* column does two jobs. Rows 1, 4, 6 and 7
 give the whole nominal; rows 2, 3 and 5 give only the clearance, with the nominal it applies to
 described in prose. Section 3's completeness test scrapes parameter names out of that column, so
