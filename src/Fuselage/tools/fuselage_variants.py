@@ -2535,6 +2535,88 @@ def boom_bulkhead_render(dp, output_dir, filename):
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
+def _cowl_variant_note(dp):
+    """What variant a cowl definition file records. Not `_variant_note`, which reads
+    `dp.bulkhead` and `dp.panel` -- a cowl's parameter set has neither."""
+    return {'U': dp.U, 'cowl_type': dp.cowl_type, 'type_name': dp.type_name}
+
+
+def cowl_parameters(kind, U, dp):
+    """The flat parameter set a FreeCAD cowl part is seeded from.
+
+    One `derived_cowl_parameters()` result feeds all four cowl kinds, and each takes a
+    different subset of it: the plate has no OML at all, the nose cowl reads only the `top`
+    buttress group, and the tail reads five groups independently. Selecting here rather than
+    exporting everything to every part keeps `check_unseeded` meaningful -- a row on a part's
+    sheet is a row that part's geometry actually uses.
+
+    Booleans are exported as 0.0/1.0 because a definition file is all floats: `oml_reversed`
+    is a flag in the model and a number on the wire, and `cowl.from_flat` turns it back.
+    """
+    b = dp.buttress
+    oml = {'oml_scale_m_per_mm': dp.oml.scale_m_per_mm,
+           'oml_length_m': dp.oml.length_m,
+           'oml_offset_x_m': dp.oml.offset_x_m,
+           'oml_reversed': 1.0 if dp.oml.reversed else 0.0}
+    common = {'U': U, 'unit_width': dp.unit_width,
+              'overhang_angle_from_bed': dp.overhang_angle_from_bed}
+
+    # The two cowls are seeded as **fractions of unit_width**, which is how the shape file
+    # states them and how `cowl_tree`'s sheet holds them. `derived_cowl_parameters()` has
+    # already multiplied them out, so they are divided back here rather than read again from
+    # the JSON -- one place applies the scaling, and this is its inverse, not a second copy.
+    #
+    # The reason the sheet wants the fraction is editability: a document whose rows are
+    # absolute millimetres puts its ribs where they were built when someone changes U, which
+    # is the failure a parametric model exists to avoid. Verified 2026-08-31: at U = 2 both
+    # cowls come out eight times the volume, to 0.05%.
+    def frac(v):
+        return v / dp.unit_width
+
+    if kind == 'nose_cowl':
+        return dict(common, cut_len=frac(dp.cut_len),
+                    buttress_cut_thickness=b.cut_thickness,
+                    buttress_z_offset=frac(b.z_offset),
+                    buttress_r_start=frac(b.top.r_start),
+                    buttress_r_end=frac(b.top.r_end),
+                    buttress_r_inset=frac(b.r_inset),
+                    # The nose's single buttress is repeated eightfold by symmetry and sits
+                    # on the octant boundary, so its angle is zero by construction.
+                    butt_angle=0.0, **oml)
+    if kind == 'tail':
+        # The eleven placement angles are stated in `cowl_geometry.scad` rather than in the
+        # shape file, so they are constants here. They reach the sheet because OQ-DES-CW4
+        # decided placement is a list -- and a list nobody can see is not one.
+        return dict(common, cut_len=frac(dp.cut_len),
+                    buttress_cut_thickness=b.cut_thickness,
+                    buttress_z_offset=frac(b.z_offset),
+                    buttress_r_inset=frac(b.r_inset),
+                    side_z_end=frac(b.side.z_end), side_r_start=frac(b.side.r_start),
+                    side_r_end=frac(b.side.r_end),
+                    top_z_end=frac(b.top.z_end), top_r_start=frac(b.top.r_start),
+                    top_r_end=frac(b.top.r_end),
+                    bottom_z_end=frac(b.bottom.z_end),
+                    bottom_r_start=frac(b.bottom.r_start),
+                    bottom_r_end=frac(b.bottom.r_end),
+                    top_diag_z_start=frac(b.top_diag1.z_start),
+                    top_diag_depth=frac(b.top_diag1.depth), top_diag_angle=30.0,
+                    side1_angle=5.0, side2_angle=12.5, side3_angle=20.0, side2_x=0.0,
+                    top1_angle=15.0, top2_angle=0.0, top2_y=0.0,
+                    bottom1_angle=15.0, bottom2_angle=0.0, bottom2_y=0.0, **oml)
+    if kind == 'nose_nose':
+        return dict(common, cut_len=dp.cut_len,
+                    nose_flange_height=dp.nose.flange_height,
+                    nose_flange_inset=dp.nose.flange_inset,
+                    plate_diam=dp.plate.diameter, plate_thickness=dp.plate.thickness,
+                    plate_tol=dp.plate.tolerance, **oml)
+    if kind == 'nose_plate':
+        return {'U': U, 'overhang_angle_from_bed': dp.overhang_angle_from_bed,
+                'plate_diam': dp.plate.diameter, 'plate_thickness': dp.plate.thickness,
+                'plate_flange_height': dp.plate.flange_height,
+                'plate_flange_width': dp.plate.flange_width}
+    raise ValueError('not a cowl kind: %r' % kind)
+
+
 def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose_plate):
 
     cgeom = scad_module('cowl_geometry.scad')
@@ -2566,6 +2648,14 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     oml_length_m = dp.oml.length_m
     oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
+
+    kind = ('nose_cowl' if is_nose_cowl else
+            'nose_nose' if is_nose_nose else
+            'nose_plate' if is_nose_plate else None)
+    if kind is not None and _backend_for(kind) == 'freecad':
+        freecad_render(kind, cowl_parameters(kind, U, dp), output_dir, filename,
+                       _cowl_variant_note(dp))
+        return
 
     if is_nose_cowl:
         scadobj = cgeom.nose_cowl(
@@ -2658,6 +2748,11 @@ def tail_render(U, dp, output_dir, filename):
     oml_length_m = dp.oml.length_m
     oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
+
+    if _backend_for('tail') == 'freecad':
+        freecad_render('tail', cowl_parameters('tail', U, dp), output_dir, filename,
+                       _cowl_variant_note(dp))
+        return
 
     # Twenty-three arguments, of which eighteen are floats describing buttresses in
     # four groups that differ only by prefix. Positionally this was the single most
@@ -2840,7 +2935,7 @@ def sweep_session(workers=None, resume=False, previews=True, fail_fast=True):
                   % len(failures), flush=True)
 
 
-def main(workers=None, resume=False, previews=True, backend='openscad'):
+def main(workers=None, resume=False, previews=True, backend='openscad', output_dir=None):
     """Run all five sweeps, writing an STL and a preview PNG for every part.
 
     `workers` is the number of concurrent OpenSCAD renders; None picks a default
@@ -2858,6 +2953,12 @@ def main(workers=None, resume=False, previews=True, backend='openscad'):
     `backend` is 'openscad' or 'freecad' (IP-FC-10). Only the corner and the bulkhead have
     FreeCAD generators; the rest of the sweep renders in OpenSCAD either way, and which is
     which is printed rather than left to be inferred from the output.
+
+    `output_dir` is where the tree is written; None means `OUTPUT_DIR`. **It exists so a run
+    cannot silently overwrite an earlier one.** Every sweep wrote to the one hardcoded path
+    until 2026-08-30, so rendering with a different backend, or with an edited parameter, took
+    the previous output with it -- and none of the `variant_output*` trees are in version
+    control, so there was nothing to recover from. IP-FC-113.
     """
     workers = default_render_workers() if workers is None else max(1, int(workers))
     budget, why = render_worker_budget()
@@ -2882,32 +2983,35 @@ def main(workers=None, resume=False, previews=True, backend='openscad'):
         print('resume: skipping parts whose STL is already complete and whose definition '
               'and geometry sources are unchanged', flush=True)
 
+    destination = OUTPUT_DIR if output_dir is None else os.path.abspath(output_dir)
+    print('output: %s' % destination, flush=True)
+
     try:
         with sweep_session(workers=workers, resume=resume, previews=previews):
-            _run_all_sweeps()
+            _run_all_sweeps(destination)
     finally:
         set_backend(previous_backend)
 
 
-def _run_all_sweeps():
+def _run_all_sweeps(output_dir=OUTPUT_DIR):
 
-    run_corner_parametric_sweep(axes('panel_variants.csv', 'bulkhead_size_variants.csv', 'corner_size_variants.csv'), OUTPUT_DIR)
+    run_corner_parametric_sweep(axes('panel_variants.csv', 'bulkhead_size_variants.csv', 'corner_size_variants.csv'), output_dir)
 
-    run_bulkhead_parametric_sweep(axes('panel_variants.csv', 'bulkhead_type_variants.csv', 'bulkhead_size_variants.csv'), OUTPUT_DIR)
+    run_bulkhead_parametric_sweep(axes('panel_variants.csv', 'bulkhead_type_variants.csv', 'bulkhead_size_variants.csv'), output_dir)
 
-    run_boom_bulkhead_parametric_sweep(axes('panel_variants.csv', 'bulkhead_size_variants.csv', 'boom_bulkhead_type_variants.csv'), OUTPUT_DIR)
+    run_boom_bulkhead_parametric_sweep(axes('panel_variants.csv', 'bulkhead_size_variants.csv', 'boom_bulkhead_type_variants.csv'), output_dir)
 
     # nose_size_variants.csv carries U *and* the print-driven nose dimensions,
     # so it replaces bulkhead_size_variants.csv as this sweep's size axis --
     # using both would multiply the two U columns into a nonsense product.
     run_nose_parametric_sweep(axes('nose_size_variants.csv',
-                                   'nose_type_variants.csv'), OUTPUT_DIR)
+                                   'nose_type_variants.csv'), output_dir)
 
     # The tail is now JSON-driven like the nose. It borrows the nose size axis
     # for U; the nose-only columns in it (plate/flange dimensions) are simply
     # unused by a tail, which has neither a tip nor a plate.
     run_tail_parametric_sweep(axes('nose_size_variants.csv',
-                                   'tail_type_variants.csv'), OUTPUT_DIR)
+                                   'tail_type_variants.csv'), output_dir)
 
 if __name__ == "__main__":
     _parser = argparse.ArgumentParser(
@@ -2942,10 +3046,17 @@ if __name__ == "__main__":
                               'STLs already in variant_output. Use after a look '
                               'change -- with --force to redo every preview, '
                               'without it to fill in only the missing ones')
+    _parser.add_argument('--output-dir', default=None, metavar='DIR',
+                         help='where to write the tree (default: variant_output). '
+                              'Give a new directory to keep an earlier run: none of the '
+                              'variant_output trees are in version control, so a sweep that '
+                              'writes over one destroys it outright')
     _args = _parser.parse_args()
     if _args.previews_only:
-        _failures = rebuild_previews(workers=_args.workers, force=_args.force)
+        _failures = rebuild_previews(output_dir=_args.output_dir,
+                                     workers=_args.workers, force=_args.force)
         raise SystemExit(1 if _failures else 0)
     main(workers=_args.workers, resume=_args.resume and not _args.force,
-         previews=not _args.no_previews, backend=_args.backend)
+         previews=not _args.no_previews, backend=_args.backend,
+         output_dir=_args.output_dir)
 

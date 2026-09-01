@@ -43,6 +43,12 @@ from corner_common import is_entry_point, script_args
 BULKHEAD, CORNER = 'parameters', 'corner_parameters'
 BOOM_BULKHEAD = 'boom_parameters'
 
+# The cowls' table. One table serves all four cowl kinds because one JSON shape file
+# defines all four parts -- see part_kinds.KINDS. A cowl variant carries this and none of
+# the others: it has no corner, no bulkhead and no boom, and naming it separately is what
+# makes a bulkhead parameter file handed to a cowl fail rather than seed it with nothing.
+COWL = 'cowl_parameters'
+
 # Modules whose literals should already agree with the swept parameter set, as
 # (module, table, the bulkhead type they are written at or None for any).
 #
