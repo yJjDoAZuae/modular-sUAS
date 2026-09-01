@@ -71,6 +71,25 @@ KINDS = {kind: (module, getattr(parameters, table))
 LINEAR_DEFLECTION = 1.0e-3
 ANGULAR_DEFLECTION = 0.5
 
+# The cowls are the exception, and they need one. The table above was measured on a bulkhead,
+# whose surfaces are planes, cylinders and cones -- shapes a mesher covers with few facets
+# however tight the deflection. A cowl's surface is freeform over its whole area, so the same
+# 1.0e-3 produced a 94 MB tail of 1 879 224 facets, against the OpenSCAD path's 18 MB and
+# 89 910 for the same part. Multiplied across the sweep that is tens of gigabytes of
+# tessellation for a part whose *definition* is a few dozen control points, which is the
+# opposite of what IP-FC-4 set out to achieve.
+#
+# 0.02 mm is chosen to land near the OpenSCAD tessellation rather than to match it exactly:
+# the two meshers do not agree facet for facet, and pretending otherwise would be a false
+# precision. It is far finer than any printer resolves and, being only the *exported mesh*,
+# it does not touch the B-rep the `.FCStd` carries -- which is the artifact that matters and
+# is exact at any deflection.
+#
+# **This is not the acceptance measure.** That is `oml_blank.VOLUME_DEFLECTION`, which is
+# 0.002 and is chosen by a different criterion entirely -- see OQ-DES-CW12.
+COWL_LINEAR_DEFLECTION = 0.02
+COWL_KINDS = ('nose_cowl', 'nose_nose', 'nose_plate', 'tail')
+
 # Do NOT reach for `Mesh.Volume` to check any of this. It accumulates in single precision and
 # gets *worse* as the mesh gets finer: on the 173 408-facet mesh above it reports
 # 6921.9243164, which is 0.55 mm3 -- twenty times the real tessellation error -- below what
@@ -150,7 +169,7 @@ def build(doc, kind, params_path):
     return tip
 
 
-def write_mesh(shape, out_path):
+def write_mesh(shape, out_path, kind=None):
     """Mesh a shape at the stated deflection and write it as binary STL.
 
     `Shape.exportStl` is not used: it meshes at whatever deviation the document carries,
@@ -160,7 +179,9 @@ def write_mesh(shape, out_path):
     import MeshPart
 
     mesh = MeshPart.meshFromShape(Shape=shape,
-                                  LinearDeflection=LINEAR_DEFLECTION,
+                                  LinearDeflection=(COWL_LINEAR_DEFLECTION
+                                                    if kind in COWL_KINDS
+                                                    else LINEAR_DEFLECTION),
                                   AngularDeflection=ANGULAR_DEFLECTION,
                                   Relative=False)
     mesh.write(out_path)
@@ -234,7 +255,7 @@ def main():
         sys.stdout.flush()
         return 1
 
-    facets = write_mesh(shape, opt['out'])
+    facets = write_mesh(shape, opt['out'], opt['kind'])
 
     # UC-2 wants the parametric document, not just its mesh -- and it is the *primary* output
     # of this backend, so it is written every time rather than only when asked (IP-FC-14). The

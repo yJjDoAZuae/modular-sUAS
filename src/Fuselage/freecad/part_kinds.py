@@ -23,10 +23,20 @@ once it has one.
 # without complaint, leaving every boom row at its module literal: a part built at the
 # reference configuration under the swept variant's filename. A separate name makes that a
 # missing key instead.
+# The four cowl kinds share one seed table, unlike the bulkheads above and for the opposite
+# reason: they are four parts of *one* shape definition -- a nose cowl, its tip, its plate and
+# a tail all come out of `derived_cowl_parameters()` reading a single JSON file. Splitting the
+# table would leave four files describing one cowl with nothing keeping them in step. They are
+# separate *kinds* because `build_part.py` builds one part per invocation, and because the
+# IP-FC-11 digest should rebuild only the cowl part whose modules actually changed.
 KINDS = {
     'corner': ('corner_tree', 'CORNER'),
     'bulkhead': ('bulkhead_full', 'BULKHEAD'),
     'boom_bulkhead': ('boom_bulkhead', 'BOOM_BULKHEAD'),
+    'nose_cowl': ('cowl_nose_cowl', 'COWL'),
+    'nose_nose': ('cowl_nose_tip', 'COWL'),
+    'nose_plate': ('cowl_nose_plate', 'COWL'),
+    'tail': ('cowl_tail', 'COWL'),
 }
 
 
