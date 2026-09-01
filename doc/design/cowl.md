@@ -518,6 +518,27 @@ cowl is **an imported triangle mesh, cut by primitives**. Consequences:
 B-rep like everything else — and removes 36 MB from the repository. That is IP-FC-4, it
 depends on nothing, and it is on the critical path for four use cases.
 
+> **The surface and the mesh are not the same geometry, and the difference is not negligible
+> where it matters.** Measured 2026-08-31. Over the whole nose they agree to 0.005% by
+> enclosed volume — but over the *nose cowl's own extent*, the 44 mm slice the cowl is cut
+> from, they differ by **0.253%**. The nose cowl built on the surface encloses 371569 mm³
+> where the same cowl built on the mesh encloses 372511 mm³. The tail's equivalent figure is
+> 0.039%.
+>
+> The reason the whole-part figure hides it is that the difference reverses along the length:
+> a station-by-station comparison puts the two surfaces within 0.14 mm of each other
+> everywhere, with the sign changing, so the errors cancel end to end and concentrate in any
+> slice taken from one part of the body. The STEP is a NURBS *fit* of the same loft the STL
+> tessellates, and 0.14 mm is the fit residual.
+>
+> **Neither is wrong** — both are exports of the model in §1, which is the definition. What
+> matters is that a ported cowl cannot be checked against an OpenSCAD-rendered cowl by
+> comparing volumes, because the two are cut from different source geometry and will disagree
+> by two to twenty-five times the migration's 0.010% tolerance while both are correct.
+> Verified by holding the OML constant: built on the *same* mesh the OpenSCAD path uses, the
+> ported nose and tail cowls agree with their references to **−0.0000%** each. That is what
+> establishes the port; the volume difference above is a change of input, not an error.
+
 ### 6.2 The cowl has no interior surface
 
 The cowl today is a **solid blank with channels cut into it**. It has no wall — the printed
@@ -682,6 +703,10 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42 entirely**, the nose base offset included: 0.5 mm stays, written as `1 × 0.6 + (−0.1)`, and OQ-DES-CW10 confirms that is the correct built value |
 | OQ-DES-CW10 | Is the nose cowl's base offset a function of the nozzle? | ~~Resolved 2026-08-21~~ — **yes**: the nose shape seats on the cowl's perimeter shell and is bonded there, and the inset gives that joint both its alignment and its bonding surface. `nose_flange_tolerance = -0.1`, so the offset is 0.5 mm at the sweep's 0.6 — **the built value, unchanged**. The `0.4 + 0.1` decomposition that twice argued for 0.7 is void: the hand drivers' 0.4 is a development test value and was never a tuning |
 | OQ-DES-CW11 | Which group does the overhang angle belong in? | ~~Resolved 2026-08-21~~ — **`slicing`**: choosing an overhang angle is a slicing concern, and it fails `printer`'s own membership rule because it does not move with the nozzle. Renamed `cone_angle` → `overhang_angle_from_bed` and moved from four places to one. **Not a free parameter**: it has to agree with where the nose/cowl break line falls and changing it means adjusting the buttresses, neither of which is enforced in code. `slicing` gained a per-key validator, since a perimeter count and an angle cannot share one rule. **Unblocks IP-FC-28** |
+| OQ-DES-CW12 | What measures whether a ported part is correct, now that `Shape.Volume` cannot? | Not blocking — the port proceeds on the tessellated volume, alternative 1 |
+| OQ-DES-CW13 | Where does the tail's folded aft closure get fixed? | Not blocking — the closure is rebuilt at import, alternative 1 |
+| OQ-DES-CW16 | How is a cowl document built and shipped, when FreeCAD's own document booleans produce wrong geometry for this part? | Blocking the claim that a cowl `.FCStd` can be re-solved by someone who has only FreeCAD |
+| OQ-DES-CW17 | Two defects make the tail correct only near `U` = 1: the OML blank's faces are too coarsely subdivided for the cut, and the overlapping tools are fused before cutting. Fixing both, plus an exact C1 conversion that doubles the margin, holds the tail within 0.004% of OpenSCAD at every swept `U` and costs nothing on recompute. Adopt alternatives 3, 6 and 7 as one change? | Blocking the tail on the FreeCAD backend for every `U` except 1 |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -1375,6 +1400,939 @@ sampled sweep agrees on every cowl. `audit_call_args.py` reports no positional m
 the renamed signatures.
 
 *Implementation: IP-FC-28, complete.*
+
+### OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot
+
+**Problem.** The FreeCAD port checks each part it builds by comparing the volume of material
+it encloses against the volume of the same part built by the existing OpenSCAD generator, and
+accepts the part when the two agree to within 0.010%. IP-FC-12 records the boom bulkhead
+passing at 0.00110%.
+
+That check reads the volume from FreeCAD's `Shape.Volume`, which computes it from the
+mathematical surfaces bounding the solid rather than from any approximation of them. Measured
+2026-08-31, that figure is not accurate enough for parts whose surfaces are **freeform** —
+the smoothly curving surfaces used for an aircraft's outer shape, stored as control points —
+rather than the planes, cylinders and cones every part ported so far is made of:
+
+| shape | reported volume error |
+| --- | --- |
+| a sphere built as a primitive | **0.000000%** at r = 5, 25, 50 and 100 mm |
+| the *same sphere*, converted to a freeform surface | **−0.0437%**, identically at all four radii |
+| the nose cowl's outer surface | **+0.077%** |
+| the tail cowl's outer surface | **+6.79%** |
+
+The tail's figure is not caused by the defect in [OQ-DES-CW13](#open-questions) — it is
+unchanged after that defect is repaired. Three independent measurements of the tail (summing
+the volume enclosed by its triangles, summing each surface patch's contribution separately,
+and the triangle mesh OpenVSP exports directly) agree with one another to better than 0.02%
+and all disagree with `Shape.Volume`.
+
+So the acceptance tolerance is four times tighter than the instrument's own error on the
+simplest possible freeform shape, and roughly 700 times tighter than its error on the tail.
+Every cowl would fail the check while being geometrically correct. The more serious risk runs
+the other way: because the error is not bounded in a known direction or magnitude, a cowl that
+really is wrong could pass.
+
+Parts already ported are unaffected. The corner, both bulkheads and the boom bulkhead are
+built entirely from planes, cylinders and cones, where the figure is exact — the sphere
+primitive row above is the evidence that the instrument is sound on those.
+
+**Alternatives.**
+
+1. **Measure the volume enclosed by the triangles instead.** Convert the finished solid to a
+   triangle mesh at the tessellation setting the export already uses, and sum the volume those
+   triangles enclose. *Benefits:* it is the same quantity the OpenSCAD side reports, since that
+   side is triangles all the way down, so the comparison becomes like-for-like rather than
+   surface-against-triangles; it needs about fifteen lines and no new dependency; and it agreed
+   with OpenVSP's own mesh to 0.001% on the tail. *Drawbacks:* the answer depends on the
+   tessellation setting, so the tolerance has to be stated against a fixed one; it is slower,
+   by roughly a second on the tail. *Prerequisites:* none.
+2. **Compare the surfaces directly, with `tools/surface_distance.py`.** Ask how far the ported
+   surface lies from the reference surface at its worst point. *Benefits:* it answers the
+   question the tolerance is really asking — has the shape moved — in millimetres, which is
+   inspectable against a print tolerance; a volume check can pass while a surface is locally
+   wrong by compensating errors. *Drawbacks:* it needs a reference mesh for every part, which
+   only the cowls currently have; it is much slower. *Prerequisites:* deciding the acceptance
+   distance, which is not the same question as the acceptance volume.
+3. **Keep `Shape.Volume` but loosen the tolerance for freeform parts.** *Benefits:* no new
+   code. *Drawbacks:* the loosened tolerance would have to be about 10%, which is wide enough
+   to admit a badly wrong part; and it would have to be justified per part rather than
+   derived, since the error is not predictable from the shape. *Prerequisites:* none.
+4. **Compare cross-sectional areas at stations along the part.** *Benefits:* localizes a
+   disagreement instead of reporting one number, which would have shortened this
+   investigation considerably. *Drawbacks:* substantially more code; sectioning a freeform
+   solid has its own failure modes, several of which were hit while diagnosing CW13.
+   *Prerequisites:* none.
+
+**Recommendation.** Alternative 1, because it makes the two sides of the comparison the same
+kind of measurement, and it is the smallest change. Alternative 2 is worth adding afterwards
+for the cowls specifically, since a cowl is a shape rather than an assembly of features and
+"the surface has not moved by more than *x* mm" is the statement that actually matters for
+one. Alternative 3 should be rejected: a tolerance wide enough to accommodate this instrument
+is too wide to catch the errors the check exists to catch.
+
+### OQ-DES-CW13 — Where the tail's folded aft closure gets fixed
+
+**Problem.** The tail's outer surface is exported from OpenVSP as twelve freeform patches.
+Four of them — the flat closure across the aft opening — are malformed. All four lie in a
+single plane, as a flat closure should, but the mathematical description **doubles back on
+itself**, covering part of that plane twice, facing opposite ways.
+
+Measured 2026-08-31. On those four patches the surface's facing direction reverses across a
+contiguous band covering a quarter to a third of the patch. The reversals are real rather than
+numerical noise: they occur where the surface is well-conditioned (a well-behaved region
+scores about 0.89 on the relevant measure; the reversed samples score 0.43, and only 9 of
+roughly 120 lie on the patch edge, which is the one place a reversal would be meaningless).
+Every other patch on the tail, and every patch on the nose — **including the nose's own aft
+closure, the same kind of feature** — shows zero reversals.
+
+The consequence is that cutting operations fail near the tail's aft end. Cutting the tail
+blank with a cylinder passing through it returns *nothing* at 9 of 20 tested positions, all in
+the upper half; the general-purpose splitting operation returns 3 pieces where a sound solid
+gives 4; and relaxing the tolerance to 0.001 mm and 0.01 mm changes neither. The tail cowl is
+built by cutting buttress tools out of this blank, so as it stands this blocks the tail cowl.
+
+**No export setting avoids it.** Of the STEP options the model carries, only surface splitting
+changes what `ExportFile` writes — merge-points, representation and tolerance produce a
+byte-identical file, matching the behavior already recorded for `CADLenUnit` in
+`tools/oml_export.py`. Splitting is what creates the closure patches at all: with it off, each
+part exports as a single uncapped surface that cannot be closed into a solid. So there is no
+setting that yields a closed tail without yielding these four patches.
+
+**Alternatives.**
+
+1. **Rebuild the closure when the surface is imported.** Discard the four patches and close
+   the opening with one flat face built from the boundary the remaining eight leave behind.
+   *Benefits:* measured 2026-08-31 to fix the cutting failures completely — 0 of 20 positions
+   fail, against 9 before — and to be shape-preserving: the repaired solid encloses
+   594449.974 mm³, identical to the original. About twenty lines, confined to the import.
+   *Drawbacks:* the repository's surface no longer matches what OpenVSP wrote, so a reader
+   comparing them finds a difference that only the importer explains; and the repair is
+   specific to a *flat* closure, so a future model whose tail closes with a curved surface
+   would need it revisited. *Prerequisites:* none — implemented.
+2. **Fix the closure in the `.vsp3` model.** Change how the tail's aft end is built so the
+   exporter produces a sound closure. *Benefits:* fixes it at the source, so every consumer
+   benefits and no importer carries a special case. *Drawbacks:* it is not yet known what in
+   the model provokes it, so the work is open-ended; it changes the airframe definition, which
+   invalidates the recorded provenance hash and every exported artifact. *Prerequisites:*
+   finding the provoking feature, which needs an experiment the aft closure's construction
+   would have to be varied in.
+3. **Trim the aft end away before use.** The tail cowl is open at both ends (§6.2), so the
+   closure may be cut off by the part's own trimming before any buttress is cut. *Benefits:*
+   no repair code at all, if it holds. *Drawbacks:* it has not been shown to hold — it depends
+   on where `cut_len` falls, and it would silently stop holding if that changed; and it leaves
+   an unusable blank in the repository for every other consumer. *Prerequisites:* confirming
+   the trim always removes the affected region, at every unit size in the sweep.
+4. **Export IGES instead of STEP.** `oml_export.py` already supports it. *Benefits:* a
+   different exporter path might not produce the fold. *Drawbacks:* entirely unknown whether
+   it helps; IGES carries less topology than STEP, so the sewing step could be worse rather
+   than better. *Prerequisites:* one experiment.
+
+**Recommendation.** Alternative 1, and it is what the port uses, because it is measured,
+small, reversible, and provably does not change the shape. Alternative 2 is the durable fix
+and should follow once the port is running, at which point there is a working comparison to
+verify a model change against — which there is not today. Alternative 3 should not be relied
+on even if it happens to be true, because it makes a part's correctness depend on a trim
+length that nothing checks.
+
+### ~~OQ-DES-CW14 — Should the buttress positions be editable values?~~ — WITHDRAWN 2026-08-31
+
+**Withdrawn: already decided, and the framing was wrong.**
+[OQ-DES-CW4](#open-questions) resolved this on 2026-08-09 — *"the full fix wants a list of
+buttress placements rather than a fixed set of named groups"*. Placement becomes data at the
+port. There was nothing left to ask.
+
+Two things were wrong with asking it again. It re-opened a settled decision, which costs a
+reader the work of re-deciding something the document already answers. And by offering "keep
+them in the code" as an alternative and questioning whether the present angles are "deliberate
+or incidental", it put the rib layout itself up for negotiation. **The ribs are designed
+structure.** They are the cowl's only internal load path, and the mechanism that produces them
+under a print mode that admits no other (§4, §6.4). Nothing about the port removes, moves or
+reconsiders them.
+
+*Implementation: the eleven tail placements and the nose's one become sheet rows under
+IP-FC-12, per CW4.*
+
+### ~~OQ-DES-CW15 — How much of a cowl document should survive changing the outer shape?~~ — WITHDRAWN 2026-08-31
+
+**Withdrawn: speculative.** It asked what a cowl document should do if the aircraft's outer
+shape were replaced. No such shape exists or is planned; the question invented a scenario and
+asked for a decision about it, which is design effort spent on something that may never happen
+and a decision made without the case that would inform it.
+
+The nose tip's lip is derived from the outer surface the model actually has, which is what §1
+establishes as the definition. If the airframe is ever reshaped, cowls are regenerated — the
+OML provenance record ([OQ-DES-CW7](#open-questions)) already exists to make that change
+visible, and it is the point at which a real question could be asked with a real case behind
+it.
+
+### OQ-DES-CW16 — How is a cowl document built, when FreeCAD's document booleans get it wrong?
+
+**Problem.** A cowl is made by cutting slots into the aircraft's outer surface. The outer
+surface arrives as a NURBS solid (the tail's is nine faces of degree 5×3 with 139 control
+points along the body). The slots are 0.1 mm wide and do not scale with the aircraft — they
+are fold lines for vase-mode printing, not gaps, and two of the tail's eleven slots cross each
+other inside the solid at ±30°. Cutting a 0.1 mm slot across another 0.1 mm slot in a curved
+NURBS body is the hardest case a solid modeller meets, because the two sides of a slot are
+0.1 mm apart while the curves bounding them are computed by approximation.
+
+A FreeCAD document is made of *document objects* — a `Part::Cut`, a `PartDesign::Pocket` — and
+those are what make a saved file editable: change a number and the objects recompute. FreeCAD
+also exposes the same operations directly on geometry, as `Part.Shape` methods, which are not
+document objects and do not recompute on their own.
+
+**Measured 2026-09-01 on FreeCAD 1.1.1, the two do not agree, and the document objects are the
+ones that are wrong.** With byte-identical inputs — the same half-body, the same cutter:
+
+| route | faces | valid | `Shape.Volume` | tessellated volume |
+|---|---|---|---|---|
+| `Part.Shape.cut` (not a document object) | 39 | yes | 308777.93 | 297004.19 |
+| `Part::Cut` (document object) | 69 | no | 310563.18 | 232547.58 |
+| `PartDesign::Boolean` | 69 | no | — | — |
+| `PartDesign::Pocket`, slots cut in sequence | — | no | — | — |
+
+The document result is not the right solid with a pedantic flag on it. It loses 68 mm³ of
+material that the correct result has, it carries six invalid faces including one whose
+boundary does not close, and it tessellates 22% smaller — so it would print wrong, not merely
+report oddly. All three document routes give the same wrong answer because in FreeCAD 1.1 they
+share one `TopoShape` layer, which emits `TopoShapeExpansion.cpp: hasher mismatch` throughout.
+The same layer inflates tolerances generally: two plain 10 mm boxes fused by `Part::MultiFuse`
+come out at 1.3e-05 where `Shape.fuse` gives 1.5e-07.
+
+**What the document layer is doing is reproducible from the geometry API.** `Part.Shape.cut`
+takes an optional fuzzy tolerance, and sweeping it reproduces the document's answer:
+
+| fuzzy | faces | valid | volume |
+|---|---|---|---|
+| 0, 1e-09, 1e-07 | 39 | yes | 308777.93 |
+| 1e-06 | 68 | yes | 310343.13 |
+| 1e-05 | 68 | yes | 310367.26 |
+| *the document* | 69 | no | 310563.18 |
+
+So the document booleans behave as though a fuzzy value of about 1e-06 or larger were applied,
+where the correct answer needs 1e-07 or tighter. **Nothing exposed changes it**, each of these
+measured 2026-09-01 and each leaving the result at 69 faces and invalid: tightening both
+operands with `fixTolerance` to 1e-07 and 1e-08 (the operands are already 3.8e-07 and 1.5e-07);
+`Document.UseHasher = False`; clearing `_ElementMapVersion`, which the object rewrites;
+`Refine`; a cutter cleaned to 1.5e-07. On 1.1.1 the boolean features' entire property list is
+`Base`, `Tool`, `Refine`, `Placement`; on 1.1.3 `Part::Cut`'s list is unchanged and only
+PartDesign gained a `FuzzyTolerance`. An earlier version of this paragraph also said there was
+no fuzzy or tolerance preference anywhere in the parameter tree. **That was wrong** — there is
+one, `Mod/Part/Boolean/BooleanFuzzy`, and setting it to 0 resolves this outright. See *What
+1.1.3 changed* below, which carries the correction and the measurements.
+
+**Rearranging the model does not avoid it either**, all measured: eleven separate cuts, the six
+connected groups, a single `Part::Compound` tool, chained pairwise `Part::Fuse`, diagonals first
+or last, the crossing pair pre-fused into one tool, `PartDesign::Pocket` per slot,
+`PartDesign::Boolean` with the whole cutter, re-expressing the cut as an intersection with the
+cutter's complement, and building the model 10× and 100× oversize so the 0.1 mm feature sits
+further above OCC's absolute 1e-07 confusion. Cutting the full body before masking rather than
+after — which is free set algebra, `(blank ∩ mask) − cutter` being `(blank − cutter) ∩ mask` —
+returns an *empty* solid. The geometry API gets the right answer in every one of these
+arrangements, including plain sequential cuts.
+
+**What 1.1.3 changed, and what it did not.** Everything above was measured on FreeCAD 1.1.1.
+FreeCAD 1.1.3 (rev 20260725) adds a `FuzzyTolerance` property to `PartDesign::Boolean`, and it
+does exactly what it says — but it reaches one of the cowl's operations and not the other two.
+All of the following measured 2026-09-01 on 1.1.3, against the same tail half and cutter.
+
+*The cut is fixed.* With one clean tool and `FuzzyTolerance = 0`, `PartDesign::Boolean`
+reproduces the reference solid with **zero** symmetric difference:
+
+| route | faces | valid | `Shape.Volume` | symmetric difference |
+|---|---|---|---|---|
+| `Part.Shape.cut` (the reference) | 39 | yes | 308777.9299 | — |
+| `Part::Cut` | 69 | no | 310563.1768 | 6.84e+01 |
+| `PartDesign::Boolean`, `FuzzyTolerance = −1` (auto) | 69 | no | 310563.1768 | 6.84e+01 |
+| `PartDesign::Boolean`, `FuzzyTolerance = 0` | 39 | yes | 308777.9299 | **0** |
+
+`FuzzyTolerance` is an ordinary stored property, so it survives a save. Values of 1e-12, 1e-09
+and 1e-07 give the same exact result; `Part::Cut` still has no such property.
+
+*The fuse and the intersection are not.* A cowl is not one cut. The tail fuses its eleven
+tools into a cutter, and both cowls intersect the blank with masks. Both come out wrong:
+
+* **Fuse.** `PartDesign::Boolean` of type `Fuse` returns a *compound* rather than a union, at
+  every fuzzy value tried (−1, 0, 1e-09, 1e-08, 1e-07, 1e-06). Fusing `Top1` with `Diag11`,
+  which overlap by about 1.1 mm³, returned two solids totalling 2015.7495 — exactly the sum of
+  the two inputs, with none of the overlap removed. Over the six overlapping tools it gives
+  6065.3155 where the correct union is 6061.7611.
+* **Common.** The nose's first mask intersection — a box against the NURBS blank — comes back
+  with 5 faces where the reference has many, +4067.96 mm³, and a tolerance of 19.7 mm. Carried
+  through, a fully stock nose ends as 4 solids with a symmetric difference of 1.84e+05. Retested
+  with the *global* fuzz off as well (below), it is worse, not better: it returns an **empty
+  shape** for the tail's lower mask, which covers the whole blank and should be a no-op.
+
+Both of those were first measured with the global fuzz still at its default, relying on the
+per-feature property alone; they were re-measured at `BooleanFuzzy = 0` and are unchanged for
+`Fuse` (still a two-solid compound, +3.554461 mm³) and worse for `Common`. So these are real
+defects in those operations, not fuzz.
+
+**`PartDesign::Pocket` does work, and an earlier note here saying otherwise was wrong.** The
+1.1.1 table above records it as going invalid at the second diagonal. Re-rigged properly on
+1.1.3 — eleven pockets, each the buttress sketch carried on the slab's placement, `Midplane`
+with `Length = buttress_cut_thickness`, `FuzzyTolerance = 0` — **all eleven succeed and every
+one is a single valid solid.** It is still not the right part: the chain ends at 66 faces and
++561.60 mm³ against the reference's 39, because a pocket subtracts one profile at a time and
+subtracting the crossing tools in sequence is not the same as subtracting their union. That is
+the same 0.18% error the geometry API gives for sequential cuts, and it is 18× the project's
+0.010% tolerance. The obstacle is the missing union, not PartDesign's ability to cut.
+
+*Why no arrangement of stock `Part::` objects can supply the clean tool the cut needs.* The
+tolerance a stock boolean records is proportional to the size of its operands — measured at
+**7.0e-07 per mm of bounding-box diagonal**, from two independent cases: the six overlapping
+tools (diagonal 170.3 mm) record 1.20e-04, and all eleven (diagonal 371.2 mm) record 2.63e-04.
+The cut's requirement, by contrast, is *absolute*: 1.5e-07 gives the exact answer and 1.0e-06
+already gives 68 faces and +1565 mm³, with nothing working in between. A stock-built tool is
+therefore clean enough only if it fits inside a box about **0.2 mm** across, which no part does.
+
+The geometry is not what is wrong. `Part::MultiFuse` followed by `Part::Cut` reproduces the
+reference cutter to **±0.000000 mm³**. Forcing that stock cutter's tolerance down with
+`fixTolerance` restores a 39-face valid result; forcing the clean cutter's tolerance *up* to
+the stock value reproduces the 69-face invalid one. The recorded tolerance is the entire
+defect — and nothing stock re-records it: `Part::Refine`, `Part::Mirroring` applied twice about
+the same plane, and `Draft::Clone` at scale 1 each return the identical shape at the identical
+2.63e-04.
+
+**But the fuzz is a preference, and turning it off fixes everything.** This corrects an earlier
+claim in this document, which said no such preference existed. It does. From PR #17119's own
+diff, the value is read once at startup in `AppPart.cpp`
+
+    hGrp = ...GetGroup("Mod/Part/Boolean");
+    Part::FuzzyHelper::setBooleanFuzzy(hGrp->GetFloat("BooleanFuzzy", 10.0));
+
+and applied in `FCBRepAlgoAPIHelper::setAutoFuzzy()` as
+
+    op->SetFuzzyValue(getBooleanFuzzy() * sqrt(bounds.SquareExtent()) * Precision::Confusion());
+
+`sqrt(SquareExtent)` is the bounding-box diagonal, so at the default of **10.0** the applied
+fuzz is 1.0e-06 per mm of diagonal — which is the measured 7.0e-07 per mm of *recorded*
+tolerance above, and explains it exactly. Two things had hidden it: the earlier search looked
+only for 7-bit ASCII in the binaries, where a Windows build may hold the string otherwise; and
+the value is read **once at module load**, so setting the parameter from a running session —
+which is how it was first tested — cannot change anything.
+
+Set `BooleanFuzzy = 0` before FreeCAD starts and the stock objects become correct. Measured
+2026-09-01 on 1.1.3, against the same reference:
+
+| | recorded tolerance | result |
+|---|---|---|
+| `Part::MultiFuse`, default fuzz | 2.63e-04 | — |
+| `Part::MultiFuse`, `BooleanFuzzy = 0` | **2.12e-07** | geometry unchanged, ±0.000000 mm³ |
+| `Part::Cut`, default fuzz | — | 69 faces, invalid |
+| `Part::Cut`, `BooleanFuzzy = 0` | — | **39 faces, valid, symmetric difference 0** |
+
+Carried through the whole part, with every boolean a stock `Part::MultiCommon`, `Part::MultiFuse`,
+`Part::Cut` and `Part::Mirroring`, and nothing scripted in the chain:
+
+    tail  stock solids=1 faces=74  valid=True  | scripted faces=74  | symmetric difference 0
+    nose  stock solids=1 faces=64  valid=True  | scripted faces=64  | symmetric difference 0
+
+So the three things that could not previously hold at once — correct geometry, a document that
+re-solves in stock FreeCAD, and nothing of this project's installed — **all hold**, at the cost
+of one preference set on each machine that opens the file. That is alternative 6.
+
+*Further arrangements ruled out on 1.1.3*, adding to the list above: cutting by the eleven
+tools separately rather than by their union (69 faces, +1496 mm³, tolerance 0.266); cutting by
+a `BooleanFragments` decomposition of the overlapping group into 32 disjoint pieces, which is
+itself exact and clean (±0.000000 mm³ at tolerance 2.12e-07, via FreeCAD's own `BOPTools`
+scripted features, which take an explicit tolerance) but gives 52 faces and +1149 mm³ when cut
+with; and cutting slot by slot in sequence (70 faces, invalid). One of these does not merely
+return the wrong solid — `PartDesign::Boolean` handed all eleven tools at the stock tolerance
+of 1.4e-04 ran for 24 minutes and then died of `Not enough memory available`, the same
+pathology as the 4.4 GB build recorded in IP-FC-12. A tool at stock tolerance is not a
+degraded input to these operations; it is one they cannot complete.
+
+*One thing worth keeping from this.* Only **one** fuse in the tail is load-bearing. The eleven
+tools form six disjoint solids, and only one group of six actually overlaps — `Top1`, `Top2`
+and the four diagonals. Cutting by that group's union and then by the five remaining slabs
+separately reproduces the reference exactly. So the scripted surface could in principle shrink
+from seven nodes to one. It is not worth doing on its own: a single blocked module import
+stops a document restoring just as completely as seven do, so it buys no deployment and costs
+a construction the two cowls would no longer share.
+
+The port therefore builds the cowls through a small scripted document object (`_ShapeBoolean`
+in `cowl_tree.py`) that performs the operation with `Part.Shape` and stores the result. It is a
+real document object — it links its operands, recomputes when the spreadsheet changes, and is
+saved and reloaded — and with it both cowls come out geometrically identical to the reference
+implementation, exactly zero difference in both directions.
+
+**The cost is deployment.** FreeCAD 1.1 refuses to restore a scripted object whose defining
+module is not FreeCAD's own or an installed addon:
+
+    PropertyPythonObject::Restore: blocked import of module 'cowl_tree' during document
+    restore. Only modules from FreeCAD or installed addons are permitted.
+
+There is no preference anywhere in FreeCAD's parameter tree that grants trust; the decision is
+made purely from where the module sits on disk. So opening `tail_U1.FCStd` on a machine that
+has only FreeCAD gives a document that *displays the correct part* — the geometry is saved, and
+the spreadsheet, sketches, extrusions, wedge and datum placements all restore — but the seven
+boolean nodes come back inert, so changing a parameter rebuilds nothing. The document is
+correct and readable; it is not re-solvable.
+
+This affects nobody in the project's own toolchain: the sweep and `build_part.py` import
+`cowl_tree` before opening anything, so they rebuild normally. It affects a person handed a
+`.FCStd`.
+
+**Alternatives.**
+
+1. **Keep the scripted object; ship documents that display but do not re-solve.** The geometry
+   is right, the parameter sheet and the whole feature tree are visible and inspectable, and
+   anyone regenerating a variant does it through the sweep, which works. *Benefits:* nothing to
+   install, no geometry compromise, no further work. *Drawbacks:* a recipient cannot change
+   `U` in the GUI and get a new part; the boolean nodes show as errors on open, which looks
+   like breakage even though the part is correct. *Prerequisites:* none.
+
+2. **Ship the cowl modules as a FreeCAD addon.** Place them under a FreeCAD `Mod` path so the
+   restore is permitted. *Benefits:* fully live documents — open, change `U`, recompute.
+   *Drawbacks:* makes the project a FreeCAD extension, which is a deployment posture the
+   project has not chosen; every recipient needs the install, and it must be kept in step with
+   the repository. *Prerequisites:* deciding where the addon lives and how it is versioned
+   against the source tree.
+
+3. **Widen the slots until the document booleans cope.** The failure is specific to 0.1 mm
+   features; a wider slot may be within what `Part::Cut` handles. *Benefits:* a fully stock
+   document with no scripted objects at all. *Drawbacks:* changes the printed part. The slot
+   width is not free — it is a vase-mode fold line, deliberately unscaled (§6.3), and widening
+   it turns a fold into a gap. *Prerequisites:* measuring the width at which the document
+   boolean becomes correct, then deciding whether the resulting part is still the design. This
+   has not been measured.
+
+4. **Build against a FreeCAD that does not apply automatic fuzz.** **This is a known upstream
+   regression, identified 2026-09-01.** FreeCAD [PR #17119](https://github.com/FreeCAD/FreeCAD/pull/17119),
+   merged October 2024 and shipped in 1.1, made every boolean in every core workbench apply an
+   automatic fuzzy value computed as `BooleanFuzzy × Precision::Confusion() × size of the part
+   in mm`. For this half — bounding box 100.08 × 50 × 100, diagonal 150.06 mm — that is about
+   1.5e-05, and the table above shows the correct answer needs 1e-07 or tighter. It explains
+   every observation: why `Part::Cut`, `PartDesign::Pocket` and `PartDesign::Boolean` agree with
+   each other and not with `Part.Shape.cut`, and why no rearrangement helps. Upstream states the
+   change "is also known to cause several regressions".
+
+   [PR #31249](https://github.com/FreeCAD/FreeCAD/pull/31249), in **1.1.3**, adds a
+   `FuzzyTolerance` property so a feature can ask for pre-1.1 non-fuzzy behaviour. Two limits:
+   the changelog entry is *"PD: Add FuzzyTolerance property"* — PartDesign, not `Part::` — and
+   1.1.x deliberately **keeps auto-fuzz as the default**. **1.1.3 was installed and tested on
+   2026-09-01, and it does not resolve this.** It fixes the cut exactly — `PartDesign::Boolean`
+   at `FuzzyTolerance = 0` reproduces the reference solid with zero symmetric difference — but
+   PartDesign's `Fuse` returns compounds instead of unions and its `Common` collapses the NURBS
+   intersection, so the cowl's other booleans are worse off than before, and no stock `Part::`
+   object can supply the clean tool the fixed cut needs (all measured, *What 1.1.3 changed*
+   above). An earlier version of this alternative said **26.3 reverts to pre-1.1 behaviour, no
+   fuzziness by default**, citing `FeaturePartBoolean.cpp` on `main` as carrying no fuzzy
+   property. **Both halves of that are withdrawn (2026-09-01).** The file check was of the wrong
+   file — the fuzz has never lived there; it is applied in `FCBRepAlgoAPIHelper::setAutoFuzzy()`
+   in `FCBRepAlgoAPI_BooleanOperation.cpp` and configured from `AppPart.cpp`. And the 26.3
+   release notes say only that *"a Fuzzy Tolerance property was added to override the default
+   fuzziness/tolerance for boolean operations determined from the size of the input shapes"* —
+   a knob, not a revert — with the release date still a placeholder.
+
+   **Checked directly against `main`, and this alternative is ruled out** (2026-09-01). On the
+   branch 26.3 comes from: `FCBRepAlgoAPI_BooleanOperation`'s constructor still calls
+   `setAutoFuzzy()` *unconditionally*; `AppPart.cpp` still reads `BooleanFuzzy` with the same
+   default of **10.0**; and `Part::Boolean`'s property list is still just `Base`, `Tool`,
+   `History`, `Refine`, with no per-feature `FuzzyTolerance`. So 26.3 neither disables the fuzz
+   by default nor lets a `Part::` boolean override it per feature. The `FuzzyTolerance` the
+   release notes describe is a PartDesign property, it is already present in 1.1.3, and
+   PartDesign cannot build this part for reasons unrelated to fuzz. Waiting for 26.3 would
+   change nothing; alternative 6 is the route, and the same preference exists on `main`, so it
+   keeps working across the upgrade.
+
+   *Benefits:* the only alternative that gives up nothing — correct geometry, a document that
+   re-solves in stock FreeCAD, no addon, no design change, and nothing of this project's placed
+   inside FreeCAD. On such a build the scripted objects come out and this question closes.
+   *Drawbacks:* 26.3 is not released — it is planned for Q4 2026 under the new CalVer scheme and
+   its release-notes page still carries a placeholder date — so this is a wait unless a weekly
+   development build is used; and pinning a version is itself a constraint on whoever opens the
+   files. 1.1.3 is now ruled out, so the wait is for 26.3 specifically rather than for the next
+   1.1.x. *Prerequisites:* running the reproduction above against a build of `main`. Weekly
+   development builds are published and would answer it now. Note this is not alternative 2:
+   changing which FreeCAD is used adds nothing of this project's to FreeCAD.
+
+5. **Flatten the boolean nodes when the document is saved**, replacing each with a plain
+   `Part::Feature` holding its computed shape, and keep the sketches, spreadsheet and
+   expressions. *Benefits:* opens anywhere with no errors and no install. *Drawbacks:* gives up
+   re-solving deliberately rather than accidentally — the same capability as alternative 1,
+   presented honestly instead of as a broken node. *Prerequisites:* none.
+
+6. **Build the cowls from stock objects, and set `BooleanFuzzy = 0`.** Add the key
+   `BooleanFuzzy` with value `0` under `BaseApp/Preferences/Mod/Part/Boolean` — in the GUI,
+   Preferences → Part → Boolean — which restores pre-1.1 boolean behaviour for that FreeCAD
+   install. Every boolean in both cowls then becomes an ordinary `Part::MultiCommon`,
+   `Part::MultiFuse`, `Part::Cut` or `Part::Mirroring`, and the blank's scaler an ordinary
+   `Draft::Clone`, so nothing scripted remains and the document restores and re-solves
+   anywhere. **Measured 2026-09-01 on 1.1.3:** both cowls come out at exactly zero symmetric
+   difference against the current build, with matching face counts (74 tail, 64 nose), and the
+   `Draft::Clone` blank matches `_ScaledSurface` at zero difference and still tracks `U`
+   (200.000 mm at `U` = 2). *Benefits:* correct geometry, a fully live document in stock
+   FreeCAD, no addon, no design change, and it works on the FreeCAD already installed rather
+   than on a version that does not exist yet. *Drawbacks:* it is a per-install setting, so a
+   recipient must apply it too, and a document that silently depends on a preference is a trap
+   if it travels without that instruction — the failure would be a wrong part rather than an
+   error. It also changes boolean behaviour for everything else in that install, and upstream
+   introduced the automatic fuzz to fix real failures for other users (PR #17119 lists eight
+   issues), so turning it off may reintroduce those elsewhere. *Prerequisites:* deciding how the
+   setting travels with the file, and — since the value is read once at startup — making the
+   sweep and `build_part.py` set it before FreeCAD loads rather than after.
+
+**Recommendation (revised 2026-09-01).** **Alternative 6.** It is the one that gives up
+nothing, and unlike alternative 4 it is measured and available today rather than waiting on an
+unreleased version. Everything below this paragraph was written before `BooleanFuzzy` was
+found and is kept because the reasoning still holds for the other five: it is the argument for
+why, *if the fuzz cannot be turned off*, the remaining alternatives all trade something away.
+The premise it rests on — that correct geometry requires the `Part.Shape` API — is exactly what
+alternative 6 removes.
+
+The one thing alternative 6 needs decided is how the preference travels with a file, because a
+document that depends on a setting nobody mentions fails by producing a *wrong part* rather
+than an error. Alternative 5 pairs with it as a safety net: a flattened copy is correct on any
+install regardless of the setting, so shipping both a live document and a flattened one covers
+the recipient who never sets the preference.
+
+Superseded reasoning follows. Pursue alternative 4 first, because it is the only one that gives up
+nothing. Correct geometry requires the `Part.Shape` API; using that API inside a document
+requires a scripted object; and FreeCAD 1.1 will not restore a scripted object whose module is
+not an addon. Those three facts are what make the other alternatives trade something away —
+under FreeCAD 1.1.1 and 1.1.3 alike, *correct geometry*, *a document that re-solves in stock
+FreeCAD*, and *nothing installed* cannot all hold at once, and no arrangement of the model
+changes that (see the ruled-out list above). Alternative 4 attacks the premise instead of
+choosing among the consequences, and its cost is one afternoon with a second FreeCAD build.
+That afternoon has now been spent. 1.1.3 did not pay, and 26.3 has been checked at source and
+will not either — it keeps the automatic fuzz, keeps the default at 10.0, and adds no override
+to the `Part::` booleans. Alternative 4 is closed.
+
+If no version computes it correctly, then the trade has to be made and it should be made in
+this order: alternative 1 or 5, which keep the part right and give up live re-solving; then
+alternative 2, if handing out editable cowl files turns out to be a real requirement rather
+than a preference, since it is the only one that delivers a live document. Alternative 3 is
+last and should not be adopted on convenience grounds — it trades a correct part for a
+convenient toolchain, which is the wrong way round, and the measurements above show the failure
+is not simply a matter of the slot being too narrow.
+
+### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1
+
+**Problem.** `U` is the airframe's size multiplier: every dimension of the aircraft is written
+as a multiple of it, and the project sweeps `U` from 0.5 to 4.0. The tail cowl is made by
+cutting eleven slots into the aircraft's outer surface, a NURBS solid. Those slots are 0.1 mm
+wide and **do not scale with `U`** — they are fold lines for vase-mode printing, not gaps, and
+that is deliberate (§6.3). So as `U` grows the body grows and the slots do not, and the slot
+becomes ever finer relative to the part.
+
+**Measured 2026-09-01 on FreeCAD 1.1.3, the tail is correct only at `U` = 1.** Everything
+feeding the cut scales exactly: `Half` tracks `U`³ to four decimals, and the cutter's volume
+tracks `U`² to four figures — 10464.28, 16353.48 and 23551.93 at `U` = 1, 1.25 and 1.5, which
+is what fixed-thickness plates must do. It is the cut itself that degrades.
+
+**This must be measured tessellated, not with `Shape.Volume`** (OQ-DES-CW12). The slots remove
+231 mm³ from a 297 243 mm³ half — 0.078% — while `Shape.Volume` overstates that half by 5.5%,
+so the raw-volume version of this test reports the removal as 5923.93 and is measuring its own
+error. A first version of this question carried those raw figures and read the damage as
+"+16.7% at `U` = 1.1"; **they are withdrawn**, and the tessellated measure shows the failure is
+far larger than they suggested.
+
+| `U` | faces | valid | half (tess) | cut (tess) | removed | should be | over |
+|---|---|---|---|---|---|---|---|
+| 1.0 | 39 | yes | 297242.57 | 297011.11 | 231.46 | 231.46 | — |
+| 1.1 | 38 | yes | 395630.09 | 310740.07 | **84890.02** | 280.07 | **303×** |
+| 1.25 | 68 | **no** | 580552.73 | 574666.06 | 5886.66 | 361.66 | 16× |
+| 1.3 | 69 | **no** | 653042.97 | 648758.29 | 4284.68 | 391.17 | 11× |
+| 1.5 | 68 | **no** | 1003196.03 | 993190.66 | 10005.37 | 520.79 | 19× |
+| 1.6 | 7 | yes | — | — | cut volume **−11.05** | | |
+| 1.75 | — | — | — | — | **empty** | | |
+| 2.0 | — | — | — | — | **empty** | | |
+| 3.0 | 7 | yes | — | — | cut volume **−339.51** | | |
+
+`Half` tessellates to exactly `U`³ at every row (580552.73 is 297242.57 × 1.25³), so the input
+is right and the cut is what fails. It removes between 11 and 303 times too much material at
+every `U` above 1, is invalid from 1.25 to 1.5, and returns nothing or a negative volume above
+that. The part is not slightly wrong above `U` = 1; it is destroyed at the first step above it.
+
+**It is also not repeatable.** The same computation at `U` = 1.25 reported `valid = True` in one
+run and `valid = False` in another, the only difference being which values of `U` the document
+had been recomputed through first. Whatever the cause, the result depends on history.
+
+**The failures are silent.** At `U` = 1.6 and 3.0 the result is a negative-volume solid that
+`Shape.isValid()` accepts, which is the worst possible behaviour inside a sweep. A fresh build
+fails identically to editing the sheet (`U` = 2.0 empty by either route, `U` = 1.25 agreeing to
+three decimals), so this is not a recompute-order defect and the sweep is affected exactly as
+the interactive path is. Fusing only the crossing group and cutting the rest singly gives
+byte-identical results at every `U`, so it is not a construction-order defect either.
+
+**The controlling quantity is the slot width relative to the body**, not `U` as such. Holding
+`U` at 1 and thinning the slot instead reproduces the same collapse: at 0.1 mm the part is
+correct; at 0.08 mm it returns a 40-face solid of 59.11 mm³ where 308 777 is right; at 0.05,
+0.04 and 0.0125 mm it returns nothing. The ratios agree across both knobs — 0.08 mm at `U` = 1
+and 0.1 mm at `U` = 1.25 are both slot/body = 0.0008 and both wrong; 0.05 mm at `U` = 1 and
+0.1 mm at `U` = 1.75 are both about 0.0005 and both empty. The cliff sits near 0.0006–0.0008
+and **the design sits at 0.001**, so the working configuration is only 25–40% clear of it, with
+failure in both directions: a thinner slot or a larger body.
+
+**The OpenSCAD path builds both cowls correctly at `U` = 4.0** (confirmed against the
+pre-migration sweep output, 2026-09-01). The design is buildable at every scale in the swept
+range; it is this port that is not. CGAL meshes have no curve-intersection tolerance, so none
+of what follows arises there.
+
+**One fault is confirmed to be in this port's construction, and it is not sufficient.** The
+blank is built by *scaling* an imported NURBS solid, and `Shape.scale()` multiplies the recorded
+tolerance along with the coordinates — so the body is stamped 3.3e-07 at `U` = 1 rising to
+1.3e-06 at `U` = 4, while the cutter that has to meet it stays at 1.5e-07 at every scale. That
+is bookkeeping, not geometry: scaling a NURBS surface moves its control points exactly.
+Resetting it with `fixTolerance(1e-07)` measurably helps — `U` = 2.0 goes from **empty** to a
+38-face valid solid, and `U` = 1.5 from 68 faces invalid to 40 faces valid — but the removal
+stays an order of magnitude too high at every `U` above 1, and `U` = 4.0 is still empty. So it
+is a real defect and not the root cause.
+
+**It also shows the `U` = 1 configuration is not robust.** Resetting that tolerance, which
+cannot change the geometry, changes the material removed at `U` = 1 from 231.46 to 457.66 mm³.
+The one configuration that agrees with OpenSCAD is sitting on a knife edge rather than
+comfortably correct, which is the more troubling result of the two.
+
+**One construction explanation has been tested and ruled out.** The cutting tools extend well
+past the body — at `U` = 2 a slab is 0.1 mm thick and 268 mm long, an aspect ratio of 2676:1 —
+which costs nothing in CSG and is not free in a B-rep. Trimming every tool to the body's
+bounding box, at 2% and at 20% padding, changes nothing: `U` = 1.25 and 1.5 still give 68 faces
+and `U` = 2.0 is still empty. Whatever is wrong, it is not the tools' reach.
+
+This is a property of the B-rep port, not of the design. The OpenSCAD path meshes with CGAL and
+has no curve-intersection tolerance, so it builds the whole swept range. The nose cowl is
+unaffected — 10 faces on its cut and 64 on the part at every `U` from 0.5 to 3.0, always valid,
+with removal per `U`² holding to ±1.3%.
+
+**A real finding that turned out *not* to be the cause: the blank is not a legal boolean
+argument.** It is recorded here because it is true, because it cost a day to establish, and
+because the experiment that disproved it as the cause is below and is worth keeping. OCC's own
+argument analyser says so directly. `Shape.check(True)` runs `BOPAlgo_ArgumentAnalyzer`, which
+asks whether a shape is fit to be handed to a boolean, and on every OML-derived shape it
+raises:
+
+```
+BOP check found the following errors:
+Error in Edge: BOPAlgo GeomAbs_C0
+Error in Face: BOPAlgo GeomAbs_C0
+```
+
+`BOPAlgo_GeomAbs_C0` is the status OCC reports when an argument contains C0 geometry. Its
+boolean algorithm requires arguments to be at least C1. Every shape on the OML side fails the
+check and every cutting tool passes it:
+
+| shape | `check(True)` at `U` = 1 | at `U` = 2 |
+|---|---|---|
+| `Blank`, `Lower`, `Half` | C0 errors | C0 errors |
+| `Core`, `Cutter`, `Safe` | clean | clean |
+
+**The blank has never been a legal argument, at any scale** — the condition is present at
+`U` = 1 too, where the part comes out right.
+
+**And legality is not what matters.** Two experiments settle it, and they point the same way.
+First, the C0 condition can be removed *exactly*: reparameterising the V knot intervals so the
+Bézier segments join at matching parametric speed makes the surface genuinely C1 (measured
+below), after which the interior multiplicity drops from 3 to 2 at **all 45 joints** and
+`check(True)` returns **CLEAN** on a 9-face blank. The cut still fails — `U` = 4 returns a
+removal of **−3573.933 mm³**. Second, and conversely, splitting each face into three-knot-span
+pieces gives a 129-face blank that OCC flags with **256 C0 errors**, and it produces the correct
+part to +0.0036%. A legal blank that fails and an illegal blank that succeeds, in the same
+harness: **subdivision is what the cut needs; continuity is neither sufficient nor necessary.**
+
+**Continuity is not irrelevant, though — it buys margin**, and an earlier version of this
+section overstated the case by saying it was not what the cut needs at all. Measured in one
+harness with controls, the C1 conversion moves the subdivision cliff by a factor of two:
+
+| blank | `k` | faces | removed | vs correct |
+|---|---|---|---|---|
+| C1 | 23 | 17 | −2438.945 | −0.500 |
+| C1 | 12 | 33 | 4498.708 | 0.922 |
+| **C1** | **6** | **65** | **4874.110** | **0.999** |
+| plain | 6 | 65 | −46674.487 | −9.569 |
+| C1 | 3 | 129 | 4873.375 | 0.999 |
+| plain | 3 | 129 | 4877.857 | 1.000 |
+
+Plain, the cliff sits between `k` = 3 and 6; converted, between 6 and 12. So both contribute to
+conditioning, and the cheapest way to sit well clear of the edge is to do both.
+
+The depth required is sharp and was measured at `U` = 4 by splitting at every `k`-th knot:
+
+| `k` | faces | `check(True)` | removed | vs correct | whole part vs OpenSCAD |
+|---|---|---|---|---|---|
+| 46 | 9 | 16 C0 | 3979478.761 | 815× | −20.86% |
+| 23 | 17 | 32 C0 | 2315319.183 | 474× | −12.14% |
+| 12 | 33 | 64 C0 | −40644.893 | −8.3× | +0.2475% |
+| 6 | 65 | 128 C0 | −46674.487 | −9.6× | +0.1506% |
+| **3** | **129** | **256 C0** | **4877.857** | **1.000** | **+0.0036%** |
+| 1 | 369 | — | 4879.645 | 1.000 | +0.0034% |
+
+Three knot spans per face is enough and six is not, with nothing in between: the failure at
+`k` = 6 is not a near miss but a negative-volume result. Going finer than `k` = 3 buys nothing.
+
+**The exact C1 conversion, for the record**, since it is a usable technique even though it does
+not solve this. The joints are G1 but not C1 — tangent directions agree to 0.000029° while the
+parametric speeds do not — and the speed ratio at each V joint is **u-independent to 3.5e-07**,
+with the ratios exact powers of two (0.125, 0.25, 0.5, 1, 2, 4; OpenVSP subdivides its domain
+dyadically). So propagating `Δv[i+1] = Δv[i] · r[i]` along the chain makes it C1 with **no
+control point moved**: measured deviation **2.9e-14 mm**, knot-interval dynamic range 512×.
+Multiplicity then reduces 3 → 2 at all 45 joints at a further 3.1e-10 mm. Multiplicity 2 at
+degree 3 is exactly C1, so the ten corner curvature breaks survive — unlike every refit. A
+corroboration worth keeping: before reparameterisation `removeVKnot` succeeded at exactly 6 of
+45 joints, which are exactly the 6 whose speed ratio was already 1.0.
+
+**Where the C0 comes from.** The blank is imported from `vsp_tail.step`, and OpenVSP's internal
+surface representation *is* a grid of Bézier patches. Its STEP writer joins them into one NURBS
+by setting the interior knot multiplicity equal to the degree, which is C0 by definition. Each
+of the blank's eight B-spline faces is degree 5 × 3 with **45 interior V knots at multiplicity
+3** — 360 C0 seams on the blank. The V direction is circumferential; U is axial and is a single
+quintic span.
+
+**The surface is not creased, only written that way.** Measured across all 45 interior knots of
+face 0, the worst normal break is **0.000029°**. The multiplicity permits a crease; the control
+points line up and there is none. This matters because it is what makes the condition fixable
+without touching the geometry — and it is also why the condition went unnoticed: nothing about
+the surface looks wrong.
+
+**Boolean fuzz is not the cause and does not help.** `Part.Shape.cut()` takes an explicit fuzz.
+Scanned at the failing scales:
+
+| fuzz | `U` = 1 | `U` = 1.5 | `U` = 2 |
+|---|---|---|---|
+| 0 | 39 faces, valid, 231.46 removed | 68 faces, invalid, 10004.97 | empty |
+| 1e-07 | 39 faces, valid, 231.46 | 68 faces, invalid, 10004.97 | empty |
+| 1e-06 | 68 faces, invalid, 1267.15 | 68 faces, invalid, 10004.97 | empty |
+| 1e-04 | 69 faces, invalid, 64649.90 | 74 faces, invalid, 214667.23 | empty |
+
+At `U` = 1.5 it is already wrong with **zero** fuzz, and there is nothing below zero. Setting
+the `BooleanFuzzy` preference to 0 changes nothing either, and for a second reason: this port
+builds through `Part.Shape` rather than document objects, and that path does not read the
+preference. The `U` = 1 row does show how narrow the working margin is — the part is correct
+only while the fuzz stays at or below 1e-07 mm, which is OCC's own `Precision::Confusion`.
+
+**Refitting the surface is ruled out by the airframe, not by the kernel.** The obvious repair is
+to re-approximate the faces at C1 or better. It cannot be used: the fuselage section is a
+rounded rectangle, whose straight runs meet the corner arcs tangentially, so the section is C1
+but emphatically **not C2** — curvature jumps from 0 to 1/r at every corner tangency, and the
+bulkhead mates to that profile. Measured on face 0, **10 of the 45 interior knots carry real
+curvature discontinuities**, up to a 99.3% jump (κ = 0.0687 → 9.4528 at knot 15, a corner radius
+of 0.106 mm — the same order as the 0.1 mm cut itself). A C1 smoothing approximation was tried
+and flattened all ten: curvature breaks over 5% went from 10 to 0, the maximum jump from 99.3%
+to 0.1%, deviation reached 4.2e-03 mm against a 1e-04 mm budget, and the result would not sew
+into a closed solid. Any free re-parameterisation smooths the corners, because the fit has no
+reason to keep knots where the curvature breaks are.
+
+**Splitting at the C0 seams changes no geometry and removes the scale dependence.** A B-rep is
+entitled to tangent discontinuities *between* faces; the C0 seams are only illegal because they
+sit inside a face. Splitting each face along its 45 C0 knot lines gives 46 strips per face, each
+a single Bézier patch and so C∞ internally, at 369 faces for the blank. A first spike gives:
+
+| `U` | solids | valid | removed | per `U`² from `U` = 1 |
+|---|---|---|---|---|
+| 1.0 | 1 | yes | 213.05 | 1.00 |
+| 1.5 | 1 | yes | 685.35 | 1.43 |
+| 2.0 | 1 | yes | 1218.36 | 1.43 |
+| 4.0 | 1 | yes | 4873.08 | 1.43 |
+
+Against 19× at `U` = 1.5 and nothing at all at 2.0 and 4.0, every scale now returns one valid
+solid and the error is **constant** rather than growing — which is what scale-invariance looks
+like.
+
+**The split is geometrically exact and its costs are now measured** (2026-09-01). Tessellated,
+the split blank is 16833.772147 mm³ against the original's 16833.911873 — a difference of
+**−8.3e-04%**, eight parts per million. An earlier note here reported a 6.35% volume loss and
+withdrew the split on it; that figure came from `Shape.Volume`, which reports 17975.091439 for
+the same blank against the true 16833.911873, a 6.8% overstatement matching the +6.79% already
+recorded for this shape. **It is withdrawn.** Sewing is not the cost either: `Part.Shell`,
+`sewShape` and `makeSolid` together take 1.0 s for 369 faces. The 24-minute stall that first
+made the split look unaffordable was `Shape.check(True)` — `BOPAlgo_ArgumentAnalyzer` scaling
+badly with face count — and not the construction. What the split does cost is recompute: about
+75 s per `U` against about 12 s for the whole document build with the 9-face blank, roughly 6×.
+
+**The C0 condition is one of two defects, and the second is the fuse.** With the split blank the
+error localises completely: cutting with each of the six disjoint `Safe` solids alone, five of
+them scale as `U`² to **0.07%** (213.290 mm³ at `U` = 1 against 3410.144 at `U` = 4, where
+213.290 × 16 = 3412.64). All of the remaining error sits in the sixth, which is the fused group
+of six overlapping tools — `Top1`, `Top2` and the four diagonals — and it is not a tool defect:
+cut individually, all six behave, and their removals sum to 91.320 mm³ at `U` = 1 and 1486.304
+at `U` = 4.
+
+| tool | `U` = 1 | `U` = 4 | per `U`² | factor |
+|---|---|---|---|---|
+| `Top1Slab` | 44.345 | 709.818 | 709.526 | 1.000 |
+| `Top2Slab` | 22.875 | 365.962 | 365.998 | 1.000 |
+| `Diag11Slab` | 7.686 | 138.407 | 122.978 | 1.125 |
+| `Diag12Slab` | 6.999 | 111.864 | 111.992 | 0.999 |
+| `Diag21Slab` | 3.459 | 54.814 | 55.346 | 0.990 |
+| `Diag22Slab` | 5.956 | 105.439 | 95.296 | 1.106 |
+
+**Fused, that group removes −0.252 mm³ at `U` = 1 and 1461.713 at `U` = 4.** At `U` = 4 that is
+98.3% of the sum of the singles, which is what modest overlap should give; at `U` = 1 it is
+zero. The fuse does not fail at large `U` — **it fails at `U` = 1**, which is the reverse of what
+every earlier note here assumed, and it is why the `U` = 1 configuration looked like a knife
+edge: the part that agreed with OpenSCAD was agreeing while silently omitting a cut.
+
+**All three fixed, the tail is correct across the whole swept range.** Measured 2026-09-01, and
+this is the shipping configuration: the blank converted to C1 (alternative 3), subdivided at
+every third knot into 129 faces (alternative 6), and the eleven tools cut individually
+(alternative 7), with the whole mirrored part measured against the pre-migration OpenSCAD sweep.
+
+| `U` | recompute | removed | per `U`² | whole part | OpenSCAD reference | difference |
+|---|---|---|---|---|---|---|
+| 0.5 | 10.2 s | 76.106 | 1.0000 | 74158.400 | 74155.416 | **+0.0040%** |
+| 1.0 | 10.4 s | 304.517 | 1.0003 | 593874.323 | 593851.961 | **+0.0038%** |
+| 1.5 | 11.0 s | 685.318 | 1.0005 | 2005006.818 | 2004935.411 | **+0.0036%** |
+| 2.0 | 12.3 s | 1218.285 | 1.0005 | 4753419.174 | 4753250.616 | **+0.0035%** |
+| 3.0 | 12.1 s | 2741.312 | 1.0005 | 16045530.354 | 16044964.051 | **+0.0035%** |
+| 4.0 | 11.5 s | 4873.375 | 1.0005 | 38037098.226 | 38035749.164 | **+0.0035%** |
+
+One valid solid at every scale, **154 faces at every scale** — the topology is stable, not just
+the volume — and the difference is **flat across an 8× range in `U` and 512× in volume**. It is
+the mesh-OML against surface-OML difference (§6.1) and carries no scale term at all. Removal
+tracks `U`² to **0.05%**.
+
+**And it is not expensive.** Recompute runs 10.2 to 12.3 s against about 12 s for the original
+9-face blank — no penalty at all, and slightly faster than the same subdivision without the C1
+conversion (12.2–15.6 s), which is the reverse of what a heavier blank would suggest. The
+conversion itself is a one-time 0.5 s at import. An earlier note here costed this fix at 6× on
+recompute; that came from splitting to 369 faces, which the `k` table above shows is 2.9× more
+subdivision than the cut needs. **It is withdrawn.**
+
+**The nose runs the same conditioning, and it improves there too.** Both cowls import through
+`oml_blank.surface()`, so whatever conditions one conditions the other; two cowls conditioned by
+two different mechanisms would be the same trap `nose_cowl()` already avoids for its booleans.
+The nose blank is not shaped like the tail's, and exercises a case the tail never does: its
+faces 0–3 carry interior **U** multiplicities of 5 at degree 5, so it is C0 in *both* parametric
+directions where the tail is C0 only in V. The conditioning handles both — 8 faces in, 96 out,
+180 multiplicity reductions, deviation 9.5e-10 mm, 0.2 s — and the speed-ratio precondition
+holds in both directions (spread 2.7e-11 in U, 5.7e-08 in V, against a 1e-04 tolerance).
+
+The nose was never broken, but it was **drifting**, which had not been measured before:
+
+| `U` | unconditioned | conditioned |
+|---|---|---|
+| 0.5 | +0.0110% | +0.0136% |
+| 1.0 | +0.0111% | +0.0136% |
+| 2.0 | **−0.0046%** | +0.0134% |
+| 4.0 | **−0.0156%** | +0.0134% |
+
+Unconditioned it moves 0.027% across the swept range and crosses zero, which is a scale term,
+small but real. Conditioned it is flat, one valid solid and 88 faces at every scale, at 1.3 s
+per recompute. This supersedes the note above that the nose "is unaffected": it does not fail,
+and it was not clean either.
+
+Neither fix alone suffices: without subdivision the cut fails at scale whatever the blank's
+continuity, and without unfusing, `U` = 1 silently loses 91.491 mm³ — the fused tree removes
+213.044 where 304.564 is right.
+
+**Alternatives.**
+
+1. **Declare the FreeCAD backend's tail valid only for `U` ≤ 1.2 and enforce it.** Add a domain
+   check that refuses to build outside the range, the way `boom_key_validity_check()` does for
+   the boom key. *Benefits:* honest, immediate, and converts a silent wrong answer into a loud
+   refusal, which is the single most valuable change available. *Drawbacks:* leaves the tail
+   unported over most of the swept range, so `compare_backends.py` cannot cover it there.
+   *Prerequisites:* establishing the safe bound properly — the measurements above sample `U` at
+   0.5, 0.75, 1.0, 1.1, 1.2, 1.25, 1.3, 1.5, 1.6, 1.75, 2.0 and 3.0, and `U` = 1.1 already
+   removes 21% of the part, so the honest bound today is `U` = 1 exactly, not 1.2.
+
+2. **Keep OpenSCAD as the production path for the tail cowl** and treat the FreeCAD tail as a
+   single-point reference. *Benefits:* the swept range keeps working today, and nothing has to
+   be solved. *Drawbacks:* abandons the port's purpose for this one part, and the migration's
+   value comes from covering the whole space. *Prerequisites:* none.
+
+3. **Convert the blank to C1 after import.** Reparameterise the V knot intervals so the Bézier
+   segments join at matching parametric speed, then reduce interior multiplicity 3 → 2. Both
+   steps are exact — no control point moves — and the whole conversion runs in **0.5 s** at a
+   measured deviation of **5.8e-10 mm**. *Benefits:* it does not fix the cut on its own, but it
+   **doubles the subdivision margin**: with it, `k` = 6 works where plain `k` = 6 fails at
+   −9.57×, moving the cliff from between `k` = 3 and 6 to between 6 and 12. Paired with
+   alternative 6 at `k` = 3 it also tightens `U`² tracking from 0.14% to 0.05% and is slightly
+   *faster* to recompute, so it costs nothing to keep. Multiplicity 2 at degree 3 is exactly
+   C1, which is the continuity the rounded-rectangle section actually has, so the ten corner
+   curvature breaks survive untouched. *Drawbacks:* it depends on a property of this export —
+   the speed ratio at each V joint is u-independent to 3.5e-07, with the ratios exact powers of
+   two — which holds for OpenVSP's dyadic subdivision but is not guaranteed for a surface from
+   another source, so the conversion needs to verify its own precondition rather than assume it.
+   *Prerequisites:* none; measured and verified.
+
+   **Alone it is not a fix.** A C1 9-face blank on which `check(True)` is CLEAN still returns
+   −3573.933 mm³ at `U` = 4. The **refit** route once carried under this heading stays closed:
+   the section is C1-but-not-C2 by design, and a C1 smoothing approximation flattened all ten of
+   its curvature breaks.
+
+4. **Cut the slots by splitting the surface rather than by a solid boolean**, building the cowl
+   from the split surface. *Benefits:* avoids the solid-solid intersection that is failing.
+   *Drawbacks:* a substantial rewrite of both cowls, and it must still produce a solid for
+   vase-mode slicing, so the closure problem returns. *Prerequisites:* a spike showing a surface
+   split survives at `U` = 2 where the boolean does not.
+
+5. **Scale the slot width with `U` after all.** *Benefits:* removes the problem completely; the
+   ratio stays at 0.001 everywhere. *Drawbacks:* changes the printed part at every `U` except 1,
+   turning a fold line into a gap, which §6.3 and the source both reject. *Prerequisites:* none,
+   but it is a design change and not a port fix.
+
+6. **Subdivide the blank's faces on import**, at every third knot line — 129 faces for the
+   blank. It belongs in `oml_blank.surface()`, which is the one place every consumer of the OML
+   already passes through, and it pairs with alternative 3 in the same function. *Benefits:* it
+   changes the geometry by **nothing** — a trimmed view on the original surface, no
+   approximation, no tolerance budget, no argument about whether a deviation is small enough
+   against the bulkhead fit — and it is what actually fixes the cut, across the whole swept
+   range. *Drawbacks:* the blank goes from 9 faces to 129, and it affects every other consumer
+   of the OML, not just the cowls. The recompute cost is **not** a drawback: 10.2–12.3 s with
+   alternative 3, against about 12 s for the 9-face blank. **Necessary but not sufficient on its
+   own** — it must be paired with alternative 7, or `U` = 1 still silently omits 91.5 mm³.
+   *Prerequisites:* none; measured and verified at `U` = 0.5, 1.0, 1.5, 2.0, 3.0 and 4.0. On
+   depth: with alternative 3, `k` = 6 already works and `k` = 3 is the belt-and-braces choice at
+   no extra cost; without it, `k` = 3 is the minimum and `k` = 6 returns a negative volume.
+   `k` = 1 (369 faces) buys nothing and costs 75 s per recompute.
+
+7. **Cut with the eleven tools individually instead of fusing the overlapping group.** The six
+   tools that overlap are fused into one solid before cutting, and that solid removes nothing at
+   `U` = 1 (see *Cause* above). *Benefits:* with alternative 6 it makes the tail correct across
+   the sweep — +0.0037% at `U` = 1 and +0.0034% at `U` = 4 against the OpenSCAD reference, the
+   same offset at both, with removal tracking `U`² to 0.15%. It also removes a construction step
+   rather than adding one. *Drawbacks:* eleven cuts instead of one, so more boolean calls per
+   rebuild, and the scripted-boolean node count rises — which cuts against the direction
+   OQ-DES-CW16 wants for restorability. *Prerequisites:* none; measured and verified. Note this
+   **reverses** a finding recorded in IP-FC-12, that cutting by the group's union reproduces the
+   reference exactly — the reference it was checked against was the baked FreeCAD document,
+   which carries the same omission.
+
+**Recommendation.** Note first that alternative 1 bounds the damage without curing it: the
+`U` = 1 configuration is itself only marginally stable, since resetting a tolerance that cannot
+change the geometry moves its removed volume by a factor of two. A domain check makes the
+failure loud; it does not make the surviving point trustworthy.
+
+Alternative 1 immediately and unconditionally, because the current state ships a *silent* wrong
+answer — a negative-volume solid that passes `isValid()` — and that must stop regardless of what
+else is decided. Set the bound at `U` = 1 on today's evidence and widen it only if measurement
+supports it. A domain check is also the right shape of fix now that the cause is known: the
+condition it should test is not a value of `U` at all but whether `check(True)` passes on the
+blank, which is a direct question with a direct answer.
+
+Then **alternatives 3, 6 and 7 together**, which are the cure, are measured rather than
+proposed, and cost nothing. Together they hold the tail within **+0.0035% to +0.0040%** of the
+OpenSCAD reference at every swept `U` from 0.5 to 4.0 — flat across 512× in volume, so no scale
+term survives — with removal tracking `U`² to 0.05%, 154 faces at every scale, and recompute at
+10–12 s against about 12 s today.
+
+**6 and 7 are each load-bearing and neither works alone**: 6 without 7 silently omits 91.5 mm³
+at `U` = 1, and 7 without 6 fails at scale. **3 is the one that is optional** — and it should
+still be taken, because it is the difference between sitting two-fold clear of the subdivision
+cliff and four-fold clear, and it makes the result more accurate and slightly faster for half a
+second at import. Adopt all three as one change.
+
+The only real cost is eleven booleans in place of one, which raises the scripted-node count and
+so pulls against OQ-DES-CW16's restorability concern — that tension is worth stating, but it is
+a small price against a part that is otherwise wrong by a factor of 20 above `U` = 1.
+
+Do **not** repoint the alternative-1 domain check at `check(True)`, which an earlier version of
+this recommendation proposed: a blank carrying 256 C0 errors builds the part correctly, so that
+test would refuse a good configuration. If a guard is wanted, test the invariant that actually
+holds — removal per `U`² against its value at `U` = 1, which is constant to 0.14% when the
+construction is right and off by factors of 8 to 800 when it is not.
+
+Check **alternative 3** first, since it is strictly cheaper if it works — a blank that arrives
+C1 costs no faces and needs no code — but do not wait on it, because the piecewise-Bézier form
+is OpenVSP's internal representation and an exporter option to change it may not exist.
+
+Alternative 2 is the fallback if both fail, and should be stated openly rather than arrived at by
+default. Alternative 5 should not be adopted: it trades the printed part for a convenient
+toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
+closed — the section is C1-but-not-C2 by design and no free re-parameterisation preserves that.
 
 ## See also
 
