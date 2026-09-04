@@ -617,7 +617,7 @@ A cowl has to be two things at once, and the port cannot collapse them:
 | What it is | The notched blank exactly as generated today — no wall, no modelled rib | The blank shelled by the §6.2 per-layer inset, with the rib modelled where each notch is |
 | Serves | UC-1 | UC-2, UC-3, UC-4, UC-7, UC-8 |
 | Wall comes from | The slicer, one contour per layer in vase mode | Geometry |
-| The rib | Emerges, as the wall follows the notch in and back out | Modelled, `2·w·n + t_cut` thick |
+| The rib | Emerges, as the wall follows the notch in and back out | Present in the geometry, `2·w·n + t_cut / sin θ` thick measured in the layer plane — 1.3 mm at a vertical cut, 1.4 mm at the tail's 30° diagonals ([OQ-DES-CW19](#open-questions)) |
 
 **They cannot be merged, and the direction of the incompatibility is the important part.**
 Adding a wall to the print representation destroys vase-mode printability outright: vase mode
@@ -637,6 +637,25 @@ reverse-engineered from a slicer's output as a curiosity; it is the structure, a
 is the *mechanism* that produces it under a mode that permits no other mechanism. The notch
 is not a workaround for the model's shortcomings. It is a design choice that buys ribs inside
 a single-wall print, and it is the reason the interior is worth modelling at all.
+
+**Status: both representations exist as of 2026-09-04** (IP-FC-17). The solid representation is
+built by [`cowl_interior.py`](../../src/Fuselage/freecad/cowl_interior.py) and delivered as two
+**additional** part kinds, `nose_cowl_shell` and `tail_shell`, beside the unchanged `nose_cowl`
+and `tail`. The invariant above is held by construction rather than by care: the shelled kinds
+are separate parts, the print kinds' output is unchanged, and the shelled kinds are FreeCAD-only
+— asking for one on the OpenSCAD backend raises rather than quietly rendering the blank. Two
+things the table above have turned out to be more specific in the built version. The rib is **not
+modelled** as a feature: eroding the notched section reproduces it, which the acceptance tests
+measure rather than assume — so that row reads *"present in the geometry"* rather than
+*"constructed separately"*. And its thickness carries the cut angle, `2·w·n + t_cut / sin θ`
+([OQ-DES-CW19](#open-questions)): 1.3 mm at every vertical cut and 1.4 mm at the tail's 30°
+diagonals, because the cut is a fixed thickness normal to its own plane while the perimeters are
+measured parallel to the build plate. And the wall
+is a **horizontal** inset, not a normal offset, which is what makes the rib come out at that
+thickness at all. At `U` = 1 the nose wall measures 9714.2617 mm³ and the tail 23685.2264 mm³,
+each one valid solid. What is not yet established — the construction alternative that was never
+compared, the cost of the dilation, and verification at any `U` but 1 — is
+[cowl_interior_surface.md §10](cowl_interior_surface.md), as IP-FC-115, IP-FC-116 and IP-FC-117.
 
 ---
 
@@ -707,6 +726,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW13 | Where does the tail's folded aft closure get fixed? | Not blocking — the closure is rebuilt at import, alternative 1 |
 | OQ-DES-CW16 | How is a cowl document built and shipped, when FreeCAD's own document booleans produce wrong geometry for this part? | Blocking the claim that a cowl `.FCStd` can be re-solved by someone who has only FreeCAD |
 | OQ-DES-CW17 | Two defects make the tail correct only near `U` = 1: the OML blank's faces are too coarsely subdivided for the cut, and the overlapping tools are fused before cutting. Fixing both, plus an exact C1 conversion that doubles the margin, holds the tail within 0.004% of OpenSCAD at every swept `U` and costs nothing on recompute. Adopt alternatives 3, 6 and 7 as one change? | Blocking the tail on the FreeCAD backend for every `U` except 1 |
+| OQ-DES-CW18 | `plate_thickness`, the two plate flange dimensions and `nose_flange_height` are swept per `U` but were never tuned — 3.2 mm against the reference's 0.8 mm at `U` = 4, a factor of 4.8 in the plate's material. Should they scale, hold fixed, or be derived from the printer? | Not blocking the port — but the committed reference cannot check the nose plate or nose tip above `U` = 1 until it is settled |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -1098,7 +1118,8 @@ So:
   structure of a single-wall part.
 - **Alternative 2 is adopted**, with alternative 1 available where fidelity is later shown to
   matter. The rib is modelled at `2·w·n_perimeters + t_cut`, with `n_perimeters = 1` in vase
-  mode — which is the case that matters, and conveniently the case where the formula is least
+  mode — refined 2026-09-04 by [OQ-DES-CW19](#open-questions) to `2·w·n_perimeters + t_cut / sin θ`,
+  measured in the layer plane, θ being the cut's angle to it and 90° for every vertical cut — which is the case that matters, and conveniently the case where the formula is least
   ambiguous.
 - **The representational split is now a stated invariant, not a compromise.** §6.4 records it:
   the print export stays the un-shelled notched blank, and the shelled-and-ribbed solid is a
@@ -2333,6 +2354,158 @@ Alternative 2 is the fallback if both fail, and should be stated openly rather t
 default. Alternative 5 should not be adopted: it trades the printed part for a convenient
 toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
 closed — the section is C1-but-not-C2 by design and no free re-parameterisation preserves that.
+
+### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`?
+
+**Problem.** `U` is the airframe's size multiplier: every dimension is written as a multiple of
+it, and the project sweeps `U` from 0.5 to 4.0. Four values in `nose_size_variants.csv` are
+given a separate column per `U` and increase linearly with it:
+
+| `U` | `plate_thickness` | `plate_flange_width` | `plate_flange_height` | `nose_flange_height` |
+|---|---|---|---|---|
+| 0.5 | 0.4 | 1.2 | 0.6 | 0.6 |
+| 1 | 0.8 | 2.0 | 1.0 | 1.0 |
+| 2 | 1.6 | 4.0 | 2.0 | 2.0 |
+| 4 | **3.2** | **8.0** | **4.0** | **4.0** |
+
+All four are millimetres. `plate_thickness` is the nose plate's thickness — the plate is a flat
+printed disc that closes the nose and carries the flange the tip plugs into. `plate_flange_width`
+and `plate_flange_height` are that flange's section; `nose_flange_height` is the matching flange
+on the tip.
+
+**These are placeholders.** Recorded 2026-09-01: the per-`U` values were generated by plain
+linear scaling when the sweep was set up, and were never tuned against a print or a load case.
+The file has carried them unchanged since it was first committed on 2026-08-04. They are not a
+decision that these dimensions scale, and the archive's fixed values are not a decision that
+they do not — the question below is open on its merits.
+
+**These read as manufacturing dimensions, not airframe dimensions.** At a 0.2 mm layer height,
+0.8 mm is four layers and 3.2 mm is sixteen. §6.3 already establishes that
+`buttress.cut_thickness` is deliberately absolute and does **not** scale, on the grounds that it
+is a slicer tolerance and *a tolerance has no business tracking the airframe*; the same section
+lists `tolerance` and `flange_inset` as unscaled for the same reason. It does not mention these
+four, so the existing documentation neither confirms nor contradicts scaling them.
+
+**The pre-migration sweep held all four fixed.** Read from the generated drivers it rendered
+from, `variant_output_original/U_4.0/nose/U_4.0__nose_plate.stl.scad` calls
+`nose_plate(plate_diam = 240.0, plate_flange_height = 1.0, plate_flange_width = 2,
+plate_thickness = 0.8)` — `plate_diam` scaled from 60 to 240 while the other three stayed at
+their `U` = 1 values. The tip driver does the same with `nose_flange_height = 1.0`. So the
+archive and the current derivation disagree, and one of them is wrong.
+
+**What the two readings give at `U` = 4:**
+
+| | scaled (sweep) | fixed (archive) |
+|---|---|---|
+| plate volume | 184 542 mm³ | 38 669 mm³ |
+| plate z-extent | 11.200 mm | 2.800 mm |
+| tip z-extent | 28.000 mm | 25.000 mm |
+
+A factor of 4.8 in the plate's material.
+
+**No backend comparison can detect this.** `compare_backends.py` renders both engines from the
+same `derived_cowl_parameters()` result, so a parameter that scales when it should not produces
+two engines agreeing exactly on the wrong part. Measured 2026-09-01, FreeCAD and OpenSCAD agree
+on the `U` = 4 plate to **2.0e-05** — inside `TOL_EXACT` — while building the 3.2 mm version.
+The comparison validates the port; it never validates the parameters. That is why this question
+survived a backend compare and needs answering separately.
+
+**Alternatives.**
+
+1. **Hold all four fixed at their `U` = 1 values**, as the archive does. *Benefits:* consistent
+   with §6.3's rule for every other manufacturing dimension, and with the last physically
+   printed configuration; a plate stays four layers whatever the airframe. *Drawbacks:* a
+   240 mm plate 0.8 mm thick may be too floppy to handle or to print flat, so the rule that
+   suits a tolerance may not suit a structural member. *Prerequisites:* a view on whether the
+   plate is structure or skin.
+
+2. **Scale all four with `U`**, as the current derivation does. *Benefits:* the part stays
+   self-similar, so its stiffness keeps up with its span, and nothing has to change.
+   *Drawbacks:* it silently contradicts the reasoning §6.3 gives for `cut_thickness`, and it
+   makes a printed wall a function of the airframe rather than of the printer.
+   *Prerequisites:* none; it is the status quo.
+
+3. **Split them by what they are.** Scale `plate_thickness` because it is structural, and hold
+   the three flange dimensions fixed because they are a joint fit — `flange_inset` is already
+   unscaled by §6.3, so a flange whose inset is absolute and whose height scales is
+   inconsistent. *Benefits:* answers each on its own merits rather than by category.
+   *Drawbacks:* four values with three rules is harder to state and to check.
+   *Prerequisites:* deciding each one.
+
+4. **Derive the thicknesses from the printer instead of from `U`** — `plate_thickness =
+   n_layers × layer_height`, the flanges from `extrusion_width`, the way
+   `nose_flange_inset` is already `cowl_n_perimeters × extrusion_width + tolerance`.
+   *Benefits:* puts a manufacturing dimension under the manufacturing parameters, where the
+   existing precedent already sits, and it stops being a swept axis at all. *Drawbacks:* the
+   largest change of the four, and it removes the ability to sweep them.
+   *Prerequisites:* choosing `n_layers`, and confirming the plate's job is printing rather than
+   stiffness.
+
+**Recommendation.** **Alternative 4**, and the reason is that the values are untuned. A
+derivation removes the need to tune them: `plate_thickness = n_layers × layer_height` and the
+flange section from `extrusion_width` are numbers that follow from the printer rather than
+numbers somebody has to pick eight times and keep consistent. It also puts these dimensions
+where the precedent already is — `nose_flange_inset` is already
+`cowl_n_perimeters × extrusion_width + tolerance`, and §6.3 puts `cut_thickness` and
+`tolerance` in the same class — so it makes the rule uniform instead of adding a fourth
+convention.
+
+Alternative 2 is worth choosing on its merits if the plate is structural, but not on the grounds
+that it is what the file already says.
+
+The one thing that would change this recommendation is the plate being **structural**. If it
+carries load rather than closing the nose, its thickness has to follow the span and not the
+nozzle, which is alternative 1's drawback and alternative 2's whole case. That is the question
+to answer first, and it is not answerable from the geometry.
+
+Whichever is chosen, the sweep and the archive must be brought back into agreement, because at
+present the committed reference geometry cannot be used to check the nose plate or the nose tip
+at any `U` except 1.
+
+### ~~OQ-DES-CW19 — The rib at an inclined buttress cut is thicker than the rib everywhere else~~ — RESOLVED 2026-09-04
+
+**Alternative 1**, and for a better reason than the one recommended. The recommendation rested
+on the cost of re-rendering the tail. The actual reason is that the two terms are measured in
+different frames because they are two different kinds of dimension:
+
+- **The thickness of the OML cut is fixed regardless of orientation.** `buttress_cut_thickness`
+  is a property of the cut — 0.1 mm normal to the cut's own plane, whichever way that plane
+  faces. It is not a function of the cut's angle, and there is nothing in the model to change.
+- **The thickness of the perimeters is evaluated parallel to the build plate.** A perimeter is
+  laid down by a nozzle travelling within a layer, so its width is an in-plane measurement by
+  definition. That is the same fact that makes the interior a horizontal inset rather than a
+  normal offset (§6.2, and [cowl_interior_surface.md](cowl_interior_surface.md) §9.2).
+
+The rib is the two together, measured where the printer measures them — in the layer plane — so
+its thickness is
+
+    2 · n_p · w + t_cut / sin θ
+
+with θ the angle between the cut plane and the layer plane. Every vertical cut has θ = 90°,
+which returns the familiar 1.3 mm; the tail's 30° diagonals give 1.4 mm. **θ is bounded away
+from 0, where the expression diverges, by the design and not by the arithmetic:** a rib forms
+because the perimeter walks into the notch and back out within a layer, a notch lying in the
+layer plane offers no such path, and a horizontal rib would therefore come out malformed under
+thin-wall perimeter slicing — so horizontal ribs are not used. Stated 2026-09-04 and recorded as
+P4 in [cowl_interior_surface.md](cowl_interior_surface.md) §2, where it sits beside P1 for the same
+reason: a horizontal surface leaves no wall, and a horizontal notch leaves no rib. **Nothing in the
+geometry changes, and nothing was ever wrong with it.** OQ-DES-CW3's `2·w·n + t_cut` is the
+θ = 90° case of this expression, not a rule the diagonals break.
+
+Alternatives 2, 3 and 4 are all rejected by the first clause: each of them scales the cut's
+thickness by its orientation, which is precisely what a fixed cut thickness means not doing.
+
+**Nothing to implement.** `check_cowl_interior.in_plane_width` already derives the width from
+the cut face's own normal as `t_cut / hypot(n_x, n_y)`, which is this expression and holds for a
+cut at any orientation rather than only for rotation about one axis. The measured 1.3000 mm at
+every axial notch and 1.4000 mm at every diagonal is the design being met, not tolerated.
+
+**One thing this does not settle, kept here rather than reopened.** The diagonal rib's thickness
+is a function of `top_diag_angle` — 1.4 mm at 30°, 1.59 mm at 15° — and nothing couples the two.
+Under this resolution that is correct behaviour rather than a defect, since the cut stays 0.1 mm
+and a shallower layer plane simply cuts it wider. It does mean a shape parameter moves a
+structural dimension with no note anywhere that it does, which is the same class of unenforced
+coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
 
 ## See also
 

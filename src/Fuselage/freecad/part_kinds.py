@@ -23,12 +23,20 @@ once it has one.
 # without complaint, leaving every boom row at its module literal: a part built at the
 # reference configuration under the swept variant's filename. A separate name makes that a
 # missing key instead.
-# The four cowl kinds share one seed table, unlike the bulkheads above and for the opposite
-# reason: they are four parts of *one* shape definition -- a nose cowl, its tip, its plate and
+# The six cowl kinds share one seed table, unlike the bulkheads above and for the opposite
+# reason: they are six parts of *one* shape definition -- a nose cowl, its tip, its plate and
 # a tail all come out of `derived_cowl_parameters()` reading a single JSON file. Splitting the
-# table would leave four files describing one cowl with nothing keeping them in step. They are
+# table would leave six files describing one cowl with nothing keeping them in step. They are
 # separate *kinds* because `build_part.py` builds one part per invocation, and because the
 # IP-FC-11 digest should rebuild only the cowl part whose modules actually changed.
+#
+# **`nose_cowl_shell` and `tail_shell` are the same two shapes as `nose_cowl` and `tail`, in
+# the other of the two representations cowl.md section 6.4 says a cowl has to be at once**
+# (IP-FC-17). The unshelled pair is what UC-1 prints -- vase mode spirals one contour per layer
+# and admits no interior geometry, so a modelled wall removes the capability outright -- and
+# the shelled pair is what UC-2, UC-3, UC-4, UC-7 and UC-8 analyse. They are four kinds rather
+# than two kinds with a flag precisely so that a consumer cannot take one for the other; the
+# invariant that matters is that the print path keeps coming from the blank.
 KINDS = {
     'corner': ('corner_tree', 'CORNER'),
     'bulkhead': ('bulkhead_full', 'BULKHEAD'),
@@ -37,6 +45,8 @@ KINDS = {
     'nose_nose': ('cowl_nose_tip', 'COWL'),
     'nose_plate': ('cowl_nose_plate', 'COWL'),
     'tail': ('cowl_tail', 'COWL'),
+    'nose_cowl_shell': ('cowl_nose_cowl_shell', 'COWL'),
+    'tail_shell': ('cowl_tail_shell', 'COWL'),
 }
 
 

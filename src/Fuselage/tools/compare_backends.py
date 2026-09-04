@@ -66,7 +66,32 @@ SWEEPS = (
     ('boom_bulkhead', 'run_boom_bulkhead_parametric_sweep',
      ('panel_variants.csv', 'boom_bulkhead_type_variants.csv',
       'bulkhead_size_variants.csv')),
+    # The nose sweep produces three kinds from one driver, so it appears three times here and
+    # `_drivers_for` runs it once. Listing each kind is what lets `--kinds nose_plate` mean
+    # something and what tells `kind_of` the three names apart.
+    ('nose_cowl', 'run_nose_parametric_sweep',
+     ('nose_size_variants.csv', 'nose_type_variants.csv')),
+    ('nose_nose', 'run_nose_parametric_sweep',
+     ('nose_size_variants.csv', 'nose_type_variants.csv')),
+    ('nose_plate', 'run_nose_parametric_sweep',
+     ('nose_size_variants.csv', 'nose_type_variants.csv')),
+    ('tail', 'run_tail_parametric_sweep',
+     ('nose_size_variants.csv', 'tail_type_variants.csv')),
 )
+
+
+def _drivers_for(kinds: set[str] | None):
+    """Each (driver, axes) once, in table order.
+
+    Several kinds can come out of one sweep -- the nose driver builds the cowl, the tip and
+    the plate -- and running it once per kind would build the same parts three times.
+    """
+    seen, out = set(), []
+    for _kind, driver, axis_names in sweeps_for(kinds):
+        if (driver, axis_names) not in seen:
+            seen.add((driver, axis_names))
+            out.append((driver, axis_names))
+    return out
 
 # Volume agreement, as a fraction.
 #
@@ -152,6 +177,35 @@ BBOX_PLACES = 9
 
 FILLETED_KINDS = {'bulkhead', 'boom_bulkhead'}
 
+# The cowls compare a *mesh* against a *surface* and no amount of re-rendering removes the
+# difference: the OpenSCAD path cuts the committed `vsp_*.stl` and the port cuts the STEP
+# export of the same loft, and those two exports differ by up to 0.253% over the nose cowl's
+# own extent (cowl.md 6.1). That is a property of the comparison, not of either engine, so
+# these kinds cannot be held to the 360-segment floor the others are.
+#
+# Measured 2026-09-01 with both engines rendered fresh at the same parameters: 2.0e-05 on the
+# plate, 8.0e-05 on the tail at U = 1, 2.1e-04 on the tail at U = 0.5, 4.8e-04 on the tip.
+# The limit is set above the worst of those with margin, and is **not** a statement that this
+# much error is acceptable -- it is the floor the confound imposes. Tightening it needs the
+# OML exported once and consumed by both paths, which is OQ-ARCH-4's retirement of the
+# OpenSCAD sweep, not a tolerance change.
+TOL_FREEFORM = 6.0e-4
+FREEFORM_KINDS = {'nose_cowl', 'nose_nose', 'tail'}
+
+# Every cowl kind, including the plate -- which has no OML and so meets `TOL_EXACT` on volume,
+# but is a turned disc whose bounding box is a tessellated circle like the others.
+COWL_KINDS = FREEFORM_KINDS | {'nose_plate'}
+
+# `build_part.py` exports the cowls at 0.02 mm deflection, because a wholly freeform surface
+# does not mesh cheaply (IP-FC-12). An inscribed tessellation sits up to that far inside the
+# true surface, so a curved part's bounding box cannot agree closer than the deflection --
+# measured 2.07e-02 mm on the plate at U = 4 against a `bbox_tol` of 2.0e-03. Flooring the
+# limit here keeps the check meaningful for the flat faces instead of failing every cowl on a
+# number that is a property of the export setting. **This is worth removing** by scaling the
+# export deflection with `U`; the tail's volume error falls monotonically 2.1e-04 -> 1.5e-05
+# from U = 0.5 to 4 for the same reason, which is the same defect seen on the other axis.
+COWL_EXPORT_DEFLECTION = 0.02   # mm
+
 
 def kind_of(name: str) -> str:
     """Which sweep produced this part, from its filename.
@@ -196,7 +250,7 @@ def wanted_parts(per_kind: int | None, kinds: set[str] | None = None) -> dict[st
     fv.solid_render = lambda obj, d, f: (note(f), (f, f, f))[1]
     fv.freecad_render = lambda k, p, d, f, v=None: note(f)
     try:
-        for _kind, driver, axis_names in sweeps_for(kinds):
+        for driver, axis_names in _drivers_for(kinds):
             getattr(fv, driver)(fv.axes(*axis_names), '/nonexistent')
     finally:
         fv.solid_render, fv.freecad_render = real_solid, real_freecad
@@ -311,7 +365,7 @@ def render(backend: str, out_dir: Path, wanted: set[str], workers: int,
     try:
         with fv.sweep_session(workers=workers, resume=resume, previews=False,
                               fail_fast=False) as queue:
-            for _kind, driver, axis_names in sweeps_for(kinds):
+            for driver, axis_names in _drivers_for(kinds):
                 getattr(fv, driver)(fv.axes(*axis_names), str(out_dir))
         failed = list(queue.failures)
     finally:
@@ -450,13 +504,20 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
             sa = mesh_stats.mesh_stats(a, bbox_places=BBOX_PLACES)
             sb = mesh_stats.mesh_stats(b, bbox_places=BBOX_PLACES)
             btol = bbox_tol(u_of(name))
+            if kind in COWL_KINDS:
+                btol = max(btol, COWL_EXPORT_DEFLECTION)
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             failures.append((name, f'unreadable: {exc}'))
             continue
 
         rel = (sb['volume'] - sa['volume']) / sa['volume']
         bbox_off = max(abs(x - y) for x, y in zip(sa['bbox'], sb['bbox']))
-        tol = tol_filleted if kind in FILLETED_KINDS else tol_exact
+        if kind in FREEFORM_KINDS:
+            tol = TOL_FREEFORM
+        elif kind in FILLETED_KINDS:
+            tol = tol_filleted
+        else:
+            tol = tol_exact
         ok = abs(rel) <= tol and bbox_off <= btol
         rows.append((name, kind, sa['volume'], sb['volume'], rel, bbox_off, btol, ok))
         if not ok:

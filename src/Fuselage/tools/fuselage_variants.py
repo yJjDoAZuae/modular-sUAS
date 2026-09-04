@@ -1194,12 +1194,17 @@ def generate_fuselage_boom_bulkhead_variant_filename_from_params(dp, extension="
 
     return os.path.join(dir_name, file_name)
     
-def generate_fuselage_nose_variant_filename_from_params(U, dp, is_nose_cowl, is_nose_nose, is_nose_plate, extension=".scad"):
+def generate_fuselage_nose_variant_filename_from_params(U, dp, is_nose_cowl, is_nose_nose, is_nose_plate, extension=".scad", is_shell=False):
     """
     Creates a unique filename based on parameter values.
+
+    `is_shell` names the solid representation of the cowl body -- IP-FC-17, cowl.md section
+    6.4 -- which sits beside the print representation rather than replacing it. The suffix is
+    on the *part*, `nose_cowl_shell`, not on the variant directory, because the two are the
+    same variant of the same cowl in the two representations one cowl has to be at once.
     """
     if is_nose_cowl:
-        type_name = "cowl"
+        type_name = "cowl_shell" if is_shell else "cowl"
     elif is_nose_nose:
         type_name = "nose"
     elif is_nose_plate:
@@ -1217,9 +1222,13 @@ def generate_fuselage_nose_variant_filename_from_params(U, dp, is_nose_cowl, is_
 
     return os.path.join(dir_name, file_name)
     
-def generate_fuselage_tail_variant_filename_from_params(U, dp, extension=".scad"):
+def generate_fuselage_tail_variant_filename_from_params(U, dp, extension=".scad",
+                                                        is_shell=False):
     """
     Creates a unique filename based on parameter values.
+
+    `is_shell` names the solid representation -- IP-FC-17 -- which sits beside the print
+    representation rather than replacing it. See the nose generator above.
     """
     # The variant name is in the path for the same reason it is on the nose
     # side: one pass per parameter file, and without it a second tail type
@@ -1227,7 +1236,8 @@ def generate_fuselage_tail_variant_filename_from_params(U, dp, extension=".scad"
     variant = dp.type_name
 
     dir_name = os.path.join("U_" + str(U), "tail", variant)
-    file_name = "U_" + str(U) + "__" + variant + "__tail" + extension
+    file_name = ("U_" + str(U) + "__" + variant + "__tail"
+                 + ("_shell" if is_shell else "") + extension)
 
     return os.path.join(dir_name, file_name)
 
@@ -1449,6 +1459,16 @@ def run_nose_parametric_sweep(csv_files, output_dir):
             nose_render(U, dp, output_dir, filename,
                         is_nose_cowl, is_nose_nose, is_nose_plate)
 
+        # **The solid representation, beside the print one, never instead of it** (IP-FC-17,
+        # cowl.md section 6.4). Enumerated only under the FreeCAD backend because there is no
+        # OpenSCAD generator for it -- and this is an absence, not a refusal: a refusal records
+        # a part the port *should* build and cannot, where this kind does not exist on the
+        # other side at all and never will.
+        if _BACKEND == 'freecad':
+            shell_name = generate_fuselage_nose_variant_filename_from_params(
+                U, dp, True, False, False, is_shell=True)
+            nose_render(U, dp, output_dir, shell_name, True, False, False, is_shell=True)
+
 
 def run_tail_parametric_sweep(csv_files, output_dir):
     """
@@ -1485,6 +1505,15 @@ def run_tail_parametric_sweep(csv_files, output_dir):
         filename = generate_fuselage_tail_variant_filename_from_params(U, dp)
 
         tail_render(U, dp, output_dir, filename)
+
+        # The solid representation, beside the print one, never instead of it -- IP-FC-17,
+        # cowl.md section 6.4. FreeCAD only, because the construction is a per-layer 2-D
+        # erosion fitted to a B-spline surface and there is no OpenSCAD generator for it.
+        if _BACKEND == 'freecad':
+            tail_render(U, dp, output_dir,
+                        generate_fuselage_tail_variant_filename_from_params(
+                            U, dp, is_shell=True),
+                        is_shell=True)
             
 _SCAD_REF_RE = re.compile(r'(?m)^(\s*)(use|include)\s*<([^>]+)>\s*;')
 
@@ -2535,6 +2564,17 @@ def boom_bulkhead_render(dp, output_dir, filename):
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
+#: The solid representation of each cowl body, and the print representation it is built from
+#: (IP-FC-17, cowl.md section 6.4). **Only the two bodies appear here.** `nose_nose` and
+#: `nose_plate` are the closure parts the nose body is cut to -- solid parts in their own
+#: right, not single-wall prints -- so there is nothing to shell.
+#:
+#: These kinds exist on the FreeCAD side only. There is no OpenSCAD generator for them and
+#: there will not be one: the construction is a per-layer 2-D erosion fitted to a B-spline
+#: surface, which is what IP-FC-4's STEP export was for.
+SHELLED_COWL_KINDS = {'nose_cowl_shell': 'nose_cowl', 'tail_shell': 'tail'}
+
+
 def _cowl_variant_note(dp):
     """What variant a cowl definition file records. Not `_variant_note`, which reads
     `dp.bulkhead` and `dp.panel` -- a cowl's parameter set has neither."""
@@ -2553,6 +2593,16 @@ def cowl_parameters(kind, U, dp):
     Booleans are exported as 0.0/1.0 because a definition file is all floats: `oml_reversed`
     is a flag in the model and a number on the wire, and `cowl.from_flat` turns it back.
     """
+    # **The shelled kinds are the print kinds' parameter set plus the wall** (IP-FC-17). Same
+    # shape, same rows, and two more: `cowl_n_perimeters` and `extrusion_width`, whose product
+    # is the horizontal inset. Those two are **absolute millimetres**, unlike every other
+    # length here, which is a fraction of `unit_width` -- a nozzle does not scale with the
+    # airframe, so the wall is 0.6 mm at U = 0.5 and 0.6 mm at U = 4.
+    if kind in SHELLED_COWL_KINDS:
+        return dict(cowl_parameters(SHELLED_COWL_KINDS[kind], U, dp),
+                    cowl_n_perimeters=COWL_N_PERIMETERS,
+                    extrusion_width=EXTRUSION_WIDTH_MM)
+
     b = dp.buttress
     oml = {'oml_scale_m_per_mm': dp.oml.scale_m_per_mm,
            'oml_length_m': dp.oml.length_m,
@@ -2617,7 +2667,8 @@ def cowl_parameters(kind, U, dp):
     raise ValueError('not a cowl kind: %r' % kind)
 
 
-def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose_plate):
+def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose_plate,
+                is_shell=False):
 
     cgeom = scad_module('cowl_geometry.scad')
 
@@ -2649,9 +2700,16 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
 
-    kind = ('nose_cowl' if is_nose_cowl else
+    kind = ('nose_cowl_shell' if is_shell else
+            'nose_cowl' if is_nose_cowl else
             'nose_nose' if is_nose_nose else
             'nose_plate' if is_nose_plate else None)
+    if is_shell and _backend_for(kind) != 'freecad':
+        # Reaching here under OpenSCAD is a caller's mistake rather than a fallback: the
+        # solid representation has no OpenSCAD generator, and the sweep is supposed not to
+        # enumerate it at all outside the FreeCAD backend. Say so rather than render a blank
+        # under a name that claims a wall.
+        raise ValueError('nose_cowl_shell has no OpenSCAD path; it is a FreeCAD-only kind')
     if kind is not None and _backend_for(kind) == 'freecad':
         freecad_render(kind, cowl_parameters(kind, U, dp), output_dir, filename,
                        _cowl_variant_note(dp))
@@ -2706,7 +2764,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
 
-def tail_render(U, dp, output_dir, filename):
+def tail_render(U, dp, output_dir, filename, is_shell=False):
 
     cgeom = scad_module('cowl_geometry.scad')
 
@@ -2748,6 +2806,13 @@ def tail_render(U, dp, output_dir, filename):
     oml_length_m = dp.oml.length_m
     oml_offset_x_m = dp.oml.offset_x_m
     oml_reversed = dp.oml.reversed
+
+    if is_shell:
+        if _backend_for('tail_shell') != 'freecad':
+            raise ValueError('tail_shell has no OpenSCAD path; it is a FreeCAD-only kind')
+        freecad_render('tail_shell', cowl_parameters('tail_shell', U, dp), output_dir,
+                       filename, _cowl_variant_note(dp))
+        return
 
     if _backend_for('tail') == 'freecad':
         freecad_render('tail', cowl_parameters('tail', U, dp), output_dir, filename,

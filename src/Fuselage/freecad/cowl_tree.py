@@ -203,6 +203,77 @@ class _ShapeBoolean(object):
         return None
 
 
+class _CowlShell(object):
+    """IP-FC-17: the notched blank with its interior cavity removed.
+
+    A document node rather than a shape computed once and stored, for the reason
+    `_ScaledSurface` is one: a cowl document whose wall did not follow `U` would be a document
+    that lies about being parametric, and the failure mode is a full-size body carrying a wall
+    built at another scale. `cowl_interior` does the geometry; this owns the links and the two
+    sheet-bound numbers it needs.
+
+    **`Inset` is `cowl_n_perimeters * extrusion_width` and does not scale with `U`.** The wall
+    is what a nozzle lays down, so it is 0.6 mm on a 50 mm cowl and 0.6 mm on a 400 mm one --
+    the one dimension on this part that is absolute. Binding it to an expression over two sheet
+    rows rather than storing 0.6 keeps that visible in the document.
+    """
+
+    def __init__(self, obj):
+        obj.addProperty('App::PropertyLink', 'Base', 'Shell',
+                        'The notched blank -- the print representation, unchanged')
+        obj.addProperty('App::PropertyLink', 'Body', 'Shell',
+                        'The same blank before any notch reached it')
+        obj.addProperty('App::PropertyLinkList', 'Notches', 'Shell',
+                        'The cutting tools, in the symmetry cell they were built in')
+        obj.addProperty('App::PropertyStringList', 'Mirrors', 'Shell',
+                        'The mirror normals that take that cell out to the whole part')
+        obj.addProperty('App::PropertyFloat', 'Inset', 'Shell',
+                        'The horizontal inset: cowl_n_perimeters * extrusion_width, in mm')
+        obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
+                        'overhang_angle_from_bed, which P1 is asserted against')
+        obj.Proxy = self
+
+    def execute(self, obj):
+        import cowl_interior
+        if obj.Base is None or obj.Body is None or not obj.Notches or not obj.Inset:
+            return
+        shapes = [n.Shape for n in obj.Notches]
+        for text in obj.Mirrors:
+            normal = App.Vector(*[float(v) for v in text.split(',')])
+            normal.normalize()
+            shapes = shapes + [s.mirror(App.Vector(0, 0, 0), normal) for s in shapes]
+        obj.Shape = cowl_interior.shell_solid(
+            obj.Base.Shape, obj.Body.Shape, Part.makeCompound(shapes),
+            obj.Inset, obj.Overhang)
+
+    def dumps(self):
+        return None
+
+    def loads(self, state):
+        return None
+
+
+def _shell(doc, name, tip, body, notches, mirrors):
+    """One `_CowlShell`, wired to the tree the print representation already built.
+
+    **The tools are handed over as a compound, not as a fused solid.** `cowl_interior` only
+    sections them and reads their vertices, and neither wants a union: overlapping wires at a
+    station are what the dilation fuses anyway, per IP-FC-52. Recovering the same set as
+    `body - notched` instead was measured at 47 s a part, and leaves a 202-face solid that is
+    slower to section than the eleven slabs are.
+    """
+    node = C._owned(doc, 'Part::FeaturePython', name)
+    if getattr(node, 'Proxy', None) is None:
+        _CowlShell(node)
+    node.Base = tip
+    node.Body = body
+    node.Notches = list(notches)
+    node.Mirrors = ['%g,%g,%g' % m for m in mirrors]
+    node.setExpression('Inset', '%(p)scowl_n_perimeters * %(p)sextrusion_width' % {'p': P})
+    node.setExpression('Overhang', '%soverhang_angle_from_bed' % P)
+    return node
+
+
 def _shape_bool(doc, name, operation, base, tools):
     """One `_ShapeBoolean` node, created and wired the way `C._cut` wires a `Part::Cut`."""
     node = C._owned(doc, 'Part::FeaturePython', name)
@@ -501,6 +572,22 @@ def _common(doc, name, base, tool):
     return _shape_bool(doc, name, 'common', base, [tool])
 
 
+#: What the shelled kinds need out of a built cowl and cannot recover from the tip alone: the
+#: un-notched body, the cutting tools in the cell they were built in, and the mirrors that take
+#: that cell out to the whole part. Recorded by the builders rather than looked up by node name
+#: afterwards, because a name is a coincidence and this is the actual wiring -- a lookup that
+#: silently found nothing would shell a cowl with no notches in it, which is a plausible solid
+#: and the wrong part.
+_PIECES = {}
+
+
+def pieces(doc):
+    """`(body, tools, mirrors)` for the cowl just built into `doc`."""
+    if doc.Name not in _PIECES:
+        raise KeyError('no cowl has been built into %r' % doc.Name)
+    return _PIECES[doc.Name]
+
+
 def nose_cowl(doc):
     """One octant, one buttress cut, taken out to the whole part by three mirrors.
 
@@ -518,6 +605,8 @@ def nose_cowl(doc):
 
     # `mirror_x(mirror_y(mirror_xy(...)))`, and the order matters: the diagonal runs first, so
     # it acts on the octant alone rather than on an already-doubled quadrant.
+    _PIECES[doc.Name] = (lower, [tool], [(1, -1, 0), (0, -1, 0), (-1, 0, 0)])
+
     quad = _mirror_union(doc, 'Diag', cut, (1, -1, 0))
     half = _mirror_union(doc, 'HalfY', quad, (0, -1, 0))
     return _mirror_union(doc, 'NoseCowl', half, (-1, 0, 0))
@@ -588,8 +677,27 @@ def tail_cowl(doc):
     # cuts and not a multi-argument one.
     safes = [_shape_bool(doc, t.Name.replace('Slab', 'Safe'), 'cut', t, [protected])
              for t in tools]
+    # **The safes, not the raw slabs.** The core is a region the cuts may not enter, so the
+    # material actually removed is the tool minus the core; handing the shell the slabs would
+    # dilate a notch the part does not have, right where the bulkhead interface is.
+    _PIECES[doc.Name] = (lower, safes, [(0, -1, 0)])
+
     cut = _shape_bool(doc, 'Cut', 'cut', half, safes)
     return _mirror_union(doc, 'TailCowl', cut, (0, -1, 0))
+
+
+def nose_cowl_shell(doc):
+    """IP-FC-17: the nose cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
+    tip = nose_cowl(doc)
+    body, tools, mirrors = pieces(doc)
+    return _shell(doc, 'NoseCowlShell', tip, body, tools, mirrors)
+
+
+def tail_shell(doc):
+    """IP-FC-17: the tail cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
+    tip = tail_cowl(doc)
+    body, tools, mirrors = pieces(doc)
+    return _shell(doc, 'TailShell', tip, body, tools, mirrors)
 
 
 # --------------------------------------------------------------------------------
@@ -647,8 +755,24 @@ def _as_cells(rows):
             for alias, value in rows]
 
 
+# The shelled kinds are the print kinds plus the two rows the wall is made of, and nothing
+# else -- the shape is the same shape. **They are separate sheets rather than two more rows on
+# the existing ones** because a row a part's geometry does not read is a row `check_unseeded`
+# is right to complain about, and because adding them to `PARAMS_NOSE_COWL` would change the
+# definition file of every already-verified `nose_cowl` in the sweep and re-render all of them
+# to produce byte-different files describing identical parts.
+#
+# `extrusion_width` and `cowl_n_perimeters` are **absolute**, unlike every other length on
+# these sheets, which are fractions of `unit_width`. A nozzle does not scale with the airframe.
+_WALL_ROWS = [('cowl_n_perimeters', 1.0), ('extrusion_width', 0.6)]
+
+PARAMS_NOSE_COWL_SHELL = PARAMS_NOSE_COWL + _WALL_ROWS
+PARAMS_TAIL_SHELL = PARAMS_TAIL + _WALL_ROWS
+
 PARAMS_NOSE_COWL = _as_cells(PARAMS_NOSE_COWL)
 PARAMS_TAIL = _as_cells(PARAMS_TAIL)
+PARAMS_NOSE_COWL_SHELL = _as_cells(PARAMS_NOSE_COWL_SHELL)
+PARAMS_TAIL_SHELL = _as_cells(PARAMS_TAIL_SHELL)
 
 
 def emit(doc, seed, params, builder):
