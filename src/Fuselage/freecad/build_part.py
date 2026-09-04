@@ -88,7 +88,8 @@ ANGULAR_DEFLECTION = 0.5
 # **This is not the acceptance measure.** That is `oml_blank.VOLUME_DEFLECTION`, which is
 # 0.002 and is chosen by a different criterion entirely -- see OQ-DES-CW12.
 COWL_LINEAR_DEFLECTION = 0.02
-COWL_KINDS = ('nose_cowl', 'nose_nose', 'nose_plate', 'tail')
+COWL_KINDS = ('nose_cowl', 'nose_nose', 'nose_plate', 'tail',
+              'nose_cowl_shell', 'tail_shell')
 
 # Do NOT reach for `Mesh.Volume` to check any of this. It accumulates in single precision and
 # gets *worse* as the mesh gets finer: on the 173 408-facet mesh above it reports
