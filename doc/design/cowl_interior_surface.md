@@ -88,11 +88,20 @@ This is P1's sibling and a different object: P1 says the *body* is nowhere shall
 `overhang_angle_from_bed`, because a horizontal surface leaves no wall; P4 says no *notch* is
 horizontal, because a horizontal notch leaves no rib.
 
-**It is not asserted today, and the one place that could see it looks away.**
-`check_cowl_interior.in_plane_width` returns `None` when the cut's normal is vertical, and
-`rib_gap` responds with `continue` — so a horizontal notch would be dropped from the rib check
-without comment and the build would report `OK`. That is the failure mode P1's own paragraph
-warns about, so it is filed as IP-FC-118 rather than left as a remark.
+**Asserted 2026-09-04, in the build and not only in the check** (IP-FC-118).
+`cowl_interior.dilated_notches` sees every cutting tool, so it is where P4 lives: a tool whose
+own plane is horizontal is refused, and so is one with no planar face at all, which is not a
+slab and whose thickness has no direction. Every build reports the shallowest cut plane it saw
+— 90° on the nose, 30° on the tail — because the assertion deliberately separates *horizontal*
+from *not horizontal* and says nothing about *shallow*: no minimum angle is stated anywhere in
+the design, and choosing one in a constant would be inventing a design decision. If a floor is
+ever wanted it is an open question, not a number in that file.
+
+It had been true and unchecked, which is what P1's own paragraph warns about. Worse, the one
+place that could have seen it looked away: `check_cowl_interior.in_plane_width` returned
+`None` for a horizontal cut and `rib_gap` answered with `continue`, so the notch dropped out of
+the rib check without comment and the part reported `OK`. Both now raise, and P4 joins P1 and
+P2 in the block of preconditions the acceptance test requires to fire.
 
 ---
 
