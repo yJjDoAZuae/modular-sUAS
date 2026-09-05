@@ -107,13 +107,25 @@ def in_plane_width(tool, t_cut):
     """
     planar = [f for f in tool.Faces if isinstance(f.Surface, Part.Plane)]
     if not planar:
-        return None
+        raise ci.PreconditionFailed(
+            'a cutting tool spanning z %.4f..%.4f has no planar face, so it is not a slab and '
+            'its thickness has no direction.'
+            % (tool.BoundBox.ZMin, tool.BoundBox.ZMax))
     face = max(planar, key=lambda f: f.Area)
     n = face.Surface.Axis
     n.normalize()
     flat = math.hypot(n.x, n.y)
     if flat < 1.0e-9:
-        return None                                    # a horizontal cut has no in-plane width
+        # **P4, and it raises rather than returning None.** A horizontal cut has no in-plane
+        # width, so there is no rib to check -- but returning `None` here and letting the
+        # caller `continue` is how a design-domain violation used to leave no trace at all: the
+        # notch dropped out of the rib check and the part reported OK. The build now refuses
+        # such a tool in `cowl_interior.dilated_notches`, so reaching this line means the
+        # assertion there has been weakened or bypassed, which is worth saying loudly.
+        raise ci.PreconditionFailed(
+            'P4: a cutting tool spanning z %.4f..%.4f lies in the layer plane. It leaves no '
+            'rib, and the build should have refused it before this check ran.'
+            % (tool.BoundBox.ZMin, tool.BoundBox.ZMax))
     return t_cut / flat
 
 
@@ -146,8 +158,6 @@ def rib_gap(body, notches, z, t, t_cut):
     widths = []
     for tool in notches.Solids:
         want = in_plane_width(tool, t_cut)
-        if want is None:
-            continue
         for w in ci._slice_wires(tool, z):
             if not w.isClosed():
                 continue
@@ -260,6 +270,13 @@ def main():
         bad += 1
     except ci.PreconditionFailed:
         print('  P2 fires on an erosion that annihilates the section')
+    try:
+        flat_tool = Part.makeBox(10.0, 10.0, t_cut, App.Vector(-5.0, -5.0, 0.5 * (lo + hi)))
+        ci.dilated_notches(Part.makeCompound([flat_tool]), t)
+        print('  P4 did NOT fire on a notch lying in the layer plane  <-- FAIL')
+        bad += 1
+    except ci.PreconditionFailed:
+        print('  P4 fires on a notch lying in the layer plane')
 
     print('%s: %s' % (kind, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
     sys.stdout.flush()

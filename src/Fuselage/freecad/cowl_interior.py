@@ -134,6 +134,22 @@ CHECK_MAX = 6000
 #: parts in ten thousand of volume for twice the time.
 RIB_FACETS = 48
 
+#: Below this, a cutting slab's plane is horizontal and P4 is violated.
+#:
+#: **A numerical guard, not a design threshold.** The value is the sine of the angle between
+#: the cut plane and the layer plane, so 1 is a vertical cut and 0 is a horizontal one; this
+#: only separates "horizontal" from "not horizontal" through floating-point noise, and it is
+#: deliberately not a limit on how shallow a cut may be. P4 says no notch *lies in* the layer
+#: plane, because a rib forms only where the perimeter can walk into the notch and back out
+#: within a layer -- a horizontal notch offers no such path and comes out malformed under
+#: thin-wall perimeter slicing. It does not say a 5-degree cut is acceptable and a 4-degree one
+#: is not. Nothing in the design is shallower than the tail's 30-degree diagonal, no minimum
+#: angle is stated anywhere, and picking one here would be inventing a design decision in a
+#: constant. If a floor is ever wanted it is an open question, not a number in this file.
+#: Meanwhile `dilated_notches` reports the shallowest cut it saw, so a shallow one is visible
+#: rather than silent.
+FLAT_TOL = 1.0e-9
+
 #: How much dilated rib may remain inside the finished cavity, in cubic millimetres.
 #:
 #: **Zero is the right answer and the measured one.** `cavity` subtracts the dilated ribs from
@@ -476,6 +492,21 @@ def eroded_body(wire, t, z, tol=REFIT_TOL):
         'IP-FC-54 failure.' % (wire.Length, z, t, why))
 
 
+def slab_normal(tool):
+    """The unit normal of a cutting slab's own plane, or `None` if it has no planar face.
+
+    A slab's two largest faces are the pair that give it its thickness, so their normal is the
+    direction the slab is thin in, and `hypot(n.x, n.y)` is the sine of the angle between the
+    slab's plane and the layer plane -- 1 for a vertical cut, 0 for a horizontal one.
+    """
+    planar = [f for f in tool.Faces if isinstance(f.Surface, Part.Plane)]
+    if not planar:
+        return None
+    n = max(planar, key=lambda f: f.Area).Surface.Axis
+    n.normalize()
+    return n
+
+
 def dilated_notches(notches, t, report=None):
     """`dilate(B, t)` as a list of solids, built once for the part: section 4.2's right-hand
     term.
@@ -535,11 +566,44 @@ def dilated_notches(notches, t, report=None):
     nose's slab correctly (424.570 -> 5702.021 mm3) and returns a null shape on the first tail
     tool.
 
-    Returned as a list rather than fused, because the caller cuts with it and `cut` takes a
-    list. Fusing the tail's 22 dilated tools into one solid first cost 260 s and bought nothing.
+    Returned as a list, which `cavity` then fuses into a single tool before cutting with it.
+    An earlier version of this note said fusing "bought nothing" because it cost 260 s and the
+    cut looked the same; that was wrong, and `cavity`'s own comment records what it buys --
+    cutting with twenty-two separate tools succeeds on some and fails on others, silently, and
+    the wall comes out in pieces because the ribs are what bridge the buttress slots.
     """
     grown = []
+    angles = []
     for tool in notches.Solids:
+        # **P4: no notch lies in the layer plane.** A rib forms because the slicer's single
+        # perimeter walks into the notch and back out again *within* a layer; a notch lying in
+        # the layer plane offers no such path, so the feature would have to be formed between
+        # layers instead, which thin-wall perimeter slicing cannot do, and it comes out
+        # malformed. Horizontal ribs are therefore not used, which is also what keeps the rib
+        # thickness `2*n_p*w + t_cut / sin(theta)` away from its singularity (OQ-DES-CW19).
+        #
+        # Asserted here rather than left true: this is the one place that sees every cutting
+        # tool. It used to be visible only to `check_cowl_interior.in_plane_width`, which
+        # returned `None` for a horizontal cut and whose caller answered with `continue` -- so
+        # a design-domain violation was dropped from the rib check without comment and the
+        # build reported OK.
+        normal = slab_normal(tool)
+        if normal is None:
+            raise PreconditionFailed(
+                'a cutting tool spanning z %.4f..%.4f has %d faces and not one of them is '
+                'planar, so it is not a slab and its thickness has no direction. P4 cannot be '
+                'evaluated on it and neither can the rib it is supposed to leave.'
+                % (tool.BoundBox.ZMin, tool.BoundBox.ZMax, len(tool.Faces)))
+        flat = math.hypot(normal.x, normal.y)
+        if flat < FLAT_TOL:
+            raise PreconditionFailed(
+                'P4: a cutting tool spanning z %.4f..%.4f lies in the layer plane -- its own '
+                'plane is %.3e from horizontal. A rib forms where the perimeter walks into the '
+                'notch and back out within a layer, and a horizontal notch offers no such '
+                'path, so this one would come out malformed rather than as a rib. Horizontal '
+                'ribs are outside the design.' % (tool.BoundBox.ZMin, tool.BoundBox.ZMax, flat))
+        angles.append(math.degrees(math.asin(min(1.0, flat))))
+
         copies = [tool.translated(App.Vector(t * math.cos(2.0 * math.pi * i / RIB_FACETS),
                                              t * math.sin(2.0 * math.pi * i / RIB_FACETS),
                                              0.0))
@@ -555,9 +619,14 @@ def dilated_notches(notches, t, report=None):
 
     if report is not None:
         report.update(dilated_tools=len(grown),
-                      dilated_volume=sum(g.Volume for g in grown))
-    note('ribs: %d tools dilated by %.4f mm in %d directions'
-         % (len(grown), t, RIB_FACETS))
+                      dilated_volume=sum(g.Volume for g in grown),
+                      shallowest_cut_deg=min(angles) if angles else None)
+    # The shallowest angle is reported, not bounded -- see `FLAT_TOL`. A cut at theta leaves a
+    # rib of `2*n_p*w + t_cut / sin(theta)`, so this number is the one to look at if a rib ever
+    # measures wider than expected.
+    note('ribs: %d tools dilated by %.4f mm in %d directions; shallowest cut plane %.2f deg '
+         'from the layer plane' % (len(grown), t, RIB_FACETS,
+                                   min(angles) if angles else float('nan')))
     return grown
 
 
@@ -1155,6 +1224,7 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # number.
     pieces = []
     stations = 0
+    chosen = []
     worst_wall = 0.0
     started = time.time()
     for index, (p_lo, p_hi) in enumerate(patches):
@@ -1172,6 +1242,11 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         rows, surf, worst = _refine(fit_at, outer_at, zs, t, tau, budget, n_check, anchor)
         stations += len(rows)
         worst_wall = max(worst_wall, worst)
+        # **The positions, not only the count.** Two builds that both settle on 16 stations
+        # have not necessarily settled on the same 16, and the count is what the progress line
+        # reports -- so a refinement that lands somewhere else is invisible in the log while
+        # changing the surface, the cavity and the wall.
+        chosen.extend(z for z, _pts in rows)
 
         # Section 4.5: both cowls are open -- the tail at both ends, the nose body where it is
         # cut to the closure parts -- so a patch is closed by the two contours it already has
@@ -1186,6 +1261,11 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
              'worst wall %.4f  %5.1f s  [%.0f s total]'
              % (index + 1, len(patches), p_lo, p_hi, p_hi - p_lo, len(zs), len(rows),
                 worst, time.time() - at, time.time() - started))
+        # **The positions, in the log and not only in the report.** Two builds that both settle
+        # on the same number of stations have not necessarily settled on the same stations, and
+        # a build that lands elsewhere produces a different surface, different end caps and a
+        # different wall while the progress line above reads identically.
+        note('    at %s' % ' '.join('%.4f' % z for z, _pts in rows))
 
         # **The two open ends are extended past the part, not stopped at it.** A station may
         # not sit exactly on a planar end -- sectioning there returns the end face's boundary
@@ -1205,8 +1285,11 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     for piece in pieces[1:]:
         smooth = smooth.fuse(piece)
     smooth = smooth.removeSplitter()
-    note('smooth interior: %d solids, valid=%s, %.0f s to fuse'
-         % (len(smooth.Solids), smooth.isValid(), time.time() - at))
+    if report is not None:
+        report.update(stations=chosen, smooth_volume=smooth.Volume,
+                      smooth_faces=len(smooth.Faces))
+    note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
+         % (len(smooth.Solids), smooth.isValid(), smooth.Volume, time.time() - at))
 
     # Section 4.2's right-hand term, applied here rather than fitted into the surface above.
     # **Fused into one tool, and the result verified against it.** Cutting with a list of
@@ -1234,10 +1317,12 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             'downstream catches this: the cavity is a valid closed solid either way.'
             % (left.Volume, len(left.Solids)))
     if report is not None:
-        report.update(rib_residue=left.Volume)
+        report.update(rib_residue=left.Volume, cavity_volume=solid.Volume,
+                      cavity_faces=len(solid.Faces))
     note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
-    note('cavity closed: %d solids, valid=%s, worst wall error %.4f mm, %.0f s in all'
-         % (len(solid.Solids), solid.isValid(), worst_wall, time.time() - started))
+    note('cavity closed: %d solids, valid=%s, %.4f mm3, worst wall error %.4f mm, '
+         '%.0f s in all' % (len(solid.Solids), solid.isValid(), solid.Volume, worst_wall,
+                            time.time() - started))
     if report is not None:
         report.update(patches=len(patches), stations=stations, features=len(features),
                       solids=len(solid.Solids), valid=solid.isValid(),
