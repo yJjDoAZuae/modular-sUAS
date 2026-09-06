@@ -132,6 +132,18 @@ CHECK_MAX = 6000
 #:
 #: 48 is the first count that reproduces the exact offset's gap, and going further buys three
 #: parts in ten thousand of volume for twice the time.
+#: **48 is a floor, not a tuning knob.** The copies sit on a circle of radius `t`, so adjacent
+#: ones are `2*t*sin(pi/N)` apart, and their union is a solid only while that is smaller than
+#: the slab's in-plane thickness. The thinnest cut here is 0.1 mm, which needs
+#: `N > pi / asin(0.1 / 1.2)` = 37.6, so **38 facets minimum and 48 leaves 26 % headroom**.
+#: Below the floor the union is a comb and the wall comes out with material missing -- measured
+#: at N = 24, where the tail lost 1332 mm3 and two stations reported 0.1035 mm of wall. The
+#: check in `dilated_notches` derives this per tool rather than trusting the number here.
+#:
+#: The count is also what makes the polygon approximate a disc: inscribed, it under-dilates by
+#: `t * (1 - cos(pi/N))` at the facet midpoints, which is 0.0013 mm at 48 against a 0.05 mm wall
+#: tolerance. That error is negligible at any N the floor above permits, so it is the floor and
+#: not the accuracy that decides the count.
 RIB_FACETS = 48
 
 #: Below this, a cutting slab's plane is horizontal and P4 is violated.
@@ -603,6 +615,33 @@ def dilated_notches(notches, t, report=None):
                 'path, so this one would come out malformed rather than as a rib. Horizontal '
                 'ribs are outside the design.' % (tool.BoundBox.ZMin, tool.BoundBox.ZMax, flat))
         angles.append(math.degrees(math.asin(min(1.0, flat))))
+
+        # **The facet count has a floor set by this tool, and below it the dilation is a comb.**
+        # The copies sit on a circle of radius `t`, so adjacent ones are `2*t*sin(pi/N)` apart.
+        # Their union is a solid only while that spacing is smaller than the slab's own in-plane
+        # thickness; once it is larger the copies stop touching and the "dilated" tool has gaps
+        # in it. Nothing downstream notices -- the tool is still a valid solid, the rib gaps it
+        # leaves still measure correctly, and the wall simply comes out with material missing
+        # where the gaps fell.
+        #
+        # Measured 2026-09-05 on the tail at `U` = 1 with `RIB_FACETS` = 24: spacing 0.157 mm
+        # against a 0.1 mm axial cut, wall 22348.60 mm3 instead of ~23680, and two stations
+        # reporting 0.1035 mm of wall where 0.6 is wanted. The 0.2 mm diagonal cuts passed --
+        # they need only 19 facets -- which is why the failure appeared at some stations and not
+        # others. At 48 the spacing is 0.0785 mm and every tool overlaps.
+        span = [v.Point.x * normal.x + v.Point.y * normal.y + v.Point.z * normal.z
+                for v in tool.Vertexes]
+        in_plane = (max(span) - min(span)) / flat
+        spacing = 2.0 * t * math.sin(math.pi / RIB_FACETS)
+        if spacing >= in_plane:
+            raise PreconditionFailed(
+                'RIB_FACETS = %d puts adjacent copies %.4f mm apart while this tool is only '
+                '%.4f mm thick in the layer plane, so the copies do not overlap and their '
+                'union has gaps in it. The tool spans z %.4f..%.4f. It needs at least %d '
+                'facets: N > pi / asin(w / 2t) with w = %.4f and t = %.4f.'
+                % (RIB_FACETS, spacing, in_plane, tool.BoundBox.ZMin, tool.BoundBox.ZMax,
+                   int(math.ceil(math.pi / math.asin(min(1.0, in_plane / (2.0 * t))))) + 1,
+                   in_plane, t))
 
         copies = [tool.translated(App.Vector(t * math.cos(2.0 * math.pi * i / RIB_FACETS),
                                              t * math.sin(2.0 * math.pi * i / RIB_FACETS),
@@ -1286,8 +1325,14 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         smooth = smooth.fuse(piece)
     smooth = smooth.removeSplitter()
     if report is not None:
+        # **The shape as well as its measure, and deliberately.** IP-FC-115 compares two ways of
+        # assembling the same set -- cut the ribs out of this and cut the result out of the
+        # blank, or cut this out of the blank and fuse back the part the ribs occupy -- and the
+        # comparison only means anything if both are assembled from the *identical* operands.
+        # Handing the surface out here is what makes that one fit instead of two. Nothing in
+        # production passes a report at all: `cowl_tree` calls `shell_solid` without one.
         report.update(stations=chosen, smooth_volume=smooth.Volume,
-                      smooth_faces=len(smooth.Faces))
+                      smooth_faces=len(smooth.Faces), smooth_shape=smooth)
     note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
          % (len(smooth.Solids), smooth.isValid(), smooth.Volume, time.time() - at))
 
@@ -1318,7 +1363,7 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             % (left.Volume, len(left.Solids)))
     if report is not None:
         report.update(rib_residue=left.Volume, cavity_volume=solid.Volume,
-                      cavity_faces=len(solid.Faces))
+                      cavity_faces=len(solid.Faces), rib_tool=tool)
     note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
     note('cavity closed: %d solids, valid=%s, %.4f mm3, worst wall error %.4f mm, '
          '%.0f s in all' % (len(solid.Solids), solid.isValid(), solid.Volume, worst_wall,
@@ -1342,6 +1387,21 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 #: The floor is what the kernel's own reproducibility costs: repeated cuts of one fixed pair of
 #: operands agreed to 0.25 mm3 in 581652 mm3, four parts in ten million, so 1e-4 leaves three
 #: orders of headroom over that and still catches a loss of a tenth of a percent.
+#:
+#: **What this check cannot resolve, measured 2026-09-05 under IP-FC-119.** Both sides of the
+#: identity come from `Shape.Volume`, which is wrong by 0.16 to 0.24 % on these B-spline solids,
+#: and *its error does not reliably cancel across a partition*. Splitting this wall with a plane
+#: and adding the pieces back up leaves a slip of **1.604e-03** by `Shape.Volume` where the same
+#: partition measured by tessellation slips only 4.4e-05 -- so 38 mm3 of that is the instrument,
+#: not the boolean.
+#:
+#: The slips actually seen on the cavity cut are ~1e-6, three orders inside this tolerance, so
+#: nothing is failing. But the resolution here is not 1e-4; it is whatever `Shape.Volume`
+#: happens to do on the two operands, and 1.6e-3 has been measured. **Read this check as a
+#: gross-failure detector** -- it caught a wall that came out at 415 mm3 instead of 9713, which
+#: is 1.6e-2 and unmissable -- and if it ever fires marginally, suspect the measurement before
+#: the boolean. A check with real resolution would take its volumes from
+#: `solid_measure.converged_difference`, at a cost of minutes per build.
 PARTITION_TOL = 1.0e-4
 
 

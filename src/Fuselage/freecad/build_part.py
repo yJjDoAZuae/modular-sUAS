@@ -87,6 +87,35 @@ ANGULAR_DEFLECTION = 0.5
 #
 # **This is not the acceptance measure.** That is `oml_blank.VOLUME_DEFLECTION`, which is
 # 0.002 and is chosen by a different criterion entirely -- see OQ-DES-CW12.
+#
+# **It scales with `U`, decided 2026-09-06.** The figure below is the deflection at `U` = 1 and
+# `export_deflection` multiplies it by the part's own `U`. A fixed 0.02 mm is a *shrinking*
+# fraction of a growing part: at `U` = 4 the same part is four times the size and meshed four
+# times as finely relative to itself, which costs facets nobody asked for and makes every
+# comparison across `U` measure the export setting as much as the geometry. `compare_backends`
+# records exactly that drift -- the tail's volume error falls 2.1e-04 to 1.5e-05 from `U` = 0.5
+# to 4 -- and its own comment already called it worth removing. Scaling here is what makes a
+# nondimensional comparison criterion `U`-invariant rather than merely dimensionless; see
+# OQ-ARCH-20.
+#
+# **What this is not.** It is not scaled to make a comparison tolerance pass -- the export is
+# chosen for printing and preview, and analysis of the B-rep is a separate concern that must
+# never reach back into it. It is scaled because a part four times the size deserves the same
+# fidelity *relative to itself*, which is the same rule OQ-ARCH-12 sets for every other
+# tolerance in this project. At `U` = 1 nothing changes.
+#
+# **Scaled by `U`, not by the shape's bounding box.** `MeshPart` offers `Relative=True`, which
+# divides the deflection by the shape's own bounding box -- and a nose and a tail at one `U`
+# have different bounding boxes, so that would export two parts of the same family at two
+# different absolute deflections. `U` is the family's scale and is carried in the parameter
+# file, so it is the honest hook.
+#
+# **Deliberately not applied to `LINEAR_DEFLECTION` above.** That constant has a floor this
+# argument does not reach: binary STL stores float32, so past about 26k facets the error is the
+# file format rather than the mesher, and 1e-3 was also chosen to land within a facet count of
+# the OpenSCAD reference so IP-FC-13 compares geometry and not mesh density. Scaling it would
+# move both of those. The prismatic parts pass today; extending this to them is a separate
+# question and needs its own measurement.
 COWL_LINEAR_DEFLECTION = 0.02
 COWL_KINDS = ('nose_cowl', 'nose_nose', 'nose_plate', 'tail',
               'nose_cowl_shell', 'tail_shell')
@@ -170,19 +199,42 @@ def build(doc, kind, params_path):
     return tip
 
 
-def write_mesh(shape, out_path, kind=None):
+def export_deflection(kind, seed):
+    """The linear deflection this part is exported at, in millimetres.
+
+    One place for the rule, because it is no longer a constant lookup: a cowl's figure scales
+    with the part's `U` and every other kind's does not. See `COWL_LINEAR_DEFLECTION` above for
+    why, and for why this is not applied to `LINEAR_DEFLECTION`.
+
+    `U` comes from the parameter file, which carries it beside `unit_width` for every swept
+    part. A seed without it -- a hand-written variant, say -- falls back to the `U` = 1 figure
+    rather than guessing a scale, which is the same choice `mesh_stats.u_of_name` makes when a
+    filename carries no `U`.
+    """
+    if kind not in COWL_KINDS:
+        return LINEAR_DEFLECTION
+    u = seed.get('U')
+    return COWL_LINEAR_DEFLECTION * (float(u) if u is not None else 1.0)
+
+
+def write_mesh(shape, out_path, deflection):
     """Mesh a shape at the stated deflection and write it as binary STL.
 
     `Shape.exportStl` is not used: it meshes at whatever deviation the document carries,
     which is a preference rather than a decision, so two machines could produce different
     STLs from the same model. MeshPart takes the deflection as an argument.
+
+    **The deflection arrives already decided.** It used to be chosen in here from the kind,
+    which hid a rule inside a mesher call; `export_deflection` states it instead, and this
+    function does what its name says.
+
+    `Relative=False` is deliberate: `Relative=True` would divide the deflection by the shape's
+    own bounding box, which differs between a nose and a tail at the same `U`.
     """
     import MeshPart
 
     mesh = MeshPart.meshFromShape(Shape=shape,
-                                  LinearDeflection=(COWL_LINEAR_DEFLECTION
-                                                    if kind in COWL_KINDS
-                                                    else LINEAR_DEFLECTION),
+                                  LinearDeflection=deflection,
                                   AngularDeflection=ANGULAR_DEFLECTION,
                                   Relative=False)
     mesh.write(out_path)
@@ -256,7 +308,8 @@ def main():
         sys.stdout.flush()
         return 1
 
-    facets = write_mesh(shape, opt['out'], opt['kind'])
+    deflection = export_deflection(opt['kind'], load_seed(opt['params'], opt['kind']))
+    facets = write_mesh(shape, opt['out'], deflection)
 
     # UC-2 wants the parametric document, not just its mesh -- and it is the *primary* output
     # of this backend, so it is written every time rather than only when asked (IP-FC-14). The
@@ -264,8 +317,10 @@ def main():
     fcstd = fcstd_path(opt)
     doc.saveAs(fcstd)
 
-    print('%s  %.6f mm3  %d facets  -> %s + %s'
-          % (opt['kind'], shape.Volume, facets,
+    # The deflection is printed because it is no longer a constant: a reader comparing two
+    # runs at different `U` needs to see what each was meshed at without inferring it.
+    print('%s  %.6f mm3  %d facets at %.5f mm  -> %s + %s'
+          % (opt['kind'], shape.Volume, facets, deflection,
              os.path.basename(opt['out']), os.path.basename(fcstd)))
 
     return 0
