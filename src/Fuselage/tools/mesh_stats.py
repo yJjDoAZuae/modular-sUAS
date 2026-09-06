@@ -101,6 +101,52 @@ def _load_ascii(data: bytes, path: Path) -> np.ndarray:
     return np.asarray(verts, dtype=np.float64).reshape(-1, 3, 3)
 
 
+#: Decimal places the canonical hash rounds coordinates to before hashing.
+#:
+#: Binary STL stores coordinates as float32, about seven significant digits, so six places is
+#: below the format's own resolution on a part of this size and two runs of one mesher on one
+#: input produce identical values to round. It exists so the hash is not hostage to a last-bit
+#: difference that means nothing.
+HASH_PLACES = 6
+
+
+def canonical_hash(tris, places: int = HASH_PLACES) -> str:
+    """A hash of the triangle set that does not depend on the order it is written in.
+
+    **This is the only comparison here with no false negatives**, which is why it exists. Volume
+    and bounding box can both agree while the shape has changed -- move material from one side of
+    a part to the other and the volume difference is exactly zero, the box is untouched, and the
+    solids are different. That is the loophole OQ-ARCH-19 names, and it sits in the baseline
+    check today. Equal hashes, by contrast, mean the two meshes are the same set of triangles:
+    the same geometry, exactly.
+
+    **Its errors run one way only.** A last-bit difference in a coordinate changes the hash on
+    geometry that is fine, so it can say "different" about parts that agree -- which costs a
+    closer look and never a missed change. It can never say "same" about parts that differ.
+
+    **Order-invariant, and winding-preserving.** Each triangle is rotated so its lowest vertex
+    comes first rather than sorted, because sorting three vertices flips the winding of half of
+    them and winding is what distinguishes a solid from its own inside-out twin. The triangles
+    are then sorted. OpenSCAD emits the same mesh in a different facet order on every run, so
+    order-invariance is what makes this usable at all.
+    """
+    import hashlib
+
+    canonical = []
+    for tri in tris:
+        pts = [(round(float(v[0]), places), round(float(v[1]), places),
+                round(float(v[2]), places)) for v in tri]
+        low = min(range(3), key=lambda i: pts[i])
+        canonical.append((pts[low], pts[(low + 1) % 3], pts[(low + 2) % 3]))
+    canonical.sort()
+    digest = hashlib.sha256()
+    for tri in canonical:
+        for point in tri:
+            digest.update(("%.*f,%.*f,%.*f;" % (places, point[0], places, point[1],
+                                                places, point[2])).encode("ascii"))
+    return digest.hexdigest()
+
+
 def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
     """Triangle count, enclosed volume, surface area, and bounding box of an STL.
 
@@ -121,7 +167,8 @@ def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
     """
     tris = load_triangles(path)
     if len(tris) == 0:
-        return {"triangles": 0, "volume": 0.0, "area": 0.0, "bbox": None}
+        return {"triangles": 0, "volume": 0.0, "area": 0.0, "bbox": None,
+                "hash": canonical_hash(tris)}
 
     a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
     volume = float(np.abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum()) / 6.0)
@@ -136,6 +183,7 @@ def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
         "volume": volume,
         "area": area,
         "bbox": [float(v) for v in lo] + [float(v) for v in hi],
+        "hash": canonical_hash(tris),
     }
 
 
@@ -213,6 +261,18 @@ def same_geometry(a: dict | None, b: dict | None,
     """
     if a is None or b is None:
         return False
+
+    # **The hash first, because it is the only test here that cannot be wrong in the dangerous
+    # direction.** Equal hashes mean the same set of triangles, so the parts are identical and
+    # nothing below can overturn it. Unequal hashes mean the meshes genuinely differ, and the
+    # tolerances below then judge whether the difference matters -- which is the question they
+    # are good at and this test is not. Decided under OQ-ARCH-19: screen on something with no
+    # false negatives, adjudicate with something that measures.
+    #
+    # Measurements recorded before the hash existed do not carry one, and fall through.
+    if a.get("hash") and a.get("hash") == b.get("hash"):
+        return True
+
     if a["bbox"] is None or b["bbox"] is None:
         return a["bbox"] == b["bbox"] and a["volume"] == b["volume"]
     if abs(a["volume"] - b["volume"]) > tol * max(abs(a["volume"]), 1.0):

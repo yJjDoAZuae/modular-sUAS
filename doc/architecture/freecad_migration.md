@@ -703,7 +703,6 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 | ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 | ARCH-18 | ~~withdrawn~~ 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
-| ARCH-19 | open, measured 2026-09-06 | How much may two builds of one part differ? **The alarming figures that prompted this are withdrawn** — `Shape.Volume` was what differed, not the solids (IP-FC-119). The symmetric difference, the number this question said would decide it, is now measured: **1.6 mm³, 6.8e-5 of the part, a 19 nm mean surface offset** — 260× the difference of volumes, and still far below anything downstream can see. Only the thresholds remain, and they can be tight |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2721,347 +2720,84 @@ on a premise nobody verified — is worth being able to point at twice.
 
 *Implementation: IP-FC-21, unblocked.*
 
-### OQ-ARCH-19 — What reproducibility is required of a generated solid?
+### ~~OQ-ARCH-19 — What reproducibility is required of a generated solid?~~ — DECIDED 2026-09-06
 
-> **Premise corrected 2026-09-05, and most of the numbers below are withdrawn.** This question
-> was filed on a measured run-to-run spread of up to 5.8e-3 in the shelled tail's volume. That
-> spread is an artifact of **`Shape.Volume`**, not a property of the builds. Measured by
-> tessellating each solid and integrating the divergence theorem over the triangles — a
-> different method with a different failure mode — the difference between two builds collapses
-> as the mesh refines:
->
-> | deflection | mesh volume a | mesh volume b | b − a |
-> | --- | --- | --- | --- |
-> | 0.020 mm | 23726.382955 | 23727.743018 | +1.360063 mm³ |
-> | 0.005 mm | 23735.042624 | 23735.212553 | +0.169929 mm³ |
-> | 0.001 mm | 23737.997001 | 23738.003187 | **+0.006186 mm³** |
->
-> against `Shape.Volume`'s fixed +19.810039 mm³. **A real difference does not shrink by an order
-> of magnitude each time the mesh is refined; a discretisation error does.** At 0.001 mm the two
-> builds agree to 2.6e-7 relative. Every *direct* geometric measurement agrees with that and
-> always did: the outline of the one face that looked different matches to **286 nm** (median
-> 23 nm), the sampled surface deflection has median and p90 of exactly zero with a maximum near
-> 1 µm, and no face exists in one build and not the other. **The two builds are the same solid.**
->
-> Note also that both mesh volumes converge to ≈ 23738.00 while `Shape.Volume` reports 23680.88
-> and 23700.69 — low by 0.24 % and 0.16 %. It is not merely inconsistent between builds; it is
-> wrong on this geometry. `Face.Area` was caught the same way, reading 1.3 % low on one build and
-> 0.85 % high on another for a face whose boundary is identical to 0.0004 mm², and
-> `CenterOfMass` comes from the same integration. **That defect is IP-FC-119**, and it is the
-> real finding this question produced.
->
-> **What still stands, unaffected:**
-> - the metric set and its nondimensionalisation by 100·U, decided 2026-09-04 and recorded below;
-> - the observation that a *sampled* maximum is a lower bound and cannot be made an upper one;
-> - the observation that boolean operations fail outright between two nearly coincident NURBS
->   solids — `a & b` returned 0.000000 mm³ — which now reads as confirmation that the builds
->   really are coincident, and as a hard limit on the symmetric difference as an instrument.
->
-> **What changes:** the question is no longer urgent, and the thresholds it asks for can be set
-> *tight* rather than loose. Nothing is failing to reproduce.
->
-> **And one sub-question is answered, 2026-09-05: the STL export deflection is not part of this.**
-> `COWL_LINEAR_DEFLECTION` = 0.02 is set by what the STL is for — printing and preview — and must
-> not be changed to satisfy a comparison tolerance. Analysis of the B-rep and export of a mesh are
-> separate concerns. The comparison is made on the B-rep; where a volume is needed for it, it is
-> measured by refining a tessellation *for measurement*, which is not an export setting.
+**Two thresholds, and a screen that cannot give a false negative.**
 
-**The question.** A *generated solid* is a part the FreeCAD backend builds by running code over
-parameters. Everything in this project that compares parts assumes that rebuilding one from
-unchanged inputs reproduces it: `mesh_stats.same_geometry` calls two measurements the same
-solid when their volumes agree to `VOLUME_TOL` = 1e-6 *relative* and their bounding boxes to
-`bbox_tol(U)`, and `baseline_manifest.verify` checks a frozen tree against recorded hashes. The
-shelled cowls do not meet that, and cannot be made to by anything in this repository.
+**What the question turned out to be about.** It was filed on a measured 5.8e-3 run-to-run spread
+in a shelled cowl's wall volume, which looked like a kernel that could not reproduce its own
+output. That spread was not real: `Shape.Volume` misreports these B-spline solids by 0.16 to
+0.94 %, and its error moves with the face partition (IP-FC-119, IP-FC-120). The parts reproduce.
+What the question then became, and what it answers, is how to *measure* that they do.
 
-**Measured 2026-09-04, `tail_shell` at `U` = 1.** Eight builds from one source span 23622.55 to
-23759.91 mm³ of wall — 137.4 mm³, **5.8e-3 relative**. Three of those were run as controlled
-repeats, three separate processes with identical code and identical parameters, and gave
-23699.17, 23623.95 and 23680.35 mm³: a spread of 75.2 mm³, **3.2e-3 relative**, which is
-**3200 times** `VOLUME_TOL`.
+**The thresholds.** Both measured, both set about four times above what reproduction actually
+costs:
 
-**The parts themselves pass every check.** Every one of those builds returns one valid solid,
-holds the wall inside 0.05 mm at 12 stations by 240 samples, leaves rib gaps of exactly
-1.3000 mm at the axial notches and 1.4000 mm at the diagonals, and finishes with zero rib
-residue.
+| criterion | threshold | measured between two builds |
+|---|---|---|
+| symmetric difference, `XOR / (A · 100U)` | ≤ **1.0e-6** | 2.45e-7 — 2.0829 mm³ |
+| surface distance, `max gap / (100U)` | ≤ **5.0e-5** | 1.28e-5 — 1.28 µm |
 
-**What the spread is in millimetres is not yet measured, and the arithmetic below is not a
-substitute for measuring it.** 75.2 mm³ spread over roughly 44 000 mm² of cavity wall is about
-**0.0017 mm** — but that is a *mean inferred from a volume difference*, and it carries none of
-the authority of a measurement. A mean cannot see a local excursion: the same 75.2 mm³ is
-consistent with 0.0017 mm everywhere and with 0.5 mm over a small patch. And it is not
-reassuring even as a mean — `surface_tol(1)` is 5.0e-4 mm, so 0.0017 mm is already **3.4 times**
-the threshold this project holds a moved surface to.
+Stated in the same nondimensional form OQ-ARCH-20 decided, so the reproducibility check and the
+cross-backend check are read on one scale. The surface distance is kept as a separate criterion
+because the volume metric is an integral and averages away a local excursion — and here that
+matters, since **5 % of the surface carries 83 % of the difference**.
 
-**Worse, every figure in this question so far is a difference of two totals**, which is what
-`same_geometry` compares and is only a *lower bound* on the symmetric difference. Two solids of
-equal volume can differ everywhere. So "the cavity is stable to 3.2 mm³" does not establish
-that the cavity barely moved, and it is very likely why the wall appears to move twenty-four
-times further than the cavity does: a shape can shift while its volume does not, and
-subtraction cannot see it.
+**What two builds actually differ by.** 2.08 mm³, 8.8e-5 of the part, a **19 nm mean surface
+offset** with a 1.28 µm worst sample; **65.5 % of the surface is bit-identical**. The
+disagreement sits at the **corners of the section**, radius 62–66 mm, spread along the whole
+length rather than at the ends or any one rib — an adaptive fit diverging where curvature is
+highest, while agreeing exactly on the flats. That is noise to be bounded, not a defect with an
+address; had it clustered at a feature the answer would have been to fix it instead.
 
-**It is not the algorithm, and that is established by elimination rather than by argument.**
-Each of these was measured over four trials on 2026-09-04:
+**The symmetric difference is 260× the difference of volumes** — 2.08 mm³ against 0.006186. A
+signed volume difference lets a surface that wanders out and back cancel itself; the symmetric
+difference adds both excursions. Subtraction was understating build-to-build disagreement by two
+orders of magnitude, which is what this question suspected when it called a difference of totals
+a lower bound. The ratio decided nothing and the magnitude decided everything: 260 × a very small
+number is still very small.
 
-| held fixed | result |
-| --- | --- |
-| the body — notched blank, `Lower`, z extent, an eroded section | bit-identical to nine decimals |
-| the per-station pipeline — section, erode, refit, contour, at all 16 stations | bit-identical |
-| `_fit` on fixed rows — the fitted surface's poles | bit-identical |
-| that surface sectioned, and closed as a solid | bit-identical, 594896.076133478 mm³ |
-| the boolean chain on BREP-loaded operands, within one process | identical over four trials |
-| **the stations the refinement chose, across the three repeats** | **byte-identical — the same 16, to four decimals** |
+**Scope: screen on a canonical hash, adjudicate with the criteria above.** The screening pattern
+was adopted **on the condition that the screen has no possible false negative**, and the obvious
+screen fails that condition: volume and bounding box can both agree while the shape has changed —
+move material from one side of a part to the other and the volume difference is exactly zero.
+That loophole is live in `baseline_manifest.verify` today.
 
-So every input to the surface is provably the same across the runs that disagree. The smooth
-interior still comes out 1.4 mm³ apart, the cavity 3.2 mm³ apart, and the wall 75.2 mm³ apart.
-What is left is OCC's own booleans on these operands across processes: the three-piece fuse that
-closes the interior, and the cuts after it.
+`mesh_stats.canonical_hash` meets the condition. It rotates each triangle so its lowest vertex
+comes first — preserving winding, where sorting the three vertices would flip half of them — then
+sorts the triangles and hashes. **Equal hashes mean the same set of triangles, so the same
+geometry, exactly.** Its errors run one way only: a last-bit coordinate difference makes it say
+"different" about parts that agree, which costs a closer look, and it can never say "same" about
+parts that differ.
 
-**One thing is measured and unexplained**, and it should not be papered over: the wall moves
-about twenty-four times further than the cavity's own volume does. A cavity whose volume is
-stable to 3 mm³ can still remove a different amount of blank if its shape shifts while its
-volume does not — and the cavity runs 1 mm past each open end, where a shift costs nothing — but
-that is a hypothesis. It has not been tested by differencing two cavities geometrically, which
-is the measurement that would settle it.
+**It fires on real data, which was not obvious.** The same bulkhead rendered into four
+independent trees has four completely different *file* hashes — `24eef96b`, `c52009f0`,
+`f9eb383a`, `d5558215` — and one canonical hash. OpenSCAD writes the same geometry in a different
+facet order every run, so a plain file hash would report four false differences and
+order-invariance is what makes the screen usable at all.
 
-**What this affects.** `same_geometry` rejects a shelled cowl compared against itself, and any
-baseline capture-and-verify of one fails. The `.FCStd` and the STL differ byte for byte on every
-build. `--resume` is **not** affected, because its staleness key is over inputs rather than
-output bytes. UC-1 is **not** affected: the print export is the un-shelled notched blank
-(OQ-DES-CW6), and it is untouched by any of this. For UC-8, 0.0017 mm of wall is nothing.
+So: the hash answers *are these identical*, and where it does not fire, the two criteria above
+answer *does the difference matter*. The volume-and-bbox tolerances stop being an identity test,
+which they were never sound as, and remain what they are good at — judging a difference that is
+already known to exist. Implemented under IP-FC-124.
 
-**Decided 2026-09-04 — how a generated solid is compared.** This does not answer the
-question, it fixes the instrument the answer will be expressed in, and it rules out most of the
-alternatives below as *individual* choices.
+**Adopted alternatives: 1, 3 and 6**, together rather than chosen between — a per-class
+tolerance, surface distance as the adjudicator, and the symmetric difference as the metric — with
+**6 amended by measurement**: the boolean XOR is exact between solids that share surfaces
+(a planted 0.001 mm³ recovered exactly in 2 s) and unusable between independently built ones
+(invalid halves, a planted difference in the wrong half with the wrong sign), so the metric is
+computed by `solid_measure.surface_difference` and the boolean is kept for pairs that share
+surfaces. `isValid()` on both halves tells the cases apart. **Alternative 5 rejected.**
+**Alternatives 2 and 4 withdrawn** — each existed because the parts were believed not to
+reproduce, one to sidestep that and one to repair it, and there is nothing left to sidestep or
+repair. Alternative 2's residue, that a shell costs ten minutes to build, is a performance
+argument and belongs to its own item.
 
-- **Both a volume metric and a maximum linear deflection metric are required**, not one or the
-  other. They answer different questions — how much material is in a different place, and how
-  far a surface moved — and neither implies the other.
-- **The volume metric is the symmetric difference, not a difference of totals.** Subtracting two
-  volumes is only a lower bound: two solids of equal volume can differ everywhere. Every figure
-  in this question as originally filed was such a subtraction, which is why it could not
-  distinguish a part that moved from one that did not.
-- **Every metric is nondimensionalized by the part scale** `L` = `unit_width` = 100·U — lengths
-  over `L`, areas over `L²`, volumes over `L³`, principal moments over `L⁵` — so a threshold
-  means the same thing at `U` = 0.5 and `U` = 4 with no `× U` factor bolted on, and transfers
-  between parts rather than meaning one thing for a cowl and another for a corner.
-- **`L` is a parameter, not a measurement of the shape under test.** The part's own bounding-box
-  diagonal was considered and rejected: it is derived from the very solid being compared, so two
-  builds give two denominators and the yardstick moves with what it measures. `100·U` is known
-  before either build runs and is what `bbox_tol` and `surface_tol` already key off.
-- **The metric set is not closed.** The set below is derived from failures this repository has
-  actually had, which is a better test of completeness than listing what is convenient to
-  compute — but it is a starting point, and metrics are expected to be added.
-
-| metric | the failure it exists for |
-| --- | --- |
-| solid and shell count | the tail that came out in five pieces when a quarter of the ribs failed to cut |
-| XOR volume / `L³` | material in a different place, which a difference of totals cannot see |
-| max deflection / `L` | a local excursion that a mean over the whole wall hides |
-| mean deflection / `L` | the converse — a maximum that is a single outlier on a boundary edge |
-| centre of mass shift / `L` | a shape that shifted while holding its volume; cheap, and the most plausible reading of a wall moving 24× further than its cavity |
-| surface area difference / `L²` | wrinkling, which changes area long before it changes volume, and which drives print time and mesh quality |
-| principal moments / `L⁵` | mass distribution, which is what UC-8 consumes and what an assembly balances |
-| bounding-box corners / `L` | continuity with `bbox_tol`, and a rigid shift that the XOR would report as two equal lumps |
-
-Wall thickness is deliberately not in this set: it is part-specific, and the cowl acceptance
-tests already measure it at 12 stations by 240 samples. It belongs to the part's own check.
-
-**What this leaves open**, and it is the substance of the question:
-
-1. **The threshold for each metric.** Not derivable from the geometry — it is a statement about
-   what difference matters, which is what the question was filed to ask.
-2. **Scope.** Whether this replaces `same_geometry` for every part, or applies only to generated
-   solids that cannot be bit-reproduced, with the cheap volume-and-bbox screen kept elsewhere.
-3. **How the STL path is served.** The symmetric difference needs both parts as B-reps in one
-   process, and the sweep stores STLs. Either B-reps are retained for anything to be compared,
-   or the mesh path keeps a screening criterion of its own.
-
-Alternatives 1, 3 and 6 below are therefore **adopted together** rather than chosen between, and
-alternative 5 is rejected. Alternatives 2 and 4 are untouched by this: they are about avoiding
-the irreproducibility and about fixing it, not about measuring it, and both remain live.
-
-**First measurements under that set, 2026-09-04.** Two `tail_shell` builds at `U` = 1 from
-identical inputs, in separate processes, compared as solids so that no tessellation enters:
-`a` = 23680.884053 mm³, `b` = 23700.694092 mm³, each one valid solid of 2480 faces.
-
-| metric | value | in mm |
-| --- | --- | --- |
-| solids / shells / faces | 1 / 1 / 2480 both | identical |
-| volume difference / `L³` | 1.981e-05 | 19.810039 mm³ |
-| XOR volume / `L³` | **unusable — see below** | 28.874616 mm³ |
-| surface area difference / `L²` | 1.186e-04 | 1.1861 mm² |
-| centre of mass shift / `L` | 3.954e-04 | 0.039544 mm |
-| principal moments / `L⁵` | 4.517e-06 | |
-| bounding-box corners / `L` | 4.263e-15 | 0.000000 mm |
-| max deflection / `L` | 1.517e-05 *(lower bound)* | 0.001517 mm |
-| mean deflection / `L` | 2.266e-07 | 0.000023 mm |
-
-**The single most useful thing this produced is that the metrics disagree with each other**,
-which is the argument for the set rather than for any one of them. The bounding box is identical
-to 4e-15 while the centroid has moved 40 µm — so `bbox_tol`, one of the two checks
-`same_geometry` relies on, is completely blind to this. And the centroid moved 53 times further
-than the sampled maximum deflection allows: a surface that moves at most 0.74 µm cannot shift a
-centroid by 40 µm. The arithmetic says which one to believe — 19.81 mm³ placed about 50 mm
-off-centre shifts the centroid of a 23 680 mm³ part by 0.042 mm, against the 0.0395 mm measured
-— so the volume difference is **concentrated, not spread**, and the sampling had missed it.
-
-**Both adopted metrics are, as measured today, untrustworthy on this part. Neither number above
-should be used to set a threshold.**
-
-- **The booleans do not merely disagree — they fail outright, and alternative 6 is not viable
-  as written.** Asked separately, with each result inspected: `a - b` = 0.071125 mm³ in 9
-  solids, `b - a` = 28.803492 mm³ in 7 solids, and **`a & b` = 0.000000 mm³** — the
-  intersection of two solids that coincide over almost all of their volume came back empty. All
-  three results report `isValid()` false. The partition identity `Va = |a & b| + |a - b|` misses
-  by 23680.81 mm³, which is the entire part.
-
-  **The cause is the similarity being measured.** Every face of `a` lies within a micron of a
-  corresponding face of `b`, and coincident faces at tolerance scale are the pathological case
-  for boolean algorithms. So the closer two builds are to identical — which is the outcome the
-  comparison exists to confirm — the less able the instrument is to say so. This does not
-  impugn the wall construction itself: `notched.cut(cavity)` operates on surfaces 0.6 mm
-  apart, not coincident ones.
-
-  The escape clause originally written for alternative 6 — that `a` XOR `a` must come back
-  empty, and is checkable — is worthless: identical operands are the one case the kernel cannot
-  get wrong. The controls that bite are the conservation identity and `isValid()` on every
-  boolean result, and both are cheap.
-- **The sampled deflection does not converge, and biasing the sampling made it worse.** The
-  maximum read 0.000742 mm at 120 uniform points and 0.001517 mm at 2500 — doubling with twenty
-  times the samples. Re-sampling with 75 % of points at vertices and edges, mirroring
-  `surface_distance.VERTEX_SHARE`, *lowered* it again to 0.000773 mm: the two solids have
-  identical topology, so their vertices and edges coincide and contribute zeros, and the median
-  and p90 both became exactly 0. Three samplers, three maxima, none converged. **A sampled
-  maximum is a lower bound and cannot be made into an upper one by sampling harder.**
-
-**A third comparison answered what both adopted ones could not, in seconds.** Both solids
-carry the same 2480 faces, and a face knows its own area and centroid, so matching faces between
-the two by centroid and differencing localises the disagreement exactly — no booleans, no
-sampling. Measured:
-
-- **Every face matches one-to-one**; no face exists in only one solid. The topology is genuinely
-  identical, so this is not a feature that appeared or vanished.
-- **One face appeared to carry 83 % of the total area difference** — at (−20.05, 11.80,
-  **0.00**), on the open end, 47.5811 mm² against 48.6157 mm², centroid apparently moved
-  0.0915 mm. **That was `Face.Area` lying and the conclusion is withdrawn.** The face's boundary
-  wire is the same in both builds to 286 nm point for point, and its *signed* area is 48.2074
-  against 48.2070 — a difference of 0.0004 mm². `Face.Area` was 1.3 % low on one and 0.85 % high
-  on the other for identical geometry, and `CenterOfMass` shares that integration. See
-  IP-FC-119.
-- **Everything else agrees closely.** The main lateral surface, 26166 mm², matches to 0.157 mm²
-  — 6e-6 relative — with its centroid moved 0.49 µm. The twelve worst faces are 98.2 % of the
-  whole difference.
-
-So the two builds do **not** differ anywhere: every face matches, and the one that appeared to
-differ was an artifact of how its area was measured. **The comparison still belongs in the metric
-set** — it costs seconds, it localises, and it is the only one of the three that reached an
-answer at all on this case — but it must be computed from **wire signed areas, not `Face.Area`**,
-which is the mistake made here and the reason it produced a false positive rather than a clean
-negative. Its one requirement is that the two parts have
-comparable topology — and when they do not, "faces present in one solid only" is precisely the
-thing worth reporting.
-
-**A number that was quoted earlier in this question is withdrawn.** The "about 0.0017 mm" of
-wall was a volume difference divided by a wall area, and it assumed the difference was a uniform
-film. It is not. The measured mean is 0.000023 mm, fifty times smaller, and the measured maximum
-is a lower bound that has not converged. An inferred average is not a measurement, and this one
-was wrong in both directions at once.
-
-**Alternatives.**
-
-1. **Give generated solids their own reproducibility tolerance.** Let `same_geometry` carry a
-   per-part or per-class figure — something like 1e-2 relative for a shelled cowl — recorded
-   with the reason. *Benefits:* the smallest change; keeps the existing machinery usable; states
-   plainly what the kernel does. *Drawbacks:* a bound that loose would not catch a real 1 %
-   regression in these parts, and it makes one number serve two different questions — whether
-   two *engines* agree, and whether one engine agrees with itself. *Prerequisites:* deciding
-   what size of real change still has to be caught.
-2. **Build each shell once and treat the stored BREP as the artifact.** They are FreeCAD-only
-   and cost ten minutes each; build, cache, and rebuild only when the inputs change.
-   *Benefits:* dissolves the question instead of answering it, since a stored solid is identical
-   to itself, and it takes ten minutes off every consumer. *Drawbacks:* a cached artifact can go
-   stale against its parameters, which is the exact failure IP-FC-11's staleness key exists to
-   prevent and which would have to be extended to cover it; and it makes the shells unlike every
-   other part in the system. *Prerequisites:* extending the staleness key to a cached solid.
-3. **Adjudicate on sampled surface distance rather than on volume.** IP-FC-83's
-   [`surface_distance.py`](../../src/Fuselage/tools/surface_distance.py) already reports how far
-   a surface moved, in millimetres. 0.0017 mm is inside any bound worth writing; the volume
-   ratio is the same fact rendered alarming. *Benefits:* measures where the surface is, which is
-   the physical question, instead of a proxy that amplifies it — and OQ-ARCH-16 already named
-   this as the adjudicator with volume as the screen ahead of it. *Drawbacks:* slower than a
-   volume comparison, and the screen ahead of it is precisely what is failing, so a tolerance
-   still has to move. *Prerequisites:* none; the tool exists.
-4. **Make the booleans reproduce, by round-tripping the operands through BREP** before each one
-   — the single condition under which they did agree exactly. *Benefits:* would restore
-   bit-reproducibility if the effect is real. *Drawbacks:* the evidence is four trials in one
-   process on one pair of operands, which is as consistent with coincidence as with cause; it
-   adds serialisation to every boolean on a part that already takes ten minutes; and it is a
-   workaround against kernel behaviour nobody here controls. *Prerequisites:* testing whether
-   the round-trip is what made those trials agree — the converse nobody has run.
-5. **Accept it, change nothing, and say so in the documents.** *Benefits:* nothing to build.
-   *Drawbacks:* leaves `same_geometry` rejecting a correct part, so the first person to
-   re-render a shell and compare it meets a failure with no explanation attached to it.
-6. **Compare by symmetric difference — the volume of `(a − b) ∪ (b − a)`, as real booleans.**
-   *Benefits:* it is not a proxy for "the same solid", it is the definition of it. There is no
-   sampling to miss a displaced region between samples, no tessellation, no seed, and no way for
-   two different solids to pass by having equal volumes — which volume subtraction permits and
-   which is exactly the loophole the figures above fall through. It also *localises*: the
-   difference comes back as solids with their own volumes and bounding boxes, so a failure says
-   where, and a thin film over the whole wall is distinguishable from a blob in one place, which
-   is the distinction this question turns on. *Drawbacks:* it needs both parts as B-reps in one
-   process, so it cannot compare the STLs the sweep actually stores, which is what `mesh_stats`
-   and `same_geometry` operate on; it is expensive, minutes per comparison on the tail; and it
-   measures suspected boolean irreproducibility **with booleans**, which shares a failure mode
-   with the thing under test — not fatal, since a solid XOR'd with itself must come back exactly
-   empty and that is checkable, but it has to be checked rather than assumed. *Prerequisites:*
-   retaining the B-rep of any part to be compared, and choosing a relative XOR tolerance.
-
-**Recommendation on the thresholds — withheld until the metrics are measured.** The instrument
-is now decided; what it reads is not yet known. Recommending a number before the first
-measurement would be picking one to fit a conclusion already reached, and this question has
-already had two of my explanations die under measurement.
-
-**Measured 2026-09-06, and this is the number that was missing: the symmetric difference
-between two builds is about 1.6 mm³.** A → B gives 1.4386 ± 0.3731 mm³ and B → A gives
-1.8398 ± 0.4838, agreeing within their combined error. That is **6.8e-5 of the part**, a mean
-surface offset of about **19 nm**, with the worst sampled gap near 1.5 µm.
-
-**It is 260 times the difference of the two volumes**, which is 0.006186 mm³ — and that ratio is
-the point. A signed volume difference lets a surface that wanders out and back cancel itself to
-nothing; the symmetric difference adds both excursions. So subtraction was understating the
-disagreement between two builds by more than two orders of magnitude, exactly as this question
-suspected when it said a difference of totals is only a lower bound.
-
-**But the ratio being large does not make the parts far apart, and the magnitude is what decides
-the threshold.** 19 nm of mean surface movement is four orders below the 0.05 mm the wall is held
-to and three below `surface_tol(1)` = 5.0e-4 mm. The builds reproduce to far better than anything
-downstream can see, so the thresholds this question asks for can be set tight, and the earlier
-clause about reconsidering the recommendation "from the top" if the XOR came back much larger is
-answered: it came back much larger *in ratio* and very small *in absolute terms*.
-
-**How it was measured matters, because the obvious route does not work.** The boolean symmetric
-difference is exact between solids that share surfaces — it recovers a planted 0.001 mm³ cube
-exactly, in 2 s — and unusable between two independently built solids, where both halves come
-back `isValid()` false and a planted difference lands in the wrong half with the wrong sign
-(IP-FC-123). The figure above comes from `solid_measure.surface_difference`, which samples one
-surface and measures the gap to the other, calibrated against a closed-form answer to 0.62
-standard errors. It is blind to a difference that never reaches the surface; the boolean covers
-that case. If the XOR comes back close to the 75.2 mm³ volume
-difference, the two builds really are near-identical solids and a loosened tolerance is honest.
-If it comes back much larger — which is what a twenty-four-fold amplification between cavity and
-wall suggests — then the builds differ substantially more than any figure in this question has
-so far admitted, and the recommendation should be reconsidered from the top rather than adjusted.
-
-Alternative 2 deserves consideration on its own merits, because ten minutes a shell is real and
-these parts are rebuilt often. It should not be adopted *in order to avoid this question*: a
-cached artifact hides irreproducibility rather than bounding it, and the first time the cache is
-invalidated the question returns unanswered.
-
-**What would change the recommendation.** If the symmetric difference is concentrated somewhere
-specific — at the rib cuts, or at the open ends — rather than spread thin over the surface, then
-this is a defect with a location and should be fixed rather than tolerated, and no tolerance
-should be loosened to accommodate it. The measurement is cheap, and until it exists every
-alternative here is being chosen between on incomplete evidence.
+**What is not settled by this.** The thresholds are set from **one pair of builds at `U` = 1**.
+Whether the corner divergence stays noise at other scales — or becomes systematic, the same
+corners moving the same way — is IP-FC-117's soak, which has not run. And a sampled maximum is a
+lower bound that cannot be made an upper one by sampling harder; the surface-distance threshold
+inherits that limit.
 
 ### ~~OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area?~~ — DECIDED 2026-09-06
 
