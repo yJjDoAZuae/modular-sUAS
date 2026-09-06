@@ -12,6 +12,19 @@ area is 48.2074 against 48.2070. That is 1.3 % low on one and 0.85 % high on the
 same geometry. `Face.CenterOfMass` comes from the same integration and moved 0.0915 mm on that
 identical face.
 
+**`Shape.BoundBox` is loose on the same solids, and by far more.** Measured 2026-09-06
+(IP-FC-127): the nose cowl runs z = -50.000 to -6.000 and reports a box of -61.159 to 0.000 --
+**139 % of the part** -- and the nose tip is 7.000 mm tall in that same 61.159 mm box, **874
+%**. It is computed from the B-spline geometry rather than from the trimmed result, so it is
+an outer bound and nothing more. `optimalBoundingBox(True)` is not the fix: it is 0.363 mm
+loose on each side of the nose cowl and on the tail returns -102.482 to 2.764 where the plain
+box is exactly right. **What is unaffected, and it is worth being specific**: `mesh_stats`
+takes its bounding boxes from the triangles of a written STL, which are the part, so
+`BBOX_TOL` and every cross-backend comparison are measuring a tight box. The loose one is
+`Shape.BoundBox` on a B-rep, and the rule is the same as for volume -- ask the geometry, not a
+property derived from the surfaces that carry it. `cowl_interior.z_extent` is what does the
+asking.
+
 **Three conclusions were drawn from those numbers before anyone checked them**, and all three
 were wrong: that two builds of a cowl differ by up to 0.58 % of their volume, that the
 difference is concentrated at one face on the open end, and that the project therefore needed a

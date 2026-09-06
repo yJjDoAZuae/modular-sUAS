@@ -129,7 +129,7 @@ Rules over the whole fuselage design. Argued in [design_basis.md section 4](desi
 | **DES-9** | Where more than one requirement can govern a dimension, the drawing **shall** state which one produced the value shown | — *(e)* | **—** | **nothing** | **not verified** — [OQ-DES-SR2](#open-questions) |
 | **DES-10** | The panel envelope **shall** be fixed by the frame and stated without reference to any panel design | AR-MOD-1, AR-MOD-5 | I | `check_derived_geometry.py` | verified indirectly, through INT-5 |
 | **DES-11** | Where a feature's function is set by something that does not scale with the airframe, its size **shall** be floored at what that function requires | AR-PRT-1 | A | `check_derivation.py` | verified, 7 relations; **3 of the 7 floors are justified nowhere** |
-| **DES-12** | A cowl **shall** remain printable in spiral vase mode: the solid exported for printing carries one closed contour per layer and no interior geometry whatsoever | AR-PRT-1 | **—** | **nothing** | **not verified** — [OQ-DES-SR2](#open-questions) |
+| **DES-12** | A cowl **shall** remain printable in spiral vase mode: the solid exported for printing carries one closed contour per layer and no interior geometry whatsoever | AR-PRT-1 | A | `check_vase_printable.py` | verified — *(q)* |
 | **DES-13** | A printed part **shall** be modelled in the orientation it prints in — the print bed is the x/y plane and +z the build direction — and that orientation **shall** be chosen so the layer orientation carries the load the part is designed for | AR-PRT-2 | R | review | **partially verifiable** — *(n)* |
 | **DES-14** | A printed part **shall** build without support material: no downward-facing surface leans shallower than `overhang_angle_from_bed` from the bed | AR-PRT-3 | A | **nothing yet** | **not verified, but verifiable** — *(o)*, [IP-FC-95](../implementation/freecad_migration.md) |
 | **DES-15** | At a bay end, the features that mate with the adjoining bay — the OML perimeter, the longeron positions and sizes, and the fastener positions and sizes — **shall** be identical across every bay of the same size. **The interior aperture is not one of those features** and **shall** be free to vary | AR-MOD-1, AR-MOD-2, AR-MOD-3 | I | **nothing yet** | **not verified, but verifiable** — *(p)*, [IP-FC-100](../implementation/freecad_migration.md) |
@@ -166,6 +166,25 @@ the panel-thickness requirement on 60.
 **DES-12 restates a decision, it does not make one** — OQ-DES-CW6, stated in
 [cowl.md](cowl.md) as a constraint over the whole interior-surface section. It is in this set
 because nothing enforced it and nothing named it as a requirement.
+
+*(q)* **"A cowl" means the vase-printed piece of an assembly, and not the pieces that cap it.**
+Confirmed as design intent 2026-09-06. `check_vase_printable.py` runs on `nose_cowl` and `tail`
+and both hold: **one closed contour at every sampled station**, 207 on the nose and 435 on the
+tail. The nose tip and nose plate are **cap pieces and are deliberately outside the
+requirement** — a single-contour shell cannot close the nose without carrying the wall round
+the tip, where it would lean shallower than `overhang_angle_from_bed`, so the tip and plate
+exist precisely so the cowl never has to violate the overhang limit to close the shape
+([cowl.md](cowl.md)). They are not shelled and not vase-printed, and the geometry agrees: the
+plate sections into two closed loops at 143 of 200 stations and the tip into two at all 200,
+being a 7 mm ring.
+
+**The scope is therefore a rule and not a list, because the list will grow.** The tail is one
+cowl today because its aft end is the OML's own closure, and a future tail design may add an
+end piece on the same footing as the nose's. So the check takes *every* cowl kind and subtracts
+the shelled representations and an explicit, reasoned register of cap pieces — which means a
+newly added kind is **in scope by default and fails until somebody records why it is a cap**.
+The alternative, naming the two parts to check, would let a new vase-printed cowl go unchecked
+in silence, which is the failure DES-12 exists to prevent.
 
 *(n)* **DES-13's orientation is recorded by construction, and its correctness is only half
 checkable.** Every existing part is modelled in its print orientation, so **the model is the
@@ -248,7 +267,7 @@ requirements.
 | **DRW-4** | H4 **A witness line shall not cross a dimension line.** Crossing another witness line is conventional and permitted | DES-9 | A | `check_dimension_placement.py` | verified — *(h)* |
 | **DRW-5** | H5 **No structurally-zero dimension shall be placed at all** | DES-7, DES-9 | A | `check_dimension_placement.py` | verified |
 | **DRW-6** | Where the hard constraints cannot all be satisfied the build **shall** fail and name the dimensions it could not place. It **shall not** relax a constraint, shrink the text, or emit the overlap | DES-9 | A | `check_dimension_placement.py` | verified |
-| **DRW-7** | The same family **shall** produce byte-identical placement on every run: no unseeded randomness, no dependence on dictionary or set iteration order, every tie broken by a stated total order | DES-9 | **—** | **nothing** | **not verified** — [OQ-DES-SR2](#open-questions) |
+| **DRW-7** | The same family **shall** produce byte-identical placement on every run: no unseeded randomness, no dependence on dictionary or set iteration order, every tie broken by a stated total order | DES-9 | A | `check_placement_determinism.py` | verified — one digest across four `PYTHONHASHSEED` values, and a deliberately disordered placer is seen to fail it |
 | **DRW-8** | The checker that re-derives the hard constraints **shall** be independent of the placer that satisfies them | DES-9 | R | `check_dimension_placement.py` | held — *(h)* |
 | **DRW-9** | The drawn view **shall** occupy at least three quarters of the sheet frame | DES-9 | A | `check_dimension_placement.py` | verified — 75.4 % against the pinned title block |
 | **DRW-10** | The sheet **shall** state its units, as fixed text rather than an editable field | DES-9 | A | `check_sheet_standard.py` | verified — the check fails a template with the statement removed |
@@ -275,8 +294,11 @@ computed from `greeble_thickness`, and the bulkhead's mold half width **is** `un
 because it states the seating face's width and not only its position. So DRW-12 stays *partial*,
 and the reason has changed from *the register under-asks* to *two sheets do not answer*. That is
 a better failure: it names four specific family sheets rather than a whole column, and closing it
-is **IP-FC-109** and **IP-FC-110**, both blocked on drawing decisions
-([OQ-DES-D11](dimension_scheme.md#open-questions), [OQ-DES-D12](dimension_scheme.md#open-questions)).
+is **IP-FC-109** and **IP-FC-110**. **IP-FC-110 was unblocked on 2026-09-06** when
+[OQ-DES-D12](dimension_scheme.md#open-questions) was decided — a register row's
+parameters drop when the row's joint is absent from the family, rather than when their
+values happen to be zero. **IP-FC-109 is still blocked** on
+[OQ-DES-D11](dimension_scheme.md#open-questions), which is a drawing decision.
 
 **No drawn sheet changed**, verified by comparing every family's quantity column count, block
 count and row count before and after.
@@ -397,24 +419,31 @@ Modularity gaps under [OQ-DES-SR3](#open-questions), both on 2026-08-30. Generat
 extrusions governs *walls*, which are internal structure and therefore reference geometry rather
 than interface, and it is checked on the parameters instead. **DES-13 is correct for a different
 reason** — it constrains how a part is *placed* rather than what any two parts do to each other,
-so it has no joint to reach. **For DES-12 it is not correct**: nothing below it and nothing
-verifying it is the same finding twice.
+so it has no joint to reach. **For DES-12 it was not correct** — nothing below it and nothing
+verifying it was the same finding twice — and **half of that is now fixed**: it has a verifier
+as of 2026-09-06 (IP-FC-98). It still reaches nothing below, which remains correct for the same
+reason DES-2 does: vase-mode printability is a property of one part's own solid and not of what
+any two parts do to each other.
 
 ### 9.3 Verification status
 
-**Forty-five of the fifty requirements have a verifier. Five have none, and two have a verifier
-that does not fully hold. Every one of the five is now a work item with a named approach** —
-decided 2026-08-30 under [OQ-DES-SR2](#open-questions) and
-[OQ-DES-SR3](#open-questions), which is the change that matters more than the count.
+**Forty-seven of the fifty requirements have a verifier. Three have none, and two have a
+verifier that does not fully hold. Every one of the three is a work item with a named
+approach** — decided 2026-08-30 under [OQ-DES-SR2](#open-questions) and
+[OQ-DES-SR3](#open-questions), which is the change that matters more than the count. **DES-12
+and DRW-7 left that queue on 2026-09-06** (IP-FC-98, IP-FC-97) — the one the decision singled
+out as having a live silent failure mode, and the one everything about DES-9 was waiting on.
 
 | | Count | Which |
 | --- | ---: | --- |
 | Verified, exhaustive over the sweep | 24 | most of DES and INT |
+| Verified, sampled over the part's own features | 1 | **DES-12**, by `check_vase_printable.py` |
+| Verified across processes | 1 | **DRW-7**, by `check_placement_determinism.py` — the only property here that one process cannot observe |
 | Verified, sampled by construction | 9 | the geometry and drawing checkers, on corpora chosen for difficulty |
 | Verified by demonstration | 8 | MDL-1 to MDL-4, EQV-5, EQV-6 |
 | Held by review | 2 | DRW-8; **DES-13**, whose remaining half needs stress analysis the project has no tools for |
 | **Partial or violated** | 2 | **DRW-12** (IP-FC-109, IP-FC-110), **MDL-7** (IP-FC-56) |
-| **Verified by nothing, work item raised** | 5 | **DRW-7** (IP-FC-97), **DES-12** (IP-FC-98), **DES-9** (IP-FC-99), **DES-14** (IP-FC-95), **DES-15** (IP-FC-100) |
+| **Verified by nothing, work item raised** | 3 | **DES-9** (IP-FC-99), **DES-14** (IP-FC-95), **DES-15** (IP-FC-100) |
 
 **The last two rows are the whole value of writing the set down**, and as of 2026-08-30 the last
 row is a queue rather than a question. Every entry has a named approach and a work item; what
@@ -485,10 +514,13 @@ edge between them. That is a better state than three open questions and a worse 
 green run, and the table says which it is.
 
 **The live questions elsewhere are all in
-[dimension_scheme.md](dimension_scheme.md#open-questions).** **OQ-DES-D11** and **OQ-DES-D12**
-both hold DRW-12 at *partial*: no bulkhead sheet says how wide the panel's seating surface is,
-and a bulkhead with no panel is nonetheless asked to explain the panel joint. **OQ-DES-D10**, the
-*Carried by* column meaning two things, affects no requirement's status.
+[dimension_scheme.md](dimension_scheme.md#open-questions).** **OQ-DES-D11** holds DRW-12 at
+*partial*: no bulkhead sheet says how wide the panel's seating surface is. **OQ-DES-D12 was
+decided on 2026-09-06** — a bulkhead with no panel is no longer to be asked to explain the panel
+joint, because a row's parameters now drop when the row's *joint* is absent rather than when
+their values are zero — so **DRW-12 stays partial for one reason instead of two**, and that one
+is now a build rather than a question ([IP-FC-110](../implementation/freecad_migration.md)).
+**OQ-DES-D10**, the *Carried by* column meaning two things, affects no requirement's status.
 
 Two closed on 2026-08-30. **OQ-DES-D7** — the *governing expression* column meaning two things,
 which is why DRW-12 is partial — was decided: every row states the whole size, then the

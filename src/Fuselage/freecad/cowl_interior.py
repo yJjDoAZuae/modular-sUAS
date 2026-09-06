@@ -867,6 +867,33 @@ def _check_slope(lower, upper, z_lo, z_hi, limit):
 # Stations
 # --------------------------------------------------------------------------------
 
+def _tessellated_interior(body, sections, deflection=0.1):
+    """A z the body really does section at, found from a mesh rather than from a box.
+
+    Only called when `z_extent`'s probes of the bounding box have all missed, which happens
+    when that box is much larger than the part. A tessellation is bounded by the part itself,
+    so its z range cannot be an over-estimate the way the box can, and the middle of that
+    range is interior for any body whose material is z-connected -- which every part here is.
+    The fractions are tried in the same order as above for the same reason: if the middle is
+    somehow not interior, near-middle is the next most likely place.
+
+    Returns `None` if even that finds nothing, so the caller can say so rather than guess.
+    """
+    lo = hi = None
+    for face in body.Faces:
+        points, _facets = face.tessellate(deflection)
+        for point in points:
+            lo = point.z if lo is None else min(lo, point.z)
+            hi = point.z if hi is None else max(hi, point.z)
+    if lo is None or hi <= lo:
+        return None
+    for f in (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8):
+        z = lo + (hi - lo) * f
+        if sections(z):
+            return z
+    return None
+
+
 def z_extent(body, tol=END_INSET):
     """The body's real axial extent, found by asking it where it sections.
 
@@ -885,6 +912,18 @@ def z_extent(body, tol=END_INSET):
     same path for both cowls, which is the property that matters more than the cost: an outer
     bound plus a predicate is all this needs, and both are reliable.
 
+    **The probe has to be able to find the part, and on one kind it could not.** The seven
+    fractions below are of the *bounding box*, so how well they work depends on how loose it
+    is. Measured 2026-09-06: the nose cowl's box is 139 % of the part and every fraction still
+    lands inside it, but the nose tip is 7.000 mm tall inside a box of 61.159 -- **874 %** --
+    and all seven miss, whereupon this raised `the body does not section anywhere in its own
+    bounding box`, which is a false statement about the body. Nothing calls it on the tip
+    today, since only cowls are shelled; it would have been inherited by the next caller. A
+    tessellation cannot miss, so it is the fallback, and it is only reached when the cheap
+    probes have all failed. **The returned extent is unchanged either way** -- the bisection
+    below converges on the real boundary from any interior point, and the fallback supplies
+    only a starting point.
+
     About 34 sections at roughly 0.7 s each, once per part.
     """
     def sections(z):
@@ -902,9 +941,11 @@ def z_extent(body, tol=END_INSET):
             inside = z
             break
     if inside is None:
+        inside = _tessellated_interior(body, sections)
+    if inside is None:
         raise PreconditionFailed(
-            'the body does not section anywhere in its own bounding box, %.4f to %.4f'
-            % (lo, hi))
+            'the body does not section anywhere in its own bounding box, %.4f to %.4f, nor '
+            'anywhere in the z range of its own tessellation' % (lo, hi))
 
     def edge(outside, within):
         while abs(within - outside) > tol:

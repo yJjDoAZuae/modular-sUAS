@@ -36,6 +36,19 @@ are the same construction with different parameters:
   that carries the tip back to the cowling bulkhead.
 - The **tail** assembly — a single **tail cowl** from the aft OML to the cowling bulkhead.
 
+**Only the cowl of each assembly is the vase-printed part, and the tip and plate exist so that
+it can stay one.** A spiral-vase cowl is a single contour per layer, so it cannot cap itself:
+closing the nose in the cowl would mean carrying that thin shell round the tip, where the
+surface turns over and the wall would have to lean shallower than
+`overhang_angle_from_bed`. The tip and the plate are separate printed pieces precisely so the
+shell never has to violate the overhang limit to close the shape. **They are therefore not
+shelled and not vase-printed**, and DES-12 does not reach them.
+
+**The tail has no such pieces today and may later.** Its aft end is the OML's own closure
+(OQ-DES-CW13), so one cowl suffices. A future tail design that needs an end piece to cap off
+without an overhang violation would add one on the same footing as the nose's — a cap piece,
+outside DES-12, for the same reason.
+
 Unlike every other part in the system, a cowl's outer surface is **not** parametric
 geometry. It is a fixed aerodynamic shape authored in OpenVSP, imported, and then cut. All
 the parameters do is decide *where to cut it* and *what to hollow out of it*.

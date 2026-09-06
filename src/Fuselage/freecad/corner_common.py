@@ -269,7 +269,23 @@ def build_sheet(doc, params, seed=None, extra=()):
     for row, (alias, value) in enumerate(seeded(rows, seed), start=1):
         sheet.set('A%d' % row, alias)
         sheet.setAlias('B%d' % row, alias)
-        sheet.set('B%d' % row, value)
+        # **A cell is text, and two of the cowl modules hand this floats.** `cowl_tree` runs
+        # its tables through `_as_cells` at import time; `cowl.PARAMS_NOSE_TIP` and
+        # `PARAMS_NOSE_PLATE` cannot, because those same tables are *also* the reference
+        # configuration handed to the builder, which wants numbers. So the coercion belongs
+        # here, where it is a property of the spreadsheet rather than of any one table.
+        #
+        # Measured 2026-09-06: without it `cowl_nose_tip.emit(doc)` and
+        # `cowl_nose_plate.emit(doc)` raise `TypeError: set() argument 2 must be str, not
+        # float`, while `cowl_nose_cowl` and `cowl_tail` build -- four sibling modules
+        # presenting one interface, two of which could not honour it unseeded. It went
+        # unnoticed because `cowl.main()`, the reference check for those two, calls the
+        # builder directly and never makes a sheet.
+        #
+        # `repr(float(v))` is the spelling `_as_cells` and `seeded` already use, so a value
+        # arriving by any of the three routes formats identically and the definition files
+        # stay byte-comparable (IP-FC-11).
+        sheet.set('B%d' % row, value if isinstance(value, str) else repr(float(value)))
     doc.recompute()
     return sheet
 
