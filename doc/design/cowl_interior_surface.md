@@ -297,6 +297,14 @@ The wall and rib checks are the load-bearing ones. Volume agreement says two sol
 same space; it does not say the wall is where it should be, and a wall in the wrong place with
 compensating error elsewhere passes on volume alone.
 
+That is about what a volume check cannot *see*. There is a second problem with it, in the
+number itself, and §9.6 carries it: `Shape.Volume` is wrong on solids of this kind by a
+fraction of a percent, by an amount that depends on how the solid happens to be cut into
+faces. **A volume here is only meaningful as a difference between volumes taken the same way
+over the same operands** — which is what the row above and both identities in §9.6 are. A
+volume compared against an expected value, or between two independently built solids, has to
+come from [`solid_measure.py`](../../src/Fuselage/freecad/solid_measure.py) instead.
+
 ---
 
 ## 7. Failure modes to expect
@@ -436,8 +444,24 @@ that is the whole point: a wrong cavity and a right one are both valid closed so
 Both are computed from `Shape.Volume`, which IP-FC-119 has since measured as wrong by 0.16 to
 0.24 % on solids of this kind. They are differences of volumes taken the same way over
 overlapping geometry, where that error should largely cancel — and the measured partition slips
-of ~1e-6 say it does — but the audit under that item is what will establish it rather than
-assume it.
+of ~1e-6 say it does.
+
+**The audit ran (IP-FC-120, 2026-09-05), and it neither cleared nor condemned them.** What it
+established is that the error is a property of the **face partition** rather than of the solid:
+merging 535 faces into 449 on the nose moved `Shape.Volume` by 91.08 mm³ — 0.94 % — without
+moving the solid at all. It is also not *predictable* from the partition, because two walls
+with those same differing partitions had meshes agreeing to 3.3e-6. So the cancellation these
+two identities rely on cannot be derived; it can only be observed, and it is observed.
+
+Two things make that acceptable here. Both identities subtract shapes produced by the same
+booleans over the same operands, which is the case where a shared partition is likely rather
+than accidental. And **the direction of a failure is safe**: a partition effect would make a
+zero identity read nonzero, which is a check firing, not a check passing something bad. The
+rule that follows is for reading the result rather than for the build — **a residue or slip
+that is small but not zero is not evidence of lost material until it has been re-measured**
+by `solid_measure.converged_difference`, which cancels discretisation between matched
+partitions and refuses mismatched ones, or by `solid_measure.surface_difference`, which is
+indifferent to face layout altogether.
 
 ### 9.7 Measured, at `U` = 1
 
@@ -492,7 +516,25 @@ established, and each is a work item in
   a micron. The spread of up to 0.58 % previously reported was `Shape.Volume` misreporting these
   B-spline solids by 0.16 to 0.24 %, which is IP-FC-119. The builds reproduce.
 
-  What remains is that **no scale but one has been tried**. **`U` = 4 is where to expect
+  **The 0.006 mm³ understates the disagreement by two orders of magnitude, and that is now
+  measured too.** A difference of volumes lets a surface that wanders out and back cancel
+  itself. The symmetric difference adds both excursions, and between the same two builds it is
+  **2.08 mm³** — 260 times the difference of totals, and still only 8.8e-5 of the part.
+
+  **There is a tolerance for the soak to judge against**, decided 2026-09-06 under
+  [OQ-ARCH-19](../architecture/freecad_migration.md): two builds are the same part when the
+  symmetric difference over `A · 100U` is at most **1.0e-6** and no sampled surface gap exceeds
+  **5.0e-5** of `100U`. The pair above measures 2.45e-7 and 1.28e-5 — both about four times
+  inside. Where they disagree is measured as well: **65.5 % of the surface is bit-identical**,
+  and 5 % of it carries 83 % of the difference, sitting at the **corners of the section**,
+  radius 62–66 mm, spread along the whole length rather than at the ends or at any one rib.
+  That reads as an adaptive fit diverging where curvature is highest while agreeing exactly on
+  the flats — noise to be bounded, not a defect with an address.
+
+  What remains is that **no scale but one has been tried**, and that is what would overturn the
+  reading above: the same corners moving the same way at every build and growing with `U` would
+  be a systematic bias rather than noise, and the two thresholds come from one pair of builds
+  at `U` = 1. **`U` = 4 is where to expect
   trouble**: the wall is `n_p·w` = 0.6 mm at every `U`, because extrusion width is a property of
   the machine, so at `U` = 4 that same 0.6 mm wraps a part four times the size — proportionally
   the thinnest shell, and the most surface to hold inside a fixed 0.05 mm tolerance. The OML

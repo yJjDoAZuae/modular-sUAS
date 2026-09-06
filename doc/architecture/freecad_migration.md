@@ -559,15 +559,56 @@ care about which properties are portable:
 
 | Property | Portable across toolchains? |
 | --- | --- |
-| Enclosed volume | **Yes** — with a tessellation tolerance |
+| Enclosed volume | **Yes — but not as a fraction of itself.** See below |
 | Bounding box | **Yes** |
 | Hole positions and count | **Yes** |
+| The triangle set itself | **No across toolchains, exact within one.** See below |
 | Triangle count | **No** — a tessellation setting, measured above at 520 vs 932 for one solid |
 
 `sweep_check.py` compares all four today, and triangle count is currently its *strictest*
 signal. That signal has to be dropped for cross-toolchain comparison and kept for
 within-toolchain regression. Conflating the two would either mask real differences or
 report false ones on every part.
+
+**Volume is portable; a volume *ratio* is not.** [OQ-ARCH-20](#open-questions), decided
+2026-09-06, replaces the relative criterion `|Va − Vb| / V` with `|Va − Vb| / (A · 100U)`.
+The difference between two meshes of one surface is a **surface** quantity — it is the area
+times the distance the surface moved — so dividing it by volume divides a surface quantity by
+a bulk one, and the answer then depends on how thick the part happens to be. Measured: under
+the old form a shelled cowl was judged **39 times more harshly** than the solid it was
+hollowed out of, for no reason except that hollowing it removed most of the denominator.
+Dividing by area instead recovers the distance the surface would have to move to account for
+the difference, and dividing that by `100U` — the project's own length scale — makes it a pure
+number, comparable between parts of different sizes and between a solid and its shell. The
+shelled kinds are judged at **6.6e-5**, a figure transferred from what the *solid* cowls
+achieve, which only means anything because the metric is comparable across kinds. Every other
+kind keeps its own relative figure and is marked in the code as unconverted, because
+converting one mechanically gives `k = tol_rel · V/(A · 100U)` — algebraically the same test,
+with the volume denominator back inside the threshold.
+
+**Neither `Shape.Volume` nor a mesh volume can be trusted on its own here.** `Shape.Volume`
+was measured 0.16 to 0.24 % wrong on two `tail_shell` builds, and merging 535 faces into 449
+on the nose moved it by **0.94 % without changing the solid** — so the error is a property of
+the face partition and not of the geometry, and it is not predictable from the partition
+either: elsewhere two differing partitions agreed to 3.3e-6 (IP-FC-119, IP-FC-120). A mesh
+volume is no safer alone. A `tail_shell` wall meshed closed, consistently wound, inside its
+build deflection, carrying the right area and with its vertices on the true surface enclosed
+**112.5 mm³ less** than the same solid meshed another way, at every deflection tried. The rule
+that leaves: a volume that matters is measured twice by instruments that fail differently, or
+it is not measured. `solid_measure` exists for that, and refuses rather than returning a
+number that is still moving.
+
+**Within one toolchain the exact tier comes back, in a form the port did not lose.** This
+section's premise is that byte comparison dies with the generated `.scad`, and for *source*
+it does. For geometry it does not: `mesh_stats.canonical_hash` rotates each triangle so its
+lowest vertex leads — preserving winding, where sorting the three vertices would flip half of
+them — then sorts the triangles and hashes. **Equal hashes mean the same set of triangles, so
+the same geometry, exactly**, and its errors run one way only: it can call agreeing parts
+different, which costs a closer look, and never differing parts the same. The order-invariance
+is what makes it usable rather than a nicety — OpenSCAD writes the same mesh in a different
+facet order every run, and one bulkhead rendered into four trees has four different *file*
+hashes and one canonical hash. It does not cross the toolchain boundary, because the two
+engines do not place vertices in the same places at all. See [OQ-ARCH-19](#open-questions).
 
 ### The reference corpus is faceted, and that is a real geometric difference
 
@@ -595,12 +636,21 @@ Three consequences:
   a genuine finding rather than a tolerance problem. That is worth more than a tighter
   bound.
 - **This applies only to comparisons against the OpenSCAD corpus.** UC-2, UC-3 and UC-4
-  compare B-rep against B-rep, where volume is exact on both sides and the tolerance
-  collapses to floating point.
+  compare B-rep against B-rep, where the faceting bias is absent. *The claim that stood here —
+  that volume is then exact on both sides and the tolerance collapses to floating point — is
+  withdrawn, measured 2026-09-05.* B-rep volume is not exact on a B-spline solid, for the
+  reasons above, and two independent builds of one `tail_shell` differ by a symmetric
+  difference of **2.08 mm³**: 8.8e-5 of the part, a 19 nm mean surface offset, with 65.5 % of
+  the surface bit-identical. Small enough that nothing downstream can see it, and far too
+  large to call floating point. B-rep against B-rep needs a stated tolerance like everything
+  else, and [OQ-ARCH-19](#open-questions) states it.
 
-So the equivalence test is a one-time migration instrument, not a permanent fixture. Once
-UC-1 is signed off, within-FreeCAD regression testing is strictly more precise than
-anything available today.
+So the equivalence test is a one-time migration instrument, not a permanent fixture. What
+replaces it measures the geometry rather than proxies for it — a symmetric difference and a
+surface distance, in millimetres — and in that sense is more precise than anything available
+today. **But not uniformly so, and the exception is worth stating plainly:** an OpenSCAD part
+built twice is bit-identical and can be proved so by hash, and a FreeCAD part built twice
+cannot. The exact tier survives on the far side of the port and not on the near one.
 
 ---
 
@@ -2595,6 +2645,17 @@ The retirement argument raised against alternative 3 — that the OpenSCAD mesh 
 IP-FC-34 — does not survive [OQ-ARCH-15](#open-questions)'s decision. A baseline frozen until
 the `PartDesign::` end state means mesh comparison against `variant_output_baseline` is needed
 for the whole remaining life of the port, and it is the measure that review will rest on.
+
+**Amended 2026-09-06 by [OQ-ARCH-19](#open-questions): the two roles are right, and they were
+assigned the wrong way round.** This note has the cheap criteria screening and the distance
+adjudicating. Volume and bounding box cannot screen, because a screen is only sound if it has
+**no false negatives**, and those two have one: move material from one side of a part to the
+other and the volume difference is exactly zero while the bounding box never moves. That
+loophole was live in `baseline_manifest.verify`. `same_geometry` now screens on
+`mesh_stats.canonical_hash` — exact, and one-sided in its errors — and the tolerances fixed
+here adjudicate the differences the hash finds, which is the question they are actually good
+at. Everything measured above about sampling, coverage and the tangential component stands
+unchanged; only the order of the two tiers changed.
 
 *Recorded as IP-FC-82 (tolerances) and IP-FC-83 (sampled surface distance).*
 

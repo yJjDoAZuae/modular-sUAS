@@ -323,7 +323,7 @@ the flange is where it is lives in another part.
    on the corner's sheet or the bulkhead's carries `corner_tolerance`, and both the
    structural-zero filter and section 5.2's H5 drop it while it is 0. A reader of the sheet has
    no way to learn that these faces meet line-to-line, or that they may need a bond line.
-   [OQ-DES-D12](#open-questions) covers why the filter behaves this way.
+   [OQ-DES-D12](#open-questions), decided 2026-09-06, covers why the filter behaves this way — and does not fix this direction of it, which is [IP-FC-112](../implementation/freecad_migration.md).
 
 4. **No bulkhead sheet dimensions the panel's exposed seating width**, which row 5 now states and
    the test therefore demands. Reported on four bulkhead families; two others are clean only
@@ -333,7 +333,7 @@ the flange is where it is lives in another part.
    row's parameters when they are zero on the family, and `panel_offset` is not zero on a
    panel-less bulkhead even though the panel joint is absent from it. Two families carry an
    obligation no correct drawing can discharge, which is the error [OQ-DES-D6](#open-questions)
-   was decided to remove. [OQ-DES-D12](#open-questions).
+   was decided to remove. **Answered by [OQ-DES-D12](#open-questions) on 2026-09-06**: a row's parameters drop when the row's joint is absent from the family, rather than when their values happen to be zero. Implementation is [IP-FC-110](../implementation/freecad_migration.md).
 
 ---
 
@@ -611,7 +611,6 @@ belong in its interface-conventions section, and what stays here is the drawing-
 | --- | --- | --- |
 | OQ-DES-D10 | The register's *Carried by* column means both *which part the fit's gap is cut out of* and *which drawing must explain the fit*, and row 3 is where the two come apart | Not blocking — no drawing changes under any answer, and the bulkhead already states the joint. What is at stake is whether the completeness test would notice if it stopped |
 | OQ-DES-D11 | No bulkhead drawing says how wide the panel's seating surface is, and OQ-DES-D7's decision now requires it to | **Blocking IP-FC-107's last two names.** Four family sheets report the gap; two of them are clean only because an unrelated dimension's `max` happens to pick a branch |
-| OQ-DES-D12 | A bulkhead with no panel is asked to explain the panel joint, because `panel_offset` is not zero on it and so escapes the structural-zero filter | **Blocking.** Two family sheets carry an obligation no correct drawing can discharge, which is the error OQ-DES-D6 was decided to remove |
 
 
 ### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
@@ -1062,7 +1061,7 @@ gap**: no bulkhead sheet dimensions the panel's exposed span, so the completenes
 reports it on four families. That is the test doing its job, and closing it is
 [OQ-DES-D11](#open-questions). A second thing surfaced with it: `panel_offset` is demanded of
 bulkheads that have **no panel**, because it is not zero on them and so escapes the
-structural-zero rule — [OQ-DES-D12](#open-questions).
+structural-zero rule — [OQ-DES-D12](#open-questions), decided 2026-09-06 in favour of dropping a row's parameters when its joint is absent.
 
 **No drawn sheet changed**, which was the part of the estimate that held. Every family's quantity
 column count, block count and row count is identical before and after, verified 2026-08-30.
@@ -1517,153 +1516,97 @@ to follow, not a further decision.
 
 *Implementation: `freecad/sheet_annotations.py`'s bulkhead quantities and dimensions.*
 
-### OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint
+### ~~OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint~~ — DECIDED 2026-09-06: a row applies to the families that have its joint
 
-**The problem.**
+**Resolution note.** **Alternative 1**, let a register row be restricted by feature rather than
+only by type — **described as alternative 3**, which is the same mechanism arriving as a
+statement about the rule rather than about the register.
 
-*Self-contained; everything it relies on is defined here.*
+**The rationale.** The structural-zero filter was always a *proxy* for "the joint is not there",
+and this is the case where the proxy fails: `panel_offset` keeps an ordinary non-zero value on a
+bulkhead that has no panel, so the row is demanded and no correct drawing can supply it. The fix
+is to say what was meant. Stated as alternative 3 the rule reads as one idea — **a row's
+parameters drop when the row's joint is absent from the family** — instead of as a test on a
+value that stands in for it.
 
-**Not every bulkhead has a panel.** Some sit at a station where the skin is continuous, or where
-there is no skin at all. Those bulkheads have no panel seating face, and register row 5 — the fit
-between a panel and a bulkhead flange — describes a joint they do not have.
+**Doing it generally rather than for row 5 was part of the choice.** The family partition
+already computes the predicate, so covering every row costs little more than covering one, and
+[OQ-DES-D6](#open-questions)'s row 7 can move onto it too — replacing a list of type names with
+the thing the list was standing in for.
 
-**The register cannot currently say so.** A row names one part in its *Carried by* column, and
-every drawing of that kind is then obliged to state every parameter the row consumes. There is no
-way to write "this row applies to the bulkheads that have a panel."
+**The constraint the decision carries, and it is the whole of what was left to decide.**
+Alternative 1's own drawback was that the condition has to live somewhere a document and a tool
+can both read, with the risk of **stating it twice and having the two disagree**. So it is
+written **once**: the family partition owns the predicate and the register *refers* to it. A
+register that carried its own copy of "has a panel seating face" would be a second statement of
+the partition, and the one that moved would win silently — which is the failure this document
+has now spent three questions on.
 
-**There is a filter, and it does not catch this one.** A parameter that is **zero** across a whole
-family is treated as the *absence* of the joint rather than a dimension the drawing is missing —
-so `panel_thickness`, `panel_tolerance` and `panel_overlap` all drop out on a panel-less bulkhead,
-because they are zero there. **`panel_offset` does not drop out, because it is not zero.** It
-keeps its ordinary value on a bulkhead with no panel; it simply does not describe anything on that
-part. So the test demands it, and no correct drawing can supply it.
+**Alternative 2 is explicitly rejected**, and for the reason the recommendation gave rather than
+on cost: it would put a not-a-type into `CARRIED_BY_TYPES`, a structure whose name and contents
+say *type*. That is exactly how the *Governing expression* column came to mean two things, which
+[OQ-DES-D7](#open-questions) was spent correcting. Alternative 4, recording the gap and leaving
+it, is rejected because a report with a permanent known-false entry trains its readers to skim
+it.
 
-**The filter is a proxy, and it fails in both directions. The other direction is
-`corner_tolerance`, and it is the more serious one.** Added 2026-08-30. That parameter is 0 on
-every part, so the filter drops it — and section 5.2's rule **H5** refuses to place a
-structurally-zero dimension for the same reason, *"a dimensioned zero asserts an inspectable
-coincident fit; where the joint is absent there is nothing to inspect."*
+**What this does not settle.** The `corner_tolerance` direction of the same proxy — a parameter
+that is 0 on *every* part, so the filter drops it and H5 refuses to place it, leaving a
+line-to-line fit undrawn and unmentioned — is a different failure of the same test and is
+[IP-FC-112](../implementation/freecad_migration.md), not this. This question is about a row that
+is demanded where its joint is absent; that one is about a fit that is real and invisible.
 
-**The joint is not absent.** The corner does seat against the bulkhead, on two faces.
-[OQ-DES-C5](corner.md#open-questions) created `corner_tolerance` and held it at 0 because that is
-what every flown part was built at — a **line-to-line fit**, which is a statement about the fit
-and not the lack of one. A joint built to zero clearance is arguably the one a reader most needs
-told, because the alternative assumption is that there is room.
-
-So the same proxy produces two opposite errors: a parameter demanded where its joint is absent
-(`panel_offset`), and a parameter dropped where its joint is present (`corner_tolerance`). **Any
-answer to this question should be tested against both**, and an answer that only stops the
-false demand has fixed the easier half.
-
-Measured 2026-08-30 under IP-FC-107, on the families with no panel:
-
-| Family | Panel parameters that are zero | Still demanded |
-| --- | --- | --- |
-| `bulkhead-end_anchor_end_bolt-257941` | `panel_overlap`, `panel_thickness`, `panel_tolerance` | **`panel_offset`** |
-| `bulkhead-interconnect-b591ef` | `panel_overlap`, `panel_thickness`, `panel_tolerance` | **`panel_offset`** |
-| `bulkhead-cowling_anchor_cowling_bolt-b4b410` | `panel_offset`, `panel_overlap`, `panel_thickness`, `panel_tolerance` | — |
-
-The cowling family escapes only because `panel_offset` happens to be zero on it too. Two families
-are left holding an obligation they cannot discharge.
-
-**This is a known class of error with a decided principle and no mechanism for this case.**
-[OQ-DES-D6](#open-questions), decided 2026-08-28, hit the same thing from the other side: the cowl
-flange row was obliging end and interconnect bulkheads to state a parameter for a flange those
-types do not have, and the note recorded that *"an obligation no correct drawing can discharge
-costs the completeness test its meaning."* The fix was a restriction by **type name** —
-`CARRIED_BY_TYPES`. Whether a bulkhead has a panel is not a type; it is a topology property that
-splits a type into two families. So the existing mechanism does not reach it.
-
-**What is not at stake.** The parts are right, no drawing is wrong, and no answer here changes a
-sheet. What changes is whether two family sheets carry an obligation that cannot be met.
-
-**Alternatives.**
-
-**1. Let a register row be restricted by feature, not only by type.**
-
-Extend the restriction mechanism so a row can say *"only for families that have a panel seating
-face"*, evaluated the same way the family partition already evaluates it.
-
-*What it looks like.* Row 5 carries a condition alongside its *Carried by* entry; the two
-panel-less families stop being asked for `panel_offset` and the four panelled ones are unaffected.
-
-*Benefits.* Fixes the general case rather than this instance — the same mechanism would cover any
-future row describing a feature only some families have, and OQ-DES-D6's row 7 could move onto it
-too, replacing a type-name list with the thing the list was standing in for.
-
-*Drawbacks.* The condition has to be written somewhere a document and a tool can both read, which
-is a new kind of entry in the register. The family partition already computes exactly this
-predicate, so the risk is stating it twice and having the two disagree.
-
-*Needs.* A decision on where the condition is written and how the register and the partition are
-kept from disagreeing.
-
-**2. Split row 5 into a panelled row and treat the panel-less bulkhead as having no joint 5.**
-
-The register keeps one row for the joint and marks it as belonging to the panelled families, the
-same way row 7 is marked as belonging to the cowling type.
-
-*What it looks like.* Row 5's *Carried by* reads `bulkhead (panelled)`, and `CARRIED_BY_TYPES`
-gains an entry keyed on something other than a type name.
-
-*Benefits.* Smallest change; reuses the mechanism OQ-DES-D6 already built and the reader already
-knows.
-
-*Drawbacks.* It overloads a structure whose name and contents say *type*, with a thing that is not
-a type. That is how the *Governing expression* column came to mean two things, which is what
-OQ-DES-D7 was just spent correcting.
-
-*Needs.* Nothing.
-
-**3. Widen the zero rule: a parameter is absent if the *joint* is absent, not only if the value
-is zero.**
-
-Instead of asking whether a parameter is zero, ask whether the row's joint exists on the family,
-and drop all of that row's parameters when it does not.
-
-*What it looks like.* `panel_offset` drops on the panel-less families for the same reason
-`panel_thickness` already does, and the rule reads as one idea instead of a proxy for it.
-
-*Benefits.* It is the rule the current one is an approximation of. The zero test was always a
-stand-in for "the joint is not there", and this says the real thing.
-
-*Drawbacks.* It needs a definition of *the joint exists on this family* that is separate from the
-zero test, which is alternative 1's mechanism arriving by another route — so this is not
-independent of it so much as a different justification for the same work.
-
-*Needs.* The same condition alternative 1 needs.
-
-**4. Leave it, and record that two family sheets carry an unmeetable obligation.**
-
-Section 3 already lists known gaps in the completeness test. This becomes a fourth.
-
-*What it looks like.* Nothing moves; the report keeps naming `panel_offset` on two families and a
-reader is expected to know why.
-
-*Benefits.* No work.
-
-*Drawbacks.* A report with a permanent known-false entry trains its readers to skim it, and the
-next true entry is read the same way. OQ-DES-D6 made this argument and acted on it; this would
-un-make it.
-
-*Needs.* Nothing.
-
-**Recommendation: alternative 1**, with alternative 3 as the way to describe it.
-
-The zero test is a proxy and this is the case where the proxy fails, so the fix is to say what was
-meant — a row applies to the families that have its joint. Doing that generally is barely more
-work than doing it for row 5, because the family partition already computes the predicate; the
-question is where it is written so the register and the partition cannot drift apart, and that is
-what needs deciding rather than designing here.
-
-Alternative 2 is tempting because the mechanism exists, and it should be resisted for the reason
-this document has just spent a question learning: a structure that says *type* and holds
-not-types becomes a structure that means two things.
-
-*Implementation: `tools/drawing_families.py`'s `CARRIED_BY_TYPES` and the structural-zero filter,
-and section 2's register table.*
+*Implementation: [IP-FC-110](../implementation/freecad_migration.md), now unblocked —
+`tools/drawing_families.py`'s `CARRIED_BY_TYPES` and the structural-zero filter, and section 2's
+register table.*
 
 ---
+
+### ~~OQ-DES-D13 — Nine dimensions can be governed by either of two requirements, and the drawing says which for none of them~~ — DECIDED 2026-09-06: a `GOVERNED BY` column in the value table
+
+**Resolution note.** **Alternative 1**, one extra column in the value table carrying the
+requirement id that produced each variant's value, **with alternative 3's marker held as the
+fallback** if a second column is ever needed.
+
+**The rationale, and it is not a preference.** All nine dimensions with two governing
+requirements split *inside* a family — on the corner sheet 240 variants take the longeron branch
+and 24 the panel branch — so **the answer varies by row of the value table, exactly as the value
+does**. An annotation that cannot vary per variant cannot state what DES-9 asks for, which rules
+out every fixed-text candidate on the family sheet. The column also reuses table generation that
+already runs per variant, and it survives the count growing from nine, which it will: 14
+conditional branches are unexamined and the build layer is untouched.
+
+**It fits, measured.** A column of requirement ids is **6.92 mm** against the **12.0 mm** of
+table width the band layout has spare, leaving 5.1 mm. A column of branch *names* is 15.33 mm and
+does not fit — and overrunning by 3.3 mm is not a small penalty but a cliff, dropping the drawn
+view from 75.4 % to 45.3 % as the layout falls back to a column.
+
+**The constraint the decision carries: one column per sheet, not one per branching dimension.**
+Per dimension does not fit — the corner has four branching dimensions and 4 × 6.92 = 27.7 mm
+against 12.0 mm available. So a single column serves the sheet, and its cells must therefore name
+the *dimension* as well as the requirement. **That widens the cell, and the width is the thing to
+measure before building**: `drawing_standard.column_width_mm` on the real cell contents, against
+the 5.1 mm of margin the column leaves. If it does not fit, alternative 3's marker plus a legend
+in the three spare rows is the fallback, and the legend is what carries the mapping.
+
+**Alternative 2 is rejected for the family sheet on measurement rather than taste.** A leader
+note is fixed text, so on a sheet where 240 variants go one way and 24 the other it would have to
+describe both cases and when each applies — a sentence, on the one document whose text-extent
+argument assumes single letters, which is the unmeasured risk [OQ-DES-D2](#open-questions)
+recorded when it chose that annotation. Alternative 4 (single-variant sheets only) is rejected
+because it defers DES-9 behind [IP-FC-84](../implementation/freecad_migration.md) and leaves the
+family sheet — the document a reviewer reads — silent about the thing DES-9 exists to surface.
+Alternative 5 (a bigger frame) is rejected because it reopens [OQ-DES-D5](#open-questions) for
+one requirement. Alternative 6 is rejected because DES-9 says *the drawing* states it, and the
+honest form of that alternative is to amend DES-9 rather than to declare the register sufficient.
+
+**What this rests on that was itself corrected.** The budget above is not the one this question
+was framed against: the sheet was believed to have no spare table rows and to lose the view at an
+eleventh, and it has **three spare rows** and loses nothing until the fourteenth
+([IP-FC-128](../implementation/freecad_migration.md)). Depth is cheap because the table sits
+beside a title block deeper than it is; **width** is where this sheet is tight.
+
+*Implementation: [IP-FC-99](../implementation/freecad_migration.md) step three.*
+
 
 ## See also
 
