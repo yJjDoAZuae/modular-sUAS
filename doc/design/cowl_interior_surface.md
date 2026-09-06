@@ -433,6 +433,12 @@ check what an *operation* promised instead, and they are the reason the build is
 Neither is a tolerance on the answer. Both are identities that the operation has to satisfy, and
 that is the whole point: a wrong cavity and a right one are both valid closed solids.
 
+Both are computed from `Shape.Volume`, which IP-FC-119 has since measured as wrong by 0.16 to
+0.24 % on solids of this kind. They are differences of volumes taken the same way over
+overlapping geometry, where that error should largely cancel — and the measured partition slips
+of ~1e-6 say it does — but the audit under that item is what will establish it rather than
+assume it.
+
 ### 9.7 Measured, at `U` = 1
 
 | | nose | tail |
@@ -451,35 +457,47 @@ None of these stops the parts being built or used. They are the shape of what ha
 established, and each is a work item in
 [freecad_migration.md](../implementation/freecad_migration.md).
 
-- **Only one of the two candidate constructions has ever run** (IP-FC-115). The cavity is
-  assembled by cutting the dilated ribs out of the smooth interior and then cutting that out of
-  the blank. The same set can be had by cutting the smooth interior out of the blank and fusing
-  back the part the ribs occupy, which asks the kernel for two easy booleans and a fuse instead
-  of one cut between doubly curved NURBS solids 0.6 mm apart. That comparison was attempted and
-  the harness crashed, so it produced nothing. The construction in use is reproducible; it has
-  not been shown to be the better of the two.
+- **Both candidate constructions have now run, and the one in use is the better of the two**
+  (IP-FC-115, measured 2026-09-05). The cavity is assembled by cutting the dilated ribs out of
+  the smooth interior and then cutting that out of the blank. The same set can be had by
+  cutting the smooth interior out of the blank and fusing back the part the ribs occupy. Both
+  were run on one saved set of operands, so the comparison is of the assembly and not of the
+  parts. They build the same wall — the symmetric difference is empty in both directions and
+  2003 sampled boundary points of each lie on the other's faces to within 6e-10 mm — and the
+  one in use is **316 s against 723 s** on the tail. The reason the alternative was expected to
+  be easier does not hold: its two halves *overlap*, because the shell already contains whatever
+  rib material lies outside the smooth interior, so the fuse that joins them is a union of two
+  intersecting multi-solid sets and is the most expensive single operation in either route at
+  165 s. It also depends on `removeSplitter`, which raises `Bnd_Box is void` on the tail's
+  fused wall. Nothing in this section changes.
 - **The dilation is brute force** (IP-FC-116). §9.2's horizontal disc is built by fusing 48
-  translated copies of each notch solid. It is correct and it is slow: 315 to 336 s of a 571 to
-  597 s tail build, and a rib solid of roughly 250 faces where an offset section would give
-  about 15. The 48-gon is also only an approximation of the disc — inscribed radius
-  `t·cos(π/48)` = 0.99786 `t`, so 0.0013 mm short at the facet midpoints, inside τ but not
-  exact.
-- **Verified at `U` = 1 only, on three verification builds per kind plus the delivered one** (IP-FC-117). Four full tail builds from
-  identical code gave 23623.14, 23623.73, 23627.59 and 23685.23 mm³. **The first three agree
-  to 0.019 % and the fourth is 0.26 % away from them, and the two groups are not yet
-  comparable:** the three ran `check_cowl_interior.py`, which builds at `cowl_tree`'s own
-  parameter rows, and the fourth ran `build_part.py`, which builds at the sweep's overlay. The
-  overlay matches those rows on every key the render recorded, so the parts should be the same
-  part -- but *should be* is the thing to measure, and until it is measured the 0.26 % is as
-  likely to be a difference between two entry points as run-to-run variance. **What is ruled
-  out is the obvious explanation:** all four builds chose the same 16 stations, so this is not
-  refinement stopping somewhere different. Nothing bounds the spread either way, and §6 measures
-  thickness at 12 stations by 240 samples, which cannot see a quarter of a percent spread over
-  the whole part. **Isolating that is the first step of this item**, and it is cheap: build the
-  same kind through both entry points and difference them. **`U` = 4 is where to expect trouble**: the wall is `n_p·w` = 0.6 mm at every
-  `U`, because extrusion width is a property of the machine, so at `U` = 4 that same 0.6 mm
-  wraps a part four times the size — proportionally the thinnest shell, and the most surface to
-  hold inside a fixed 0.05 mm tolerance.
+  translated copies of each notch solid. It is correct, and it makes a rib solid of roughly 250
+  faces where an offset section would give about 15, which every boolean downstream then
+  carries. **The cost is downstream of it, not in it**: one instrumented tail build at `U` = 1
+  spends 194 s on the surface fit, **72 s on the dilation** and **337 s fusing the dilated tools,
+  cutting with them and checking the residue**, 609 s in all. An earlier version of this bullet
+  read the 337 s as the dilation and called it more than half the build; it is 12 %. The 48-gon
+  is also only an approximation of the disc — inscribed radius `t·cos(π/48)` = 0.99786 `t`, so
+  0.0013 mm short at the facet midpoints, inside τ but not exact. **48 facets is a floor rather
+  than a choice**, and that part is settled: the copies sit on a circle of radius `t`, so adjacent
+  ones are `2·t·sin(π/N)` apart and their union is solid only while that is under the slab's
+  in-plane thickness. The 0.1 mm axial cut needs `N > π/asin(w/2t)` = 37.6, so 38 minimum;
+  `RIB_FACETS` = 24 built a wall 1332 mm³ light with two stations at 0.1035 mm **while the rib
+  gaps still measured 1.3000 and 1.4000 mm exactly**. `dilated_notches` now derives the floor per
+  tool and refuses to dilate below it.
+- **Verified at `U` = 1 only** (IP-FC-117). Both kinds have been built repeatedly at `U` = 1
+  and never at any other scale. **The run-to-run volume spread that used to be recorded here is
+  withdrawn**: measured 2026-09-05, two builds of the tail agree to 0.006 mm³ — 2.6e-7 relative
+  — when their volume is measured by refining a tessellation, and their surfaces agree to about
+  a micron. The spread of up to 0.58 % previously reported was `Shape.Volume` misreporting these
+  B-spline solids by 0.16 to 0.24 %, which is IP-FC-119. The builds reproduce.
+
+  What remains is that **no scale but one has been tried**. **`U` = 4 is where to expect
+  trouble**: the wall is `n_p·w` = 0.6 mm at every `U`, because extrusion width is a property of
+  the machine, so at `U` = 4 that same 0.6 mm wraps a part four times the size — proportionally
+  the thinnest shell, and the most surface to hold inside a fixed 0.05 mm tolerance. The OML
+  blank conditioning that makes the tail correct above `U` = 1 landed under IP-FC-12 and has
+  never been exercised through the shell path.
 
 ## See also
 

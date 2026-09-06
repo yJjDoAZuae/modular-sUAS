@@ -77,6 +77,16 @@ SWEEPS = (
      ('nose_size_variants.csv', 'nose_type_variants.csv')),
     ('tail', 'run_tail_parametric_sweep',
      ('nose_size_variants.csv', 'tail_type_variants.csv')),
+    # **The shelled kinds are listed so `kind_of` can name them** (OQ-ARCH-20). They come out
+    # of the same two drivers as the solid cowls -- `_drivers_for` dedupes, so nothing is built
+    # twice -- and without them here `kind_of` matches the longest known name inside the
+    # filename and answers `nose_cowl` for `..._nose_cowl_shell.stl` and `tail` for
+    # `..._tail_shell.stl`. A shell would then be compared against the tolerance of the solid it
+    # was hollowed out of, silently.
+    ('nose_cowl_shell', 'run_nose_parametric_sweep',
+     ('nose_size_variants.csv', 'nose_type_variants.csv')),
+    ('tail_shell', 'run_tail_parametric_sweep',
+     ('nose_size_variants.csv', 'tail_type_variants.csv')),
 )
 
 
@@ -192,9 +202,24 @@ FILLETED_KINDS = {'bulkhead', 'boom_bulkhead'}
 TOL_FREEFORM = 6.0e-4
 FREEFORM_KINDS = {'nose_cowl', 'nose_nose', 'tail'}
 
+# **The shelled kinds are compared on the offset criterion, not on relative volume.**
+# OQ-ARCH-20, decided 2026-09-06: a mesh's volume error goes as offset x area, so dividing it by
+# the part's own volume charges a hollow part for being hollow -- 6.0e-4 asks a solid cowl for
+# 0.006578 mm of surface agreement and its shell for 0.000168 mm, 39 times tighter and 1 % of
+# the deflection the part is exported at.
+SHELLED_KINDS = {'nose_cowl_shell', 'tail_shell'}
+
+# `|Va - Vb| / (A * 100U)`, dimensionless. **6.6e-5 is what the present tolerance already grants
+# the solid cowls** -- 6.578e-5 on the tail and 6.809e-5 on the nose, taking the smaller so that
+# nothing loosens -- and it is a measured figure transferred between kinds rather than one
+# converted from the shells' own tolerance, which would have reproduced the volume denominator
+# and changed nothing. The worst shell mesh anomaly yet measured, 112.5 mm3 on a wall three
+# independent instruments call correct (IP-FC-120), is 1.324e-5 and sits five times inside it.
+TOL_OFFSET = 6.6e-5
+
 # Every cowl kind, including the plate -- which has no OML and so meets `TOL_EXACT` on volume,
 # but is a turned disc whose bounding box is a tessellated circle like the others.
-COWL_KINDS = FREEFORM_KINDS | {'nose_plate'}
+COWL_KINDS = FREEFORM_KINDS | SHELLED_KINDS | {'nose_plate'}
 
 # `build_part.py` exports the cowls at 0.02 mm deflection, because a wholly freeform surface
 # does not mesh cheaply (IP-FC-12). An inscribed tessellation sits up to that far inside the
@@ -505,24 +530,54 @@ def compare(a_dir: Path, b_dir: Path, wanted: dict[str, str], tol_exact: float,
             sb = mesh_stats.mesh_stats(b, bbox_places=BBOX_PLACES)
             btol = bbox_tol(u_of(name))
             if kind in COWL_KINDS:
-                btol = max(btol, COWL_EXPORT_DEFLECTION)
+                # The floor is the export deflection, and that now scales with `U` (IP-FC-121),
+                # so this must scale with it or a large part is held to a bound its own mesh
+                # cannot meet.
+                btol = max(btol, COWL_EXPORT_DEFLECTION * (u_of(name) or 1.0))
         except (mesh_stats.TruncatedMesh, ValueError, OSError) as exc:
             failures.append((name, f'unreadable: {exc}'))
             continue
 
         rel = (sb['volume'] - sa['volume']) / sa['volume']
+        offset = mesh_stats.volume_offset(sa, sb, u_of(name))
         bbox_off = max(abs(x - y) for x, y in zip(sa['bbox'], sb['bbox']))
-        if kind in FREEFORM_KINDS:
-            tol = TOL_FREEFORM
+
+        # **Two criteria, and which one applies is a statement about evidence.** The shelled
+        # kinds are judged on the offset, at a threshold measured from what the solid cowls
+        # achieve (OQ-ARCH-20). Every other kind keeps the relative-volume rule it has always
+        # had -- *not* a converted version of it, because converting a kind's own tolerance into
+        # the offset metric is algebraically the same rule with the volume denominator smuggled
+        # back in through the threshold, and would look like a change while being none. Those
+        # kinds move when someone measures what their geometry actually achieves.
+        if kind in SHELLED_KINDS:
+            tol, unconverted = TOL_OFFSET, False
+        elif kind in FREEFORM_KINDS:
+            tol, unconverted = TOL_FREEFORM, True
         elif kind in FILLETED_KINDS:
-            tol = tol_filleted
+            tol, unconverted = tol_filleted, True
         else:
-            tol = tol_exact
-        ok = abs(rel) <= tol and bbox_off <= btol
+            tol, unconverted = tol_exact, True
+
+        if unconverted:
+            volume_ok = abs(rel) <= tol
+        elif offset is None:
+            # No area recorded: the offset cannot be computed, and falling back to the rule this
+            # kind was moved off would assert agreement that was never tested.
+            volume_ok = False
+        else:
+            volume_ok = offset <= tol
+
+        ok = volume_ok and bbox_off <= btol
         rows.append((name, kind, sa['volume'], sb['volume'], rel, bbox_off, btol, ok))
         if not ok:
             why = []
-            if abs(rel) > tol:
+            if not volume_ok and offset is None:
+                why.append('no surface area recorded, so the offset criterion this kind is '
+                           'judged on could not be computed -- re-measure the meshes')
+            elif not volume_ok and kind in SHELLED_KINDS:
+                why.append(f'volume offset {offset:.3e} exceeds {tol:.3e} '
+                           f'({offset * 100.0 * (u_of(name) or 1.0):.6f} mm of surface)')
+            elif not volume_ok:
                 why.append(f'volume {rel * 100:+.5f}% exceeds {tol * 100:.5f}%')
             if bbox_off > btol:
                 why.append(f'bounding box moved {bbox_off:.6f} mm, '
