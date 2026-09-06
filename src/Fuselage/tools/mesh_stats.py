@@ -102,19 +102,30 @@ def _load_ascii(data: bytes, path: Path) -> np.ndarray:
 
 
 def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
-    """Triangle count, enclosed volume, and bounding box of an STL.
+    """Triangle count, enclosed volume, surface area, and bounding box of an STL.
 
     Volume is the divergence-theorem sum over signed tetrahedra, taken absolute so
     that winding direction does not change the answer. Vectorized rather than
     looped: these meshes reach 367k triangles, where a per-triangle Python loop
     costs seconds per file and makes verifying a 576-part sweep impractical.
+
+    **`area` is here because a volume difference is a surface quantity** (OQ-ARCH-20,
+    decided 2026-09-06). A mesh's volume error goes as offset x area, so a comparison
+    that divides it by the part's own volume charges a hollow part for being hollow:
+    the same tolerance asked a solid cowl for 0.0066 mm of surface agreement and its
+    shell for 0.000168 mm. The area costs one cross product per triangle on data
+    already in hand.
+
+    Older recorded measurements have no `area` key. Readers must treat it as optional
+    rather than assume it -- `same_geometry` does.
     """
     tris = load_triangles(path)
     if len(tris) == 0:
-        return {"triangles": 0, "volume": 0.0, "bbox": None}
+        return {"triangles": 0, "volume": 0.0, "area": 0.0, "bbox": None}
 
     a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
     volume = float(np.abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum()) / 6.0)
+    area = float(np.linalg.norm(np.cross(b - a, c - a), axis=1).sum() / 2.0)
 
     flat = tris.reshape(-1, 3)
     lo = np.round(flat.min(axis=0), bbox_places)
@@ -123,8 +134,29 @@ def mesh_stats(path: str | Path, bbox_places: int = 4) -> dict:
     return {
         "triangles": int(len(tris)),
         "volume": volume,
+        "area": area,
         "bbox": [float(v) for v in lo] + [float(v) for v in hi],
     }
+
+
+def volume_offset(a: dict, b: dict, u: float | None = None) -> float | None:
+    """`|Va - Vb| / (A * 100U)` -- the volume difference as a fraction of the part.
+
+    **What it means.** Divide a volume difference by the surface area and it becomes the
+    average distance the surface would have to move to account for it; divide that by
+    `100U`, the unit width, and it is a pure number comparable between parts of different
+    sizes and between a solid and its shell. OQ-ARCH-20, decided 2026-09-06.
+
+    `None` when either measurement predates the `area` key, or when the area is zero --
+    the caller then has no offset to test and must say so rather than substitute one.
+    """
+    if a is None or b is None:
+        return None
+    area = a.get("area")
+    if not area:
+        return None
+    scale = 100.0 * (u if u else 1.0)
+    return abs(a["volume"] - b["volume"]) / (area * scale)
 
 
 # A tolerance on a length or a volume scales with the part it measures. That is the

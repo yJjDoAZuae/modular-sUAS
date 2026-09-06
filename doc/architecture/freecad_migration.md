@@ -703,7 +703,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 | ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 | ARCH-18 | ~~withdrawn~~ 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
-| ARCH-19 | open, premise corrected 2026-09-05 | How much may two builds of one part differ? **The alarming figures that prompted this are withdrawn** — two builds agree to ~1 µm and 2.6e-7 of volume; `Shape.Volume` was the thing that differed, not the solids (IP-FC-119). The metric set stands; the thresholds remain open, and can now be tight |
+| ARCH-19 | open, measured 2026-09-06 | How much may two builds of one part differ? **The alarming figures that prompted this are withdrawn** — `Shape.Volume` was what differed, not the solids (IP-FC-119). The symmetric difference, the number this question said would decide it, is now measured: **1.6 mm³, 6.8e-5 of the part, a 19 nm mean surface offset** — 260× the difference of volumes, and still far below anything downstream can see. Only the thresholds remain, and they can be tight |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2941,17 +2941,23 @@ sampling. Measured:
 
 - **Every face matches one-to-one**; no face exists in only one solid. The topology is genuinely
   identical, so this is not a feature that appeared or vanished.
-- **One face carries 83 % of the total area difference**: at (−20.05, 11.80, **0.00**) — on the
-  open end — 47.5811 mm² against 48.6157 mm², with its centroid moved **0.0915 mm**. That is two
-  orders of magnitude more than any other face in the part.
+- **One face appeared to carry 83 % of the total area difference** — at (−20.05, 11.80,
+  **0.00**), on the open end, 47.5811 mm² against 48.6157 mm², centroid apparently moved
+  0.0915 mm. **That was `Face.Area` lying and the conclusion is withdrawn.** The face's boundary
+  wire is the same in both builds to 286 nm point for point, and its *signed* area is 48.2074
+  against 48.2070 — a difference of 0.0004 mm². `Face.Area` was 1.3 % low on one and 0.85 % high
+  on the other for identical geometry, and `CenterOfMass` shares that integration. See
+  IP-FC-119.
 - **Everything else agrees closely.** The main lateral surface, 26166 mm², matches to 0.157 mm²
   — 6e-6 relative — with its centroid moved 0.49 µm. The twelve worst faces are 98.2 % of the
   whole difference.
 
-So the two builds differ in one place, at the end annulus where the cavity's end cap meets the
-blank, and agree everywhere else to within a micron. **This belongs in the metric set**: it is
-exact, it costs seconds, it localises, and it worked on the case that defeated the symmetric
-difference and the sampled deflection alike. Its one requirement is that the two parts have
+So the two builds do **not** differ anywhere: every face matches, and the one that appeared to
+differ was an artifact of how its area was measured. **The comparison still belongs in the metric
+set** — it costs seconds, it localises, and it is the only one of the three that reached an
+answer at all on this case — but it must be computed from **wire signed areas, not `Face.Area`**,
+which is the mistake made here and the reason it produced a false positive rather than a clean
+negative. Its one requirement is that the two parts have
 comparable topology — and when they do not, "faces present in one solid only" is precisely the
 thing worth reporting.
 
@@ -3015,8 +3021,32 @@ is now decided; what it reads is not yet known. Recommending a number before the
 measurement would be picking one to fit a conclusion already reached, and this question has
 already had two of my explanations die under measurement.
 
-This is held as provisional because **the symmetric difference has not been measured yet**, and
-it is the number that decides the question. If the XOR comes back close to the 75.2 mm³ volume
+**Measured 2026-09-06, and this is the number that was missing: the symmetric difference
+between two builds is about 1.6 mm³.** A → B gives 1.4386 ± 0.3731 mm³ and B → A gives
+1.8398 ± 0.4838, agreeing within their combined error. That is **6.8e-5 of the part**, a mean
+surface offset of about **19 nm**, with the worst sampled gap near 1.5 µm.
+
+**It is 260 times the difference of the two volumes**, which is 0.006186 mm³ — and that ratio is
+the point. A signed volume difference lets a surface that wanders out and back cancel itself to
+nothing; the symmetric difference adds both excursions. So subtraction was understating the
+disagreement between two builds by more than two orders of magnitude, exactly as this question
+suspected when it said a difference of totals is only a lower bound.
+
+**But the ratio being large does not make the parts far apart, and the magnitude is what decides
+the threshold.** 19 nm of mean surface movement is four orders below the 0.05 mm the wall is held
+to and three below `surface_tol(1)` = 5.0e-4 mm. The builds reproduce to far better than anything
+downstream can see, so the thresholds this question asks for can be set tight, and the earlier
+clause about reconsidering the recommendation "from the top" if the XOR came back much larger is
+answered: it came back much larger *in ratio* and very small *in absolute terms*.
+
+**How it was measured matters, because the obvious route does not work.** The boolean symmetric
+difference is exact between solids that share surfaces — it recovers a planted 0.001 mm³ cube
+exactly, in 2 s — and unusable between two independently built solids, where both halves come
+back `isValid()` false and a planted difference lands in the wrong half with the wrong sign
+(IP-FC-123). The figure above comes from `solid_measure.surface_difference`, which samples one
+surface and measures the gap to the other, calibrated against a closed-form answer to 0.62
+standard errors. It is blind to a difference that never reaches the surface; the boolean covers
+that case. If the XOR comes back close to the 75.2 mm³ volume
 difference, the two builds really are near-identical solids and a loosened tolerance is honest.
 If it comes back much larger — which is what a twenty-four-fold amplification between cavity and
 wall suggests — then the builds differ substantially more than any figure in this question has
@@ -3032,6 +3062,66 @@ specific — at the rib cuts, or at the open ends — rather than spread thin ov
 this is a defect with a location and should be fixed rather than tolerated, and no tolerance
 should be loosened to accommodate it. The measurement is cheap, and until it exists every
 alternative here is being chosen between on incomplete evidence.
+
+### ~~OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area?~~ — DECIDED 2026-09-06
+
+**To surface area and part scale: the criterion is `|Va − Vb| / (A · 100U)`, dimensionless.**
+Alternative 1. Dividing by area turns the number into the surface offset the error physically is;
+dividing again by `100U` — the unit width, the length scale the rest of the metric set already
+uses — makes it a pure number, so one figure speaks for a part at any size.
+
+**Why the denominator was the defect.** A tessellated mesh's volume error goes as offset × area,
+so dividing it by the part's own volume charges a hollow part for being hollow. Measured
+2026-09-06 at deflection 0.001 mm, the same 6.0e-4 asks a solid cowl for 0.006578 mm of surface
+agreement and its shell for 0.000168 mm — 39 times tighter, and 1 % of the 0.02 mm the part is
+exported at, so the shell was required to agree sixty times more closely than either mesh is
+built to. The same table disposes of a distinction that had been carried without examining it:
+the nose and tail shells have A/V ratios of 3.58 and 3.57 and identical implied offsets, so the
+class that bears on this is solid against shell, not which end of the airframe a part sits on.
+
+**The threshold is 6.6e-5, for the cowl and shell kinds.** That is what the present tolerance
+already grants the solid cowls — 6.578e-5 tail, 6.809e-5 nose, taking the smaller so nothing
+loosens. The worst shell mesh anomaly yet measured, 112.5 mm³ on a correct wall (IP-FC-120),
+is 1.324e-5 and sits five times inside it.
+
+**Per-kind thresholds are right, and carry one trap.** Geometries genuinely differ, so one
+number for every kind is not wanted. But a per-kind threshold obtained by *converting* that
+kind's old relative tolerance — `k = tol_rel · V/(A·100U)` — makes `ΔV/(A·100U) ≤ k`
+algebraically identical to `ΔV/V ≤ tol_rel`: the volume denominator returns through the
+threshold and nothing has changed but the spelling. **So a per-kind number has to come from what
+that geometry achieves, not from arithmetic on the old one.** The shells' 6.6e-5 qualifies
+because it was not converted from their own tolerance (6.0e-4 relative, which is 1.68e-6 in this
+metric) but taken from what the solid cowls achieve — a transfer between kinds that is only
+meaningful because the metric is comparable across them, and the payoff of the change.
+The prismatic kinds have no such measurement yet; they stay on their existing rule, marked in
+the code as unconverted rather than re-expressed, so the remaining work stays visible.
+
+**Also decided, and already built: the cowl export deflection scales with `U`** (IP-FC-121).
+`COWL_LINEAR_DEFLECTION` is the figure at `U` = 1 and `export_deflection` multiplies it by the
+part's own `U`. This is what makes the criterion `U`-invariant rather than merely dimensionless,
+and it removes the drift `compare_backends` recorded across `U` — the tail's volume error falling
+2.1e-04 to 1.5e-05 from `U` = 0.5 to 4 — which was measuring the export setting as much as the
+geometry. Scaled by `U` rather than by `MeshPart`'s `Relative=True`, which divides by the shape's
+own bounding box and would export a nose and a tail at one `U` at two different deflections. At
+`U` = 1 nothing changes; `LINEAR_DEFLECTION` for the prismatic kinds is untouched, having a
+float32 STL floor and a deliberate facet-count match with the OpenSCAD reference.
+
+**And the classification defect goes with it.** `compare_backends.kind_of` finds a kind by
+looking for a known kind name inside the filename, and no shelled kind was in its table, so
+`..._tail_shell.stl` would have been compared as `tail` — a shell judged against the solid it was
+hollowed out of. Wrong under every alternative and needing no decision.
+
+**Why not simply take the symmetric difference.** Where both sides are solids, the XOR *is* the
+right volume metric and it works: validated 2026-09-06 on the tail wall, it returns a planted
+0.008 mm³ and 0.001 mm³ exactly, in seconds, for a difference wholly interior to the material —
+4.2e-08 of the part. But `compare_backends` compares two *meshes*: the OpenSCAD side is an STL
+and there is no B-rep to boolean. The two are not competing. The XOR is the instrument where
+both sides are solids — which is OQ-ARCH-19's case, and IP-FC-115's — and this criterion is for
+where one side is only ever a mesh.
+
+**Implemented under IP-FC-122.** What is not yet shown is that the comparison still passes at
+`U` ≠ 1, since every FreeCAD cowl STL there now changes; that needs a `compare_backends` run over
+the cowl kinds at several `U`.
 
 ## References
 
