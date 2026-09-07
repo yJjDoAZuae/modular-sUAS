@@ -73,10 +73,43 @@ _FIELD = [None]
 #: (field, function, line, name) -> {winning argument index: variants}
 SITES = {}
 
+#: A tie, as a branch label. Numeric like the others because `minimal_axes` compares through
+#: `written()`, which answers `None` for anything that is not a number -- so a string label
+#: would compare equal to every other string label and every branch would be reported constant.
+#: Negative so it cannot collide with an argument index.
+TIE = -1.0
+
+#: (field, function, line, name) -> {variant index: winner}. Aggregate counts say how often a
+#: branch wins; only this says *which* variants, and that is what decides whether the note can
+#: be factored onto the same axes as the value it explains.
+PER_VARIANT = {}
+
+#: Index of the variant being evaluated, within its own kind.
+_AT = [0]
+
+#: kind -> [axis_values per variant], parallel to `_AT`, built the way `drawing_families.resolve`
+#: builds them so the two describe the same axes.
+AXIS_VALUES = {}
+
 #: Ties, kept apart from wins. Two branches agreeing on a value is not one of them governing --
 #: it is the case where the note has nothing to choose between, and counting it as a win for
 #: the first argument would overstate how often that branch decides anything.
 TIES = {}
+
+
+def axis_values(kind, row):
+    """One variant's axis values, built exactly as `drawing_families.resolve` builds them.
+
+    Copied in shape rather than imported because `resolve` runs its own enumeration and
+    returning to it here would mean trusting two enumerations to agree on order. The axes
+    themselves come from the one `SWEEPS` entry, so there is still a single authority on what
+    the axes *are*.
+    """
+    out = {}
+    for label, column in df.SWEEPS[kind]['axes']:
+        value = row[column]
+        out[label] = float(value) if label in ('U', 'FX') else str(value)
+    return out
 
 
 def _tally(counts):
@@ -96,9 +129,11 @@ def _watching(name, chooser):
         winners = [i for i, a in enumerate(args) if a == value]
         if len(winners) > 1:
             TIES[key] = TIES.get(key, 0) + 1
+            PER_VARIANT.setdefault(key, {})[_AT[0]] = TIE
         else:
             counts = SITES.setdefault(key, {})
             counts[winners[0]] = counts.get(winners[0], 0) + 1
+            PER_VARIANT.setdefault(key, {})[_AT[0]] = float(winners[0])
         return value
     return watched
 
@@ -118,7 +153,9 @@ def sweep():
             relations = cd.COWL_RELATIONS if df.SWEEPS[kind].get('cowl') else cd.RELATIONS
             rows = cd.variants(kind)
             counted[kind] = len(rows)
-            for row, U, FX, _flat in rows:
+            AXIS_VALUES[kind] = [axis_values(kind, row) for row, _U, _FX, _f in rows]
+            for index, (row, U, FX, _flat) in enumerate(rows):
+                _AT[0] = index
                 g = cd.givens(kind, row, U, FX, const)
                 d = {}
                 for relation in relations:
@@ -207,12 +244,95 @@ def geometry_layer(kinds=('corner', 'bulkhead', 'boom_bulkhead')):
     for line in done.stdout.decode('utf-8', 'replace').splitlines():
         if line.startswith('VARIANTS '):
             total = int(line.split()[1])
-        elif line.startswith('BRANCH\t') or line.startswith('TIE\t'):
+        elif line.split('\t')[0] in ('BRANCH', 'TIE', 'PER'):
             rows.append(line.split('\t'))
     if total is None:
         return None, ('geometry_branches.py produced no result%s%s'
                       % (chr(10), done.stderr.decode('utf-8', 'replace')[-1500:]))
     return (total, rows), None
+
+
+def factor_report(kinds=('corner', 'bulkhead', 'boom_bulkhead')):
+    """Does a branch follow the same axes as the value it explains?
+
+    **This is the question OQ-DES-D13's implementation turns on, and it is not the one that
+    was asked first.** The family table is *factored by axis* -- one short table per size axis,
+    a field in each column, one row per value of that axis -- rather than one row per variant.
+    So a `GOVERNED BY` annotation is only a paired column in an existing block if the branch is
+    a function of **the same axes the value is**. If it follows more axes, it does not fit
+    beside the value at all: it needs a block of its own, which costs rows and columns rather
+    than the 6.92 mm of width the decision was measured against.
+
+    `drawing_families.minimal_axes` is what decides a table's shape, so it is what decides
+    this too -- the same function on the branch label instead of on the value. Anything else
+    would be a second authority on the same question.
+
+    Returns a list of `(kind, field, value_axes, branch_axes, verdict)`.
+    """
+    rows = []
+    for kind in kinds:
+        axes = [label for label, _column in df.SWEEPS[kind]['axes']]
+        variants = cd.variants(kind)
+        values = AXIS_VALUES.get(kind)
+        if not values:
+            continue
+
+        # **DES-9 is about the value *shown*, so a branching quantity the sheet never prints
+        # needs no note.** The obligation is `interface_fields`, which is what section 3 holds
+        # the sheet to, and the two vocabularies differ -- the derivation writes `panel.offset`
+        # and the sheet writes `panel_offset` -- so the correspondence is made explicit here
+        # rather than assumed, and a field that maps to nothing is reported as not shown.
+        resolved = df.resolve(kind)
+        shown = df.interface_fields(kind, set(resolved[0][2])) if resolved else set()
+
+        found = {}
+        # The parameter layer.
+        for (field_key, _func, _line, _name), seen in sorted(PER_VARIANT.items()):
+            at_kind, field = field_key
+            if at_kind == kind and len(set(seen.values())) > 1:
+                found[field] = dict(seen)
+
+        # The geometry layer, whose winners come back one character per variant in the order
+        # the entries were handed over -- which is `cd.variants(kind)`'s order, the same order
+        # `values` is in, so they line up without trusting two enumerations to agree.
+        result, _why = geometry_layer((kind,))
+        if result is not None:
+            for row in result[1]:
+                if row[0] != 'PER':
+                    continue
+                seen = {}
+                for i, mark in enumerate(row[3]):
+                    if mark == '-':
+                        continue
+                    seen[i] = TIE if mark == 't' else float(mark)
+                if len(set(seen.values())) > 1:
+                    found[row[1]] = seen
+
+        for field in sorted(found):
+            seen = found[field]
+            branch = [(values[i], {field: seen[i]}) for i in sorted(seen)]
+            value = [(values[i], {field: variants[i][3][field]})
+                     for i in sorted(seen) if field in variants[i][3]]
+            branch_axes = df.minimal_axes(branch, field, axes)
+            value_axes = df.minimal_axes(value, field, axes) if value else None
+            on_sheet = field.replace('.', '_') in shown
+            rows.append((kind, field, value_axes, branch_axes, on_sheet,
+                         _verdict(value_axes, branch_axes, on_sheet)))
+    return rows
+
+
+def _verdict(value_axes, branch_axes, on_sheet):
+    if not on_sheet:
+        return 'not shown on the sheet -- DES-9 asks about the value shown, so no note'
+    if branch_axes is None:
+        return 'NOT A FUNCTION OF THE AXES -- cannot be tabled at all'
+    if branch_axes == ():
+        return 'one branch governs the whole family -- one note, not a column'
+    if value_axes is None:
+        return 'shown, but not tabled -- nothing to ride beside'
+    if set(branch_axes) <= set(value_axes):
+        return 'rides beside the value'
+    return 'follows MORE axes than the value -- needs a block of its own'
 
 
 def main(argv):
@@ -245,9 +365,10 @@ def main(argv):
         multi = any(len(site) > 1 for site in by_field[field]['sites'].values())
         (split if multi else single).append(field)
 
-    print('  %d fields where both branches actually win somewhere in the sweep -- these are '
-          'the ones' % len(split))
-    print('  DES-9 is about, and the ones whose note text has to vary:')
+    print('  %d fields where both branches actually win somewhere in the sweep. **Not all of '
+          'these' % len(split))
+    print('  need a note**: DES-9 is about the value *shown*, and only some of them are printed')
+    print('  on a sheet -- see the budget below, which is the number that governs:')
     for field in split:
         entry = by_field[field]
         within = sorted(k for k, seen in entry['kinds'].items() if len(seen) > 1)
@@ -300,6 +421,39 @@ def main(argv):
     print('  Dimensions computed during a *build* are not reached by this -- exercising those')
     print('  means building the parts -- so the geometry layer is covered only as far as')
     print('  corner_common.Params goes.')
+
+    if '--factor' in argv:
+        print('')
+        print('  --- can the DES-9 note ride in the table the value is already in? ---')
+        print('  The family table is factored by axis (OQ-DES-D1), not one row per variant, so')
+        print('  a GOVERNED BY column only sits beside a value if the branch follows the same')
+        print('  axes the value does. Decided by drawing_families.minimal_axes, which is what')
+        print('  decides the table\'s shape.')
+        report_rows = factor_report()
+        for kind, field, value_axes, branch_axes, on_sheet, verdict in report_rows:
+            print('    %-14s %-26s %-9s value %-22s branch %-22s %s'
+                  % (kind, field, 'SHOWN' if on_sheet else 'not shown',
+                     '(constant)' if value_axes == () else str(value_axes or '-'),
+                     '(constant)' if branch_axes == () else str(branch_axes or '-'),
+                     verdict))
+        print('')
+        print('  the note budget is the SHOWN rows only, per sheet:')
+        for kind in ('corner', 'bulkhead', 'boom_bulkhead'):
+            need = [(f, v) for k, f, v, _b, sh, _x in report_rows if k == kind and sh]
+            print('    %-14s %d branching dimension(s) the sheet prints: %s'
+                  % (kind, len(need), ', '.join(f for f, _v in need) or 'none'))
+            # **A block per distinct axis set is what the factoring produces, so what matters
+            # is how many branching dimensions land in the same block.** One per block means
+            # the GOVERNED BY column is unambiguous without naming its dimension; two would
+            # mean the cell has to say which, and that is what widens it.
+            blocks = {}
+            for field, value_axes in need:
+                blocks.setdefault(value_axes, []).append(field)
+            for value_axes, fields in sorted(blocks.items(), key=lambda kv: str(kv[0])):
+                print('        block %-22s %d: %s%s'
+                      % (str(value_axes), len(fields), ', '.join(fields),
+                         '' if len(fields) < 2
+                         else '   <-- shares a block, so the column must name the dimension'))
 
     conditionals = uninstrumented()
     print('')

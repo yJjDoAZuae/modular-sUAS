@@ -86,6 +86,59 @@ def is_panelled(params):
     return abs(params.get('panel_thickness', 0.0)) > 1e-9
 
 
+def check_view(entry, doc, placement, fail, note_text):
+    """One view's dimensions, containment and note objects, appended to `fail`/`note_text`."""
+    layout = entry.layout
+    view = entry.view
+    label = entry.spec.name
+
+    # The dimensions have to report what the parameters say. A dimension bound to the wrong
+    # vertices still prints a confident number, and the view scale leaking into the value is
+    # the specific failure `spike_techdraw` measured this against.
+    for placed in layout:
+        name = 'Dim' + placed.letter
+        obj = doc.getObject(name)
+        if obj is None:
+            fail.append('%s was placed on %s but no dimension object was made'
+                        % (name, label))
+            continue
+        got = obj.getRawValue()
+        want = abs(placed.dimension.value)
+        mark = 'ok' if abs(got - want) <= TOLERANCE else 'WRONG'
+        print('  %-19s %s = %.4f mm, parameters say %.4f  %s  [%s]'
+              % (name, obj.Type, got, want, mark, label))
+        if mark == 'WRONG':
+            fail.append('%s reports %.6f mm where the parameters say %.6f -- it is bound to '
+                        'the wrong points, or the view scale is leaking into the value'
+                        % (name, got, want))
+
+    # H1 over the finished layout, re-derived rather than trusted: `place` already refuses a
+    # layout that leaves the frame, so this failing would mean the frame it was given is not
+    # the frame the page has. Each view is checked against **its own region**, which is what
+    # it was placed in -- checking a detail against the whole view region would pass a layout
+    # that runs across the sheet into the plan.
+    complaints = dp.check_placement(
+        layout, [],
+        drawing.frame_in_view(view, entry.region, drawing.origin_offset(view)),
+        notes=layout.notes)
+    print('  independent check   %s  [%s]' % (complaints or 'clean', label))
+    for complaint in complaints:
+        fail.append('the finished page, %s: %s' % (label, complaint))
+
+    missing = []
+    for placed in layout.notes:
+        name = 'Note' + str(placed.key).title()
+        for index, line in enumerate(placed.note.lines):
+            obj = doc.getObject(name + ('L%d' % index))
+            if obj is None:
+                missing.append('%s line %d' % (placed.key, index))
+            else:
+                note_text.append(line)
+    if missing:
+        fail.append('no annotation object for note %s' % ', '.join(missing))
+    print('  note text           %d notes  [%s]' % (len(layout.notes), label))
+
+
 def family_of(document, kind, params, type_name=None):
     """The family record this variant belongs to, or None.
 
@@ -198,11 +251,19 @@ def main(argv):
     # reported as absent rather than skipped silently -- a sheet drawn without its table is a
     # sheet whose callout letters point at nothing, and that must not look like a pass.
     family = None
+    # **The other families of this kind, because the sheet's own statement of what it is
+    # depends on them.** `branch_phrase` names the topology conditions that *differ* between
+    # the families of a kind; given none to compare against it names them all, which is a
+    # longer string, which is a wider sheet-coverage block, which is a refusal on a sheet the
+    # set draws without complaint. A checker that draws a different sheet from the one under
+    # test is not checking it.
+    siblings = ()
     if len(paths) > 1:
         with open(paths[1], encoding='utf-8') as handle:
             document = json.load(handle)
         family = family_of(document, kind, params,
                            (exported.get('variant') or {}).get('bulkhead_type_name'))
+        siblings = [f for f in document['families'] if f.get('kind') == kind]
 
     print('CHECK:: a generated sheet')
     print('  kind                %s' % kind)
@@ -226,8 +287,9 @@ def main(argv):
     for run in ('a', 'b'):
         doc = App.newDocument('check_drawing_' + kind + '_' + run)
         try:
-            page, view, layout, scale = drawing.build_sheet(
-                doc, kind, params_path, params, family)
+            page, view, layout, scale, placement, built = drawing.build_sheet(
+                doc, kind, params_path, params, family,
+                variant=exported.get('variant'), siblings=siblings)
         except dp.PlacementError as exc:
             # A refusal is a result, not a crash. Section 5.6 says an unplaceable sheet is a
             # drafting decision to be made deliberately, and a traceback is a worse way to
@@ -240,7 +302,7 @@ def main(argv):
 
         if run == 'a':
             frame = std.frame_region_mm()
-            region = drawing.view_region()
+            region = placement.view_region
             share = (region[2] * region[3]) / (frame[2] * frame[3])
             print('  scale               %g:1' % scale if scale >= 1.0
                   else '  scale               1:%g' % (1.0 / scale))
@@ -250,57 +312,40 @@ def main(argv):
             # *defined* as one minus the share, so the region is the share by construction and
             # this is a number being compared with itself through two floating-point
             # operations. It came back 0.7499999999999999 the first time it ran.
-            if share < std.VIEW_SHARE - 1e-9:
-                fail.append('the view region is %.4f%% of the frame, under the %.0f%% '
-                            'OQ-DES-D5 requires' % (100.0 * share, 100.0 * std.VIEW_SHARE))
+            print('  layout              %s' % placement.name)
+            # **The share requirement is about the band, and only the band can meet it.**
+            # OQ-DES-D5's 75% is one minus the band's depth, so in that placement this is a
+            # number compared with itself and the check is a guard against the arithmetic
+            # drifting. A sheet in the column placement is there precisely because its table
+            # does not fit the band; holding it to the band's share would fail every such
+            # sheet for the reason it exists, and would say nothing about whether it was
+            # drawn correctly. It is reported instead, because a reader should see that this
+            # sheet gives its view less room than the requirement asks for.
+            if placement.name == std.PLACEMENT_BAND:
+                if share < std.VIEW_SHARE - 1e-9:
+                    fail.append('the view region is %.4f%% of the frame, under the %.0f%% '
+                                'OQ-DES-D5 requires'
+                                % (100.0 * share, 100.0 * std.VIEW_SHARE))
+            elif share < std.VIEW_SHARE - 1e-9:
+                print('  NOTE                this sheet is in the %s placement and its view '
+                      'has %.1f%% of the frame, under the %.0f%% OQ-DES-D5 asks for -- see '
+                      'OQ-DES-D15' % (placement.name, 100.0 * share, 100.0 * std.VIEW_SHARE))
 
-            print('  annotations         %d dimensions, %d notes, %d lanes'
-                  % (len(layout), len(layout.notes),
-                     max(p.lane for p in layout) + 1 if layout else 0))
+            # **Every view, not only the leading one.** A sheet with a plan and a corner
+            # detail carries most of its dimensions and all of its notes on the detail, and
+            # a checker that inspects `layout` alone inspects the plan's two dimensions and
+            # reports "0 of 0 note lines" on a sheet with five notes -- a pass that means
+            # nothing, which is worse than a failure. Measured 2026-09-07, on the run that
+            # first split a bulkhead in two.
+            print('  views               %s'
+                  % ', '.join('%s at %s (%d dim, %d note)'
+                              % (b.spec.name, drawing.format_scale(b.scale),
+                                 len(b.layout), len(b.layout.notes)) for b in built))
 
-            # The dimensions have to report what the parameters say. A dimension bound to the
-            # wrong vertices still prints a confident number, and the view scale leaking into
-            # the value is the specific failure `spike_techdraw` measured this against.
-            for placed in layout:
-                name = 'Dim' + placed.letter
-                obj = doc.getObject(name)
-                if obj is None:
-                    fail.append('%s was placed but no dimension object was made' % name)
-                    continue
-                got = obj.getRawValue()
-                want = abs(placed.dimension.value)
-                mark = 'ok' if abs(got - want) <= TOLERANCE else 'WRONG'
-                print('  %-19s %s = %.4f mm, parameters say %.4f  %s'
-                      % (name, obj.Type, got, want, mark))
-                if mark == 'WRONG':
-                    fail.append('%s reports %.6f mm where the parameters say %.6f -- it is '
-                                'bound to the wrong points, or the view scale is leaking into '
-                                'the value' % (name, got, want))
+            note_text = []
+            for entry in built:
+                check_view(entry, doc, placement, fail, note_text)
 
-            # H1 over the finished layout, re-derived rather than trusted: `place` already
-            # refuses a layout that leaves the frame, so this failing would mean the frame it
-            # was given is not the frame the page has.
-            complaints = dp.check_placement(layout, [], drawing.frame_in_view(view),
-                                            notes=layout.notes)
-            print('  independent check   %s' % (complaints or 'clean'))
-            for complaint in complaints:
-                fail.append('the finished page: ' + complaint)
-
-            missing = []
-            note_lines = []
-            for placed in layout.notes:
-                name = 'Note' + str(placed.key).title()
-                for index, line in enumerate(placed.note.lines):
-                    obj = doc.getObject(name + ('L%d' % index))
-                    if obj is None:
-                        missing.append('%s line %d' % (placed.key, index))
-                    else:
-                        note_lines.append(line)
-            if missing:
-                fail.append('no annotation object for note %s' % ', '.join(missing))
-            print('  note text           %d lines over %d notes'
-                  % (len(note_lines), len(layout.notes)))
-            note_text = note_lines
 
             # The table. Laid out again here rather than read off the page, because the point
             # is whether the page agrees with the layout: comparing the page with itself would

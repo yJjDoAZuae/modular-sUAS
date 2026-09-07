@@ -80,6 +80,344 @@ FAMILY = 'family'
 VARIANT = 'variant'
 
 
+#: What each quantity is, in words, for the sheet's dimension key.
+#:
+#: **A callout letter is an index, not a name.** The value table gives `A` seven numbers and
+#: the view puts `A` beside a dimension line, which together say what `A` measures *if you can
+#: see the view* -- and say nothing at all about the columns whose letters appear only in the
+#: table. A reader looking at the `J` column has no way to learn that it is the boss the bolt
+#: runs through. So every letter gets a phrase and the sheet prints them.
+#:
+#: These are deliberately short: the key is a block on a crowded sheet, and a phrase that
+#: wraps is a phrase that pushes the value table off the paper. They are also deliberately
+#: *nouns for features*, not restatements of the parameter name -- `bolt_offset` is stored as
+#: an offset and read as the distance from the longeron axis to the bolt axis, and it is the
+#: second that a machinist needs.
+DESCRIPTIONS = {
+    # The corner
+    'corner_radius': 'MOLD LINE RADIUS',
+    'bore_diameter': 'LONGERON BORE DIA',
+    'longeron_diameter': 'LONGERON DIA',
+    'longeron_clearance': 'LONGERON DIA CLEARANCE',
+    'lead_in_chamfer': 'BORE LEAD-IN',
+    'socket_diameter': 'GREEBLE SOCKET DIA',
+    'post_diameter': 'GREEBLE POST DIA',
+    'greeble_clearance': 'GREEBLE DIA CLEARANCE',
+    'panel_extension': 'PANEL SEAT EXTENSION',
+    # Shared with the bulkhead
+    'panel_pocket': 'PANEL POCKET DEPTH',
+    'panel_thickness': 'PANEL THICKNESS',
+    'panel_tolerance': 'PANEL FIT CLEARANCE',
+    # The bulkhead
+    'mold_half_width': 'MOLD LINE HALF-WIDTH',
+    'longeron_offset': 'LONGERON AXIS OFFSET',
+    'nub_diameter': 'CORNER NUB DIA',
+    'bolt_offset': 'BOLT AXIS FROM LONGERON',
+    'bolt_diameter': 'BOLT HOLE DIA',
+    'boss_diameter': 'BOLT BOSS DIA',
+    'corner_seat_offset': 'CORNER SEAT OFFSET',
+}
+
+
+# ---------------------------------------------------------------------------------------
+# Construction geometry
+# ---------------------------------------------------------------------------------------
+#
+# **What the part is not, drawn so that one dimension can stand for four.** A sheet that
+# dimensions the bolt at one of four holes, on a plate that is symmetric about both axes and
+# both diagonals, has stated the bolt position once and said nothing about the other three --
+# and a reader has no way to tell whether the omission means "the same" or "not dimensioned".
+# Centre lines on the symmetry axes are the drafting convention that closes that gap, and they
+# are the reason the marks and lines below are declared per part rather than switched on for
+# the view: which axes a part is symmetric about is a fact about the part.
+#
+# **The symmetry declared here was measured, not assumed** (2026-09-07, on built solids by
+# reflecting the shape and intersecting it with itself):
+#
+#     corner     mirror about y = x        0.999950 of the volume    the only one
+#                mirror about x = 0        0.539851
+#                mirror about y = 0        0.539851
+#                mirror about y = -x       0.283603
+#     bulkhead   all four                  1.000000 each             full D4
+#
+# The corner's 5e-5 shortfall is 0.34 mm3 of 6781 and sits at the boolean tolerance; the
+# bulkhead's four are exact to six figures. So the corner gets one centre line and the
+# bulkhead gets four, which is what the parts are rather than what looks tidy.
+#
+# A record is a plain tuple whose first element says which kind it is. Nothing here may
+# import FreeCAD -- `drawing.py` turns these into cosmetic edges on its side of the boundary.
+
+#: How much wider than the features it takes in a detail view's boundary is drawn. A
+#: quarter, so the circle stands clear rather than cutting the outermost feature.
+DETAIL_MARGIN = 1.25
+
+#: A cross on a feature's axis: `(CENTER_MARK, (x, y), radius)`.
+#:
+#: **Only on an axis a dimension is taken from.** TechDraw's `ArcCenterMarks` marks every arc
+#: in the projection, which on a bulkhead is every fillet and every lead-in as well as the
+#: bores and the bolts, and a mark on a fillet asserts an axis that locates nothing. The
+#: switch is off (`drawing_standard.view_appearance`) and these are what get one.
+CENTER_MARK = 'center_mark'
+
+#: A symmetry axis: `(CENTER_LINE, (x1, y1), (x2, y2))`.
+#:
+#: **The endpoints are where the *geometry* ends, not where the line should be drawn to.** A
+#: centre line has to stand a few millimetres clear of the part to read as an axis rather than
+#: as an edge, and a few millimetres is a quantity on the *paper* -- like the text height it is
+#: derived from, and unlike everything else in this module, which is the part. `drawing.py`
+#: adds the overrun, because it is the side that knows the scale.
+#:
+#: Applied here instead it cost a preferred scale on every sheet: 5.25 mm of model overrun at
+#: each end is 26 mm of paper at the corner's 5:1, so the extent the view was fitted to grew by
+#: half again and the scale search dropped to 2:1. Measured 2026-09-07.
+CENTER_LINE = 'center_line'
+
+#: The outline of a part that is not this one: `(REFERENCE, ((x, y), ...), closed, label)`.
+#: Drawn in phantom line, ISO 128 type K. Without it there is nothing on the sheet for a fit
+#: to be a fit *to*: `panel_pocket` and `panel_thickness` are two numbers whose whole content
+#: is the gap between them, and a sheet showing only the pocket shows one side of a joint.
+REFERENCE = 'reference'
+
+#: Another *part* in phantom outline, sectioned and placed:
+#: `(REFERENCE_PART, kind, section_z, ((sx, sy, tx, ty), ...), label)`.
+#:
+#: **The mating part is drawn from the mating part.** A corner's section is an arc, two
+#: seating flats, a diagonal mask and a greeble mouth, and any outline of it written here would
+#: be a second implementation of `corner_tree` -- one that no cross-kernel check covers and
+#: that goes quietly wrong the first time the corner changes. `drawing.py` builds the real one
+#: from the `corner_parameters` the same export already carries, slices it at `section_z`, and
+#: draws the wire.
+#:
+#: Each placement is `(sx, sy, tx, ty)`, applied as `(sx * (x + tx), sy * (y + ty))`: a
+#: translation to where the part sits and a mirror for the instances the symmetry produces.
+REFERENCE_PART = 'reference_part'
+
+
+def center_marks(centers, radius):
+    """A centre mark on each of `centers`, all of one radius."""
+    return [(CENTER_MARK, (x, y), radius) for x, y in centers]
+
+
+def rectangle(x0, y0, x1, y1):
+    """The four corners of an axis-aligned rectangle, counter-clockwise."""
+    return ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+
+
+def axis_line(direction, reach):
+    """A centre line through the origin along `direction`, out to `reach` each way."""
+    dx, dy = direction
+    return (CENTER_LINE, (-dx * reach, -dy * reach), (dx * reach, dy * reach))
+
+
+# ---------------------------------------------------------------------------------------
+# What a family sheet covers, and which variant it was drawn from
+# ---------------------------------------------------------------------------------------
+#
+# **A family sheet is drawn from one variant and stands for many, and until 2026-09-07 it said
+# neither.** Three bulkhead sheets came out of the set, identical in title, differing in their
+# tables and in the shape of the drawn view, with nothing anywhere on the paper to say what
+# distinguished them or which size the geometry was. A reader could see that the three were
+# different and had no way to learn how -- and could measure the view and get one variant's
+# numbers while the table gave eight.
+#
+# `topology` on a family record is the branch: a list of `[condition, value]` that
+# `drawing_families` partitions on. These turn it into something a person reads.
+
+#: A topology condition as a phrase, `(when true, when false)`. A condition absent from this
+#: falls back to its own text, which reads as unfinished -- which it is -- rather than
+#: silently dropping a branch the sheets differ by.
+TOPOLOGY_PHRASES = {
+    'panel.thickness != 0': ('PANELLED', 'NO PANEL'),
+    'corner seating flat': ('CORNER SEAT', 'NO CORNER SEAT'),
+    'boom_bulkhead.make_vert_web': ('VERTICAL WEB', 'NO VERTICAL WEB'),
+    'boom_bulkhead.make_lower_web': ('LOWER WEB', 'NO LOWER WEB'),
+}
+
+
+def topology_phrase(condition, value):
+    """One topology entry in words."""
+    if isinstance(value, bool):
+        phrases = TOPOLOGY_PHRASES.get(condition)
+        if phrases:
+            return phrases[0] if value else phrases[1]
+        return ('' if value else 'NO ') + str(condition).replace('_', ' ').upper()
+    # A valued condition is named by its value alone -- `END` rather than `TYPE END` -- once
+    # the sheet is already headed by the kind. The block is measured against what is left of
+    # a strip beside the value table, and a word that adds nothing costs a real millimetre.
+    return str(value).upper()
+
+
+def branch_phrase(family, siblings=()):
+    """What distinguishes this family from the other families of its kind, in words.
+
+    **Only the conditions that actually differ.** Every frame bulkhead family carries
+    `bulkhead.type = END` and both boom-web flags false, so naming them would fill the line
+    with facts that separate nothing while the two that matter -- whether there is a panel and
+    whether the corner seating flat survives -- got no more room than they did. What a reader
+    wants from three sheets with one title is the difference.
+
+    With no siblings to compare against, every condition is a distinguishing one: a sheet
+    standing alone still has to say what it is.
+    """
+    topology = list((family or {}).get('topology') or [])
+    others = [list(s.get('topology') or []) for s in siblings
+              if s.get('key') != (family or {}).get('key')]
+    phrases = []
+    for index, entry in enumerate(topology):
+        condition, value = entry[0], entry[1]
+        varies = not others or any(
+            index < len(other) and other[index][1] != value for other in others)
+        if varies:
+            phrases.append(topology_phrase(condition, value))
+    return ', '.join(phrases)
+
+
+def variant_phrase(variant):
+    """The variant the geometry was drawn from, in words.
+
+    Reads out the axes the sweep is over -- size, panel stock, type -- because those are what
+    the reader has in hand when they ask which of the table's rows the picture is.
+    """
+    variant = variant or {}
+    parts = []
+    if variant.get('U') is not None:
+        parts.append('U %s' % variant['U'])
+    if variant.get('panel_name'):
+        parts.append('%s PANEL' % str(variant['panel_name']).upper())
+    for key in ('bulkhead_type_name', 'type_name'):
+        if variant.get(key):
+            parts.append(str(variant[key]).upper())
+            break
+    return ', '.join(parts) or 'NOT RECORDED'
+
+
+def coverage_rows(family, variant, siblings=()):
+    """The sheet-coverage block's rows, as (label, value).
+
+    **`DO NOT SCALE` is a row rather than a remark.** The view is drawn at a stated scale from
+    one variant, which is honest and also an invitation to measure it: at 1:1 a reader gets
+    the drawn variant's numbers, and the table gives eight others. The scale stays -- a view
+    with no scale is worse -- and the sheet says outright that the numbers come from the
+    table.
+    """
+    rows = [('GEOMETRY SHOWN', variant_phrase(variant))]
+    branch = branch_phrase(family, siblings)
+    if branch:
+        rows.append(('FAMILY', branch))
+    count = (family or {}).get('variants')
+    if count:
+        rows.append(('VARIANTS', '%d, SEE TABLE BELOW' % int(count)))
+    rows.append(('DO NOT SCALE', 'VALUES ARE TABULATED'))
+    return rows
+
+
+# ---------------------------------------------------------------------------------------
+# What views a sheet carries, and which annotations go on which
+# ---------------------------------------------------------------------------------------
+#
+# **One view could not carry a bulkhead, and the review said so before the layout did.** The
+# plate is 50 mm across at U = 0.5 and the features that need dimensioning -- the bolt in its
+# boss, the greeble post and nub, the corner seat, the panel inset -- are all inside a 9 mm
+# radius of one longeron axis. Drawn on the plan at a scale that fits the plate, those are
+# four dimensions and five notes crowding a corner a few millimetres wide, and the plate has
+# to shrink to make room for the note bands: measured 1:2, with the view at 52.4 % of the
+# frame. The mold line half-width and the longeron offset are the opposite case -- they span
+# the plate and mean nothing magnified.
+#
+# So a sheet has a **plan** and a **detail**, and each says which annotations it carries.
+#
+# **The view says what it carries, rather than each annotation saying where it goes.** Two
+# records per kind against thirty tuples to edit, and it gives the invariant for free:
+# `check_views` refuses a sheet where an annotation is named by no view or by two. An
+# annotation that quietly landed on neither would be a dimension the sheet was supposed to
+# state and does not, which is section 3's completeness test failing where nothing looks.
+
+
+class SheetView(object):
+    """One view on a sheet.
+
+    `name`        what it is called, and what its caption says
+    `clip`        `(x, y, radius)` in model millimeters, or None for the whole part. A clipped
+                  view is drawn from the part intersected with a cylinder on that axis.
+    `dimensions`  the quantity names whose dimensions this view carries
+    `notes`       the note keys this view carries
+    `caption`     what is printed under it, `None` for the plan, which needs none
+
+    **A clip is a solid intersection, not a `DrawViewDetail`.** TechDraw's detail view does
+    its cut on a worker thread, and under `freecadcmd` -- which is what builds these documents
+    -- the first recompute after adding one prints *"Detail is waiting for detail cut to
+    finish"* and the process dies. Measured 2026-09-07 on FreeCAD 1.1.3. Intersecting the
+    solid is synchronous, and it is better in the way that matters here: the clipped solid is
+    in the **same model coordinates as the whole part**, so a dimension on the detail binds to
+    the same model points the annotation set already declares, with no translation and no
+    second frame to get wrong.
+    """
+
+    def __init__(self, name, clip=None, dimensions=(), notes=(), caption=None):
+        self.name = name
+        self.clip = tuple(clip) if clip else None
+        self.dimensions = tuple(dimensions)
+        self.notes = tuple(notes)
+        self.caption = caption
+
+    def __repr__(self):
+        return '<SheetView %s%s>' % (self.name, ' clipped' if self.clip else '')
+
+
+def combined_view(views, dimensions, notes):
+    """The declared views collapsed into one that carries everything.
+
+    **The fallback for a sheet whose split will not fit the paper**, and it is a fallback
+    rather than the answer: a plan and a detail exist because the features differ in size by
+    a factor of ten, and putting them back on one view puts that problem back. It keeps the
+    leading view's name and drops the clip, so the sheet is the whole part with every
+    annotation on it -- which is what these sheets were before the split and what they go
+    back to being when a sheet has no room for two.
+    """
+    return [SheetView(views[0].name,
+                      dimensions=tuple(q.name for q, _p1, _p2, _a, _v in dimensions),
+                      notes=tuple(key for key, _anchor, _lines in notes))]
+
+
+def check_views(views, dimensions, notes):
+    """Refuse a view set that does not account for every annotation exactly once."""
+    declared = {}
+    for view in views:
+        for name in view.dimensions:
+            declared.setdefault(('dimension', name), []).append(view.name)
+        for key in view.notes:
+            declared.setdefault(('note', key), []).append(view.name)
+
+    problems = []
+    for quantity, _p1, _p2, _axis, _value in dimensions:
+        seen = declared.pop(('dimension', quantity.name), [])
+        if not seen:
+            problems.append('%s is dimensioned and no view carries it' % quantity.name)
+        elif len(seen) > 1:
+            problems.append('%s is carried by %s' % (quantity.name, ' and '.join(seen)))
+    for key, _anchor, _lines in notes:
+        seen = declared.pop(('note', key), [])
+        if not seen:
+            problems.append('the %s note is written and no view carries it' % key)
+        elif len(seen) > 1:
+            problems.append('the %s note is carried by %s' % (key, ' and '.join(seen)))
+    for (what, name), views_named in sorted(declared.items()):
+        problems.append('%s carries the %s %s, which this variant does not have'
+                        % (' and '.join(views_named), what, name))
+    return problems
+
+
+def description(field):
+    """What `field` is, in words, for the dimension key.
+
+    Falls back to the field's own name rather than raising. A quantity added without a phrase
+    should print something a reader can at least recognise -- `GREEBLE TOLERANCE` reads as an
+    unfinished description, which is what it is, where a missing row reads as a letter that
+    means nothing and a raise would cost the whole sheet.
+    """
+    return DESCRIPTIONS.get(field) or str(field).replace('_', ' ').upper()
+
+
 def issue_letters(quantities):
     """Give each varying quantity a callout letter, in a stated order.
 
@@ -249,12 +587,24 @@ def corner_annotations(params, product=FAMILY):
     socket_point = (socket * math.cos(math.radians(160.0)),
                     socket * math.sin(math.radians(160.0)), 0.0)
 
+    # **Where the pocket actually is, along the seating face.** The pocket runs from the
+    # part's end face at `-extension` to the slot's inner end at `-panel_offset`; halfway
+    # along that is a point on the pocket floor with material above and below it.
+    #
+    # It was taken at `x = 0` until 2026-09-07 -- on the vertical through the longeron axis,
+    # where there is no pocket at all, only the bore below and the mold arc above. The value
+    # was right, because the seating face is flat and the distance to the mold line is the
+    # same everywhere along it; what was wrong is that `F PANEL POCKET DEPTH` pointed at a
+    # place the part has no pocket, and a dimension that measures the right distance in the
+    # wrong place is a dimension a reader cannot check.
+    pocket_x = -(extension + params['panel_offset']) / 2.0
+
     dimensions = []
     if panelled:
         # The pocket the panel seats in, which is the one interface on this part that *is* a
         # distance between two real parallel faces.
         dimensions.append(
-            (by_name['panel_pocket'], (0.0, seat, 0.0), (0.0, radius, 0.0),
+            (by_name['panel_pocket'], (pocket_x, seat, 0.0), (pocket_x, radius, 0.0),
              dp.VERTICAL, pocket))
     dimensions += [
         # The mold line as a half-width from the longeron axis, which is where the panel's
@@ -281,11 +631,88 @@ def corner_annotations(params, product=FAMILY):
     ]
     if panelled:
         notes.append(
-            ('pocket', (0.0, seat, 0.0),
+            ('pocket', (pocket_x, seat, 0.0),
              ('%s POCKET' % w('panel_pocket'),
               'FOR %s PANEL' % w('panel_thickness'),
               '%s CLEARANCE' % w('panel_tolerance'))))
-    return quantities, dimensions, notes
+
+    construction = corner_construction(params, radius, bore, seat, thickness, extension,
+                                       panelled)
+    # **One view, because the corner is already a detail.** It is a section a few millimetres
+    # across drawn at 5:1, and every quantity on it is about the same few millimetres -- there
+    # is no pair of scales to separate. What crowds this sheet is the four multi-line notes,
+    # which a second view would not thin out.
+    views = [SheetView('SECTION',
+                       dimensions=tuple(q.name for q, _p1, _p2, _a, _v in dimensions),
+                       notes=tuple(key for key, _anchor, _lines in notes))]
+    return quantities, dimensions, notes, construction, views
+
+
+def corner_construction(params, radius, bore, seat, thickness, extension, panelled):
+    """The corner's centre mark, its one symmetry axis, and the panels it seats.
+
+    **One centre mark, because the corner has one located axis.** The longeron bore, the
+    greeble socket and the lead-in are all about the same origin, so they share a mark; every
+    other arc in the projection is a fillet, and a fillet is a blend rather than a feature a
+    dimension is taken from.
+
+    **One centre line, on `y = x`, because that is the only mirror the part has.** Measured
+    2026-09-07 by reflecting the built solid and intersecting: `y = x` recovers 0.999950 of
+    the volume and the other three candidates recover 0.54, 0.54 and 0.28. So the corner is
+    *not* symmetric about its own axes -- the panel it laps and the panel it seats are the
+    same panel seen twice, and the diagonal is what says so.
+
+    **The panels are drawn because the pocket is one side of a fit.** `panel_pocket` and
+    `panel_thickness` differ by `panel_tolerance`, and with no panel on the sheet the reader
+    sees two numbers a tenth apart and nothing to tell them the tenth is the clearance.
+
+    **The panel's outer surface is the mold line, and the clearance is behind it**, on both
+    faces of the joint:
+
+        outer surface     `y = corner_radius`. The panel skins the airframe, so its outside
+                          *is* the outer mold line -- that is what the mold line is
+        inner surface     one `panel_thickness` in, at `corner_radius - panel_thickness`,
+                          which leaves `panel_tolerance` between it and the pocket floor at
+                          `corner_radius - panel_thickness - panel_tolerance`
+        the lapped end    `x = -panel_offset`, one `panel_tolerance` short of the slot's own
+                          end at `slot_x + slot_w = -panel_offset + panel_tolerance`
+
+    So the fit shows as a gap on both faces of the joint rather than as the panel lying on
+    the pocket floor with all the slack outboard -- which is what this drew until 2026-09-07,
+    and which put the panel's outer surface a tenth of a millimetre *inside* the airframe's
+    own outer surface.
+
+    It runs out past the part's end face because a panel does not stop there -- it spans the
+    bay to the next corner -- and an outline stopping flush would read as a part this size.
+    """
+    root_half = 0.5 ** 0.5
+
+    construction = center_marks([(0.0, 0.0)], bore)
+    # The diagonal, from the far end of the seating faces out to the mold line. **The two ends
+    # are not the same distance from the origin, because the part is not.** Outboard it ends on
+    # the mold arc, at `radius`, so the coordinate is `radius / sqrt(2)`; inboard the two
+    # seating faces cross at `(-extension, -extension)`, which is `extension` in each
+    # coordinate already.
+    construction.append(
+        (CENTER_LINE, (-extension, -extension),
+         (radius * root_half, radius * root_half)))
+
+    if panelled:
+        # **How far past the part's end face the panel is drawn, and why it is short.** The
+        # outline goes into the bbox the dimension placer lanes around, so every millimetre of
+        # overhang is a millimetre the part loses on the sheet: drawn a full mold line radius
+        # past the face it grew the corner's extent from 12.3 mm to 19.8 mm and cost a
+        # preferred scale. Two panel thicknesses, or a third of the radius, is enough to read
+        # as a part that continues and small enough not to be paid for.
+        far = -(extension + max(2.0 * thickness, radius / 3.0))
+        end = -params['panel_offset']
+        inner = radius - thickness
+        construction.append(
+            (REFERENCE, rectangle(far, inner, end, radius), True, 'PANEL'))
+        # The same panel on the other seating face, which is the `y = x` mirror of the first.
+        construction.append(
+            (REFERENCE, rectangle(inner, far, radius, end), True, 'PANEL'))
+    return construction
 
 
 def bulkhead_annotations(params, product=FAMILY):
@@ -431,8 +858,17 @@ def bulkhead_annotations(params, product=FAMILY):
     ]
     if panelled:
         # The setback from the mold line to the seating face, which is the panel and its fit.
+        #
+        # **Taken at the longeron axis rather than on the plate's own centreline**, and the
+        # reason is where it gets drawn. The seating face is flat across the whole side, so
+        # the distance is the same wherever it is measured -- but a dimension on the
+        # centreline belongs to no local feature, and the placer put its line out at the
+        # frame's margin with an extension line running most of the sheet to reach a 1.1 mm
+        # gap. Measured at the corner it sits inside the detail view with the bolt, the post
+        # and the corner seat, which is where a reader looking at the panel joint is already
+        # looking.
         dimensions.append(
-            (by_name['panel_pocket'], (0.0, seat, 0.0), (0.0, half, 0.0),
+            (by_name['panel_pocket'], (axis, seat, 0.0), (axis, half, 0.0),
              dp.VERTICAL, pocket))
     # The corner seating faces, register joint 3, dimensioned where the diagonal crosses the
     # line through the longeron axis -- which is the offset the geometry is built from.
@@ -470,11 +906,130 @@ def bulkhead_annotations(params, product=FAMILY):
           'CLEARS BORE AND LEAD-IN' if seated else 'SET BY PANEL ENTRY')))
     if panelled:
         notes.append(
-            ('seat', (0.0, seat, 0.0),
+            ('seat', (axis, seat, 0.0),
              ('%s POCKET FROM MOLD LINE' % w('panel_pocket'),
               'FOR %s PANEL' % w('panel_thickness'),
               '%s CLEARANCE' % w('panel_tolerance'))))
-    return quantities, dimensions, notes
+
+    construction = bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius,
+                                         seat, thickness, panelled)
+    views = bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled)
+    return quantities, dimensions, notes, construction, views
+
+
+def detail_radius(axis, bolt_axis, boss_radius, nub_radius, corner_radius):
+    """How much of the plate the corner detail takes in, in model millimeters.
+
+    Everything the detail is for, and a margin. The furthest of them from the longeron axis
+    sets it: the mold line is `corner_radius` out, the bolt boss reaches
+    `(axis - bolt_axis) * sqrt(2) + boss_radius` along the diagonal, and the greeble nub is
+    `nub_radius`. A quarter more so the boundary stands clear of the features rather than
+    cutting the outermost one in half.
+    """
+    bolt_reach = abs(axis - bolt_axis) * (2.0 ** 0.5) + boss_radius
+    return DETAIL_MARGIN * max(corner_radius, bolt_reach, nub_radius)
+
+
+def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled):
+    """The bulkhead's plan and its corner detail, and what each carries.
+
+    **The split is by what a dimension is about, not by what fits.** Two quantities are about
+    the plate -- the mold line half-width and where the longeron axis sits in it -- and they
+    span it; magnified they would say nothing. Everything else is about one corner: the bolt
+    in its boss, the greeble post and nub, the corner seat, the panel pocket. Those are
+    within a few millimetres of one axis on a plate up to 200 mm across, and on the plan they
+    are illegible whatever the layout does with them.
+
+    One detail, not four, because the plate is symmetric about both axes and both diagonals --
+    measured, see `bulkhead_construction` -- so the other three corners are the same corner
+    and the centre lines on the plan say so.
+    """
+    radius = detail_radius(axis, bolt_axis, boss_radius, nub_radius, half - axis)
+    detail_dimensions = ['bolt_offset', 'corner_seat_offset']
+    detail_notes = ['bore', 'post', 'bolt', 'corner_seat']
+    if panelled:
+        detail_dimensions.append('panel_pocket')
+        detail_notes.append('seat')
+    return [
+        SheetView('PLAN', dimensions=('mold_half_width', 'longeron_offset')),
+        SheetView('DETAIL A', clip=(axis, axis, radius),
+                  dimensions=detail_dimensions, notes=detail_notes,
+                  caption='DETAIL A -- CORNER, 4 PLACES'),
+    ]
+
+
+def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat, thickness,
+                          panelled):
+    """The bulkhead's centre marks, its four symmetry axes, and the panels it seats.
+
+    **Four centre lines, because the plate has four mirrors and every dimension on the sheet
+    relies on it.** Measured 2026-09-07 by reflecting the built solid and intersecting it with
+    itself: `x = 0`, `y = 0`, `y = x` and `y = -x` each recover 1.000000 of the volume, at two
+    variants. That is full D4, and it is what makes one bolt dimension state four bolts. Until
+    the axes are drawn the sheet has not said so, and a reader looking at `bolt_offset` beside
+    one hole cannot tell a stated position from an omitted one.
+
+    The two diagonals do double duty: `y = x` runs through the longeron axis at `(axis, axis)`
+    **and** the bolt axis at `(bolt_axis, bolt_axis)`, because the part places the bolt along
+    the diagonal from the longeron. So the same line is the symmetry axis and the hole
+    pattern's centre line, which is the relationship `bolt_offset` is measured along.
+
+    **Centre marks on the eight located axes and nothing else** -- four longeron bores and
+    four bolt bosses. Every other arc on this part is a fillet, a lead-in or a nub blend.
+
+    **The panels are drawn because otherwise the pocket has nothing to be a pocket for.** Each
+    of the four sides seats one. Its **outer surface is the mold line** at `unit_width/2` --
+    the panel skins the airframe -- and its inner surface one `panel_thickness` in, which
+    leaves `panel_tolerance` between it and the seating face at
+    `unit_width/2 - panel_thickness - panel_tolerance`. The fit is the gap behind the panel,
+    not in front of it.
+
+    It runs from one longeron axis to the other, less `panel_offset` at each end:
+    `corner_tree`'s slot reaches `slot_x + slot_w`, which is `-panel_offset + panel_tolerance`
+    in the corner's frame, so the panel's own end is at `-panel_offset` and the remaining
+    tolerance is the fit at that face too.
+    """
+    root_half = 0.5 ** 0.5
+
+    construction = center_marks(
+        [(sx * axis, sy * axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)], bore)
+    construction += center_marks(
+        [(sx * bolt_axis, sy * bolt_axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)],
+        boss_radius)
+
+    construction += [
+        axis_line((1.0, 0.0), half),
+        axis_line((0.0, 1.0), half),
+        # The diagonals reach the plate's own corners, which are a half-diagonal out.
+        axis_line((root_half, root_half), half * (2.0 ** 0.5)),
+        axis_line((-root_half, root_half), half * (2.0 ** 0.5)),
+    ]
+
+    # **The corner, at all four longeron axes.** Section 2's joints 2, 3 and 4 are all
+    # corner-to-bulkhead, and until now the bulkhead's sheet showed none of the other side of
+    # any of them: `corner_seat_offset` located a face against nothing, and a reader had no way
+    # to see what the seat seats. Sectioned at the middle of the plate, which is where the two
+    # parts actually overlap -- the corner's end section runs the plate's own thickness.
+    #
+    # The four placements are the plate's own symmetry: the corner sits at `(axis, axis)` with
+    # its local axes pointing outboard, and the other three are its mirrors in `x` and `y`.
+    construction.append(
+        (REFERENCE_PART, 'corner', params['bulkhead_thickness'] / 2.0,
+         tuple((sx, sy, axis, axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)),
+         'CORNER'))
+
+    if panelled:
+        end = axis - params['panel_offset']
+        inner = half - thickness
+        for sign in (-1.0, 1.0):
+            # The two panels normal to Y, then the two normal to X.
+            construction.append(
+                (REFERENCE,
+                 rectangle(-end, sign * inner, end, sign * half), True, 'PANEL'))
+            construction.append(
+                (REFERENCE,
+                 rectangle(sign * inner, -end, sign * half, end), True, 'PANEL'))
+    return construction
 
 
 # The kinds that have an annotation set. Read from both sides of the boundary: `drawing.py`

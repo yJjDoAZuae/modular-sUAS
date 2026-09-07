@@ -96,6 +96,20 @@ TEMPLATE_TITLE_BLOCK_MM = (129.627, 155.673, 130.0, 46.0)
 # sheet size and the table's contents are not.
 VIEW_SHARE = 0.75
 
+#: Table text heights to try, largest first, when packing a family sheet's blocks into the
+#: band beside the title block.
+#:
+#: **The lettering is what gives, and that is a decision rather than a shortcut.** The three
+#: blocks a family sheet carries besides the view -- the value table, the dimension key and
+#: the sheet-coverage block -- come to about 11,600 mm2 at ISO 3098's smallest 2.5 mm, and
+#: the frame is 44,834 with 5,980 of it under the title block. For the view to have the 75 %
+#: `VIEW_SHARE` asks for, the three of them have to fit 5,229 -- which is 45 % of the area
+#: and so 67 % of the linear size, about 1.7 mm of text. Packing waste takes it to 1.4.
+#:
+#: A drawing whose geometry cannot be read is not saved by a legible table beside it. So the
+#: search runs down this series until the blocks fit the band, and the sheet keeps its view.
+TABLE_TEXT_HEIGHTS_MM = (2.5, 2.2, 2.0, 1.8, 1.6, 1.4, 1.2, 1.0)
+
 # A value table's row pitch, as a multiple of *its* text height. **1.4, which is ISO 3098's
 # minimum line spacing for type B lettering** -- the same standard the text heights come from,
 # so it is a number the drawing convention fixes rather than one this module picks.
@@ -111,6 +125,37 @@ VIEW_SHARE = 0.75
 #
 # The arithmetic problem was real and had a different answer, below.
 TABLE_ROW_PITCH_HEIGHTS = 1.4
+
+# **And 1.4 is not enough on its own, because a table row is ruled and a line of prose is
+# not.** ISO 3098's 1.4 is the minimum distance between two *baselines*, which keeps one line
+# of text off the next. A table row additionally has a line drawn along its edge, and what
+# must clear that line is the glyph box -- `EM_PER_TEXT_HEIGHT` cap heights tall, 1.328, so at
+# a 1.4 pitch the box leaves 0.07 of a cap height, 0.18 mm, to the rule above and below.
+# Rendered, that reads as a rule struck through the text: measured 2026-09-07, the first data
+# row of every value table and the heading above it were both touching the rule between them.
+#
+# So a row clears its rules by this much on each side, and the pitch is whichever requirement
+# is the stricter.
+#
+# **A quarter of a cap height, and the number is only meaningful because the cells are placed
+# correctly.** Raising it to 0.4 was tried while the first data row of every block was touching
+# the rule above it, and it did not help, because the row was not short of space: it was drawn
+# half a cap height high, a `DrawViewAnnotation` being positioned by its baseline rather than
+# by the middle of its text (see `drawing.add_table`). Widening a row to fix text that is
+# outside its row is the kind of tuning section 5.4 warns about -- it would have left every
+# table a third taller for nothing, and on these sheets that came straight out of the view,
+# taking two bulkheads from 1:1 to 1:2. With the placement right, this leaves 1.08 mm of white
+# between the ink and a rule drawn 0.76 mm thick.
+TABLE_ROW_CLEARANCE_HEIGHTS = 0.25
+
+# The same requirement on the other axis, and it had the same hole. `column_width_mm` returned
+# exactly the width of the widest string a column prints, so the widest value in every column
+# ran from one rule to the other with nothing between: measured 2026-09-07, all thirteen
+# columns of the bulkhead table came out width == need, to the millimetre, and `0.75` in the
+# `U` column drew across its own left-hand rule. A cell needs white space beside it for the
+# same reason a row needs white space above it -- the rule is 0.76 mm of ink, and a gap
+# narrower than that does not read as a gap.
+TABLE_COLUMN_PADDING_HEIGHTS = 0.25
 
 # The clear gap between two columns of a value table, in millimeters -- **not a multiple of
 # the text height, and that is the correction**. This was one text height, taken from section
@@ -187,6 +232,21 @@ TEXT_HEIGHT_MM = 3.5
 # `verify_font`. Advances are in font design units; divide by UNITS_PER_EM and multiply by
 # the text height to get millimeters.
 UNITS_PER_EM = 2048
+
+# **A text height on a drawing is a cap height, not an em size, and the difference is 33%.**
+# ISO 3098 specifies `h` as the height of a capital, and TechDraw honours that: it scales the
+# font so the ascender comes out at the `TextSize` it is given. Measured in the rendered page,
+# 2026-09-07: text set to 2.5 mm draws at a 3.3 mm em and text set to 3.5 mm draws at 4.7 mm,
+# both of which are `h * UNITS_PER_EM / TYPO_ASCENDER_UNITS` to the rounding the SVG writes.
+#
+# Every width here is an advance in design units, and an advance is a fraction *of the em*.
+# Multiplying it by `h` therefore under-measures every string by that same 33% -- which is why
+# the first rendered sheets had a value table whose columns were a third too narrow for their
+# own contents, numbers lapping over the rules and headings running into their neighbours.
+# `osifont` declares no `sCapHeight`, so the ascender is the metric to use, and it is pinned
+# and re-checked like the advances beside it.
+TYPO_ASCENDER_UNITS = 1542
+EM_PER_TEXT_HEIGHT = UNITS_PER_EM / float(TYPO_ASCENDER_UNITS)
 
 
 # ----------------------------------------------------------------------------------------
@@ -352,9 +412,173 @@ def frame_region_mm():
     return (frame_x, frame_y, frame_w, frame_h)
 
 
-def table_row_pitch_mm():
-    """The distance between two rows of a value table, in millimeters."""
-    return TABLE_ROW_PITCH_HEIGHTS * TABLE_TEXT_HEIGHT_MM
+# ----------------------------------------------------------------------------------------
+# Line weights, and where they have to be applied
+# ----------------------------------------------------------------------------------------
+
+# **ISO 128 line group 0.5**, which is the group that goes with 3.5 mm lettering: a wide line
+# of 0.5 mm and a narrow one of 0.25, in a 2:1 ratio. Outlines are wide; everything that is
+# not the part -- hidden edges, dimension and extension lines, leaders, the value table's own
+# rules -- is narrow.
+#
+# **These are not properties of the drawing document, and that is the trap.** Line weight,
+# dimension text size and hole centre marks live on TechDraw's *view providers*, which are Gui
+# objects. The sheets are built by `freecadcmd`, which has none, so an `.FCStd` from this
+# project carries no appearance at all and whatever opens it supplies the lot from compiled-in
+# defaults. Measured 2026-09-07, those defaults are: every view drawn at **0.7 mm** including
+# the value table's rules, dimension text at **5.0 mm** against the 3.5 this standard sets,
+# and `ArcCenterMarks` **off**, so not one hole on any sheet had a centre mark. None of that
+# was chosen; all of it was inherited. `freecad/render_pages.py` applies this table before it
+# builds the page scene, which is the only moment at which these objects exist.
+WIDE_LINE_MM = 0.5
+NARROW_LINE_MM = 0.25
+
+# The arrowhead. ISO 129 draws it about ten narrow-line-widths long, and it must not out-weigh
+# 3.5 mm text sitting beside it.
+ARROW_SIZE_MM = 2.5
+
+#: How a view whose edges are table rules is named. Those are `DrawViewPart`s like the drawn
+#: view -- see `drawing.add_table` for why the rules are real geometry -- so they cannot be
+#: told apart by type, only by name, and they must not be drawn at outline weight. Matched by
+#: suffix because there is more than one of them: the value table's and the dimension key's.
+RULE_VIEW_SUFFIX = 'RuleView'
+
+
+def view_appearance(name=None):
+    """View-provider settings for a `DrawViewPart`, as {property: value}.
+
+    Pass the object's name so the value table's rule view gets narrow lines: its edges are a
+    table, not an outline, and at outline weight the rules out-weigh the numbers between them.
+    """
+    if name and name.endswith(RULE_VIEW_SUFFIX):
+        return {'LineWidth': NARROW_LINE_MM,
+                'HiddenWidth': NARROW_LINE_MM,
+                'IsoWidth': NARROW_LINE_MM,
+                'ArcCenterMarks': False}
+    return {'LineWidth': WIDE_LINE_MM,
+            'HiddenWidth': NARROW_LINE_MM,
+            'IsoWidth': NARROW_LINE_MM,
+            # **Off, and the marks are drawn instead.** `ArcCenterMarks` is one switch for the
+            # whole view: it marks every arc the projection produced, which on a bulkhead means
+            # every fillet and every lead-in as well as the four bores and the four bolts. A
+            # centre mark asserts an axis a feature is located from, and a fillet has no such
+            # axis -- the marks on them are noise sitting exactly where the located features
+            # are, which is the worst place for it. There is no per-arc control, so the switch
+            # goes off and `sheet_annotations` names the axes that get one.
+            'ArcCenterMarks': False,
+            'CenterScale': 1.0}
+
+
+# ---------------------------------------------------------------------------------------
+# Construction geometry: centre marks, centre lines, and the outlines of adjacent parts
+# ---------------------------------------------------------------------------------------
+#
+# **These are cosmetic edges, and a cosmetic edge carries its own format in the document.**
+# That is the whole reason this is possible headlessly. Line weight on a *view* is a
+# view-provider property and a document built by `freecadcmd` has none -- which is why
+# `view_appearance` above exists and has to be applied by the renderer. A cosmetic edge's
+# style, weight, colour and visibility live in the edge itself, in the saved file, so
+# construction geometry drawn here looks the same wherever the page is opened.
+#
+# Verified 2026-09-07 against FreeCAD 1.1.3: `CosmeticEdge.Format` is a dict with the keys
+# `style`, `weight`, `color`, `visible`, lowercase. Capitalised keys are rejected.
+
+#: ISO 128 line types, as the `style` a `CosmeticEdge.Format` takes. Qt pen-style numbering,
+#: which is what TechDraw stores.
+LINE_CONTINUOUS = 1
+LINE_DASHED = 2
+LINE_DOTTED = 3
+#: Long-dash dotted: ISO 128 type G, the centre line.
+LINE_CENTER = 4
+#: Long-dash double-dotted: ISO 128 type K, which is what an adjacent part is drawn in.
+LINE_PHANTOM = 5
+
+#: Ink for construction geometry. Black, like everything else the sheet prints -- a
+#: construction line is distinguished by its *dash pattern*, which survives a photocopier and
+#: a monochrome plot, and not by being grey, which does not.
+CONSTRUCTION_COLOR = (0.0, 0.0, 0.0, 1.0)
+
+#: How far a centre mark's arms reach past the feature they mark, as a fraction of its radius.
+#: ISO 128 draws them a short way clear of the circle so the cross reads as belonging to it
+#: rather than as part of it.
+CENTER_MARK_OVERRUN = 1.35
+
+#: How far a centre line runs past the geometry it is an axis of, in text heights. Enough to
+#: read as a line rather than as a scratch, and short enough not to reach the frame.
+CENTER_LINE_OVERRUN_HEIGHTS = 1.5
+
+
+def center_mark_format():
+    """The format a centre mark's arms are drawn in.
+
+    **Continuous, not dash-dotted, and the reason is the scale the arms come out at.** A mark
+    is a short cross -- a bore of R2.05 gives arms 2.77 mm long in the model, which at the
+    bulkhead's 1:2 is 1.4 mm on the paper. A long-dash dotted pattern needs several
+    millimetres to read as a pattern; below that it renders as a dot, a gap, or nothing at
+    all, and a centre mark that sometimes disappears is worse than none. The long lines --
+    the symmetry axes, where the pattern is what distinguishes an axis from an edge -- get
+    the dashes.
+    """
+    return {'style': LINE_CONTINUOUS, 'weight': NARROW_LINE_MM,
+            'color': CONSTRUCTION_COLOR, 'visible': True}
+
+
+def center_line_format():
+    """The format a symmetry axis is drawn in: long-dash dotted, ISO 128 type G."""
+    return {'style': LINE_CENTER, 'weight': NARROW_LINE_MM,
+            'color': CONSTRUCTION_COLOR, 'visible': True}
+
+
+def detail_marker_format():
+    """The format the circle round a detail's region is drawn in on the plan.
+
+    Continuous and narrow, which is how ISO 128 draws a detail boundary -- it is a statement
+    about the drawing rather than about the part, and a dashed one would read as a hidden
+    feature at exactly the place a reader is being asked to look.
+    """
+    return {'style': LINE_CONTINUOUS, 'weight': NARROW_LINE_MM,
+            'color': CONSTRUCTION_COLOR, 'visible': True}
+
+
+def phantom_format():
+    """The format an adjacent part's outline is drawn in.
+
+    Narrow, because it is not this part's material -- a reference outline at outline weight
+    reads as a feature of the part being made, which is the one thing it must not do.
+    """
+    return {'style': LINE_PHANTOM, 'weight': NARROW_LINE_MM,
+            'color': CONSTRUCTION_COLOR, 'visible': True}
+
+
+def dimension_appearance():
+    """View-provider settings for a `DrawViewDimension`."""
+    return {'Fontsize': TEXT_HEIGHT_MM,
+            'Arrowsize': ARROW_SIZE_MM,
+            'LineWidth': NARROW_LINE_MM,
+            'Font': FONT_NAME}
+
+
+def leader_appearance():
+    """View-provider settings for a `DrawLeaderLine`."""
+    return {'LineWidth': NARROW_LINE_MM}
+
+
+def table_row_pitch_mm(text_height_mm=None):
+    """The distance between two rows of a value table, in millimeters.
+
+    The larger of two requirements, not a choice between them: ISO 3098's baseline spacing,
+    and the room a ruled row needs for its glyph box to clear the rules on either side. On
+    this font and text height the second is the binding one, at 4.57 mm against 3.50.
+
+    **It takes the height it is spacing.** Both terms are multiples of the text height, so a
+    table laid out at a smaller lettering must be spaced at that lettering too -- read from
+    the module constant instead, a block searched down the height series kept its depth while
+    its width shrank, and the search could not find a packing that existed.
+    """
+    height = TABLE_TEXT_HEIGHT_MM if text_height_mm is None else float(text_height_mm)
+    line_spacing = TABLE_ROW_PITCH_HEIGHTS * height
+    ruled_row = ((EM_PER_TEXT_HEIGHT + 2.0 * TABLE_ROW_CLEARANCE_HEIGHTS) * height)
+    return max(line_spacing, ruled_row)
 
 
 def table_band_depth_mm():
@@ -499,11 +723,17 @@ def column_width_mm(cells, text_height_mm=None):
     once against a set of values that is known in full -- the family's variants -- so there is
     nothing to be conservative about, and the bound costs real millimeters on a sheet where
     width turns out to be the binding constraint.
+
+    **Plus padding, which is not slack.** Measuring the widest string exactly and stopping
+    there gives a column the string fills to both edges, and the edges are ruled: the value
+    touches the rule on one side and the rule is thicker than the gap on the other. The
+    padding is `TABLE_COLUMN_PADDING_HEIGHTS` on each side, the horizontal twin of the
+    clearance a row gets above and below.
     """
     height = TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
     widths = [callout_width_mm(height)]
     widths += [text_width_mm(str(cell), height) for cell in cells]
-    return max(widths)
+    return max(widths) + 2.0 * TABLE_COLUMN_PADDING_HEIGHTS * height
 
 
 def table_width_mm(columns, text_height_mm=None):
@@ -631,8 +861,15 @@ def verify_template(path=None):
 
 
 def mm_from_units(units, text_height_mm=TEXT_HEIGHT_MM):
-    """Convert a font advance in design units to millimeters at a given text height."""
-    return units / float(UNITS_PER_EM) * text_height_mm
+    """Convert a font advance in design units to millimeters at a given text height.
+
+    `text_height_mm` is a **cap height**, which is what a drawing standard means by a text
+    height and what TechDraw renders it as. An advance is a fraction of the *em*, and the em
+    is `EM_PER_TEXT_HEIGHT` times taller than the cap, so that factor belongs here -- once,
+    at the single point where design units become millimetres, rather than at each of the
+    three callers that would each be a chance to forget it.
+    """
+    return units / float(UNITS_PER_EM) * text_height_mm * EM_PER_TEXT_HEIGHT
 
 
 def callout_width_mm(text_height_mm=TEXT_HEIGHT_MM):
@@ -748,6 +985,14 @@ def verify_font(path=None):
             'placement bound no longer covers every letter'
             % (widest, advances[widest], WIDEST_CALLOUT_CHAR, WIDEST_CALLOUT_UNITS))
 
+    ascender = typo_ascender_units(path)
+    if ascender != TYPO_ASCENDER_UNITS:
+        problems.append(
+            'the typographic ascender is %d units, not the recorded %d -- every text width '
+            'in this module is scaled by the em-to-cap-height ratio, so a column would be '
+            'sized for a string narrower or wider than the one that gets drawn'
+            % (ascender, TYPO_ASCENDER_UNITS))
+
     digits, _ = measure_advances(path, '0123456789')
     widest_digit = max(digits, key=lambda c: digits[c])
     if digits[widest_digit] != WIDEST_DIGIT_UNITS or widest_digit != WIDEST_DIGIT_CHAR:
@@ -757,6 +1002,20 @@ def verify_font(path=None):
             % (widest_digit, digits[widest_digit], WIDEST_DIGIT_CHAR, WIDEST_DIGIT_UNITS))
 
     return problems
+
+
+def typo_ascender_units(path=None):
+    """The font's typographic ascender in design units.
+
+    Read from `OS/2` rather than `hhea`: `hhea.ascent` on this face is 2697 units, which is
+    the line-box ascent and includes room for accents, while `sTypoAscender` at 1542 is the
+    height of a capital. Using the line-box number would over-measure every string by 75%
+    instead of under-measuring it by 33%.
+    """
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(path or font_path(), fontNumber=0)
+    return int(font['OS/2'].sTypoAscender)
 
 
 def require_font(path=None):
