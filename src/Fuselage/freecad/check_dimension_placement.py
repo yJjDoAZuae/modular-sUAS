@@ -190,7 +190,15 @@ def sheet_regions():
 # What `check_table_width.py` records the view as needing, so a table beside it can be sized.
 # Re-derived below on every run: if the annotation set changes, the two disagree and say so,
 # rather than the table being budgeted against a view that no longer exists.
-VIEW_WIDTH_RECORDED_MM = 84.5
+#
+# **84.5 until 2026-09-07, and the disagreement is what the pair is for.** The number is the
+# narrowest region four leader notes will place in, so it is set by how wide the notes are --
+# and the text width model was 32.8% short, because ISO 3098's `h` is a *cap height* and the
+# glyph advances in the font are fractions of the *em*. Correcting it widened every note and
+# with it the region they need, from 84.5 to 117.5 mm on the family sheet and from 100.0 to
+# 136.0 on the single-variant one. Nothing recorded the new value, so the table beside the
+# view was being budgeted 33 mm that the view needs.
+VIEW_WIDTH_RECORDED_MM = 117.5
 
 
 def narrowest_view_width(notes, valued, height_mm, step_mm=0.5):

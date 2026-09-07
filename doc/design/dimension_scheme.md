@@ -1580,13 +1580,28 @@ table width the band layout has spare, leaving 5.1 mm. A column of branch *names
 does not fit — and overrunning by 3.3 mm is not a small penalty but a cliff, dropping the drawn
 view from 75.4 % to 45.3 % as the layout falls back to a column.
 
-**The constraint the decision carries: one column per sheet, not one per branching dimension.**
-Per dimension does not fit — the corner has four branching dimensions and 4 × 6.92 = 27.7 mm
-against 12.0 mm available. So a single column serves the sheet, and its cells must therefore name
-the *dimension* as well as the requirement. **That widens the cell, and the width is the thing to
-measure before building**: `drawing_standard.column_width_mm` on the real cell contents, against
-the 5.1 mm of margin the column leaves. If it does not fit, alternative 3's marker plus a legend
-in the three spare rows is the fallback, and the legend is what carries the mapping.
+**The constraint this decision was recorded with has been measured away.** It said a single
+column must serve the whole sheet, so its cells would have to name the *dimension* as well as
+the requirement, and that the widened cell was the thing to measure before building. Both halves
+were wrong, and the table's own factoring is why.
+
+**The family table is factored by axis — one block per distinct axis set — and no block carries
+more than one branching dimension.** Measured 2026-09-06: on the corner the three shown
+branching dimensions sit in three *different* blocks (`greeble_thickness` in `('U',)`,
+`panel_offset` in `('U', 'panel')`, `panel_overlap` in `('panel',)`), and the two bulkhead
+sheets likewise. So the column is unambiguous where it sits and **needs no dimension label**;
+the 6.92 mm figure stands as measured, and the 5.1 mm margin is not spent.
+
+**Every branch also factors onto the same axes as the value it explains, or fewer** — checked
+with `drawing_families.minimal_axes`, the same function that decides the table's shape — so each
+`GOVERNED BY` column rides in the block its value is already in, and no new block, axis set or
+row is needed anywhere.
+
+**The count is also smaller than this question was decided against, and for a reason worth
+keeping:** DES-9 is about the value *shown*, and only some of the nine branching dimensions are
+printed on a sheet. Seven columns are needed in total — three on the corner, two on each
+bulkhead sheet. The rest, `flat_offset` among them, are not dimensioned at all, which is
+[OQ-DES-D14](#open-questions).
 
 **Alternative 2 is rejected for the family sheet on measurement rather than taste.** A leader
 note is fixed text, so on a sheet where 240 variants go one way and 24 the other it would have to
@@ -1607,6 +1622,63 @@ beside a title block deeper than it is; **width** is where this sheet is tight.
 
 *Implementation: [IP-FC-99](../implementation/freecad_migration.md) step three.*
 
+
+### OQ-DES-D14 — DES-9's own evidence is a quantity no drawing shows
+
+**Resolved 2026-09-06: alternative 1, as recommended.** DES-9 reaches *shown values* only,
+so `flat_offset` is out of scope for the `GOVERNED BY` note: it is not a dimension any sheet
+prints, and the corner sheet carries the eleven parameters that feed it, which is what
+section 3's completeness test asks for and what an inspector measures.
+
+`flat_offset` is therefore **deliberately unannotated**, and that is recorded here rather
+than left to be rediscovered. The seven `GOVERNED BY` columns that do have shown values are
+unblocked (IP-FC-99 step three): corner 3, bulkhead 2, boom_bulkhead 2.
+
+**The doubt this leaves standing**, from the question as filed: the requirement then does not
+cover the case it was drafted from, and 24 corner sheets stay silent about a real geometry
+difference. The evidence that would reopen it is a reviewer being misled by one of those 24
+sheets. That evidence has not been sought.
+
+### OQ-DES-D15 — The value table does not fit the layout OQ-DES-D5 chose
+
+**Resolved 2026-09-07: alternative 5, reduce the table lettering, decided by the user on
+review.** The sheets are drawn on ANSI A, in OQ-DES-D5's band layout, and what gives is the
+size of the text in the blocks beside the title block.
+
+The decision was made in these terms: *"I told you I wanted the drawing itself taking up 75 %
+of the area of the page"* and *"the table font size is much less important than being able to
+tell what the hell the drawing is supposed to be showing"*. The stacked strip — the third
+placement these sheets had been drawn in since the text metric was corrected — was giving the
+view **52.4 %** of the frame, and the recommendation above (ANSI B) would have bought the
+space by changing the paper. The user's reading is that the requirement is about the drawing
+and the table is what should pay for it.
+
+**What it costs, measured.** `drawing.sheet_blocks` searches
+`drawing_standard.TABLE_TEXT_HEIGHTS_MM` from 2.5 mm downward for the largest lettering at
+which the three blocks — the value table, the dimension key and the sheet-coverage statement —
+pack into the 108.5 × 46.0 mm band beside the title block. Across the six drawable family
+sheets it settles at **1.0 to 1.6 mm**, and every sheet's view region comes out at
+**75.4 %** of the frame. 1.0 mm is well below ISO 3098's smallest defined height of 2.5 mm,
+and that is the price the decision accepts.
+
+The arithmetic behind those numbers: the frame is 44,834 mm², the title block takes 5,980 of
+it, and the three blocks come to about 11,600 mm² at 2.5 mm lettering. For the view to have
+75 % the blocks must fit 5,229 mm², which is 45 % of the area and so 67 % of the linear size —
+about 1.7 mm — and packing waste takes it to between 1.0 and 1.6 depending on the family.
+
+**Two things this also settled.**
+
+*The view region is not the drawing.* A region can be 75 % of the frame with a postage stamp
+in the middle of it, which is what a scale search that shrinks the part until its own
+annotations fit produces. `drawing.SCALE_FLOOR_FRACTION` now stops the search a quarter below
+the largest scale the *geometry* fits its region at, and a view that cannot carry its
+annotations within that is split rather than shrunk — which is what a detail view is for.
+
+*Two views fit after all.* Before the lettering search the view region was 239.5 × 98.1 mm and
+a bulkhead's plan and corner detail fitted neither as columns (the detail gets 119.3 mm and
+its five leader notes need more at **any** scale, since note text does not shrink with the
+part) nor as rows (57.7 mm of height, same result). At 239.5 × 141.2 both place, and every
+bulkhead family sheet now carries a plan and a `DETAIL A`.
 
 ## See also
 

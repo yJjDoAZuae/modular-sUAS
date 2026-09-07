@@ -240,7 +240,7 @@ def block_layout(block, letters, origin_x, text_height_mm=None, pitch_mm=None):
     field letters, which is the row `drawing_families.sheet_blocks` already counts.
     """
     height = std.TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
-    pitch = std.table_row_pitch_mm() if pitch_mm is None else pitch_mm
+    pitch = std.table_row_pitch_mm(height) if pitch_mm is None else pitch_mm
     gutter = std.TABLE_COLUMN_GUTTER_MM
 
     columns = block['columns']
@@ -328,6 +328,172 @@ def block_layout(block, letters, origin_x, text_height_mm=None, pitch_mm=None):
     return cells, rules, block_width, rows
 
 
+#: The dimension key's heading, printed over its two columns.
+LEGEND_HEADING = ('', 'DIMENSION KEY')
+
+
+def legend_table(pairs, columns=1, text_height_mm=None, pitch_mm=None):
+    """The dimension key as a `Table` of its own: `(letter, phrase)` rows in `columns` runs.
+
+    **A table of its own, and not part of the value table, because it does not go where the
+    values go.** Tried the other way first: appended to the value table so it would share an
+    anchor and a fit test. The key is thirteen rows and the values are five, so it wrapped into
+    three runs of four, added 150 mm to a 135 mm table, and ran off the right-hand edge of the
+    frame. It belongs in the band beside the title block -- which the value table vacates when
+    it moves to a strip of its own -- and that is a different rectangle with a different
+    budget, so it is measured separately.
+
+    One heading over the whole key, not one per run: three boxes each labelled DIMENSION KEY
+    read as three different keys.
+    """
+    height = std.TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
+    pitch = std.table_row_pitch_mm(height) if pitch_mm is None else pitch_mm
+    gutter = std.TABLE_COLUMN_GUTTER_MM
+    pairs = list(pairs)
+    if not pairs:
+        return Table([], [], 0.0, 0.0, 0)
+
+    columns = max(1, int(columns))
+    per = -(-len(pairs) // columns)                 # ceiling, so no run is left over
+    groups = [pairs[i:i + per] for i in range(0, len(pairs), per)]
+
+    cells, rules = [], []
+    rows = 1 + max(len(g) for g in groups)
+    depth = rows * pitch
+    x = 0.0
+    for group in groups:
+        letter_w = std.column_width_mm([p[0] for p in group], height)
+        phrase_w = std.column_width_mm([p[1] for p in group], height)
+        right = x + letter_w + gutter + phrase_w
+        for index, (letter, phrase) in enumerate(group):
+            y = (index + 1) * pitch + pitch / 2.0
+            cells.append(Cell(letter, x + letter_w / 2.0, y, height, CENTER))
+            cells.append(Cell(phrase,
+                              x + letter_w + gutter + std.text_width_mm(phrase, height) / 2.0,
+                              y, height, LEFT))
+            rules.append(((x, y - pitch / 2.0), (right, y - pitch / 2.0)))
+        # The run's own box, and the rule between a letter and its phrase.
+        rules.append(((x, pitch), (x, depth)))
+        rules.append(((right, pitch), (right, depth)))
+        divider = x + letter_w + gutter / 2.0
+        rules.append(((divider, pitch), (divider, depth)))
+        x = right + 2.0 * gutter
+
+    width = x - 2.0 * gutter
+    cells.append(Cell(LEGEND_HEADING[1], width / 2.0, pitch / 2.0, height, CENTER))
+    rules.append(((0.0, 0.0), (width, 0.0)))
+    rules.append(((0.0, pitch), (width, pitch)))
+    rules.append(((0.0, depth), (width, depth)))
+    rules.append(((0.0, 0.0), (0.0, pitch)))
+    rules.append(((width, 0.0), (width, pitch)))
+    return Table(cells, rules, width, depth, rows)
+
+
+#: The sheet-coverage block's heading.
+COVERAGE_HEADING = 'SHEET COVERAGE'
+
+
+def caption_table(rows, heading=COVERAGE_HEADING, text_height_mm=None, pitch_mm=None,
+                  stacked=False):
+    """A two-column label/value block: `(label, value)` rows under one heading.
+
+    The same shape as the dimension key and for the same reason -- it is a small ruled block
+    that has to be measured before it is placed -- but the columns mean different things, so
+    it is its own layout rather than the key with different strings in it. Labels are left
+    aligned against the rule, values left aligned in their own column, because a reader scans
+    the labels down and reads one value across.
+    """
+    height = std.TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
+    pitch = std.table_row_pitch_mm(height) if pitch_mm is None else pitch_mm
+    gutter = std.TABLE_COLUMN_GUTTER_MM
+    rows = list(rows)
+    if not rows:
+        return Table([], [], 0.0, 0.0, 0)
+
+    label_w = std.column_width_mm([r[0] for r in rows], height)
+    value_w = std.column_width_mm([r[1] for r in rows], height)
+    if stacked:
+        # The value on its own row, indented under its label. One column, so the block is as
+        # wide as its widest single string rather than as wide as the widest pair.
+        indent = gutter
+        width = max(label_w, indent + value_w)
+        printed_rows = []
+        for label, value in rows:
+            printed_rows.append((label, 0.0))
+            printed_rows.append((value, indent))
+    else:
+        width = label_w + gutter + value_w
+        printed_rows = None
+
+    count = len(printed_rows) if stacked else len(rows)
+    depth = (1 + count) * pitch
+
+    cells = [Cell(heading, width / 2.0, pitch / 2.0, height, CENTER)]
+    rules = [((0.0, 0.0), (width, 0.0)), ((0.0, pitch), (width, pitch)),
+             ((0.0, depth), (width, depth)),
+             ((0.0, 0.0), (0.0, depth)), ((width, 0.0), (width, depth))]
+
+    if stacked:
+        for index, (text, indent) in enumerate(printed_rows):
+            y = (index + 1) * pitch + pitch / 2.0
+            cells.append(Cell(text, indent + std.text_width_mm(text, height) / 2.0,
+                              y, height, LEFT))
+        # A rule under each pair rather than under each row: the label and its value are one
+        # statement, and a rule between them reads as two.
+        for index in range(0, len(printed_rows), 2):
+            y = (index + 1) * pitch
+            rules.append(((0.0, y), (width, y)))
+    else:
+        for index, (label, value) in enumerate(rows):
+            y = (index + 1) * pitch + pitch / 2.0
+            cells.append(Cell(label, std.text_width_mm(label, height) / 2.0, y, height, LEFT))
+            cells.append(Cell(value,
+                              label_w + gutter + std.text_width_mm(value, height) / 2.0,
+                              y, height, LEFT))
+            rules.append(((0.0, y - pitch / 2.0), (width, y - pitch / 2.0)))
+        divider = label_w + gutter / 2.0
+        rules.append(((divider, pitch), (divider, depth)))
+    return Table(cells, rules, width, depth, 1 + count)
+
+def caption_fitting(rows, width_mm, heading=COVERAGE_HEADING, text_height_mm=None,
+                    pitch_mm=None):
+    """The coverage block in the widest form that fits `width_mm`, or the narrowest tried.
+
+    Two forms, tried in order. **Side by side**, label and value on one row, which is how a
+    reader wants it and what the block is for. **Stacked**, the value on its own row indented
+    under its label, which is half the width and twice the depth -- and depth is what this
+    sheet has to spare, because the block sits beside a value table that is deeper than it is.
+
+    Returns `(table, complaints)`; the complaints name the width missed by, so a sheet that
+    can carry neither says how much it is short rather than that it failed.
+    """
+    for stacked in (False, True):
+        table = caption_table(rows, heading, text_height_mm, pitch_mm, stacked=stacked)
+        if table.width <= width_mm + 1e-9:
+            return table, []
+    return table, ['the sheet-coverage block needs %.1f mm in its narrowest form and %.1f mm '
+                   'is free -- over by %.1f'
+                   % (table.width, width_mm, table.width - width_mm)]
+
+
+
+def legend_fitting(pairs, region, text_height_mm=None, pitch_mm=None):
+    """The key laid out in the fewest runs that fit `region`, or the widest tried.
+
+    Fewest runs because a tall narrow key is easier to read than a short wide one, and because
+    every run costs a letter column and two gutters. Returns `(table, complaints)`; the
+    complaints are `Table.fits`'s, so a key that fits nothing still says by how much.
+    """
+    best = None
+    for columns in range(1, len(list(pairs)) + 1):
+        table = legend_table(pairs, columns, text_height_mm, pitch_mm)
+        problems = table.fits(region)
+        if not problems:
+            return table, []
+        best = (table, problems)
+    return best if best else (legend_table([]), [])
+
+
 def layout(blocks, letters, text_height_mm=None, pitch_mm=None):
     """The whole value table, laid out in its own frame. Returns a `Table`.
 
@@ -357,7 +523,8 @@ def layout(blocks, letters, text_height_mm=None, pitch_mm=None):
         rows = max(rows, block_rows)
         x += width
 
-    pitch = std.table_row_pitch_mm() if pitch_mm is None else pitch_mm
+    height = std.TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
+    pitch = std.table_row_pitch_mm(height) if pitch_mm is None else pitch_mm
     return Table(cells, rules, x, rows * pitch, rows)
 
 
