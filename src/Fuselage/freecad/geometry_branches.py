@@ -45,6 +45,16 @@ SITES = {}
 #: say. Counted apart from wins rather than credited to the first argument.
 TIES = {}
 
+#: (line, which) -> [winner per entry], in the order the entries arrived. Aggregate counts say
+#: how often a branch wins; only a per-variant record says *which* variants, and that is what
+#: decides whether the note can be factored onto the same axes the value is
+#: (`drawing_families.minimal_axes`). A tie is recorded as `t`, because "neither governed" is
+#: a third outcome and folding it into the first argument would invent a branch.
+PER_ENTRY = {}
+
+#: Index of the variant being evaluated, so a recorded call can be placed.
+_AT = [0]
+
 ASSIGNMENT = re.compile(r'^\s*self\.([A-Za-z_][A-Za-z_0-9]*)\s*=')
 
 
@@ -55,11 +65,14 @@ def _watching(name, chooser):
             return value
         line = sys._getframe(1).f_lineno
         winners = [i for i, a in enumerate(args) if a == value]
+        key = (line, name)
         if len(winners) > 1:
-            TIES[(line, name)] = TIES.get((line, name), 0) + 1
+            TIES[key] = TIES.get(key, 0) + 1
+            PER_ENTRY.setdefault(key, {})[_AT[0]] = 't'
         else:
-            counts = SITES.setdefault((line, name), {})
+            counts = SITES.setdefault(key, {})
             counts[winners[0]] = counts.get(winners[0], 0) + 1
+            PER_ENTRY.setdefault(key, {})[_AT[0]] = str(winners[0])
         return value
     return watched
 
@@ -91,7 +104,8 @@ def main():
     cc.max = _watching('max', max)
     cc.min = _watching('min', min)
     try:
-        for entry in entries:
+        for index, entry in enumerate(entries):
+            _AT[0] = index
             cc.Params(**entry)
     finally:
         cc.max, cc.min = original
@@ -103,6 +117,12 @@ def main():
                  ' '.join('%d:%d' % (i, n) for i, n in sorted(counts.items()))))
     for (line, which), n in sorted(TIES.items()):
         print('TIE\t%s\t%s:%d\t%d' % (attribute_at(line), which, line, n))
+    # One character per variant, in the order they were handed over, so the caller can line
+    # them up against the axis values it already holds without trusting two enumerations to
+    # agree. A variant whose call never happened reads `-`.
+    for (line, which), seen in sorted(PER_ENTRY.items()):
+        run = ''.join(seen.get(i, '-') for i in range(len(entries)))
+        print('PER\t%s\t%s:%d\t%s' % (attribute_at(line), which, line, run))
     sys.stdout.flush()
     return 0
 

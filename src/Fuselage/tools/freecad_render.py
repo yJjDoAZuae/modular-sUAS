@@ -44,6 +44,20 @@ _DEFAULT_PATHS = [
     '/usr/local/bin/freecadcmd',
 ]
 
+# The *GUI* binary, which is a different executable and not interchangeable with the one
+# above. `freecadcmd` is built without Qt, so everything that draws -- TechDraw's page
+# renderer above all -- is simply absent from it, and asking for it there raises "Cannot load
+# Gui module in console application". That message reads like a statement about FreeCAD 1.1.
+# It is a statement about `freecadcmd`: the same version's `freecad.exe` renders pages with no
+# display attached given `QT_QPA_PLATFORM=offscreen`. See `freecad/render_pages.py`.
+GUI_ENV_VAR = 'FREECAD_GUI'
+_DEFAULT_GUI_PATHS = [
+    r'C:\Program Files\FreeCAD 1.1\bin\freecad.exe',
+    os.path.expandvars(r'%LOCALAPPDATA%\Programs\FreeCAD 1.1\bin\freecad.exe'),
+    '/usr/bin/freecad',
+    '/usr/local/bin/freecad',
+]
+
 def _load_part_kinds():
     """`freecad/part_kinds.py`, loaded by path rather than by import.
 
@@ -91,6 +105,36 @@ def freecadcmd_path():
     raise FreeCADNotFound(
         'freecadcmd not found. Set %s to its full path, or put it on PATH. '
         'Looked in: %s' % (ENV_VAR, ', '.join(_DEFAULT_PATHS)))
+
+
+def freecad_gui_path():
+    """The `freecad` GUI executable, or raise saying how to point at it.
+
+    Deliberately not derived from `freecadcmd_path()` by string substitution. They are two
+    installed programs and a machine is free to have one without the other, or to have them
+    apart; a path built by editing the other one's filename would find a file that is not
+    there and fail somewhere less informative than here.
+    """
+    explicit = os.environ.get(GUI_ENV_VAR)
+    if explicit:
+        if not os.path.isfile(explicit):
+            raise FreeCADNotFound('%s is set to %r, which does not exist'
+                                  % (GUI_ENV_VAR, explicit))
+        return explicit
+    beside = os.path.join(os.path.dirname(freecadcmd_path()),
+                          'freecad.exe' if os.name == 'nt' else 'freecad')
+    if os.path.isfile(beside):
+        return beside
+    found = shutil.which('freecad')
+    if found:
+        return found
+    for path in _DEFAULT_GUI_PATHS:
+        if os.path.isfile(path):
+            return path
+    raise FreeCADNotFound(
+        'the FreeCAD GUI executable was not found. Set %s to its full path, or put it on '
+        'PATH. Looked beside freecadcmd, then in: %s'
+        % (GUI_ENV_VAR, ', '.join(_DEFAULT_GUI_PATHS)))
 
 
 def definition_text(kind, params, variant=None):

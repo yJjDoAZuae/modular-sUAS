@@ -44,9 +44,13 @@ NEWLINE = chr(10)
 # it on every run so that a change in the annotation set shows up here as a disagreement
 # rather than as a stale constant.
 #
-# The single-variant sheet needs 100.0 mm and is not the case that matters: those sheets carry
+# The single-variant sheet needs 136.0 mm and is not the case that matters: those sheets carry
 # no family table, so nothing is competing with them for the width.
-VIEW_WIDTH_MM = 84.5
+#
+# **84.5 until 2026-09-07**, when the text width model was corrected: ISO 3098's `h` is a cap
+# height, not an em, so every string was measured 32.8% narrow and with it every note and the
+# region the notes place in. See `check_dimension_placement.VIEW_WIDTH_RECORDED_MM`.
+VIEW_WIDTH_MM = 117.5
 
 
 def column_strings(column):
