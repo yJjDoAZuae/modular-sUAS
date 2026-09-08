@@ -73,6 +73,13 @@ ZERO_MM = 1.0e-9
 # remedy and not something a longer search should paper over.
 MAX_NOTE_ASSIGNMENTS = 4096
 
+# OQ-DES-D16 alternative 4: how far past the obstacle's own extent a routed leader's elbow
+# clears it by, in text heights. Not zero -- an elbow placed exactly at the obstacle's
+# endpoint touches it, which `_segments_cross` correctly does not call a crossing, but a
+# floating-point hair away from that endpoint after projection and scaling is exactly the
+# gap a hand-drafted leader would not leave either.
+ELBOW_MARGIN_HEIGHTS = 0.5
+
 # Written as a name because a literal escape does not survive every route this file has
 # been edited through. It is one character either way.
 NEWLINE = chr(10)
@@ -198,13 +205,22 @@ class Note(object):
 
 
 class PlacedNote(object):
-    """A note with a position, its leader running from the anchor to the block."""
+    """A note with a position, its leader running from the anchor to the block.
+
+    `leader` is a sequence of two or more points -- the straight anchor-to-block line
+    `_place_notes` gives every note, or the three points `_route_leaders` (OQ-DES-D16
+    alternative 4) replaces it with when the straight line would cross a dimension's line or
+    witness and one elbow clears it. Never more than one bend: a leader that still crosses
+    something after the one bend tried is left straight, and the layout fails exactly as it
+    did before routing existed -- section 5.6 over a leader that would need a cleverer route
+    than this to draw.
+    """
 
     def __init__(self, note, side, text_box, leader):
         self.note = note
         self.side = side
         self.text_box = text_box            # (x_min, y_min, x_max, y_max)
-        self.leader = leader                # ((x1, y1), (x2, y2))
+        self.leader = tuple(leader)         # (p1, p2) or (p1, elbow, p2)
 
     @property
     def key(self):
@@ -261,6 +277,97 @@ def _segments_cross(a, b):
     # every witness line ends exactly on a dimension line. Testing `(d1 > 0) != (d2 > 0)`
     # instead reads a zero as negative and reports every witness as crossing its own lane.
     return (d1 * d2 < 0.0) and (d3 * d4 < 0.0)
+
+
+def _leader_segments(leader):
+    """A leader's consecutive point-pairs -- one segment if straight, two if routed."""
+    return list(zip(leader, leader[1:]))
+
+
+def _leader_obstacles(placed):
+    """Every line a leader must not cross: each dimension's own line, and its witnesses."""
+    lines = []
+    for p in placed:
+        lines.append(p.dimension_line)
+        lines.extend(p.witnesses)
+    return lines
+
+
+def _leader_clear(segments, obstacles, frame):
+    """Does a leader, as segments, cross none of `obstacles` and stay inside `frame`?
+
+    `frame` of `None` skips containment -- as in `place`, that is only correct in a test.
+    """
+    for segment in segments:
+        if any(_segments_cross(segment, obstacle) for obstacle in obstacles):
+            return False
+    if frame is not None:
+        xs = [point[0] for segment in segments for point in segment]
+        ys = [point[1] for segment in segments for point in segment]
+        if min(xs) < frame[0] or max(xs) > frame[2] or min(ys) < frame[1] or max(ys) > frame[3]:
+            return False
+    return True
+
+
+def _elbow_candidates(obstacle, margin):
+    """Where a leader could bend to clear an axis-aligned `obstacle`, nearer end first.
+
+    Both candidates sit exactly on the obstacle's own infinite line, `margin` past one end of
+    the segment TechDraw actually draws -- past the end, an elbow there only *touches* that
+    line rather than crossing the drawn segment, and `_segments_cross` already treats a touch
+    as clear. An obstacle that is not axis-aligned yields nothing to try: every dimension line
+    and witness in this project is horizontal or vertical, and guessing a bend for a diagonal
+    one would be inventing a case that cannot occur rather than handling one that does.
+    """
+    (x1, y1), (x2, y2) = obstacle
+    if abs(y1 - y2) < ZERO_MM:
+        lo, hi = sorted((x1, x2))
+        return [(lo - margin, y1), (hi + margin, y1)]
+    if abs(x1 - x2) < ZERO_MM:
+        lo, hi = sorted((y1, y2))
+        return [(x1, lo - margin), (x1, hi + margin)]
+    return []
+
+
+def _route_leaders(placed_notes, placed, frame, text_height_mm):
+    """Bend a note's leader around the one obstacle it crosses, where one bend suffices.
+
+    OQ-DES-D16 alternative 4. A leader is a line on the sheet exactly like a witness is, so a
+    leader crossing a dimension's line or witness is the same ambiguity H4 exists to prevent
+    for two dimensions -- but unlike a dimension's own witnesses, a leader's endpoints are not
+    fixed by what it measures, so it has somewhere to go. This tries the straight line first,
+    and only leaves a note bent if bending it actually clears every obstacle and keeps it in
+    the frame; a note that cannot be routed this way is returned unchanged; whatever still
+    crosses is left to fail the way it always did, which is `check_placement` after this
+    runs, so section 5.6 still applies to whatever is not reachable by one bend.
+
+    **Why only one bend, and only for the first obstacle found.** A second bend is a second
+    dimension the placer would need to reason about jointly with the first, which is the
+    combinatorial search OQ-DES-D16 measured as too large to add to `_note_assignments`
+    already; one elbow is the cheap case this alternative was scoped to, not a general router.
+    """
+    obstacles = _leader_obstacles(placed)
+    margin = ELBOW_MARGIN_HEIGHTS * text_height_mm
+    routed = []
+    for note in placed_notes:
+        segments = _leader_segments(note.leader)
+        if _leader_clear(segments, obstacles, frame):
+            routed.append(note)
+            continue
+
+        crossed = next((obstacle for segment in segments for obstacle in obstacles
+                        if _segments_cross(segment, obstacle)), None)
+        bent = None
+        if crossed is not None:
+            start, end = note.leader[0], note.leader[-1]
+            for elbow in _elbow_candidates(crossed, margin):
+                candidate = (start, elbow, end)
+                if _leader_clear(_leader_segments(candidate), obstacles, frame):
+                    bent = candidate
+                    break
+        routed.append(PlacedNote(note.note, note.side, note.text_box, bent)
+                      if bent is not None else note)
+    return routed
 
 
 def _text_box(centre, text_height_mm, text=None):
@@ -395,6 +502,62 @@ def _note_assignments(notes, geometry_bbox):
         yield dict(zip(keys, (order[p] for p in pick)))
 
 
+def _dimension_extent(placed, arrow):
+    """A placed dimension's full drawn extent -- text, line, witnesses, arrowhead allowance.
+
+    Returns `(xs, ys)`. Shared by `_require_containment` and OQ-DES-D17 alternative 3's
+    candidate scoring, both of which are the placer judging its own work before section 5.6's
+    independent check runs -- `check_placement` re-derives the same extent on purpose rather
+    than calling this, so a mistake here cannot hide from both.
+    """
+    xs = [placed.text_box[0], placed.text_box[2],
+         placed.dimension_line[0][0], placed.dimension_line[1][0]]
+    ys = [placed.text_box[1], placed.text_box[3],
+         placed.dimension_line[0][1], placed.dimension_line[1][1]]
+    for w in placed.witnesses:
+        xs.extend([w[0][0], w[1][0]])
+        ys.extend([w[0][1], w[1][1]])
+    # The arrowheads sit at the dimension line's ends, pointing along it.
+    if placed.dimension.axis == HORIZONTAL:
+        xs.extend([min(xs) - arrow, max(xs) + arrow])
+    else:
+        ys.extend([min(ys) - arrow, max(ys) + arrow])
+    return xs, ys
+
+
+def _witness_length(group_placed):
+    """Total length of every witness line a set of placed dimensions draws.
+
+    OQ-DES-D17 alternative 3's score: the two arrangements section 5.3 item 5's balance rule
+    admits for one axis group cost the same lanes and the same text, and differ only in how
+    far each dimension's witnesses have to reach to its line -- which is exactly what a long,
+    unforced witness spends.
+    """
+    total = 0.0
+    for p in group_placed:
+        for (x1, y1), (x2, y2) in p.witnesses:
+            total += ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+    return total
+
+
+def _group_fits(group_placed, frame, text_height_mm):
+    """Does every dimension in this candidate stay inside `frame`? `None` always fits (tests).
+
+    Checked before OQ-DES-D17 alternative 3 accepts the swapped arrangement, so a shorter
+    total witness length cannot buy itself by pushing a dimension off the sheet -- the final
+    `_require_containment` would catch that too, but only after discarding the untouched
+    arrangement that might not have had the problem.
+    """
+    if frame is None:
+        return True
+    arrow = ARROWHEAD_LENGTH_HEIGHTS * text_height_mm
+    for p in group_placed:
+        xs, ys = _dimension_extent(p, arrow)
+        if min(xs) < frame[0] or min(ys) < frame[1] or max(xs) > frame[2] or max(ys) > frame[3]:
+            return False
+    return True
+
+
 def _attempt(dimensions, geometry_bbox, frame, geometry_edges, notes, assignment,
              text_height_mm):
     """One candidate layout, complete and checked.
@@ -427,22 +590,51 @@ def _attempt(dimensions, geometry_bbox, frame, geometry_edges, notes, assignment
         # Section 5.3 item 5: balance across the sides rather than stacking on one. Alternating
         # by rank keeps the two sides within one lane of each other while preserving the
         # nesting within each side, which is what H4 actually depends on.
-        by_side = {}
-        for rank, dimension in enumerate(group):
-            side = SIDES[axis][rank % 2]
-            by_side.setdefault(side, []).append(dimension)
+        def by_side_for(swap):
+            assigned = {}
+            for rank, dimension in enumerate(group):
+                side = SIDES[axis][(rank + (1 if swap else 0)) % 2]
+                assigned.setdefault(side, []).append(dimension)
+            return assigned
 
-        for side in SIDES[axis]:
-            lanes = []
-            # Seeded with every note, not with this side's notes: a note stacked down the left
-            # runs past the bottom of the view and into where a `below` dimension's text goes,
-            # and H2 does not care which side either of them was assigned to.
-            side_boxes = [n.text_box for n in placed_notes]
-            for dimension in by_side.get(side, []):
-                placement = _place_one(dimension, side, lanes, side_boxes, geometry_bbox,
-                                       gap + standoff[side], pitch, clearance,
-                                       text_height_mm)
-                placed.append(placement)
+        def build(assigned):
+            result = []
+            for side in SIDES[axis]:
+                lanes = []
+                # Seeded with every note, not with this side's notes: a note stacked down the
+                # left runs past the bottom of the view and into where a `below` dimension's
+                # text goes, and H2 does not care which side either of them was assigned to.
+                side_boxes = [n.text_box for n in placed_notes]
+                for dimension in assigned.get(side, []):
+                    result.append(_place_one(dimension, side, lanes, side_boxes, geometry_bbox,
+                                             gap + standoff[side], pitch, clearance,
+                                             text_height_mm))
+            return result
+
+        candidate = build(by_side_for(False))
+        if len(group) > 1:
+            # OQ-DES-D17 alternative 3. The balance rule above has exactly two arrangements
+            # for one axis group -- which rank takes which side -- and nothing prefers the
+            # first beyond it being the simplest to state. Measured 2026-09-07: a 1.1 mm
+            # dimension nested outboard of an unrelated note's whole three-line band on its
+            # assigned side, an 87.65 mm witness line for a millimetre-scale feature, when the
+            # other side of the same axis group had room for it beside its own feature. Trying
+            # the swap and keeping whichever gives this axis group less total witness length
+            # is the two candidates the rule already has, not a new search -- and the swap is
+            # taken only if it does not push something outside the frame the untouched
+            # arrangement did not, so a fix for one sheet cannot silently break another.
+            swapped = build(by_side_for(True))
+            if (_witness_length(swapped) < _witness_length(candidate)
+                    and _group_fits(swapped, frame, text_height_mm)):
+                candidate = swapped
+        placed.extend(candidate)
+
+    # OQ-DES-D16 alternative 4. Notes are placed before any dimension's witnesses exist --
+    # `_place_notes` runs above, `placed` is only complete here -- so a leader can only be
+    # checked against them, and therefore only routed around them, once the dimension loop
+    # above has finished. Every check downstream of this point sees the routed leaders, not
+    # the straight ones `_place_notes` gave them.
+    placed_notes = _route_leaders(placed_notes, placed, frame, text_height_mm)
 
     if frame is not None:
         _require_containment(placed, placed_notes, frame, text_height_mm)
@@ -656,22 +848,13 @@ def _require_containment(placed, notes, frame, text_height_mm):
     arrow = ARROWHEAD_LENGTH_HEIGHTS * text_height_mm
     outside = []
     for n in notes:
-        xs = [n.text_box[0], n.text_box[2], n.leader[0][0], n.leader[1][0]]
-        ys = [n.text_box[1], n.text_box[3], n.leader[0][1], n.leader[1][1]]
+        xs = [n.text_box[0], n.text_box[2]] + [point[0] for point in n.leader]
+        ys = [n.text_box[1], n.text_box[3]] + [point[1] for point in n.leader]
         if (min(xs) < frame[0] or min(ys) < frame[1]
                 or max(xs) > frame[2] or max(ys) > frame[3]):
             outside.append(str(n.key))
     for p in placed:
-        xs = [p.text_box[0], p.text_box[2], p.dimension_line[0][0], p.dimension_line[1][0]]
-        ys = [p.text_box[1], p.text_box[3], p.dimension_line[0][1], p.dimension_line[1][1]]
-        for w in p.witnesses:
-            xs.extend([w[0][0], w[1][0]])
-            ys.extend([w[0][1], w[1][1]])
-        # The arrowheads sit at the dimension line's ends, pointing along it.
-        if p.dimension.axis == HORIZONTAL:
-            xs.extend([min(xs) - arrow, max(xs) + arrow])
-        else:
-            ys.extend([min(ys) - arrow, max(ys) + arrow])
+        xs, ys = _dimension_extent(p, arrow)
         if (min(xs) < frame[0] or min(ys) < frame[1]
                 or max(xs) > frame[2] or max(ys) > frame[3]):
             outside.append(p.letter)
@@ -729,15 +912,34 @@ def check_placement(placed, geometry_edges, frame, text_height_mm=std.TEXT_HEIGH
     # Notes take the innermost band precisely so a leader stays between the geometry and the
     # first dimension line, and that holds as long as a side's notes fit along that side. When
     # they do not they run past its end into another side's lanes, and this is what says so.
+    #
+    # **Deliberately dimension-line only, still.** `_route_leaders` (OQ-DES-D16 alternative 4)
+    # now bends a leader around a witness line it would otherwise cross, and runs
+    # unconditionally, whether or not this check would fail on the result -- so the fix helps
+    # every sheet it can regardless of what this reports. Making a *remaining* witness
+    # crossing a hard failure was tried the same day and reverted: `corner-corner-1b4844`
+    # crosses one that a single bend does not clear (`bore`'s leader, near the same hub `F`'s
+    # witness runs through), and it had built clean on every run before this alternative was
+    # implemented. The router is deliberately the cheap, one-bend case OQ-DES-D16 scoped it
+    # to, not a general one, so a case it cannot reach must not regress a sheet that has
+    # never needed reaching for.
     for n in noted:
         for p in ordered:
-            if _segments_cross(n.leader, p.dimension_line):
+            if any(_segments_cross(segment, p.dimension_line)
+                  for segment in _leader_segments(n.leader)):
                 complaints.append(
                     'the leader of note %s crosses the dimension line of %s -- the note band '
                     'is meant to sit inboard of every lane, so this means a side is carrying '
                     'more note than it has length for' % (n.key, p.letter))
                 break
 
+    # **Not witness-vs-witness.** Section 5.2's H4 permits that crossing by name -- "crossing
+    # another witness line is conventional and permitted" -- because nesting only orders each
+    # axis group against itself (5.3 item 1), and two dimensions on perpendicular axes have no
+    # nesting relationship to satisfy it with. Measured on the panelled bulkhead's corner
+    # detail, 2026-09-07: the horizontal-axis `G` and the vertical-axis `K` cross witnesses at
+    # (60, 68.8), (60, 75.0), (48, 68.8) and (48, 75.0), on a layout every hard constraint
+    # accepts, which is the documented case working as decided rather than a gap to close.
     for p in ordered:
         for other in ordered:
             if other.letter == p.letter:
@@ -765,8 +967,8 @@ def check_placement(placed, geometry_edges, frame, text_height_mm=std.TEXT_HEIGH
             complaints.append('H1: %s extends outside the frame' % p.letter)
 
     for n in noted:
-        xs = [n.text_box[0], n.text_box[2], n.leader[0][0], n.leader[1][0]]
-        ys = [n.text_box[1], n.text_box[3], n.leader[0][1], n.leader[1][1]]
+        xs = [n.text_box[0], n.text_box[2]] + [point[0] for point in n.leader]
+        ys = [n.text_box[1], n.text_box[3]] + [point[1] for point in n.leader]
         if (min(xs) < frame[0] or min(ys) < frame[1]
                 or max(xs) > frame[2] or max(ys) > frame[3]):
             complaints.append('H1: note %s extends outside the frame' % n.key)

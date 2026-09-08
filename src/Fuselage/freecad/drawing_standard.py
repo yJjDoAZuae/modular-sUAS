@@ -155,7 +155,7 @@ TABLE_ROW_CLEARANCE_HEIGHTS = 0.25
 # `U` column drew across its own left-hand rule. A cell needs white space beside it for the
 # same reason a row needs white space above it -- the rule is 0.76 mm of ink, and a gap
 # narrower than that does not read as a gap.
-TABLE_COLUMN_PADDING_HEIGHTS = 0.25
+TABLE_COLUMN_PADDING_HEIGHTS = 0.35
 
 # The clear gap between two columns of a value table, in millimeters -- **not a multiple of
 # the text height, and that is the correction**. This was one text height, taken from section

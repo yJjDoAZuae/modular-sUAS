@@ -259,13 +259,27 @@ def block_layout(block, letters, origin_x, text_height_mm=None, pitch_mm=None):
     block_width = sum(widths) + gutter * (len(widths) - 1)
 
     def place(text, index, row, align):
-        """A string in column `index`, row `row`, at the row's vertical center."""
+        """A string in column `index`, row `row`, at the row's vertical center.
+
+        **Inset from the flush edge by the same padding `column_width_mm` allocated for it.**
+        A column is `widest string + 2 * pad` wide, and centering assumed that pad split
+        evenly either side -- but a right-aligned number was flushed to `left + width` and a
+        left-aligned one to `left`, so the *entire* pad landed on the free side and the flush
+        side got none. That is the side with a rule on it. Measured 2026-09-07 on a built
+        family sheet: the panel band's `1MM`/`3MM` column is the first in its block, flush
+        against the table's own outer border with nothing between the glyph and the rule, and
+        the sheet-coverage block's row labels are flush the same way -- `DO NOT SCALE`'s
+        leading stroke sits on the border it was supposed to clear. Insetting by `pad` puts
+        the padding `column_width_mm` already paid for where the rule actually is, and leaves
+        the same `pad` on the far side by the width formula's own arithmetic.
+        """
         left, width = lefts[index], widths[index]
         y = row * pitch + pitch / 2.0
+        pad = std.TABLE_COLUMN_PADDING_HEIGHTS * height
         if align == RIGHT:
-            cx = left + width - std.text_width_mm(text, height) / 2.0
+            cx = left + width - pad - std.text_width_mm(text, height) / 2.0
         elif align == LEFT:
-            cx = left + std.text_width_mm(text, height) / 2.0
+            cx = left + pad + std.text_width_mm(text, height) / 2.0
         else:
             cx = left + width / 2.0
         return Cell(text, cx, y, height, align)
@@ -361,6 +375,7 @@ def legend_table(pairs, columns=1, text_height_mm=None, pitch_mm=None):
     rows = 1 + max(len(g) for g in groups)
     depth = rows * pitch
     x = 0.0
+    pad = std.TABLE_COLUMN_PADDING_HEIGHTS * height
     for group in groups:
         letter_w = std.column_width_mm([p[0] for p in group], height)
         phrase_w = std.column_width_mm([p[1] for p in group], height)
@@ -368,8 +383,12 @@ def legend_table(pairs, columns=1, text_height_mm=None, pitch_mm=None):
         for index, (letter, phrase) in enumerate(group):
             y = (index + 1) * pitch + pitch / 2.0
             cells.append(Cell(letter, x + letter_w / 2.0, y, height, CENTER))
+            # Inset by `pad` -- see `block_layout.place`. `phrase_w` already paid for this
+            # clearance; flush-left at `x + letter_w + gutter` spent none of it before the
+            # glyph and left it all as unused space before the run's own right-hand rule.
             cells.append(Cell(phrase,
-                              x + letter_w + gutter + std.text_width_mm(phrase, height) / 2.0,
+                              x + letter_w + gutter + pad
+                              + std.text_width_mm(phrase, height) / 2.0,
                               y, height, LEFT))
             rules.append(((x, y - pitch / 2.0), (right, y - pitch / 2.0)))
         # The run's own box, and the rule between a letter and its phrase.
@@ -433,10 +452,15 @@ def caption_table(rows, heading=COVERAGE_HEADING, text_height_mm=None, pitch_mm=
              ((0.0, depth), (width, depth)),
              ((0.0, 0.0), (0.0, depth)), ((width, 0.0), (width, depth))]
 
+    # Inset from the flush edge by the same padding `column_width_mm` allocated -- see
+    # `block_layout.place`. Every row here is left-aligned against an edge with a rule on it
+    # (the table's own border, or -- stacked -- the indent), and flush placement left that
+    # rule with nothing between it and the glyph.
+    pad = std.TABLE_COLUMN_PADDING_HEIGHTS * height
     if stacked:
         for index, (text, indent) in enumerate(printed_rows):
             y = (index + 1) * pitch + pitch / 2.0
-            cells.append(Cell(text, indent + std.text_width_mm(text, height) / 2.0,
+            cells.append(Cell(text, indent + pad + std.text_width_mm(text, height) / 2.0,
                               y, height, LEFT))
         # A rule under each pair rather than under each row: the label and its value are one
         # statement, and a rule between them reads as two.
@@ -446,9 +470,10 @@ def caption_table(rows, heading=COVERAGE_HEADING, text_height_mm=None, pitch_mm=
     else:
         for index, (label, value) in enumerate(rows):
             y = (index + 1) * pitch + pitch / 2.0
-            cells.append(Cell(label, std.text_width_mm(label, height) / 2.0, y, height, LEFT))
+            cells.append(Cell(label, pad + std.text_width_mm(label, height) / 2.0,
+                              y, height, LEFT))
             cells.append(Cell(value,
-                              label_w + gutter + std.text_width_mm(value, height) / 2.0,
+                              label_w + gutter + pad + std.text_width_mm(value, height) / 2.0,
                               y, height, LEFT))
             rules.append(((0.0, y - pitch / 2.0), (width, y - pitch / 2.0)))
         divider = label_w + gutter / 2.0

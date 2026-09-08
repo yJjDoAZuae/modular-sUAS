@@ -37,6 +37,7 @@ bucketing the sweep exactly as `drawing_families.families()` does — same `reso
 the family tabulated cannot come apart. `build_sheet.py` re-derives the family from the
 parameters it is handed and refuses if it disagrees with the key it was given.
 """
+import glob
 import json
 import os
 import shutil
@@ -44,14 +45,15 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+FREECAD_DIR = os.path.normpath(os.path.join(HERE, '..', 'freecad'))
 sys.path.insert(0, HERE)
+sys.path.insert(0, FREECAD_DIR)
 
 import drawing_families as df
 import export_parameters
 import freecad_render
 import render_sheets
-
-FREECAD_DIR = os.path.normpath(os.path.join(HERE, '..', 'freecad'))
+import sheet_naming
 BUILDER = os.path.join(FREECAD_DIR, 'build_sheet.py')
 DEFAULT_OUT = os.path.join(FREECAD_DIR, 'out', 'sheets')
 
@@ -128,13 +130,20 @@ def clear(stem):
     four sheets refused, their `.FCStd` from the previous run was still on disk, and the run
     reported "wrote 6 sheet(s)" with four of the six untouched and out of date. Clearing
     first makes the test mean what it says.
+
+    **Globbed for sheet 2 and up, because this side does not know how many pages a drawing
+    has until it is drawn.** The `.FCStd` is one file for every page (`build_sheet.export`),
+    but the `.dxf`/`.svg`/`.pdf`/`.png` are one per page, named `stem-sheetN` by
+    `sheet_naming`. A family that grows a second sheet on this run and had one on the last
+    would otherwise leave that run's `stem-sheet2.pdf` on disk forever, since nothing later
+    ever asks to remove it by name.
     """
     gone = 0
     for suffix in SHEET_SUFFIXES:
-        path = stem + suffix
-        if os.path.isfile(path):
-            os.remove(path)
-            gone += 1
+        for pattern in sheet_naming.sheet_glob(stem):
+            for path in glob.glob(pattern + suffix):
+                os.remove(path)
+                gone += 1
     return gone
 
 

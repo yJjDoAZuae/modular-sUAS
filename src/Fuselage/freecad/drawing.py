@@ -850,13 +850,25 @@ def arrangement_score(built):
 
 
 def place_views(page, tip, specs, direction, x_direction, regions,
-                dimensions, notes, construction, suffix=''):
+                dimensions, notes, construction, suffix='', all_specs=None):
     """Build every view into its region, or raise `PlacementError` naming the one that failed.
 
     Returns a list of `BuiltView`. Each view searches its own scale against its own region,
     because a plan and a detail are drawn at different sizes on purpose -- that is what the
     split is for.
+
+    `specs` is what to build here; `all_specs` is the drawing's whole view set, which is a
+    different thing as soon as the views go on separate sheets. Two decisions need the whole
+    set and not this sheet's share of it: which view a construction record belongs to, and
+    which view carries the circle saying where a detail was taken from. Both were read off
+    `specs` and both were wrong the moment `build_sheets` started calling this one view at a
+    time -- `construction_for`'s fallback is "the first view", so a sheet holding only the
+    detail became the first view and took all sixteen of the plate's centre marks, axes and
+    panel outlines onto a 30 mm corner. Measured 2026-09-07: the detail refused at 2:1 and
+    1:1 and came out at 1:2, a *detail* drawn at half size, and the plan lost its detail
+    circle in the same stroke.
     """
+    all_specs = tuple(all_specs) if all_specs is not None else tuple(specs)
     doc = page.Document
     built = []
     for index, (spec, region) in enumerate(zip(specs, regions)):
@@ -871,7 +883,7 @@ def place_views(page, tip, specs, direction, x_direction, regions,
         unit_offset = origin_offset(view)
         frame = frame_in_view(view, region, unit_offset)
         view_dimensions, view_notes = annotations_for(spec, dimensions, notes)
-        view_construction = construction_for(spec, construction, specs)
+        view_construction = construction_for(spec, construction, all_specs)
         try:
             scale, layout, ceiling = choose_scale(
                 source.Shape, direction, x_direction, frame, unit_offset,
@@ -887,9 +899,9 @@ def place_views(page, tip, specs, direction, x_direction, regions,
         bind_construction(view, view_construction, scale)
         # Every clipped view is marked on the view it is clipped out of, so the plan says
         # where the detail is and the detail is not a picture of nowhere.
-        for other in specs:
+        for other in all_specs:
             if other is not spec and other.clip is not None and spec.clip is None:
-                add_detail_marker(view, other.clip, scale)
+                add_detail_marker(page, view, other.clip, scale, other.name)
         bind_dimensions(page, view, layout)
         bind_notes(page, view, layout)
         if spec.caption:
@@ -1009,17 +1021,38 @@ def add_caption(page, view, region, text):
     return annotation
 
 
-def add_detail_marker(view, clip, scale):
-    """The circle on the plan showing where a detail is taken from.
+def add_detail_marker(page, view, clip, scale, label=None):
+    """The circle on the plan showing where a detail is taken from, and its name.
 
     Drawn on the view the detail is *of*, not on the detail: it is the plan's statement that
     a region of it is enlarged elsewhere, and without it the detail is a picture of something
     the reader has to find.
+
+    **Labelled, because the detail is now on another sheet.** When both views shared a frame
+    the circle and the enlargement were a hand's breadth apart and the reader joined them by
+    looking. On separate sheets nothing joins them but the name, so the circle carries the
+    same name the detail's caption does.
     """
     cx, cy, radius = clip
     tag = view.makeCosmeticCircle3d(V(cx, cy, 0.0), radius)
     edge = view.getCosmeticEdge(tag)
     edge.Format = std.detail_marker_format()
+    if not label:
+        return tag
+
+    # Up and to the right of the circle, clear of it by half the lettering. `origin_offset`
+    # is read at the view's present scale, so this is the same arithmetic the annotations
+    # went through and the label cannot land in a frame of its own.
+    offset_x, offset_y = origin_offset(view)
+    reach = radius * scale * (0.5 ** 0.5) + std.TEXT_HEIGHT_MM
+    annotation = page.Document.addObject('TechDraw::DrawViewAnnotation',
+                                         'Detail' + view.Name + 'Label')
+    page.addView(annotation)
+    annotation.Text = [label]
+    annotation.TextSize = std.TEXT_HEIGHT_MM
+    annotation.LineSpace = LINE_SPACE_PERCENT
+    annotation.X = view.X.Value + offset_x + cx * scale + reach
+    annotation.Y = view.Y.Value + offset_y + cy * scale + reach
     return tag
 
 
@@ -1268,14 +1301,19 @@ def bind_notes(page, view, layout):
         # with no line to the feature it describes -- which is how it read, and it was
         # not a placement fault. Measured 2026-09-07: three notes on the corner sheet
         # and four on the bulkhead, not one leader among them in the rendered page.
+        # **However many points the leader has.** Straight is two -- anchor and text -- and
+        # `dimension_placement._route_leaders` (OQ-DES-D16 alternative 4) makes some three, one
+        # elbow bent around a dimension line or witness the straight line would have crossed.
+        # `DrawLeaderLine.WayPoints` already takes a polyline relative to its own `X, Y`, so the
+        # bend costs nothing more here than one more point in the list.
+        origin = placed.leader[0]
         leader = doc.addObject('TechDraw::DrawLeaderLine', 'Leader' + str(placed.key).title())
         page.addView(leader)
         leader.LeaderParent = view
-        leader.X = placed.leader[0][0] + offset_x
-        leader.Y = placed.leader[0][1] + offset_y
-        leader.WayPoints = [V(0.0, 0.0, 0.0),
-                            V(placed.leader[1][0] - placed.leader[0][0],
-                              placed.leader[1][1] - placed.leader[0][1], 0.0)]
+        leader.X = origin[0] + offset_x
+        leader.Y = origin[1] + offset_y
+        leader.WayPoints = [V(point[0] - origin[0], point[1] - origin[1], 0.0)
+                            for point in placed.leader]
         out.append((annotations, leader))
     doc.recompute()
     return out
@@ -1370,7 +1408,8 @@ def build_sheets(doc, kind, params_path, params, family=None, variant=None,
         try:
             built = place_views(page, tip, [spec], direction, x_direction, [region],
                                 dimensions, notes, construction,
-                                suffix='' if number == 1 else str(number))
+                                suffix='' if number == 1 else str(number),
+                                all_specs=specs)
         except dp.PlacementError as exc:
             raise dp.PlacementError(
                 'sheet %d of %d, the %s view:' % (number, len(specs), spec.name) + NEWLINE
