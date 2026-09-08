@@ -350,9 +350,57 @@ def settle(scene, say):
     return time.time() - started
 
 
+def render_page(page, stem, say):
+    """Render one page to `stem.svg`/`.pdf`/`.png`. Returns the paths written.
+
+    Split out of `render_one` so a multi-sheet drawing -- a bulkhead's plan and its corner
+    detail no longer share a page, see `drawing.build_sheets` -- renders every page the same
+    way, each under its own stem from `sheet_naming`.
+    """
+    # **The scene has to be asked for.** A page's `QGSPage` is built by its view provider on
+    # demand, and a document merely opened has not needed one yet. `getSceneForPage` is what
+    # forces it; without the scene, an export writes a page-sized empty file rather than
+    # raising. Reporting the item count makes an empty one visible here rather than in the
+    # artefact.
+    import TechDrawGui
+    try:
+        scene = TechDrawGui.getSceneForPage(page)
+        items = len(scene.items()) if scene is not None else 0
+    except Exception as exc:                                            # noqa: BLE001
+        say('    scene not available: %s: %s' % (type(exc).__name__, exc))
+        scene, items = None, 0
+    if scene is not None:
+        waited = settle(scene, say)
+        items = len(scene.items())
+        say('    settled in %.1f s' % waited)
+    say('    %d scene item(s)%s'
+        % (items, '  THIN' if items < THIN_SCENE else ''))
+
+    made = render(page, stem, say)
+    if scene is not None:
+        png = stem + '.png'
+        if os.path.isfile(png):
+            os.remove(png)
+        try:
+            if raster(page, scene, png, say):
+                made.append(png)
+        except Exception as exc:                                        # noqa: BLE001
+            say('    .png  not written: %s: %s' % (type(exc).__name__, exc))
+    return made
+
+
 def render_one(source, stem, say):
-    """Open one `.FCStd`, render its page, close it. Returns True if anything was written."""
+    """Open one `.FCStd`, render every page in it, close it. Returns True if anything was written.
+
+    **Every page, not the first.** `drawing.build_sheets` can put more than one page in a
+    document -- a plan and a detail that no longer share a frame are two pages of one drawing
+    -- and a renderer that stopped at `pages[0]` would silently drop every sheet after the
+    first. Pages are sorted by `sheet_naming.page_number`, which reads `Page`/`Page2`/... back
+    to 1/2/..., the same numbering `drawing.add_page` gave them, so sheet 1 always renders to
+    the bare stem a single-page drawing has always used.
+    """
     import FreeCAD
+    import sheet_naming
 
     doc = FreeCAD.openDocument(source)
     try:
@@ -361,39 +409,17 @@ def render_one(source, stem, say):
         if not pages:
             say('    no DrawPage in this document')
             return False
+        pages.sort(key=lambda p: sheet_naming.page_number(p.Name))
         if len(pages) > 1:
-            say('    %d pages; rendering %s only' % (len(pages), pages[0].Name))
-        page = pages[0]
+            say('    %d pages' % len(pages))
 
-        # **The scene has to be asked for.** A page's `QGSPage` is built by its view provider
-        # on demand, and a document merely opened has not needed one yet. `getSceneForPage`
-        # is what forces it; without the scene, an export writes a page-sized empty file
-        # rather than raising. Reporting the item count makes an empty one visible here
-        # rather than in the artefact.
-        import TechDrawGui
-        try:
-            scene = TechDrawGui.getSceneForPage(page)
-            items = len(scene.items()) if scene is not None else 0
-        except Exception as exc:                                        # noqa: BLE001
-            say('    scene not available: %s: %s' % (type(exc).__name__, exc))
-            scene, items = None, 0
-        if scene is not None:
-            waited = settle(scene, say)
-            items = len(scene.items())
-            say('    settled in %.1f s' % waited)
-        say('    %d scene item(s)%s'
-            % (items, '  THIN' if items < THIN_SCENE else ''))
-
-        made = render(page, stem, say)
-        if scene is not None:
-            png = stem + '.png'
-            if os.path.isfile(png):
-                os.remove(png)
-            try:
-                if raster(page, scene, png, say):
-                    made.append(png)
-            except Exception as exc:                                    # noqa: BLE001
-                say('    .png  not written: %s: %s' % (type(exc).__name__, exc))
+        made = []
+        for page in pages:
+            number = sheet_naming.page_number(page.Name)
+            page_stem = sheet_naming.sheet_stem(stem, number)
+            if len(pages) > 1:
+                say('  %s' % os.path.basename(page_stem))
+            made += render_page(page, page_stem, say)
         return bool(made)
     finally:
         FreeCAD.closeDocument(doc.Name)

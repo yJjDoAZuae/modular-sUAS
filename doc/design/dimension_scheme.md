@@ -1680,6 +1680,61 @@ its five leader notes need more at **any** scale, since note text does not shrin
 part) nor as rows (57.7 mm of height, same result). At 239.5 × 141.2 both place, and every
 bulkhead family sheet now carries a plan and a `DETAIL A`.
 
+### ~~OQ-DES-D16 — A leader can cross a witness line, and nothing checks for it~~ — DECIDED 2026-09-07: alternative 4, a one-bend router
+
+**Chosen: alternative 4**, over alternative 3's recommendation. `dimension_placement._route_leaders`
+runs once every dimension on a view has been placed (so every witness line exists), finds the
+first dimension line or witness a note's straight leader crosses, and tries bending the leader
+through one elbow past whichever end of that obstacle is nearer — `_elbow_candidates` gives the
+two candidate points, `_leader_clear` re-verifies the bent leader crosses nothing else and stays
+in frame before it is accepted. `PlacedNote.leader` is now two points or three; `drawing.bind_notes`
+already drew `DrawLeaderLine.WayPoints` as a list, so the third point cost nothing there.
+
+**Measured working**: on the panelled bulkhead's `DETAIL A`, the `bore` note's leader — which
+used to run straight from (58.7, 62.8) to (94.6, 16.0), crossing `G`'s witness at (60.0, 61.1)
+— now bends through (60.0, 58.2) and clears it.
+
+**Kept deliberately narrow.** The hard constraint stayed dimension-line-only, exactly as before
+this alternative existed — it was **not** widened to witness lines, because a leader that
+crosses more than one obstacle is not always reachable by the single bend this router tries
+(it stops at the first obstacle found and does not search a second elbow around a second one).
+Tried widening it anyway and rebuilt the set: `corner-corner-1b4844` — a sheet that had built
+clean on every run before this alternative existed — refused, because the `bore` note's leader
+there crosses an extension line the router's one bend cannot also clear. The gate was reverted
+to dimension-line-only so routing improves every leader it can reach without making a leader it
+cannot reach a new way to fail a sheet that never needed reaching for. A leader that still
+crosses a witness line after this is exactly as visible, or invisible, as it was before
+OQ-DES-D16 was filed — the router is strictly additive, not a new constraint.
+
+### ~~OQ-DES-D17 — A dimension can inherit an unrelated note's whole band~~ — DECIDED 2026-09-07: alternative 3, tried and measured not to reach the case it was filed on
+
+**Chosen: alternative 3.** `_attempt` now builds both of section 5.3 item 5's balancings for
+an axis group of two or more — the ranked assignment and its mirror — scores each by
+`_witness_length` (total length of every witness line the group draws), and keeps the shorter
+one, but only if `_group_fits` says the swap does not push anything outside the frame the
+unswapped arrangement was inside. Implemented, and safe: the full six-sheet set still builds
+and `check_placement_determinism.py` still reports one digest across four hash seeds.
+
+**Measured not to fix the case that motivated the question.** On `corner-corner-7faa02`, `F`
+(`panel_pocket`) and `A` (`corner_radius`) are the vertical-axis group. The default assignment
+— `F` left, `A` right — draws 262.97 mm of total witness for the pair; the swap — `F` right,
+`A` left — draws 332.97 mm, so the code correctly keeps the default and `F`'s witness stays
+87.65 mm long. The reason is not the note band this question was filed against: `F`'s own
+feature sits at `x = -17.5`, close to the geometry's left edge, so moving `F` to the
+note-free right side trades a short walk past a wide note band for a long walk **across the
+entire part** to a dimension line on the far side — 78 mm versus the 70.99 mm it already
+costs on the left. The metric alternative 3 scores (total group witness length) is answering
+correctly; the swap this specific case wants is not the cheaper one by that metric, because
+`F`'s side was never determined by the note band alone.
+
+**What this leaves standing.** The 87.65 mm witness measured when this question was filed is
+unchanged by this decision. Alternative 3 is not wasted — it will take the shorter side
+whenever a swap's savings are not outweighed by moving the dimension's own feature further
+from its line, which did not happen to be true here — but a case like `F`'s, where the
+feature itself sits nearer the crowded side, needs one of alternatives 2, 4 or 5 from the
+original list, or a different question, to actually shorten. Left as a finding rather than a
+new question because no further decision has been asked for.
+
 ## See also
 
 - [freecad_migration.md](../architecture/freecad_migration.md) — OQ-ARCH-7, the decision this
