@@ -19,12 +19,17 @@ rather than a sheet. Being told which family and working out which family are tw
 claims, and this writes a sheet only when they agree.
 
 **Two artefacts here, and two more from the renderer.** The `.FCStd` is the sheet itself and
-loses nothing; it is the artefact of record. The `.dxf` is for a reader with a CAD program, and
-**TechDraw's DXF export is lossy**: it drops all but the first line of a multi-line annotation
-and drops symbols (IP-FC-33), so it is written but never relied on. The `.svg` and `.pdf` -- a
-picture of the sheet as TechDraw draws it, which is what a person reviewing the set actually
-looks at -- are written afterwards by `tools/render_sheets.py`, because rendering a page needs
-Qt and this process is `freecadcmd`, which has none. See `render_pages.py`.
+loses nothing; it is the artefact of record, and it is one file even when the drawing is more
+than one page -- `drawing.build_sheets` puts every sheet of one drawing in one document, so a
+bulkhead's plan and its corner detail are `Page` and `Page2` of the same `.FCStd`, not two
+documents. The `.dxf` is for a reader with a CAD program, and **TechDraw's DXF export is
+per-page**, so a multi-sheet drawing writes one `.dxf` per page, named by `sheet_naming`. It is
+also lossy: it drops all but the first line of a multi-line annotation and drops symbols
+(IP-FC-33), so it is written but never relied on. The `.svg` and `.pdf` -- a picture of each
+sheet as TechDraw draws it, which is what a person reviewing the set actually looks at -- are
+written afterwards by `tools/render_sheets.py`, because rendering a page needs Qt and this
+process is `freecadcmd`, which has none. See `render_pages.py`, which renders every page of the
+document the same way this writes a `.dxf` for each.
 """
 import json
 import os
@@ -38,6 +43,7 @@ import check_drawing
 import dimension_placement as dp
 import drawing
 import sheet_annotations
+import sheet_naming
 from corner_common import is_entry_point, script_args
 
 
@@ -51,11 +57,13 @@ def _opt(name, default=None):
     return default
 
 
-def export(page, stem):
+def export(sheets, stem):
     """Write what this process can write. Returns the paths actually written.
 
-    The `.FCStd` is the sheet and the `.dxf` is a lossy convenience; a failure of the second
-    is reported and skipped rather than losing the first.
+    The `.FCStd` is the sheet -- one file for the whole drawing, however many pages
+    `build_sheets` gave it -- and the `.dxf` is a lossy convenience, one per page since DXF has
+    no notion of a multi-page document. A failure of a `.dxf` is reported and skipped rather
+    than losing the `.FCStd`.
 
     **What is deliberately not written here is the picture of the sheet.** Rendering a
     TechDraw page needs TechDraw's renderer, which is Qt, which `freecadcmd` does not have --
@@ -70,15 +78,18 @@ def export(page, stem):
     import TechDraw
 
     written = []
-    doc = page.Document
+    doc = sheets[0].page.Document
     doc.saveAs(stem + '.FCStd')
     written.append(stem + '.FCStd')
 
-    try:
-        TechDraw.writeDXFPage(page, stem + '.dxf')
-        written.append(stem + '.dxf')
-    except Exception as exc:                                            # noqa: BLE001
-        print('  .dxf  not written: %s: %s' % (type(exc).__name__, exc))
+    for sheet in sheets:
+        dxf_stem = sheet_naming.sheet_stem(stem, sheet.number)
+        try:
+            TechDraw.writeDXFPage(sheet.page, dxf_stem + '.dxf')
+            written.append(dxf_stem + '.dxf')
+        except Exception as exc:                                        # noqa: BLE001
+            print('  %s.dxf  not written: %s: %s'
+                  % (os.path.basename(dxf_stem), type(exc).__name__, exc))
     return written
 
 
@@ -124,7 +135,7 @@ def main():
 
     doc = App.newDocument('sheet_' + key.replace('-', '_'))
     try:
-        page, _view, layout, scale, placement, built = drawing.build_sheet(
+        sheets = drawing.build_sheets(
             doc, kind, params_path, params, family,
             variant=exported.get('variant'),
             siblings=[f for f in document['families'] if f.get('kind') == kind],
@@ -146,12 +157,16 @@ def main():
     folder = os.path.dirname(os.path.abspath(stem))
     if folder and not os.path.isdir(folder):
         os.makedirs(folder)
-    written = export(page, stem)
+    written = export(sheets, stem)
 
-    print('  %-42s %2d dimensions, %2d note(s), scale %s, %s layout'
-          % (key, len(layout), len(layout.notes),
-             '%g:1' % scale if scale >= 1.0 else '1:%g' % (1.0 / scale),
-             placement.name))
+    for sheet in sheets:
+        layout = sheet.view.layout
+        scale = sheet.view.scale
+        print('  %-42s %2d dimensions, %2d note(s), scale %s'
+              % ('%s (sheet %d of %d)' % (key, sheet.number, len(sheets))
+                 if len(sheets) > 1 else key,
+                 len(layout), len(layout.notes),
+                 '%g:1' % scale if scale >= 1.0 else '1:%g' % (1.0 / scale)))
     for path in written:
         print('    %s' % path)
     sys.stdout.flush()
