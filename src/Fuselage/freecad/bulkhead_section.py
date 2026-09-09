@@ -64,6 +64,7 @@ import bulkhead_cuts
 import bulkhead_positive
 import bulkhead_tree
 import corner_tree as C
+import cowl_rim
 import fillets
 import flange_base
 import flange_boss
@@ -94,7 +95,16 @@ EXPECT_BBOX = (-40.0, -13.6569, 0.0, 0.0, 5.1375, 6.0)
 # putting it first would make every conflict message point at it rather than at the module
 # that actually introduced the second definition.
 SOURCES = [flange_base, greeble_web, fillets, flange_boss, simple_positives, web,
-           bulkhead_cuts, C]
+           bulkhead_cuts, cowl_rim, C]
+
+# IP-FC-132: which of the two type flags this section is built at. Neither is a dimension,
+# both are structural zeros on the sheets that do not need them (IP-FC-56's argument for
+# corner_tree's rows applies here too). Both `is_cowling` and `is_interconnect` are acted on
+# in `emit()` below.
+TYPE_PARAMS = [
+    ('is_cowling', '0.0'),
+    ('is_interconnect', '0.0'),
+]
 
 
 def merged_rows(seed):
@@ -104,7 +114,8 @@ def merged_rows(seed):
     configurations and refuses -- correctly, because at the hand driver's values this
     assembly would not be a bulkhead the sweep produces.
     """
-    return merge_params(SOURCES, seed) + list(bulkhead_tree.GREEBLE_TOOL_PARAMS)
+    return (merge_params(SOURCES, seed) + list(bulkhead_tree.GREEBLE_TOOL_PARAMS)
+           + TYPE_PARAMS)
 
 
 def sheet(doc, seed, rows=None):
@@ -113,19 +124,46 @@ def sheet(doc, seed, rows=None):
     return build_sheet(doc, merged_rows(seed) if rows is None else rows, seed)
 
 
-def emit(doc, seed, rows=None):
+def emit(doc, seed, rows=None, make_web=True):
+    """`make_web` is which of an interconnect's two mirrored halves this is (IP-FC-132) --
+    the end and cowling types never vary it, since `bulkhead_section_octant`'s
+    non-interconnect branch always builds a single call at `make_web=True`.
+    """
     C._SEEN.clear()
     sheet(doc, seed, rows)
+    P = doc.getObject('Params')
+    is_cowling = float(P.get('is_cowling')) >= 0.5
+    is_interconnect = float(P.get('is_interconnect')) >= 0.5
 
-    # simple_positives builds six; only the bolt three belong to a bulkhead that is not a
-    # cowling. See its docstring -- this is the distinction the assembly exists to catch.
-    positive = bulkhead_positive.flange_positive(doc)
-    for name, part in (('SectionSimple', simple_positives.bolt_positives(doc)),
-                       ('SectionWeb', web.bulkhead_web(doc))):
-        positive = C._fuse(doc, name, positive, part)
+    positive = bulkhead_positive.flange_positive(
+        doc, is_cowling=is_cowling, is_interconnect=is_interconnect, make_web=make_web)
 
-    negative = C._fuse(doc, 'SectionTools', bulkhead_tree.greeble_tool(doc),
-                       bulkhead_cuts.cuts(doc))
+    # `simple_positives.bolt_positives` is the source's `if (!is_interconnect)` group --
+    # an interconnect bolts to its neighbour rather than carrying a bolt of its own.
+    if not is_interconnect:
+        positive = C._fuse(doc, 'SectionSimple', positive,
+                           simple_positives.bolt_positives(doc))
+    # `bulkhead_web` is the source's `if (make_web)` -- an interconnect's mirrored top half
+    # has none, and which shape it builds where it does have one follows `is_interconnect`.
+    if make_web:
+        web_part = (web.bulkhead_web_interconnect(doc) if is_interconnect
+                   else web.bulkhead_web(doc))
+        positive = C._fuse(doc, 'SectionWeb', positive, web_part)
+
+    if is_cowling:
+        # IP-FC-132: the other three of the six is_cowling positives (simple_positives'
+        # docstring), plus the two the assembled reference caught were missing from it --
+        # see cowl_rim.py. No greeble socket to cut on a cowling bulkhead: it does not mate
+        # with a corner, so `bulkhead_tree.greeble_tool` never runs.
+        positive = simple_positives.cowl_positives(doc, positive)
+        positive = cowl_rim.add(doc, positive)
+        negative = bulkhead_cuts.cuts(doc, is_cowling=True)
+    else:
+        # An interconnect keeps the greeble socket -- only is_cowling gates that away --
+        # and keeps the opening wedge and outer cleanup with it; only the bolt hole is
+        # additionally excluded, inside bulkhead_cuts.cuts() itself.
+        negative = C._fuse(doc, 'SectionTools', bulkhead_tree.greeble_tool(doc),
+                           bulkhead_cuts.cuts(doc, is_interconnect=is_interconnect))
 
     tip = C._owned(doc, 'Part::Refine', 'BulkheadSection')
     tip.Source = C._cut(doc, 'SectionCut', positive, negative)
@@ -147,20 +185,29 @@ def main():
     seed = parameters.seed(args[0])
     doc = App.newDocument('bulkhead_section')
     tip = emit(doc, seed)
+    is_cowling = float(doc.getObject('Params').get('is_cowling')) >= 0.5
     s = tip.Shape
-    d = s.Volume - REF
     bb = s.BoundBox
     got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
 
-    print('PART:: CSG tree -- bulkhead_section assembled')
+    print('PART:: CSG tree -- bulkhead_section assembled%s'
+          % (' (is_cowling)' if is_cowling else ''))
     print('  nodes   = %d, sketches = %d'
           % (len(doc.Objects), len([o for o in doc.Objects if o.isDerivedFrom(
               'Sketcher::SketchObject')])))
     print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
+    if is_cowling:
+        # REF and EXPECT_BBOX are the end type's octant, at mask_eps = 0 -- not a shape an
+        # is_cowling octant is. IP-FC-132 has no isolated octant reference for this branch;
+        # the binding check is bulkhead_full's, against the real OpenSCAD full-part render.
+        print('  ref     = -- (no octant-only reference for is_cowling; see bulkhead_full.py)')
+        d = None
+    else:
+        d = s.Volume - REF
+        print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
+        print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
+        print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
+        print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
     print('  valid   = %s  solids=%d  faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
@@ -179,10 +226,11 @@ def main():
         fail.append('invalid shape')
     if len(s.Solids) != 1:
         fail.append('%d solids -- the octant is one connected body' % len(s.Solids))
-    if abs(d) / REF > 1e-3:
-        fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
-        fail.append('bounding box moved')
+    if d is not None:
+        if abs(d) / REF > 1e-3:
+            fail.append('volume off by more than 0.1%')
+        if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
+            fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
     return 1 if fail else 0
 

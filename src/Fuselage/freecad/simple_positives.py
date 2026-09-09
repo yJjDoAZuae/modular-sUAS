@@ -95,11 +95,21 @@ def cowl_positives(doc, base):
     These are the `if (is_cowling)` three. See the module docstring: an ordinary bulkhead
     has none of them, and building them unconditionally is the error the assembled
     reference caught.
+
+    **The plate is omitted at `panel_overlap = 0`, IP-FC-132.** Every real cowling bulkhead
+    has no panel -- `bulkhead_validity_check()` admits only the 0 mm panel for a cowling
+    row -- so this is not a corner case, it is the only case that ever builds. OpenSCAD's
+    `linear_extrude` of a zero-width polygon is silently empty; `Part::Box` refuses a
+    zero-length box outright ("Length of box too small"), the same `_degenerate()` guards
+    in `corner_tree.py` exist for. Measured at U=1.0 cowling_bolt 0mm: the omission changes
+    nothing else, since a box of zero length has zero volume to lose.
     """
     P = 'Params.'
-    plate = C._box(doc, 'Plate', P + 'panel_overlap', P + 'corner_radius',
-                   P + 'plate_thickness', '-' + P + 'panel_overlap', '0', '0')
-    node = C._fuse(doc, 'PlateFuse', base, plate)
+    node = base
+    if not C._degenerate(doc, 'panel_overlap'):
+        plate = C._box(doc, 'Plate', P + 'panel_overlap', P + 'corner_radius',
+                       P + 'plate_thickness', '-' + P + 'panel_overlap', '0', '0')
+        node = C._fuse(doc, 'PlateFuse', base, plate)
 
     long_flange = C._cyl(doc, 'LongeronFlange', P + 'long_r', P + 'bulkhead_thickness', '0')
     node = C._fuse(doc, 'LongeronA', node, long_flange)

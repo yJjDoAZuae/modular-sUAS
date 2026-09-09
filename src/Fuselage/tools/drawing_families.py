@@ -251,17 +251,27 @@ DIMENSION_SCHEME = os.path.join(
 # is the case: the cowl flange is a `linear_extrude` of zero height on the end and interconnect
 # types, and `cowl_n_perimeters` is not even a row on their parameter sheet, so their drawings
 # were carrying an obligation no correct drawing could discharge.
+#
+# IP-FC-133: row 10 is the same shape of gap, found once IP-FC-132 made the interconnect
+# family drawable enough to run the completeness report against. An interconnect has no bolt
+# at all -- `bolt_offset` is not a feature that type has -- so an unrestricted `bulkhead`
+# carrier obliged its sheet to state a hole and boss the part does not have.
 CARRIED_BY = {
     'corner': ('corner',),
     'bulkhead': ('bulkhead', 'boom_bulkhead'),
     'nose closure': ('nose', 'tail'),
     'cowling bulkhead': ('bulkhead',),
+    'bolted bulkhead': ('bulkhead',),
 }
 
 # The type names a carried-by entry is restricted to. Absent means every type of the kinds
 # above, which is the ordinary case; an entry here is a joint one type of a part has.
 CARRIED_BY_TYPES = {
     'cowling bulkhead': ('cowling_anchor', 'cowling_bolt'),
+    # Every frame bulkhead type except interconnect -- the cowling type keeps this obligation,
+    # since it has a real bolt hole and boss (just none of the fillets or web that reach one on
+    # the end type).
+    'bolted bulkhead': ('end_anchor', 'end_bolt', 'cowling_anchor', 'cowling_bolt'),
 }
 
 
