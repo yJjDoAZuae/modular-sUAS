@@ -58,19 +58,46 @@ def emit(doc, seed=None):
     return flange_positive(doc)
 
 
-def flange_positive(doc):
-    """Geometry only, against whatever sheet the document already has."""
+def flange_positive(doc, is_cowling=False, is_interconnect=False, make_web=True):
+    """Geometry only, against whatever sheet the document already has.
+
+    IP-FC-132: `is_cowling` is the source's own branch -- `bulkhead_flange_positive` skips
+    the chamfer, both fillets, the greeble web and the outer corner fillet entirely for a
+    cowling bulkhead, and the base profile drops the pad and the diagonal cut, leaving only
+    the flange strip. Nothing here decides that; it is a straight reading of the `if
+    (!is_cowling)` that wraps everything but the base profile in the source. `is_cowling`
+    and `is_interconnect` never both hold -- no bulkhead type is both.
+
+    `is_interconnect` and `make_web` are independent of it and of each other:
+    `is_interconnect` picks the base profile (two stacked boxes, no diagonal, and no bolt
+    fillets or greeble web -- an interconnect bolts to its neighbour rather than carrying a
+    bolt of its own) and `make_web` is which of an interconnect's two mirrored halves this
+    is (the chamfer and the boss's flared foot belong to the half that has the web).
+    """
+    if is_cowling:
+        tip = C._owned(doc, 'Part::Refine', 'FlangePositive')
+        tip.Source = flange_base.flange_strip(doc)
+        doc.recompute()
+        return tip
+
+    base = (flange_base.flange_base_interconnect(doc) if is_interconnect
+           else flange_base.flange_base(doc))
+
     # `greeble_to_web_fillet` is None where this variant has no such corner (OQ-ARCH-14), so
-    # the fuse is over seven pieces rather than eight. Filtering here rather than passing an
-    # empty solid keeps the node count honest: an absent corner leaves no trace in the tree.
-    parts = [p for p in (flange_base.flange_base(doc),
-                         fillets.flange_chamfer(doc),
-                         flange_boss.flange_boss(doc),
-                         fillets.outer_corner_fillet(doc),
-                         greeble_web.greeble_bolt_web(doc),
-                         fillets.greeble_to_web_fillet(doc),
-                         fillets.web_to_bolt_fillet(doc),
-                         fillets.bolt_flange_fillet(doc)) if p is not None]
+    # the fuse is over seven pieces rather than eight for the end type. Filtering here
+    # rather than passing an empty solid keeps the node count honest: an absent corner
+    # leaves no trace in the tree.
+    pieces = [base]
+    if make_web:
+        pieces.append(fillets.flange_chamfer(doc, is_interconnect=is_interconnect))
+    pieces.append(flange_boss.flange_boss(doc, make_web=make_web))
+    pieces.append(fillets.outer_corner_fillet(doc, make_web=make_web))
+    if not is_interconnect:
+        pieces += [greeble_web.greeble_bolt_web(doc),
+                  fillets.greeble_to_web_fillet(doc),
+                  fillets.web_to_bolt_fillet(doc),
+                  fillets.bolt_flange_fillet(doc)]
+    parts = [p for p in pieces if p is not None]
 
     node = parts[0]
     for i, part in enumerate(parts[1:], start=1):

@@ -133,6 +133,10 @@ PARAMS = [
     ('chm_cut', '=chm_top + flange_thickness'),
     ('chm_len_a', '=unit_width / 2 - corner_radius + chm_x'),
     ('chm_len_b', '=corner_radius + bolt_offset - panel_thickness - panel_tolerance'),
+    # IP-FC-132: the interconnect branch of bulkhead_flange_chamfer -- prism (b) placed at
+    # y = 0 instead of -bolt_offset, and reaching only to the flange face rather than past
+    # the bolt, since an interconnect has no bolt to reach past.
+    ('chm_len_c', '=corner_radius - panel_thickness - panel_tolerance'),
     ('chm_y_a', '=corner_radius - panel_thickness - panel_tolerance'),
     # half-plane x - y > chm_cut, as a box rotated -45
     ('chm_dx', '=(chm_cut - far * 2) / 2'),
@@ -218,7 +222,12 @@ def _chamfer_prism(doc, tag, length_expr):
                          '-' + length_expr, angle=-45))
 
 
-def flange_chamfer(doc):
+def flange_chamfer(doc, is_interconnect=False):
+    """IP-FC-132: prism (a) is unconditional in the source -- same call, same frame,
+    whatever `is_interconnect` is. Prism (b) is one of two mutually exclusive branches:
+    down the side past the bolt (the end and cowling types, `is_interconnect=False`), or
+    down the side to the flange face alone at y = 0 (interconnect has no bolt to run past).
+    """
     P = 'Params.'
     # (a) along the flange: rotate -90 about y, then translate
     a = _chamfer_prism(doc, 'ChmA', P + 'chm_len_a')
@@ -227,12 +236,12 @@ def flange_chamfer(doc):
     a.setExpression('Placement.Base.y', P + 'chm_y_a')
 
     # (b) down the side: rotate -90 about y, then -90 about z, then translate
-    b = _chamfer_prism(doc, 'ChmB', P + 'chm_len_b')
+    b = _chamfer_prism(doc, 'ChmB', P + 'chm_len_c' if is_interconnect else P + 'chm_len_b')
     b.Placement = App.Placement(
         V(0, 0, 0), App.Rotation(V(0, 0, 1), -90).multiply(
             App.Rotation(V(0, 1, 0), -90)))
     b.setExpression('Placement.Base.x', P + 'chm_x')
-    b.setExpression('Placement.Base.y', '-' + P + 'bolt_offset')
+    b.setExpression('Placement.Base.y', '0' if is_interconnect else '-' + P + 'bolt_offset')
 
     node = C._fuse(doc, 'ChmFuse', a, b)
     tip = C._owned(doc, 'Part::Refine', 'FlangeChamfer')
@@ -261,17 +270,22 @@ def _ray_halfplane(doc, name, angle_expr, x, y):
 # port to. Mixing them fails at recompute with "Unit mismatch in minus operation", so the
 # unit is divided out here, once, rather than at each of the places these are used.
 SKETCH = 'FilletTangency'
-SK = SKETCH + '.Constraints.'
+
+
+def _sketch_name():
+    """The sketch's real, possibly tagged, name (IP-FC-132).
+
+    NOT a module-level constant, unlike everything else this reads through -- an
+    interconnect builds two of these in one document, one per mirrored half, each under its
+    own `corner_tree.tag()`, and the expression referencing it has to name the one the
+    current half actually built rather than the bare, untagged name neither of them carries.
+    """
+    return C._TAG[0] + SKETCH
 
 
 def _read(tag):
-    return '(%s%s_cx / 1mm)' % (SK, tag), '(%s%s_cy / 1mm)' % (SK, tag)
-
-
-OCF_CX, OCF_CY = _read('ocf')
-GTW_CX, GTW_CY = _read('gtw')
-BBF_CX, BBF_CY = _read('bbf')
-WTB_CX, WTB_CY = _read('wtb')
+    sk = _sketch_name() + '.Constraints.'
+    return '(%s%s_cx / 1mm)' % (sk, tag), '(%s%s_cy / 1mm)' % (sk, tag)
 
 
 SQ2 = math.sqrt(2.0)
@@ -658,23 +672,43 @@ def _worst_sub(sk, subs, seeds):
 
 
 def _tangency(doc):
-    """`FilletTangency`, built once per emit and shared by every corner that reads it."""
-    if SKETCH in C._SEEN:
-        return doc.getObject(SKETCH)
+    """`FilletTangency`, built once per emit (per tag, IP-FC-132) and shared by every
+    corner that reads it."""
+    name = _sketch_name()
+    if name in C._SEEN:
+        return doc.getObject(name)
     return _fillet_tangency_sketch(doc)
 
 
-def outer_corner_fillet(doc):
+def outer_corner_fillet(doc, make_web=True):
     """The corner between the flange's inner face and its y face. Two perpendicular planes,
     so this is the one center that never had a discriminant -- but it is stated the same way
     as the other three, because four separate accounts of the same flange face is what the
-    single sketch exists to stop."""
+    single sketch exists to stop.
+
+    IP-FC-132: the source's `outer_corner_fillet` takes `make_web` and only cuts the stepped
+    chamfer-relief stack when it is true. Where it is false (an interconnect's half without
+    the web) there is no plate to step the relief around, so the source cuts a single
+    full-height cylinder at the full `flange_fillet_radius` instead -- less material removed
+    near the base than the stack would, since the stack's bottom cylinder is only
+    `relief_r_low` there. Missing this branch is what IP-FC-132's interconnect discrepancy
+    traced to: every octant's `make_web=False` half carried about 2.92 mm3 of material the
+    real geometry does not have, all of it here.
+    """
     P = 'Params.'
     _tangency(doc)
+    ocf_cx, ocf_cy = _read('ocf')
     block = C._box(doc, 'OcfBlock', P + 'flange_fillet_radius',
                    P + 'flange_fillet_radius', P + 'bulkhead_thickness',
-                   OCF_CX, OCF_CY, '0')
-    node = _relief_stack(doc, 'Ocf', block, OCF_CX, OCF_CY)
+                   ocf_cx, ocf_cy, '0')
+    if make_web:
+        node = _relief_stack(doc, 'Ocf', block, ocf_cx, ocf_cy)
+    else:
+        cutter = C._cyl(doc, 'OcfCut', P + 'flange_fillet_radius',
+                        P + 'bulkhead_thickness + ' + P + 'eps', '0')
+        cutter.setExpression('Placement.Base.x', ocf_cx)
+        cutter.setExpression('Placement.Base.y', ocf_cy)
+        node = C._cut(doc, 'OcfCutPlain', block, cutter)
     tip = C._owned(doc, 'Part::Refine', 'OuterCornerFillet')
     tip.Source = node
     return tip
@@ -696,20 +730,21 @@ def greeble_to_web_fillet(doc):
     if not _web_meets_flange(cells(doc)):
         return None
 
+    gtw_cx, gtw_cy = _read('gtw')
     # the covering block: from the wall tangent point up to the center, and out to the face
-    ey = '(%s - %sflange_fillet_radius / sqrt(2))' % (GTW_CY, P)
-    block = C._box(doc, 'GtwBlock', '%sflange_inner_x - %s' % (P, GTW_CX),
+    ey = '(%s - %sflange_fillet_radius / sqrt(2))' % (gtw_cy, P)
+    block = C._box(doc, 'GtwBlock', '%sflange_inner_x - %s' % (P, gtw_cx),
                    P + 'flange_fillet_radius / sqrt(2)', P + 'bulkhead_thickness',
-                   GTW_CX, ey, '0')
+                   gtw_cx, ey, '0')
     # half-plane x + y < (cx + cy), as a box rotated +45
-    half = '((%s + %s) / 2)' % (GTW_CX, GTW_CY)
+    half = '((%s + %s) / 2)' % (gtw_cx, gtw_cy)
     node = C._cut(doc, 'GtwDiag', block,
                   C._box(doc, 'GtwDiagBox', P + 'diag_len', P + 'diag_wid',
                          P + 'bulkhead_thickness * 3',
                          '%s + %sfar * (1 - sqrt(2))' % (half, P),
                          '%s - %sfar * (1 + sqrt(2))' % (half, P),
                          '-' + P + 'bulkhead_thickness', angle=45))
-    node = _relief_stack(doc, 'Gtw', node, GTW_CX, GTW_CY)
+    node = _relief_stack(doc, 'Gtw', node, gtw_cx, gtw_cy)
     tip = C._owned(doc, 'Part::Refine', 'GreebleToWebFillet')
     tip.Source = node
     return tip
@@ -727,12 +762,13 @@ def bolt_flange_fillet(doc):
     P = 'Params.'
     _tangency(doc)
 
-    dx = '(%s - %sbolt_c)' % (BBF_CX, P)
-    dy = '(%s - %sbolt_c)' % (BBF_CY, P)
+    bbf_cx, bbf_cy = _read('bbf')
+    dx = '(%s - %sbolt_c)' % (bbf_cx, P)
+    dy = '(%s - %sbolt_c)' % (bbf_cy, P)
     # The quad's leftmost vertex, which is NOT the fillet center -- IP-FC-58. Starting the
     # block at the center puts its left edge, the ray edge and the relief cylinder's center
     # concurrent, and OCCT does not survive that; see OQ-DES-B14.
-    bx = 'min(%s; %sbolt_c)' % (BBF_CX, P)
+    bx = 'min(%s; %sbolt_c)' % (bbf_cx, P)
     # `bbf_r` was sqrt(dx^2 + dy^2), which the circle rule makes identically r_bolt_fillet.
     # That was true before and is now true *by construction*: it is the tangency the sketch
     # states, so there is no clamped branch on which the identity could fail.
@@ -743,7 +779,7 @@ def bolt_flange_fillet(doc):
     node = C._cut(doc, 'BffRay', block,
                   _ray_halfplane(doc, 'BffRayBox', 'atan2(%s; %s)' % (dy, dx),
                                  ray % dx, ray % dy))
-    node = _relief_stack(doc, 'Bff', node, BBF_CX, BBF_CY)
+    node = _relief_stack(doc, 'Bff', node, bbf_cx, bbf_cy)
     tip = C._owned(doc, 'Part::Refine', 'BoltFlangeFillet')
     tip.Source = node
     return tip
@@ -761,8 +797,9 @@ def web_to_bolt_fillet(doc):
     P = 'Params.'
     _tangency(doc)
 
-    dx = '(%s - %sbolt_c)' % (WTB_CX, P)
-    dy = '(%s - %sbolt_c)' % (WTB_CY, P)
+    wtb_cx, wtb_cy = _read('wtb')
+    dx = '(%s - %sbolt_c)' % (wtb_cx, P)
+    dy = '(%s - %sbolt_c)' % (wtb_cy, P)
     # `wtb_r` was sqrt(dx^2 + dy^2), which the tangency to the boss makes identically
     # r_bolt_fillet -- the center sits flange_fillet_radius outside a boss of bolt_boss_r,
     # and those sum to exactly that row. True before by algebra, true now by construction.
@@ -771,9 +808,9 @@ def web_to_bolt_fillet(doc):
     # `wtb_sx` was reached through the clamped square root; it is the x of the point where
     # the fillet meets the wall, which is the center offset one radius along the 45 degree
     # normal. Same value to 3.6e-15 mm over the corpus, without the clamp.
-    sx = '(%s + %sflange_fillet_radius / sqrt(2))' % (WTB_CX, P)
+    sx = '(%s + %sflange_fillet_radius / sqrt(2))' % (wtb_cx, P)
     # half-plane x + y > cx + cy, as a box rotated +45 with its near edge on the line
-    half = '(%s + %s) / 2' % (WTB_CX, WTB_CY)
+    half = '(%s + %s) / 2' % (wtb_cx, wtb_cy)
 
     block = C._box(doc, 'WtbBlock', '%s - %sbolt_c' % (sx, P), dy,
                    P + 'bulkhead_thickness', P + 'bolt_c', P + 'bolt_c', '0')
@@ -785,7 +822,7 @@ def web_to_bolt_fillet(doc):
     node = C._cut(doc, 'WtbRay', node,
                   _ray_halfplane(doc, 'WtbRayBox', 'atan2(%s; %s)' % (dy, dx),
                                  ray % dx, ray % dy))
-    node = _relief_stack(doc, 'Wtb', node, WTB_CX, WTB_CY)
+    node = _relief_stack(doc, 'Wtb', node, wtb_cx, wtb_cy)
     tip = C._owned(doc, 'Part::Refine', 'WebToBoltFillet')
     tip.Source = node
     return tip

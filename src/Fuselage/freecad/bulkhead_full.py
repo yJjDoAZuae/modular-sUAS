@@ -59,6 +59,27 @@ V = App.Vector
 REF = 6922.2726731
 EXPECT_BBOX = (-45.1375, -45.1375, 0.0, 45.1375, 45.1375, 6.0)
 
+# IP-FC-132: U=1.0 cowling_bolt 0mm, rendered through the real OpenSCAD module and measured
+# from the STL mesh (mesh_stats.py) -- 34,256 triangles, so this is a faceted volume like
+# every other REF in this port, not an analytic one. FreeCAD came out at 9854.8937182 on the
+# first build that produced a valid single solid, +0.0017% and the bounding box exact.
+REF_COWLING = 9854.7238
+EXPECT_BBOX_COWLING = (-50.0, -50.0, 0.0, 50.0, 50.0, 8.0)
+
+# IP-FC-132: U=1.0 interconnect 3/16in, rendered through the real OpenSCAD module and measured
+# from the STL mesh (mesh_stats.py) -- 25,288 triangles. FreeCAD came out at 8209.5318, +0.0013%
+# and the bounding box exact. Cross-checked at two more variants (not kept as REFs, since one
+# is enough to gate the sweep and the others exist only to rule out a one-parameter-set
+# coincidence): U=1.0 0mm, FreeCAD 7259.3321 vs OpenSCAD 7259.2816 (+0.0007%); U=2.5 3/16in,
+# FreeCAD 66047.5561 vs OpenSCAD 66046.4679 (+0.0016%). All three landed after fixing
+# `fillets.outer_corner_fillet` to take `make_web`: the source only cuts the stepped
+# chamfer-relief stack when `make_web` is true, and cuts a single full-radius cylinder
+# otherwise, a branch the port had never carried, so every `make_web=False` half (the
+# interconnect's top) kept about 2.92 mm3 of material at that corner that the real geometry
+# does not have.
+REF_INTERCONNECT = 8209.4223
+EXPECT_BBOX_INTERCONNECT = (-45.1375, -45.1375, 0.0, 45.1375, 45.1375, 12.0)
+
 # mirror_xy, then mirror_y, then mirror_x -- the nesting order in octant_to_full(). Each
 # normal is the plane's, and reflection does not care about its sign.
 STAGES = [('Xy', (1, -1, 0)), ('Y', (0, 1, 0)), ('X', (1, 0, 0))]
@@ -66,6 +87,15 @@ STAGES = [('Xy', (1, -1, 0)), ('Y', (0, 1, 0)), ('X', (1, 0, 0))]
 PARAMS = [
     # bulkhead_section_octant's translate, the only thing in its non-interconnect branch
     ('corner_offset', '=unit_width / 2 - corner_radius'),
+
+    # IP-FC-132: the interconnect octant's mass-reduction cut -- see `_mass_reduction_cut`.
+    # `ramp_x3` is the source's own `-(panel_offset + panel_overlap + flange_thickness +
+    # 2*flange_fillet_radius)`, the ramp's top-inboard corner; `ramp_x2` is one
+    # bulkhead_thickness further out, its bottom-inboard corner, the same 45 degree drop
+    # every self-supporting overhang in this port uses.
+    ('ramp_x3', '=-(panel_offset + panel_overlap + flange_thickness '
+                '+ 2 * flange_fillet_radius)'),
+    ('ramp_x2', '=ramp_x3 - bulkhead_thickness'),
 ]
 
 
@@ -84,13 +114,81 @@ def octant_to_full(doc, node):
     return node
 
 
+def _mass_reduction_cut(doc):
+    """The interconnect's mass-reduction ramp, IP-FC-132.
+
+    The source cuts this from the union of both halves, over the full depth `2 *
+    bulkhead_thickness` down to `bulkhead_thickness`, everywhere outboard of the flange --
+    full depth is kept only out to the flange plus two fillet radii, which is why the ramp's
+    inboard corner is `ramp_x3` rather than the flange face itself. A 45 degree ramp between
+    the two depths, self-supporting when printed, the same reasoning every other 45 degree
+    face in this port carries.
+
+    **This is the one profile in the whole bulkhead that is not in the X-Y plane.** Every
+    other non-axis-aligned edge in this port is a half-plane in X-Y, clipped by a box rotated
+    about Z; this one is a half-plane in X-Z, extruded the full `unit_width` along Y. Rather
+    than derive a Y-axis half-plane box from scratch, it is a fully constrained sketch --
+    `corner_tree._sketch()`'s pattern, the same one `web.py`'s interconnect profile uses --
+    reoriented into the X-Z plane by a 90 degree rotation about X applied to the finished
+    sketch, and extruded `Symmetric` so the sign of that rotation cannot matter: a symmetric
+    extrusion covers `+far` and `-far` from the sketch plane either way, which is exactly
+    `linear_extrude(height=unit_width, center=true)`.
+    """
+    P = 'Params.'
+    pts = [(-50.0, 6.0), (-18.0, 6.0), (-12.0, 12.0), (-50.0, 12.0)]
+    dims = [
+        (0, 'X', '-' + P + 'unit_width / 2'), (0, 'Y', P + 'bulkhead_thickness'),
+        (1, 'X', P + 'ramp_x2'), (1, 'Y', P + 'bulkhead_thickness'),
+        (2, 'X', P + 'ramp_x3'), (2, 'Y', '2 * ' + P + 'bulkhead_thickness'),
+        (3, 'X', '-' + P + 'unit_width / 2'), (3, 'Y', '2 * ' + P + 'bulkhead_thickness'),
+    ]
+    sk = C._sketch(doc, 'RampProfile', pts, horizontals=(), verticals=(), on_x=(),
+                  dims=dims, angle=0, z_expr='0')
+    # Reorient into the X-Z plane: local (u, v) becomes world (X, Z) rather than (X, Y).
+    sk.Placement = App.Placement(V(0, 0, 0), App.Rotation(V(1, 0, 0), 90))
+
+    ext = C._prism(doc, 'RampCut', sk, P + 'unit_width')
+    ext.Symmetric = True
+    return ext
+
+
+def _interconnect_octant(doc, seed, rows):
+    """`bulkhead_section_octant`'s `is_interconnect` branch: two mirrored halves of the
+    same octant, sharing one document and one Params sheet, distinguished only by `make_web`
+    and by the `Bot`/`Top` tag every object each half builds carries (IP-FC-132; see
+    `corner_tree.tag()`).
+    """
+    with C.tag('Bot'):
+        bottom = bulkhead_section.emit(doc, seed, rows=rows, make_web=True)
+    with C.tag('Top'):
+        top = bulkhead_section.emit(doc, seed, rows=rows, make_web=False)
+
+    # mirror([0,0,-1]) { translate([0,0,-2*bulkhead_thickness]) { <top half> } } -- translate
+    # on the section's own Placement, same as the outer corner_offset translate below, then
+    # a Part::Mirroring about the z = 0 plane.
+    top.setExpression('Placement.Base.z', '-2 * Params.bulkhead_thickness')
+    top_mirrored = _mirror(doc, 'TopMirror', top, (0, 0, 1))
+
+    halves = C._fuse(doc, 'IcHalves', bottom, top_mirrored)
+    return C._cut(doc, 'IcOctant', halves, _mass_reduction_cut(doc))
+
+
 def emit(doc, seed):
     rows = bulkhead_section.merged_rows(seed) + PARAMS
-    octant = bulkhead_section.emit(doc, seed, rows=rows)
+    # is_interconnect is a seeded literal row, so its value comes from the SEED, read the
+    # way every other Python-level branch in this port reads a type flag (bulkhead_section's
+    # own is_cowling/is_interconnect are read off the sheet AFTER seeding instead, because
+    # they are needed post-seed there; here the branch has to be taken BEFORE anything is
+    # built, so it reads the seed directly).
+    is_interconnect = float(seed.get('is_interconnect', 0.0)) >= 0.5
 
-    # bulkhead_section_octant's translate. Put on the section's own Placement rather than a
-    # wrapper: Part::Refine passes its Source's shape through and applies its Placement to
-    # the result, so this moves the whole octant and stays expression-bound.
+    octant = (_interconnect_octant(doc, seed, rows) if is_interconnect
+             else bulkhead_section.emit(doc, seed, rows=rows))
+
+    # bulkhead_section_octant's translate. Put on the octant's own Placement rather than a
+    # wrapper -- Part::Refine and Part::Cut both pass a Placement through to the result --
+    # so this moves the whole octant and stays expression-bound. is_interconnect's octant is
+    # a Part::Cut (`_interconnect_octant`'s tip), not a Part::Refine; both carry a Placement.
     octant.setExpression('Placement.Base.x', 'Params.corner_offset')
     octant.setExpression('Placement.Base.y', 'Params.corner_offset')
 
@@ -108,20 +206,33 @@ def main():
 
     doc = App.newDocument('bulkhead_full')
     tip = emit(doc, parameters.seed(args[0]))
+    is_cowling = float(doc.getObject('Params').get('is_cowling')) >= 0.5
+    is_interconnect = float(doc.getObject('Params').get('is_interconnect')) >= 0.5
+    if is_cowling:
+        ref, expect_bbox, label = REF_COWLING, EXPECT_BBOX_COWLING, ' (is_cowling)'
+    elif is_interconnect:
+        ref, expect_bbox, label = REF_INTERCONNECT, EXPECT_BBOX_INTERCONNECT, ' (is_interconnect)'
+    else:
+        ref, expect_bbox, label = REF, EXPECT_BBOX, ''
+
     s = tip.Shape
-    d = s.Volume - REF
+    d = s.Volume - ref
     bb = s.BoundBox
     got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
 
-    print('PART:: CSG tree -- bulkhead_section_full')
+    print('PART:: CSG tree -- bulkhead_section_full%s' % label)
     print('  nodes   = %d' % len(doc.Objects))
     print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-    print('  8x octant = %.7f  -- gap/overlap in the tiling is %+.4f'
-          % (8 * bulkhead_section.REF, 8 * bulkhead_section.REF - s.Volume))
+    print('  ref     = %.7f  (OpenSCAD, through the real module)' % ref)
+    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / ref))
+    if not is_cowling and not is_interconnect:
+        # Only meaningful against the end type's own octant reference -- a cowling or
+        # interconnect bulkhead's octant is a different shape and bulkhead_section.REF does
+        # not describe it.
+        print('  8x octant = %.7f  -- gap/overlap in the tiling is %+.4f'
+              % (8 * bulkhead_section.REF, 8 * bulkhead_section.REF - s.Volume))
     print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
+    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in expect_bbox))
     print('  valid   = %s  solids=%d  faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
@@ -130,9 +241,9 @@ def main():
         fail.append('invalid shape')
     if len(s.Solids) != 1:
         fail.append('%d solids -- the eight octants meet into one body' % len(s.Solids))
-    if abs(d) / REF > 1e-3:
+    if abs(d) / ref > 1e-3:
         fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
+    if max(abs(a - b) for a, b in zip(got, expect_bbox)) > 1e-3:
         fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
     return 1 if fail else 0

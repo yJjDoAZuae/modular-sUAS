@@ -152,6 +152,20 @@ not a feature those parts have, and section 3 was obliging their drawings to sta
 An obligation no correct drawing can discharge costs the completeness test its
 meaning.
 
+**Row 10 reads *bolted bulkhead* for the same reason, found and fixed under
+[IP-FC-133](../implementation/freecad_migration.md) on 2026-09-08.** The interconnect type has
+no bolt at all — `bulkhead_section.emit()` skips `bolt_positives` outright and
+`bulkhead_positive.flange_positive()` skips both bolt fillets and the greeble web that would
+reach one, since an interconnect bolts to its neighbor rather than carrying a bolt of its own —
+so `bolt_offset` is not a feature that part has, the same shape of gap `cowl_n_perimeters` was
+on the end and interconnect types before row 7 was restricted. Found by running
+`drawing_families.py`'s own completeness report after IP-FC-132 ported `is_interconnect`'s
+annotation set (`sheet_annotations.py`'s `has_bolt` flag) to stop stating a bolt that is not
+there: the report immediately named `bolt_offset` unstated on all three interconnect family
+sheets, which an unrestricted *bulkhead* carrier could not tell from a drawing that had simply
+forgotten it. The cowling type keeps the obligation — it has a real bolt hole and boss, just
+none of the fillets or web that reach it on the end type.
+
 | # | Joint | Governing expression | Clearance | Carried by |
 | --- | --- | --- | --- | --- |
 | 1 | longeron tube → corner bore | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` | `longeron_tolerance` 0.05 | corner |
@@ -163,7 +177,7 @@ meaning.
 | 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead |
 | 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure |
 | 9 | nose plate → nose closure | pocket radius = `plate_diam/2 + plate_tol`, relieved at `overhang_angle_from_bed` | `plate.tolerance` 0.1 | nose closure |
-| 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bulkhead |
+| 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bolted bulkhead |
 
 **Row 4 was corrected on 2026-08-28, and it was not a wrong requirement — it was not a
 requirement at all.** It read *"slot `2·panel_thickness + 2·panel_tolerance` deep"*, which is
