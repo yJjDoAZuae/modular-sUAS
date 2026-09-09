@@ -1790,11 +1790,13 @@ def _backend_for(kind, supported=True):
     assemble, and it is not the place that decides what to do about the answer.
 
     `supported` extends that per *variant*, not just per kind, and it exists because the
-    coarser test was wrong. `bulkhead` is ported, but only its plain end type: the FreeCAD
-    `bulkhead_full.emit()` takes no `is_cowling` or `is_interconnect`, where the OpenSCAD
-    call site passes both. So `--backend freecad` rendered all five swept types as the end
-    type -- three of five silently wrong, under the right filename, with a plausible volume
-    (IP-FC-47).
+    coarser test was wrong. When this was written `bulkhead` was ported for only its plain
+    end type: the FreeCAD `bulkhead_full.emit()` took no `is_cowling` or `is_interconnect`,
+    where the OpenSCAD call site passed both. So `--backend freecad` rendered all five swept
+    types as the end type -- three of five silently wrong, under the right filename, with a
+    plausible volume (IP-FC-47). `bulkhead_full.emit()` now implements all five (IP-FC-132),
+    so every bulkhead type passes `supported=True`; the parameter stays because the next kind
+    that gets a partial FreeCAD generator will need it again.
     """
     if _BACKEND == 'freecad' and kind in freecad_render_backend.KINDS and supported:
         return 'freecad'
@@ -2419,15 +2421,22 @@ def corner_render(dp, output_dir, filename):
 def bulkhead_parameters(dp):
     """The bulkhead's parameters, by name, as both backends need them.
 
-    The type flags are not here: they are booleans selecting *which* features exist rather
-    than dimensions. `bulkhead_render` adds them to the OpenSCAD call.
+    **`is_cowling` and `is_interconnect` are here, and until IP-FC-132 they were not** --
+    they are booleans selecting *which* features exist rather than dimensions, and this
+    dict used to leave them for `bulkhead_render` to add straight to the OpenSCAD call. That
+    stopped being enough once `bulkhead_full.emit()` grew an `is_cowling` branch of its own:
+    the FreeCAD path reaches this same dict through `freecad_render`'s `params`, and so does
+    `export_parameters.py`, so a flag added only at one call site would reach OpenSCAD and
+    silently not reach the other two. Carried as 0.0 / 1.0, the same spelling
+    `boom_bulkhead_parameters` already uses for `boom_make_vert_web` and
+    `boom_make_lower_web` -- a flag selecting a construction, read in Python and never in an
+    expression, is what the FreeCAD sheet wants of a boolean.
 
-    The FreeCAD generator does not take them at all -- `bulkhead_full.emit()` implements the
-    end type and nothing else -- which is why `bulkhead_render` routes the other three types
-    to OpenSCAD instead of handing them a table that describes them correctly and a builder
-    that would ignore the distinction. Two types producing the same 24 numbers is also why
-    `_variant_note` carries `type_name`.
+    `bulkhead_full.emit()` now implements the end, cowling and interconnect types (IP-FC-132)
+    -- `end_bolt` and `interconnect` still produce the same 24 numbers and differ only in the
+    `is_interconnect` boolean, which is why `_variant_note` carries `type_name`.
     """
+    is_end, is_interconnect, is_cowling, is_boom = decode_bulkhead_type(dp.bulkhead.type)
     return {
         'unit_width': dp.bulkhead.width,
         # No unit_length: a bulkhead is independent of bay length, which is why one
@@ -2460,6 +2469,8 @@ def bulkhead_parameters(dp):
         'cowl_flange_tolerance': dp.cowl_flange.tolerance,
         'cowl_n_perimeters': dp.cowl_flange.cowl_n_perimeters,
         'extrusion_width': dp.printer.extrusion_width,
+        'is_cowling': float(is_cowling),
+        'is_interconnect': float(is_interconnect),
     }
 
 
@@ -2467,11 +2478,8 @@ def bulkhead_render(dp, output_dir, filename):
 
     (is_end, is_interconnect, is_cowling, is_boom) = decode_bulkhead_type(dp.bulkhead.type)
 
-    # Only the plain end type is ported (IP-FC-9). `bulkhead_full.emit()` takes no
-    # is_cowling and no is_interconnect, so routing those types here would render them as
-    # end bulkheads -- wrong geometry under the right filename. They fall back to OpenSCAD,
-    # which is the same treatment every unported kind already gets. IP-FC-12 ports them.
-    if _backend_for('bulkhead', supported=is_end) == 'freecad':
+    # The end, cowling and interconnect types are all ported now (IP-FC-9, IP-FC-132).
+    if _backend_for('bulkhead', supported=is_end or is_cowling or is_interconnect) == 'freecad':
         # U on top of the shared mapping, for the reason FX is added in `corner_render`:
         # the bulkhead sheet merges `corner_tree.PARAMS`, where `corner_radius` and
         # `longeron_radius` are the relationships `=U * 10` and `=U * 2`. `bulkhead_
@@ -2486,10 +2494,14 @@ def bulkhead_render(dp, output_dir, filename):
 
     fgeom = scad_module('fuselage_bulkhead_geometry.scad')
 
+    # is_interconnect and is_cowling are passed as bools here, unchanged, rather than through
+    # bulkhead_parameters()'s 0.0 / 1.0 (IP-FC-132) -- so the .scad this writes is
+    # byte-identical to what it always was, and the two names have to be pulled back out of
+    # the dict rather than double-passed.
+    params = {k: v for k, v in bulkhead_parameters(dp).items()
+             if k not in ('is_interconnect', 'is_cowling')}
     scadobj = fgeom.bulkhead_section_full(
-        is_interconnect=is_interconnect,
-        is_cowling=is_cowling,
-        **bulkhead_parameters(dp))
+        is_interconnect=is_interconnect, is_cowling=is_cowling, **params)
 
     (scad_filename, stl_filename, png_filename) = solid_render(scadobj, output_dir, filename)
 
@@ -3034,11 +3046,11 @@ def main(workers=None, resume=False, previews=True, backend='openscad', output_d
         print('backend: FreeCAD for %s; OpenSCAD for everything else, which has no '
               'FreeCAD generator yet' % ', '.join(sorted(freecad_render_backend.KINDS)),
               flush=True)
-        # Stated because "bulkhead is ported" is true of the kind and false of three of its
-        # five types, and a run that silently rendered those in OpenSCAD would look like a
-        # run that rendered them in FreeCAD.
-        print('  bulkhead: end types only -- cowling and interconnect fall back to '
-              'OpenSCAD until IP-FC-12', flush=True)
+        # Stated because "bulkhead is ported" used to be true of the kind and false of three
+        # of its five types (IP-FC-132 closed the gap), and a run that silently rendered
+        # those in OpenSCAD would look like a run that rendered them in FreeCAD.
+        print('  bulkhead: all five types (end, cowling, interconnect) ported (IP-FC-132)',
+              flush=True)
         print('  %s' % freecad_render_backend.freecadcmd_path(), flush=True)
     else:
         print('backend: OpenSCAD', flush=True)

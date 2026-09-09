@@ -68,9 +68,15 @@ KINDS = {
 # shows four bolt bosses and four bolt holes the part does not have, dimensioned, under the
 # interconnect's title and beside a table of the interconnect's own values.
 #
-# `fuselage_variants.bulkhead_render` already routes these types to OpenSCAD rather than to a
-# builder that would ignore the distinction. This is that judgement applied to the drawing.
-BUILT_TYPES = {'bulkhead': ('end_anchor', 'end_bolt')}
+# `fuselage_variants.bulkhead_render` already routes an unbuilt type to OpenSCAD rather than to
+# a builder that would ignore the distinction. This is that judgement applied to the drawing.
+#
+# IP-FC-132: `cowling_anchor` and `cowling_bolt` added once `bulkhead_section.emit()` grew an
+# `is_cowling` branch, and `interconnect` added once `bulkhead_full.emit()` grew an
+# `is_interconnect` branch of its own (`_interconnect_octant()`) -- verified against the real
+# OpenSCAD module at three variants (U=1.0 3/16in and 0mm, U=2.5 3/16in), all within 0.002%.
+BUILT_TYPES = {'bulkhead': ('end_anchor', 'end_bolt', 'cowling_anchor', 'cowling_bolt',
+                           'interconnect')}
 
 
 def unbuilt_types(kind, type_names):

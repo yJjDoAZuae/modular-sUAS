@@ -103,6 +103,7 @@ DESCRIPTIONS = {
     'socket_diameter': 'GREEBLE SOCKET DIA',
     'post_diameter': 'GREEBLE POST DIA',
     'greeble_clearance': 'GREEBLE DIA CLEARANCE',
+    'corner_clearance': 'CORNER SEAT CLEARANCE',
     'panel_extension': 'PANEL SEAT EXTENSION',
     # Shared with the bulkhead
     'panel_pocket': 'PANEL POCKET DEPTH',
@@ -514,6 +515,7 @@ def corner_annotations(params, product=FAMILY):
     greeble = params['greeble_thickness']
     greeble_fit = params['greeble_tolerance']
     chamfer = params['extrusion_width']
+    corner_fit = params['corner_tolerance']
 
     bore = longeron + longeron_fit
     pocket = thickness + panel_fit
@@ -542,7 +544,19 @@ def corner_annotations(params, product=FAMILY):
     #
     # The slot mouth sits at `-(panel_offset - panel_tolerance)`, which makes the slot itself
     # `panel_overlap + panel_tolerance` deep: the panel's entry plus its fit.
-    extension = params['panel_overlap'] + params['panel_offset']
+    #
+    # IP-FC-111: **bound to the face, not to an expression that used to equal it.**
+    # `check_derived_geometry.py`'s `bulkhead seating flat` -- the same face this measures --
+    # is `-(panel_overlap + panel_offset) + corner_tolerance`, and this used to omit the
+    # `corner_tolerance` term entirely. Every corner built to date has `corner_tolerance = 0`
+    # (OQ-DES-C5), so the two forms have always agreed and the drawn number does not change
+    # here -- but the moment that parameter is nonzero the old expression names a point
+    # `corner_tolerance` mm inside the part, in air on one side and short of the mold line on
+    # the other, while `check_drawing`'s value check still passes because it never asks
+    # whether a dimension's endpoints land on the solid. Following `flat_x` instead means the
+    # dimension states whichever face `corner_tolerance` actually leaves, at any value.
+    flat_x = -(params['panel_overlap'] + params['panel_offset']) + corner_fit
+    extension = -flat_x
 
     panelled = abs(thickness) > dp.ZERO_MM
 
@@ -563,6 +577,19 @@ def corner_annotations(params, product=FAMILY):
                  ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
         Quantity('greeble_clearance', 2.0 * greeble_fit, ('greeble_tolerance',),
                  constant=True),
+        # IP-FC-112: joint 3's clearance, stated the way `longeron_clearance` and
+        # `greeble_clearance` state theirs -- a table constant with no dimension line, since a
+        # clearance between two parts is not a distance either single-part drawing has faces
+        # to place it between. Unlike those two, `corner_tolerance` is not doubled: it is
+        # already a single flat-to-flat gap (`flat_x`'s own `+ corner_tolerance` term), not a
+        # radius standing in for a diametral one. Every corner built to date has
+        # `corner_tolerance = 0` (OQ-DES-C5), so `panelled`'s structural-zero filter drops this
+        # column today exactly as it drops `panel_pocket` on an unpanelled corner -- the point
+        # is that it stops being contingent on staying 0: before this, no quantity on either
+        # sheet named `corner_tolerance` at all, so a nonzero value would have been
+        # `unstated` and demanded-and-silent rather than shown, at either sheet's completeness
+        # check. See doc/design/dimension_scheme.md's register, row 3.
+        Quantity('corner_clearance', corner_fit, ('corner_tolerance',), constant=True),
     ]
     if panelled:
         declared += [
@@ -571,7 +598,8 @@ def corner_annotations(params, product=FAMILY):
             Quantity('panel_tolerance', panel_fit, ('panel_tolerance',), constant=True),
         ]
     declared.append(
-        Quantity('panel_extension', extension, ('panel_overlap', 'panel_offset')))
+        Quantity('panel_extension', extension,
+                 ('panel_overlap', 'panel_offset', 'corner_tolerance')))
 
     quantities = issue_letters(declared)
     by_name = {q.name: q for q in quantities}
@@ -628,6 +656,18 @@ def corner_annotations(params, product=FAMILY):
           '%s DIA CLEARANCE' % w('greeble_clearance'))),
         ('mold', mold_point,
          ('R%s MOLD LINE' % w('corner_radius'),)),
+        # IP-FC-112: joint 3, the corner's seating faces against the bulkhead -- the same end
+        # face `panel_extension` dimensions for joint 4, doing double duty (register row 3).
+        # Unconditional, unlike 'pocket' below: this joint exists on every corner whether or
+        # not a panel is fitted, since `corner_tolerance` is carried entirely on the corner
+        # (the bulkhead re-evaluates the same shape at 0) regardless of panelling. Anchored at
+        # the same point `panel_extension`'s dimension terminates at, since that is the face
+        # this states the clearance for. Declaring `corner_clearance` without a note that
+        # prints it would satisfy section 3's completeness bookkeeping while stating nothing
+        # on the page -- the same demanded-and-silent failure this item exists to close, only
+        # quieter, since the completeness check would then say nothing is missing either.
+        ('seat', (-extension, seat, 0.0),
+         ('BULKHEAD SEAT', '%s CLEARANCE' % w('corner_clearance'))),
     ]
     if panelled:
         notes.append(
@@ -742,11 +782,11 @@ def bulkhead_annotations(params, product=FAMILY):
     **What this does not carry, and it is not an oversight.** The cowling type's
     flange -- section 2's joint 7, and the only thing on a frame bulkhead that
     consumes `cowl_flange_tolerance`,
-    `cowl_n_perimeters` or `extrusion_width` -- is not here, because `bulkhead_full.emit()`
-    builds the plain end type and nothing else (IP-FC-9; IP-FC-12 ports the rest). Writing
-    annotations for a feature no code path can build would put untested strings on the one
-    sheet nothing can draw. The consequence is a gap in §3's completeness test, and it is
-    reported rather than papered over -- see OQ-DES-D6.
+    `cowl_n_perimeters` or `extrusion_width` -- is not here. `bulkhead_full.emit()` now
+    builds the end, cowling and interconnect types (IP-FC-9; IP-FC-132 ported the other two),
+    so the cowling flange is a real, drawable feature and this is a genuine annotation gap
+    rather than a placeholder for one no code path could reach yet. The consequence is a gap
+    in §3's completeness test, and it is reported rather than papered over -- see OQ-DES-D6.
     """
     half = params['unit_width'] / 2.0
     radius = params['corner_radius']
@@ -761,6 +801,24 @@ def bulkhead_annotations(params, product=FAMILY):
     offset = params['bolt_offset']
 
     panelled = abs(thickness) > dp.ZERO_MM
+    # IP-FC-132: a cowling bulkhead has no greeble post or nub -- `if (!is_cowling)` is
+    # exactly what gates the corner_end cut that forms them out of the source, and an
+    # interconnect keeps both (only is_cowling gates it, not is_interconnect). Without this
+    # the post and nub were declared, lettered and noted from `greeble_thickness` and
+    # `greeble_nub_thickness` regardless, which stay ordinary nonzero parameters for a
+    # cowling row rather than the structural zeros that make the panel notes disappear
+    # correctly -- so the note printed a plausible diameter for a feature that is not there,
+    # dormant until IP-FC-132 made the cowling family buildable enough to draw.
+    has_greeble = params.get('is_cowling', 0.0) < 0.5
+    # An interconnect has no bolt at all -- `bulkhead_section.emit()` skips `bolt_positives`
+    # outright, and `bulkhead_positive.flange_positive()` skips the bolt boss's two fillets
+    # and the greeble web that would otherwise reach it, for the same `is_interconnect` this
+    # reads (it bolts to its neighbour rather than carrying a bolt of its own -- see
+    # `bulkhead_positive.flange_positive`'s docstring). `bolt_hole_radius`, `bolt_thickness`
+    # and `bolt_offset` stay ordinary nonzero parameters for an interconnect row, the same way
+    # `greeble_thickness` does for a cowling one, so without this gate the note printed a
+    # plausible hole-in-boss diameter for a feature that is not there.
+    has_bolt = params.get('is_interconnect', 0.0) < 0.5
 
     # The outer face, which §2 establishes *is* the panel's seating surface: it sits
     # `panel_thickness + panel_tolerance` inboard of the mold line, and one of its flats
@@ -799,13 +857,19 @@ def bulkhead_annotations(params, product=FAMILY):
         Quantity('longeron_diameter', 2.0 * longeron, ('longeron_radius',)),
         Quantity('longeron_clearance', 2.0 * longeron_fit, ('longeron_tolerance',),
                  constant=True),
-        Quantity('post_diameter', 2.0 * post,
-                 ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
-        Quantity('nub_diameter', 2.0 * nub_radius, ()),
-        Quantity('bolt_offset', offset, ('bolt_offset',)),
-        Quantity('bolt_diameter', 2.0 * bolt, ('bolt_offset',)),
-        Quantity('boss_diameter', 2.0 * boss_radius, ()),
     ]
+    if has_bolt:
+        declared += [
+            Quantity('bolt_offset', offset, ('bolt_offset',)),
+            Quantity('bolt_diameter', 2.0 * bolt, ('bolt_offset',)),
+            Quantity('boss_diameter', 2.0 * boss_radius, ()),
+        ]
+    if has_greeble:
+        declared += [
+            Quantity('post_diameter', 2.0 * post,
+                     ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
+            Quantity('nub_diameter', 2.0 * nub_radius, ()),
+        ]
     if panelled:
         declared += [
             Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
@@ -851,11 +915,13 @@ def bulkhead_annotations(params, product=FAMILY):
         # Where the corner sits.
         (by_name['longeron_offset'], (0.0, 0.0, 0.0), (axis, 0.0, 0.0),
          dp.HORIZONTAL, axis),
+    ]
+    if has_bolt:
         # The bolt from the longeron axis, taken between the two hole axes because that is
         # what the part places rather than a distance to a face.
-        (by_name['bolt_offset'], (axis, axis, 0.0), (bolt_axis, bolt_axis, 0.0),
-         dp.HORIZONTAL, offset),
-    ]
+        dimensions.append(
+            (by_name['bolt_offset'], (axis, axis, 0.0), (bolt_axis, bolt_axis, 0.0),
+             dp.HORIZONTAL, offset))
     if panelled:
         # The setback from the mold line to the seating face, which is the panel and its fit.
         #
@@ -891,15 +957,19 @@ def bulkhead_annotations(params, product=FAMILY):
          ('%s%s BORE' % (DIA, w('bore_diameter')),
           'FOR %s%s LONGERON' % (DIA, w('longeron_diameter')),
           '%s DIA CLEARANCE' % w('longeron_clearance'))),
-        ('post', on_circle((axis, axis), nub_radius, 45.0),
-         ('%s%s POST, %s%s NUB' % (DIA, w('post_diameter'), DIA, w('nub_diameter')),
-          'NOMINAL -- CORNER SOCKET',
-          'CARRIES THE CLEARANCE')),
-        ('bolt', on_circle((bolt_axis, bolt_axis), boss_radius, 225.0),
-         ('%s%s HOLE IN %s%s BOSS' % (DIA, w('bolt_diameter'), DIA, w('boss_diameter')),
-          '%s FROM LONGERON AXIS' % w('bolt_offset'),
-          'EACH AXIS, 4 PLACES')),
     ]
+    if has_bolt:
+        notes.append(
+            ('bolt', on_circle((bolt_axis, bolt_axis), boss_radius, 225.0),
+             ('%s%s HOLE IN %s%s BOSS' % (DIA, w('bolt_diameter'), DIA, w('boss_diameter')),
+              '%s FROM LONGERON AXIS' % w('bolt_offset'),
+              'EACH AXIS, 4 PLACES')))
+    if has_greeble:
+        notes.append(
+            ('post', on_circle((axis, axis), nub_radius, 45.0),
+             ('%s%s POST, %s%s NUB' % (DIA, w('post_diameter'), DIA, w('nub_diameter')),
+              'NOMINAL -- CORNER SOCKET',
+              'CARRIES THE CLEARANCE')))
     notes.append(
         ('corner_seat', (axis - seat_offset * 0.7, axis + seat_offset * 0.7, 0.0),
          ('%s CORNER SEAT' % w('corner_seat_offset'),
@@ -912,8 +982,9 @@ def bulkhead_annotations(params, product=FAMILY):
               '%s CLEARANCE' % w('panel_tolerance'))))
 
     construction = bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius,
-                                         seat, thickness, panelled)
-    views = bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled)
+                                         seat, thickness, panelled, has_bolt)
+    views = bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled,
+                           has_greeble, has_bolt)
     return quantities, dimensions, notes, construction, views
 
 
@@ -930,7 +1001,8 @@ def detail_radius(axis, bolt_axis, boss_radius, nub_radius, corner_radius):
     return DETAIL_MARGIN * max(corner_radius, bolt_reach, nub_radius)
 
 
-def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled):
+def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled,
+                   has_greeble=True, has_bolt=True):
     """The bulkhead's plan and its corner detail, and what each carries.
 
     **The split is by what a dimension is about, not by what fits.** Two quantities are about
@@ -943,10 +1015,24 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
     One detail, not four, because the plate is symmetric about both axes and both diagonals --
     measured, see `bulkhead_construction` -- so the other three corners are the same corner
     and the centre lines on the plan say so.
+
+    `nub_radius` still bounds the detail's clip radius even where `has_greeble` is false
+    (IP-FC-132) -- it is a geometric extent the framing margin can use regardless of whether
+    the post it was computed from is lettered, and it stays close to the actual longeron
+    flange boss a cowling bulkhead has there instead. `boss_radius`/`bolt_axis` are kept in
+    the same `detail_radius` max() even where `has_bolt` is false, for the same reason: an
+    interconnect's actual geometry there is a plain corner with no boss, well inside where a
+    bolt boss would have reached, so including the unused reach only makes the margin more
+    generous, never wrong.
     """
     radius = detail_radius(axis, bolt_axis, boss_radius, nub_radius, half - axis)
-    detail_dimensions = ['bolt_offset', 'corner_seat_offset']
-    detail_notes = ['bore', 'post', 'bolt', 'corner_seat']
+    detail_dimensions = ['corner_seat_offset']
+    detail_notes = ['bore', 'corner_seat']
+    if has_bolt:
+        detail_dimensions.insert(0, 'bolt_offset')
+        detail_notes.insert(1, 'bolt')
+    if has_greeble:
+        detail_notes.insert(1, 'post')
     if panelled:
         detail_dimensions.append('panel_pocket')
         detail_notes.append('seat')
@@ -959,7 +1045,7 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
 
 
 def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat, thickness,
-                          panelled):
+                          panelled, has_bolt=True):
     """The bulkhead's centre marks, its four symmetry axes, and the panels it seats.
 
     **Four centre lines, because the plate has four mirrors and every dimension on the sheet
@@ -974,8 +1060,10 @@ def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat
     the diagonal from the longeron. So the same line is the symmetry axis and the hole
     pattern's centre line, which is the relationship `bolt_offset` is measured along.
 
-    **Centre marks on the eight located axes and nothing else** -- four longeron bores and
-    four bolt bosses. Every other arc on this part is a fillet, a lead-in or a nub blend.
+    **Centre marks on the located axes and nothing else** -- four longeron bores, and four
+    bolt bosses where the type has one (`has_bolt`; an interconnect does not -- see
+    `bulkhead_annotations`). Every other arc on this part is a fillet, a lead-in or a nub
+    blend.
 
     **The panels are drawn because otherwise the pocket has nothing to be a pocket for.** Each
     of the four sides seats one. Its **outer surface is the mold line** at `unit_width/2` --
@@ -993,9 +1081,11 @@ def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat
 
     construction = center_marks(
         [(sx * axis, sy * axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)], bore)
-    construction += center_marks(
-        [(sx * bolt_axis, sy * bolt_axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)],
-        boss_radius)
+    if has_bolt:
+        # An interconnect has no bolt boss to mark -- see `bulkhead_annotations`'s `has_bolt`.
+        construction += center_marks(
+            [(sx * bolt_axis, sy * bolt_axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)],
+            boss_radius)
 
     construction += [
         axis_line((1.0, 0.0), half),

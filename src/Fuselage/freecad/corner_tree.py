@@ -28,6 +28,7 @@ a parameter change and still extrudes to a valid solid.
 Half-plane box placements are derived in the spreadsheet rather than in expressions on the
 objects, so the trigonometry is visible to whoever opens the file.
 """
+import contextlib
 import os
 import sys
 
@@ -174,9 +175,32 @@ PARAMS = [
 # and shapes come back null. Cheap to assert, very hard to diagnose from the symptom.
 _SEEN = set()
 
+# IP-FC-132: an interconnect bulkhead's octant is TWO independent calls into
+# `bulkhead_section.emit()` -- one per mirrored half -- sharing one document and one Params
+# sheet. Every module in this port names its objects with plain literal strings, so a second
+# call would silently re-find and re-point the first half's objects by name rather than
+# building its own. `tag()` namespaces every name `_owned` hands out for as long as it is
+# active, with no caller anywhere else needing to change: the default is `''`, which is the
+# identity prefix, so every existing single-call kind (end, cowling, corner, cowl, boom) is
+# untouched.
+_TAG = ['']
+
+
+@contextlib.contextmanager
+def tag(prefix):
+    """Context manager: every object `_owned` creates while active is named
+    `prefix + name` instead of `name`. Restores the previous tag on exit, so tags nest."""
+    previous = _TAG[0]
+    _TAG[0] = prefix
+    try:
+        yield
+    finally:
+        _TAG[0] = previous
+
 
 def _owned(doc, typename, name):
     """Fetch the generator's own object by name, creating and tagging it if absent."""
+    name = _TAG[0] + name
     if name in _SEEN:
         raise RuntimeError('duplicate node name %r -- the second use would re-point the '
                            'first and create a cycle' % name)

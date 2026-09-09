@@ -49,15 +49,22 @@ def _common(doc, name, base, tool):
     return node
 
 
-def flange_boss(doc):
+def flange_boss(doc, make_web=True):
+    """IP-FC-132: `make_web` selects which of `bulkhead_flange_positive`'s two branches
+    built this -- both intersect the same quadrant, but only the `make_web` one flares the
+    foot into a chamfer cone. The `make_web=False` branch is what an interconnect's
+    mirrored top half builds (it has no web and no chamfer either), so the ring there is a
+    plain cylinder with nothing fused to it.
+    """
     P = 'Params.'
     r, rc = P + 'flange_boss_r', P + 'flange_boss_rc'
-    ring = C._fuse(doc, 'BossFuse',
-                   C._cyl(doc, 'BossBody', r, P + 'bulkhead_thickness', '0'),
-                   C._cone(doc, 'BossChamfer', rc, r, P + 'flange_chamfer',
-                           P + 'plate_thickness'))
+    ring = C._cyl(doc, 'BossBody', r, P + 'bulkhead_thickness', '0')
+    if make_web:
+        ring = C._fuse(doc, 'BossFuse', ring,
+                       C._cone(doc, 'BossChamfer', rc, r, P + 'flange_chamfer',
+                               P + 'plate_thickness'))
     # The quadrant square reaches flange_boss_rc on both axes, so it contains the flared
-    # foot outright; the intersection is a clean quarter for any parameters.
+    # foot outright (where there is one); the intersection is a clean quarter either way.
     quad = C._box(doc, 'BossQuadrant', rc, rc, P + 'bulkhead_thickness',
                   '-' + rc, '-' + rc, '0')
     tip = C._owned(doc, 'Part::Refine', 'FlangeBoss')

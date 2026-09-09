@@ -227,19 +227,32 @@ def emit(doc, seed=None):
     return cuts(doc)
 
 
-def cuts(doc):
-    """Geometry only, against whatever sheet the document already has."""
+def cuts(doc, is_cowling=False, is_interconnect=False):
+    """Geometry only, against whatever sheet the document already has.
+
+    IP-FC-132: `opening_wedge` and `outer_cleanup` are the two cuts inside `if
+    (!is_cowling)` in the source -- the mouth the longeron snaps in through, and the
+    cleanup of the greeble socket's outer faces. A cowling bulkhead has neither: it does
+    not mate with a corner through a greeble, so there is no socket to open or clean up.
+
+    `BoltHole` is the other of the source's `if` gates, `if (!is_interconnect)` -- an
+    interconnect bolts to its neighbour rather than carrying a bolt hole of its own, and
+    `is_cowling`/`is_interconnect` never both hold, so the two conditions never conflict.
+    """
     P = 'Params.'
 
-    tools = [
-        opening_wedge(doc),
-        outer_cleanup(doc),
-        C._cyl(doc, 'LongeronHole', P + 'longeron_radius + ' + P + 'longeron_tolerance',
-               P + 'through_h', P + 'through_z'),
-        _at(C._cyl(doc, 'BoltHole', P + 'bolt_hole_radius', P + 'through_h',
-                   P + 'through_z'), '-' + P + 'bolt_offset', '-' + P + 'bolt_offset'),
-        octant_mask(doc),
-    ]
+    tools = []
+    if not is_cowling:
+        tools.append(opening_wedge(doc))
+        tools.append(outer_cleanup(doc))
+    tools.append(C._cyl(doc, 'LongeronHole',
+                        P + 'longeron_radius + ' + P + 'longeron_tolerance',
+                        P + 'through_h', P + 'through_z'))
+    if not is_interconnect:
+        tools.append(_at(C._cyl(doc, 'BoltHole', P + 'bolt_hole_radius', P + 'through_h',
+                                P + 'through_z'), '-' + P + 'bolt_offset',
+                         '-' + P + 'bolt_offset'))
+    tools.append(octant_mask(doc))
 
     # **No `Part::Refine` on the tip, since IP-FC-66.** This node is a *negative* -- a fused set
     # of cut tools, never a part -- and refining one buys nothing the cut that consumes it does

@@ -65,13 +65,21 @@ def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
 
 
+def flange_strip(doc):
+    """The flange strip alone -- the second polygon in the docstring above, and ALL of
+    `bulkhead_flange_positive` that an `is_cowling` bulkhead builds. IP-FC-132: for a
+    cowling bulkhead the pad and the diagonal cut below never run at all."""
+    P = 'Params.'
+    return C._box(doc, 'FlangeStrip',
+                 '-' + P + 'flange_end_x', P + 'flange_thickness', P + 'bulkhead_thickness',
+                 P + 'flange_end_x', P + 'flange_y_bot', '0')
+
+
 def flange_base(doc):
     """Geometry only, against whatever sheet the document already has -- the assembly in
     bulkhead_positive.py supplies one merged sheet for every constituent."""
     P = 'Params.'
-    strip = C._box(doc, 'FlangeStrip',
-                   '-' + P + 'flange_end_x', P + 'flange_thickness', P + 'bulkhead_thickness',
-                   P + 'flange_end_x', P + 'flange_y_bot', '0')
+    strip = flange_strip(doc)
     pad = C._box(doc, 'FlangePad',
                  '-' + P + 'x_start', P + 'flange_y_bot - ' + P + 'y_start',
                  P + 'bulkhead_thickness',
@@ -86,6 +94,22 @@ def flange_base(doc):
 
     tip = C._owned(doc, 'Part::Refine', 'FlangeTip')
     tip.Source = cut
+    return tip
+
+
+def flange_base_interconnect(doc):
+    """`bulkhead_flange_positive`'s `is_interconnect` branch, IP-FC-132: the flange strip
+    fused with a pad running from the flange face straight down to y = 0 -- no diagonal
+    cut. An interconnect has none of the bolt-side complexity the end type's pad (which
+    starts at `y_start = max(x_start, -bolt_offset)`, clipped by the diagonal) exists for;
+    it simply runs the pad to the octant boundary.
+    """
+    P = 'Params.'
+    strip = flange_strip(doc)
+    pad = C._box(doc, 'FlangePadIc', '-' + P + 'x_start', P + 'flange_y_bot',
+                P + 'bulkhead_thickness', P + 'x_start', '0', '0')
+    tip = C._owned(doc, 'Part::Refine', 'FlangeTipIc')
+    tip.Source = C._fuse(doc, 'FlangeBothIc', strip, pad)
     return tip
 
 
