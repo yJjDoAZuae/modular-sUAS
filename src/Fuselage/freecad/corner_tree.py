@@ -123,10 +123,25 @@ PARAMS = [
     # tool. `panel_tolerance` is not the corner/bulkhead clearance -- that is OQ-DES-C5, and
     # there is currently none. See OQ-DES-B13.
     ('rect_w', '=panel_overlap + panel_offset'),
-    ('slot_x', '=-panel_overlap * 2 - panel_offset + panel_tolerance'),
+
+    # IP-FC-88: the panel rebate's cutting box, real reach plus a named overshoot rather than
+    # the feature's own dimension doubled. `slot_w`/`slot_d` used to be `panel_overlap * 2` and
+    # `panel_thickness * 2 + panel_tolerance * 2` -- which reads as a considered 2x factor and
+    # is really "big enough to clear the material on both axes," sized by coincidence from the
+    # one dimension it happened to have to hand. `slot_reach` and `slot_depth` are the real
+    # feature -- the rebate is `panel_overlap` long and `panel_thickness + panel_tolerance`
+    # deep -- and `slot_overshoot` reuses `mask_reach`, the project's existing "big enough"
+    # idiom (see the box below and `mask_diag_*`), rather than inventing a second one. The
+    # near edges, `slot_y` and the box's right edge at `-panel_offset + panel_tolerance`
+    # (`slot_x + slot_w`), are unchanged -- those already located the real face; only how far
+    # past it the box overshoots changes.
+    ('slot_reach', '=panel_overlap'),
+    ('slot_depth', '=panel_thickness + panel_tolerance'),
+    ('slot_overshoot', '=mask_reach'),
+    ('slot_x', '=-slot_reach - panel_offset + panel_tolerance - slot_overshoot'),
     ('slot_y', '=corner_radius - panel_thickness - panel_tolerance'),
-    ('slot_w', '=panel_overlap * 2'),
-    ('slot_d', '=panel_thickness * 2 + panel_tolerance * 2'),
+    ('slot_w', '=slot_reach + slot_overshoot'),
+    ('slot_d', '=slot_depth + slot_overshoot'),
 
     # A half-plane is a box rotated onto the cut line. For a box rotated by t about z,
     # local +x advances (x+y) by sqrt(2) per unit at +45 and (y-x) by -sqrt(2) at -45, so
@@ -371,7 +386,12 @@ def _section(doc, tag, z0, h):
     # the one edit this variant does not support, and it is one the sweep would refuse
     # anyway, since panel_offset and panel_overlap are derived from the thickness and would
     # no longer agree (which is what render_variant.py exists for).
-    if not _degenerate(doc, 'slot_w', 'slot_d'):
+    #
+    # IP-FC-88: tests `slot_reach`/`slot_depth`, the real feature, rather than `slot_w`/
+    # `slot_d`, which now carry `slot_overshoot` unconditionally and so are never exactly 0 --
+    # checking them would build a degenerate box on every unpanelled variant instead of
+    # skipping it.
+    if not _degenerate(doc, 'slot_reach', 'slot_depth'):
         node = _cut(doc, tag + 'CutSlot', node,
                     _box(doc, tag + 'PanelSlot', P + 'slot_w', P + 'slot_d', ch,
                          P + 'slot_x', P + 'slot_y', cz))
