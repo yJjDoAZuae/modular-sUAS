@@ -166,13 +166,23 @@ sheets, which an unrestricted *bulkhead* carrier could not tell from a drawing t
 forgotten it. The cowling type keeps the obligation — it has a real bolt hole and boss, just
 none of the fillets or web that reach it on the end type.
 
+**Row 5 reads *panelled bulkhead*, decided generally rather than for this row alone under
+[OQ-DES-D12](#open-questions) on 2026-09-06.** A bulkhead with no panel — the 0 mm families
+`bulkhead-end_anchor_end_bolt-257941` and `bulkhead-interconnect-b591ef` — has no panel-to-flange
+joint to state, but `panel_offset` is not the zero that would have said so: it keeps an ordinary
+nonzero value whether or not a panel is fitted, since it positions the corner rather than being
+set by the panel interface. The structural-zero rule tests each name in a row for being zero and
+cannot see this, because the row's *joint* is absent while most of its *names* are not.
+Restricting the carrier the way rows 7 and 10 already do closes it the same way: a family with
+no panel is not asked to explain a flange it does not have.
+
 | # | Joint | Governing expression | Clearance | Carried by |
 | --- | --- | --- | --- | --- |
 | 1 | longeron tube → corner bore | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` | `longeron_tolerance` 0.05 | corner |
 | 2 | bulkhead greeble post → corner socket | socket radius = `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance`; post radius = `longeron_radius + longeron_tolerance + greeble_thickness`, the same sum without the clearance — so the whole fit is cut out of the corner | `greeble_tolerance` 0.05 | corner |
 | 3 | corner seating faces → bulkhead | `flat_offset = −max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance)) + corner_tolerance·√2`; `flat_x = −(panel_overlap + panel_offset) + corner_tolerance` | `corner_tolerance` 0.0 | corner |
 | 4 | panel → corner | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep from the mold line; end stop at `panel_offset − panel_tolerance`; extension `panel_overlap + panel_offset` | `panel_tolerance` 0.1 | corner |
-| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | bulkhead |
+| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | panelled bulkhead |
 | 6 | boom tube → boom bulkhead collet | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | `boom_tolerance` 0.2 | bulkhead |
 | 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead |
 | 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure |

@@ -256,22 +256,48 @@ DIMENSION_SCHEME = os.path.join(
 # family drawable enough to run the completeness report against. An interconnect has no bolt
 # at all -- `bolt_offset` is not a feature that type has -- so an unrestricted `bulkhead`
 # carrier obliged its sheet to state a hole and boss the part does not have.
+#
+# IP-FC-110: row 5 reads *panelled bulkhead* for the same reason, decided generally in
+# OQ-DES-D12 on 2026-09-06 -- a bulkhead with no panel was still being asked for `panel_offset`,
+# since that name stays nonzero whether or not the part has a panel to offset.
 CARRIED_BY = {
     'corner': ('corner',),
     'bulkhead': ('bulkhead', 'boom_bulkhead'),
     'nose closure': ('nose', 'tail'),
     'cowling bulkhead': ('bulkhead',),
     'bolted bulkhead': ('bulkhead',),
+    'panelled bulkhead': ('bulkhead', 'boom_bulkhead'),
 }
 
-# The type names a carried-by entry is restricted to. Absent means every type of the kinds
-# above, which is the ordinary case; an entry here is a joint one type of a part has.
-CARRIED_BY_TYPES = {
-    'cowling bulkhead': ('cowling_anchor', 'cowling_bolt'),
-    # Every frame bulkhead type except interconnect -- the cowling type keeps this obligation,
-    # since it has a real bolt hole and boss (just none of the fillets or web that reach one on
-    # the end type).
-    'bolted bulkhead': ('end_anchor', 'end_bolt', 'cowling_anchor', 'cowling_bolt'),
+# A carried-by entry may be restricted to the families that have its *feature*, decided in
+# OQ-DES-D12 on 2026-09-06 -- alternative 1, described as alternative 3: a row's parameters
+# drop when the row's joint is absent from the family, and "absent" means what
+# `topology_of()`'s own signature already says, not a second list of type names and not
+# whether a value happens to be zero. The family partition computes the predicate once; this
+# refers to it rather than restating it, which is the failure mode OQ-DES-D6, OQ-DES-D7 and
+# OQ-DES-D12 were each spent correcting a different copy of.
+#
+# Each entry is (the signature key `topology_of` writes, the value or values that count as
+# "has this joint"). A part absent from this dict is carried by every family of the kinds
+# `CARRIED_BY` names for it, which is the ordinary case.
+#
+# IP-FC-110: `panelled bulkhead` replaces testing each of row 5's names for being zero, which
+# is the proxy that failed -- `panel_offset` keeps an ordinary nonzero value on a bulkhead with
+# no panel (`bulkhead-end_anchor_end_bolt-257941`, `bulkhead-interconnect-b591ef`), so the
+# per-value test left it demanded of a joint the part does not have. Reading the family's own
+# `panel.thickness != 0` entry answers the question the value test was only a proxy for.
+#
+# `cowling bulkhead` and `bolted bulkhead` move here from a list of type names for the reason
+# OQ-DES-D12 gave for doing this generally: `bulkhead.type` is already in `TOPOLOGY_FIELDS`, so
+# a type-name list and a signature check answer the same question from two places, and the one
+# that moves wins silently. Values are the `BulkheadType` enum names `topology_of` writes --
+# `COWLING`, and every frame type but `INTERCONNECT` for the bolt, which the cowling type keeps
+# since it has a real bolt hole and boss, just none of the fillets or web that reach one on the
+# end type.
+CARRIED_BY_FEATURE = {
+    'panelled bulkhead': ('panel.thickness != 0', (True,)),
+    'cowling bulkhead': ('bulkhead.type', ('COWLING',)),
+    'bolted bulkhead': ('bulkhead.type', ('END', 'COWLING')),
 }
 
 
@@ -346,24 +372,27 @@ def read_register(path=None):
     return rows
 
 
-def interface_fields(kind, mapping_keys, register=None, type_names=None):
+def interface_fields(kind, mapping_keys, register=None, signature=None):
     """The dimensions section 3 obliges `kind`'s drawing to carry.
 
     Restricted to names the part is actually driven by, so a register row carried by "the
     bulkhead" contributes the boom collet's names to a boom bulkhead and nothing to a frame
     one.
 
-    `type_names` restricts it further, for a row the register attributes to a *type*. Passing
-    none keeps every row the kind carries, which is what a caller asking about the kind as a
-    whole wants; passing a family's type names asks what that family's sheet owes.
+    `signature` restricts it further, for a row the register attributes to a *feature* --
+    `topology_of()`'s own signature for the family, per OQ-DES-D12. Passing none keeps every
+    row the kind carries, which is what a caller asking about the kind as a whole wants;
+    passing a family's signature asks what that family's sheet owes.
     """
     wanted = set()
+    have = dict(signature) if signature is not None else None
     for _number, names, _clearance, part in (register or read_register()):
         if kind not in CARRIED_BY.get(part, ()):
             continue
-        only = CARRIED_BY_TYPES.get(part)
-        if only is not None and type_names is not None:
-            if not set(type_names) & set(only):
+        gate = CARRIED_BY_FEATURE.get(part)
+        if gate is not None and have is not None:
+            key, values = gate
+            if have.get(key) not in values:
                 continue
         wanted |= names
     return sorted(wanted & set(mapping_keys))
@@ -761,7 +790,7 @@ def quantity_members(members, kind):
     return out
 
 
-def quantity_interface(kind, members, register, type_names=None):
+def quantity_interface(kind, members, register, signature=None):
     """Which quantities section 3 obliges the sheet to carry, and which parameters go unstated.
 
     Returns (interface quantity names, unstated interface parameters). **The second is section
@@ -772,7 +801,7 @@ def quantity_interface(kind, members, register, type_names=None):
     OQ-DES-D2's resolution made possible.
     """
     quantities = sa.quantities_for(kind, members[0][1])
-    interface = set(interface_fields(kind, members[0][1], register, type_names))
+    interface = set(interface_fields(kind, members[0][1], register, signature))
     stated = set()
     names = []
     for quantity in quantities:
@@ -831,16 +860,16 @@ def families():
         for signature, rows in sorted(buckets.items(), key=lambda kv: str(kv[0])):
             members = [(a, m) for a, m, _ in rows]
             names = sorted({t for _, _, t in rows})
-            interface = set(interface_fields(kind, members[0][1], register, names))
+            interface = set(interface_fields(kind, members[0][1], register, signature))
             factored = factor(members, axes, interface)
 
             # The sheet's own table, where the part has an annotation set to draw one from.
             quantities = None
             unstated = None
             if kind in sa.ANNOTATIONS:
-                # Not `names` -- that is the family's type names two lines up, and shadowing it
-                # here put quantity names in the report's `types` column.
-                stated, unstated = quantity_interface(kind, members, register, names)
+                # Gated on `signature`, the family's own topology signature (OQ-DES-D12) --
+                # not `names`, which is the family's type names two lines up.
+                stated, unstated = quantity_interface(kind, members, register, signature)
                 quantities = factor(quantity_members(members, kind), axes, set(stated))
                 # Section 2: a parameter that is zero across the whole family is the *absence*
                 # of the joint, not a dimension the sheet is missing. `corner_tolerance` is the
