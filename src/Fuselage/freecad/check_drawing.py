@@ -78,8 +78,11 @@ def export(page, path):
 
 
 # Which key in an exported parameter file a kind's sheet is drawn from. One export carries a
-# whole frame variant -- the bulkhead and the corner it mates with -- so the kind chooses.
-PARAMS_KEY = {'corner': 'corner_parameters', 'bulkhead': 'parameters'}
+# whole frame variant -- the bulkhead and the corner it mates with -- so the kind chooses. The
+# boom bulkhead's own export carries no corner (IP-FC-12: "a boom bulkhead has no corner of its
+# own"), so it is the only key in its file rather than one of two.
+PARAMS_KEY = {'corner': 'corner_parameters', 'bulkhead': 'parameters',
+             'boom_bulkhead': 'boom_parameters'}
 
 
 def is_panelled(params):
@@ -287,7 +290,15 @@ def main(argv):
     for run in ('a', 'b'):
         doc = App.newDocument('check_drawing_' + kind + '_' + run)
         try:
-            page, view, layout, scale, placement, built = drawing.build_sheet(
+            # IP-FC-134: `build_sheets` (plural), not the single-page `build_sheet` this
+            # called until 2026-09-09. `build_sheet` hands back only `sheets[0]` -- correct
+            # for a corner or a boom bulkhead, which are one page, but a frame bulkhead's
+            # DETAIL A is `sheets[1]`, and every note this kind writes lives there. The
+            # checker was exporting page 1 and asking it for notes that were always on page
+            # 2: not a TechDraw DXF defect, a wrong artifact. `build_sheet.py`, the tool that
+            # writes the real deliverable, was never affected -- it already calls this and
+            # writes one DXF per sheet.
+            sheets = drawing.build_sheets(
                 doc, kind, params_path, params, family,
                 variant=exported.get('variant'), siblings=siblings)
         except dp.PlacementError as exc:
@@ -300,7 +311,17 @@ def main(argv):
             App.closeDocument(doc.Name)
             break
 
+        built = [sheet.view for sheet in sheets]
+        scale = built[0].scale
+
         if run == 'a':
+            # The same fixed region `build_sheet` used to construct for the lead page alone --
+            # every sheet gets the whole band (`build_sheets`' own docstring), so one is enough.
+            left, bottom, frame_w, frame_h = drawing.frame_page_box()
+            band_depth = std.TEMPLATE_TITLE_BLOCK_MM[3]
+            placement = drawing.Placement(
+                std.PLACEMENT_BAND,
+                (left, bottom + band_depth, frame_w, frame_h - band_depth))
             frame = std.frame_region_mm()
             region = placement.view_region
             share = (region[2] * region[3]) / (frame[2] * frame[3])
@@ -389,8 +410,16 @@ def main(argv):
                         'so a reader following the callout lands in the wrong column'
                         % ', '.join(disagree))
 
-        bodies.append(export(page, os.path.join(
-            out_dir(), 'check_drawing_%s_%s.dxf' % (kind, run))))
+        # One DXF per page -- TechDraw's own limitation, and `build_sheet.py` writes the
+        # deliverable the same way -- concatenated here because this check only ever asks
+        # the combined bytes a substring question (a DIMENSION count, a note line's text),
+        # never anything that depends on one page's DXF being well-formed on its own.
+        page_bodies = []
+        for sheet in sheets:
+            suffix = '' if sheet.number == 1 else str(sheet.number)
+            page_bodies.append(export(sheet.page, os.path.join(
+                out_dir(), 'check_drawing_%s_%s%s.dxf' % (kind, run, suffix))))
+        bodies.append(b''.join(page_bodies))
         App.closeDocument(doc.Name)
 
     if expect_refusal and bodies:
