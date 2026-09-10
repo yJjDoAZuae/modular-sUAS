@@ -176,18 +176,33 @@ cannot see this, because the row's *joint* is absent while most of its *names* a
 Restricting the carrier the way rows 7 and 10 already do closes it the same way: a family with
 no panel is not asked to explain a flange it does not have.
 
-| # | Joint | Governing expression | Clearance | Carried by |
-| --- | --- | --- | --- | --- |
-| 1 | longeron tube → corner bore | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` | `longeron_tolerance` 0.05 | corner |
-| 2 | bulkhead greeble post → corner socket | socket radius = `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance`; post radius = `longeron_radius + longeron_tolerance + greeble_thickness`, the same sum without the clearance — so the whole fit is cut out of the corner | `greeble_tolerance` 0.05 | corner |
-| 3 | corner seating faces → bulkhead | `flat_offset = −max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance)) + corner_tolerance·√2`; `flat_x = −(panel_overlap + panel_offset) + corner_tolerance` | `corner_tolerance` 0.0 | corner |
-| 4 | panel → corner | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep from the mold line; end stop at `panel_offset − panel_tolerance`; extension `panel_overlap + panel_offset` | `panel_tolerance` 0.1 | corner |
-| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | panelled bulkhead |
-| 6 | boom tube → boom bulkhead collet | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | `boom_tolerance` 0.2 | bulkhead |
-| 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead |
-| 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure |
-| 9 | nose plate → nose closure | pocket radius = `plate_diam/2 + plate_tol`, relieved at `overhang_angle_from_bed` | `plate.tolerance` 0.1 | nose closure |
-| 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bolted bulkhead |
+**The register's carrier column was split in two under [OQ-DES-D10](#open-questions), decided
+2026-09-09.** *Carried by* had meant two different things — which part's geometry the gap is
+cut out of, and which drawing is obliged to state the joint — and row 3 was the one place they
+disagreed: the clearance is carried entirely on the corner, but the bulkhead has always
+dimensioned the same four faces too (`corner_seat_offset`, decided under
+[OQ-DES-D6](#open-questions)). **Clearance on** keeps the manufacturing fact; **Stated by**
+lists every drawing the completeness test in section 3 obliges to state the row, and is read by
+`CARRIED_BY` in [`tools/drawing_families.py`](../../src/Fuselage/tools/drawing_families.py). A
+row may name more than one drawing there, comma-separated; row 3 is the only one that does today.
+
+| # | Joint | Governing expression | Clearance | Clearance on | Stated by |
+| --- | --- | --- | --- | --- | --- |
+| 1 | longeron tube → corner bore | bore radius = `longeron_radius + longeron_tolerance`; lead-in chamfer = `w` | `longeron_tolerance` 0.05 | corner | corner |
+| 2 | bulkhead greeble post → corner socket | socket radius = `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance`; post radius = `longeron_radius + longeron_tolerance + greeble_thickness`, the same sum without the clearance — so the whole fit is cut out of the corner | `greeble_tolerance` 0.05 | corner | corner |
+| 3 | corner seating faces → bulkhead | `flat_offset = −max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance)) + corner_tolerance·√2`; `flat_x = −(panel_overlap + panel_offset) + corner_tolerance` | `corner_tolerance` 0.0 | corner | corner, seated bulkhead |
+| 4 | panel → corner | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep from the mold line; end stop at `panel_offset − panel_tolerance`; extension `panel_overlap + panel_offset` | `panel_tolerance` 0.1 | corner | corner |
+| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | panelled bulkhead | panelled bulkhead |
+| 6 | boom tube → boom bulkhead collet | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | `boom_tolerance` 0.2 | bulkhead | bulkhead |
+| 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead | cowling bulkhead |
+| 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure | nose closure |
+| 9 | nose plate → nose closure | pocket radius = `plate_diam/2 + plate_tol`, relieved at `overhang_angle_from_bed` | `plate.tolerance` 0.1 | nose closure | nose closure |
+| 10 | bolt or insert → bulkhead | `bolt_offset = 8·U` on the diagonal; `bolt_radius` = `diameter/2`, or the insert bore from [`threaded_insert_dimensions.csv`](../../src/Fuselage/tools/threaded_insert_dimensions.csv) | — | bolted bulkhead | bolted bulkhead |
+
+**Rows 7 and 8 have not been reviewed for the same divergence row 3 had.** OQ-DES-D10's own
+scope note flagged both as candidates — each names a fit between two parts that both get
+drawings — and neither is known to diverge; row 3 is the only one measured to. Reviewing them is
+follow-on work, not assumed clean.
 
 **Row 4 was corrected on 2026-08-28, and it was not a wrong requirement — it was not a
 requirement at all.** It read *"slot `2·panel_thickness + 2·panel_tolerance` deep"*, which is
@@ -633,8 +648,6 @@ belong in its interface-conventions section, and what stays here is the drawing-
 
 | ID | Question | Blocking |
 | --- | --- | --- |
-| OQ-DES-D10 | The register's *Carried by* column means both *which part the fit's gap is cut out of* and *which drawing must explain the fit*, and row 3 is where the two come apart | Not blocking — no drawing changes under any answer, and the bulkhead already states the joint. What is at stake is whether the completeness test would notice if it stopped |
-| OQ-DES-D11 | No bulkhead drawing says how wide the panel's seating surface is, and OQ-DES-D7's decision now requires it to | **Blocking IP-FC-107's last two names.** Four family sheets report the gap; two of them are clean only because an unrelated dimension's `max` happens to pick a branch |
 
 
 ### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
@@ -1202,343 +1215,72 @@ section 2 is does not remove the loop; it stops the loop being read as evidence 
 *Implementation: IP-FC-87 for the derivation; section 1 carries the statement of what section 2
 is.*
 
-### OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart
-
-**The problem.**
-
-*Self-contained; everything it relies on is defined here.*
-
-**What the column is for.** Section 2's interface register has one row per fit between two parts,
-and a *Carried by* column naming a part. That column decides which engineering drawing is
-obliged to explain the fit: `CARRIED_BY` in
-[`tools/drawing_families.py`](../../src/Fuselage/tools/drawing_families.py) maps the name to the
-drawing kinds, and the completeness test then demands that kind's sheet state every parameter the
-row consumes.
-
-**But the phrase has a second, older meaning in this project, and it is not the same one.** A fit
-needs a gap, and the gap has to be cut out of one part or the other. This project's rule is that
-it comes out of one part only — the corner is made small, and when the bulkhead computes its
-matching socket it re-evaluates the same shape with the clearance set to zero. The corner
-comments say so in as many words: `corner_tolerance` *"is carried ENTIRELY ON THE CORNER"*. So
-*carried by* also reads as **which part's geometry the gap is taken out of**, which is a
-manufacturing fact rather than a documentation one.
-
-For most rows the two readings agree and nothing is at stake. **Row 3 is where they come apart.**
-
-**Row 3 in detail.** It is the joint between the corner's two seating faces and the bulkhead they
-seat against. The column says *carried by: corner*.
-
-- Under the **gap** reading that is right: `corner_tolerance` is subtracted from the corner and
-  the bulkhead is cut at nominal.
-- Under the **drawing** reading it is incomplete: the bulkhead has four faces belonging to this
-  joint, measured at 3.15 mm² each at 1U with a 3/16 in panel, and a bulkhead sheet that says
-  nothing about them leaves a mating surface unexplained.
-
-**This has already been half-fixed, by hand.** [OQ-DES-D6](#open-questions), decided 2026-08-28,
-put a dimension for these faces on the bulkhead sheet — `corner_seat_offset` in
-`sheet_annotations.py`, the offset of the seating faces from the longeron axis. So the bulkhead
-**does** state joint 3 today. What it is not is *obliged* to: the register still attributes the
-row to the corner alone, so if that annotation were deleted tomorrow the completeness test would
-report the drawing set complete. **The practice and the register disagree, and only the register
-is checked.**
-
-**And the corner — the part the column *does* name — states nothing about this joint under
-its own name either.** Found 2026-08-30, after this question was first written, and it changes
-the shape of it. No quantity on the corner's sheet carries `corner_tolerance`, and none carries
-the seating faces as such. What the sheet does carry is `panel_extension`, a placed dimension
-running from the longeron axis out to the corner's end face, declared for **joint 4**. That end
-face *is* the bulkhead seating flat — `check_derived_geometry.py` calls it exactly that — and
-`|flat_x| = panel_overlap + panel_offset` on every corner variant in the sweep.
-
-**But only because `corner_tolerance` is 0.** `flat_x = −(panel_overlap + panel_offset) +
-corner_tolerance`, so the two separate the moment the clearance is nonzero. So joint 3's coverage
-on the corner is not merely incidental to another joint, it is **contingent on the current value
-of a parameter that is expected to change**. Neither sheet is obliged to state this joint, and
-the one dimension that happens to locate it is pointing at the right place by arithmetic
-coincidence.
-
-**Why this is not simply a typo to fix.** The corner's sheet deliberately dimensions *both* sides
-of a different joint, row 2 — it gives the socket diameter and the post diameter, even though the
-post is a bulkhead feature — and the code says why:
-
-> *a drawing that dimensioned both sides at nominal would be right about each part and wrong
-> about the joint*
-
-So "the drawing of part A states a feature of part B" is an established and intentional pattern
-here, not an error. The question is not whether the bulkhead may state joint 3; it is what the
-column is asserting when it names one part, and what the check should demand as a result.
-
-**Scope: how many rows could be affected.** Four of the ten rows name a fit between two parts
-that both get drawings — rows 2 and 3 (corner and bulkhead), row 7 (cowl and cowling bulkhead)
-and row 8 (nose closure and cowl). The other six mate a printed part to stock tube, a panel, or
-hardware, which have no drawing to be obliged. So a change here touches at most four rows, and
-row 3 is the only one known to have diverged.
-
-**What is at stake is bounded on one side and not the other.** As established under
-[OQ-DES-D7](#open-questions), nothing that renders a drawing reads this register — mutating it
-leaves every sheet byte-identical and changes only the completeness report. So no answer to this
-question can *cause* a wrong drawing.
-
-**It can leave one uncaught, and there is one waiting.** Measured 2026-08-30 by forcing
-`corner_tolerance` to 0.1 through the pipeline: the corner's end face moves inboard to 7.1625 at
-1U with a 3/16 in panel, while `panel_extension` continues to state **7.2625** — out by exactly
-the clearance, with its endpoint off the part. `check_drawing` does not catch it, because it asks
-whether a dimension reports the value its parameters say, and 7.2625 *is*
-`panel_overlap + panel_offset`; it never asks whether the endpoints land on the solid. So the
-sheet passes while being wrong, and joint 3 — demanded of nobody — is the joint that would
-have said so. That is what an answer here is worth.
-
-**Alternatives.**
-
-**1. Name every part that carries a face, and let the column mean "whose drawing owes this".**
-
-Row 3's cell becomes *corner, bulkhead*. `CARRIED_BY` grows the entry, and both sheets are then
-obliged to state the row's parameters.
-
-*What it looks like.* Row 3's last cell reads `corner, bulkhead` instead of `corner`. The
-bulkhead's existing `corner_seat_offset` dimension stops being voluntary, and the corner becomes
-obliged to state the joint under its own name rather than through `panel_extension`. Rows 7 and 8
-would be reviewed for the same divergence.
-
-*Benefits.* Smallest change that makes the check match what the drawings already do. One meaning
-per column, which is the same principle [OQ-DES-D7](#open-questions) was just decided on.
-
-*Drawbacks.* It **discards the gap information**. Which part the clearance is taken out of is a
-real fact, it is load-bearing for anyone reading the geometry, and after this change the register
-would no longer record it anywhere — it would survive only in source comments and in
-[OQ-DES-C5](corner.md#open-questions)'s note.
-
-*Needs.* Nothing.
-
-**2. Split it into two columns: *Clearance on* and *Stated by*.**
-
-The register grows a column. *Clearance on* keeps the manufacturing fact — which part is made
-small. *Stated by* lists every drawing obliged to explain the joint. `CARRIED_BY` reads the
-second.
-
-*What it looks like.* Row 3: *Clearance on* = `corner`; *Stated by* = `corner, bulkhead`. Row 2:
-*Clearance on* = `corner`; *Stated by* = `corner` — the corner's sheet showing both sides is then
-visibly a choice about that one sheet, not an obligation. Row 6: both columns say `bulkhead`, as
-most rows would.
-
-*Benefits.* Both facts are recorded and neither is inferred from the other. It makes the row 2
-pattern legible: today, "the corner states the post" looks like it might be an error, and under
-this it plainly is not. It also gives the register somewhere to put the answer when rows 7 and 8
-are reviewed.
-
-*Drawbacks.* An eleventh column in a table that is already wide, for a distinction that matters
-in one row today. And two columns can disagree — though unlike
-[OQ-DES-D7](#open-questions)'s rejected alternative 2, these are **two different facts** rather
-than two statements of one fact, so there is no consistency rule to enforce between them and
-nothing to silently drift.
-
-*Needs.* Nothing.
-
-**3. Split row 3 into two rows, one per part.**
-
-Row 3a is the corner's two seating faces with their expression; row 3b is the bulkhead's four
-matching faces with theirs. Each row is carried by one part in the existing single sense.
-
-*What it looks like.* The register goes from ten rows to eleven, and row 3b's expression is the
-bulkhead's own — the offset `corner_seat_offset` already dimensions, rather than the corner's
-`flat_offset` arithmetic.
-
-*Benefits.* No new column, no ambiguity, and each row states the size of a face that exists on
-the part named. It also fits [OQ-DES-D7](#open-questions)'s decision cleanly: two rows, two whole
-sizes, each evaluable against its own part.
-
-*Drawbacks.* It splits one *fit* into two entries, which is what the register is a list of — and
-the clearance would appear on one of them and not the other, or on both with one of them zero,
-neither of which reads well. If rows 7 and 8 turn out the same way the register grows to
-thirteen rows for ten joints.
-
-*Needs.* A decision on where the clearance goes in a split row.
-
-**4. Leave the column as it is, and write down that it means "clearance on".**
-
-Record in section 2 that *Carried by* names the part the gap is taken out of, and that a drawing
-may state a joint it is not obliged to state.
-
-*What it looks like.* Nothing moves. Section 2 gains a sentence; the bulkhead's joint-3 dimension
-stays voluntary.
-
-*Benefits.* No work, and it is arguably the column's original meaning.
-
-*Drawbacks.* The completeness test then demands less than the drawings actually deliver, and the
-gap between them is invisible to it — delete the bulkhead's seating dimension and everything
-still reports green. That is the same *"satisfied for the wrong reason"* failure
-[OQ-DES-D7](#open-questions) was just decided against accepting, one column over.
-
-*Needs.* Nothing.
-
-**Recommendation: alternative 2.**
-
-The two meanings are two genuinely different facts, and both are used. The gap attribution is how
-the geometry is built and is why `corner_middle_shape` takes a `corner_tolerance` argument that
-the bulkhead passes as zero; the drawing obligation is what the completeness test exists to
-enforce. Collapsing them into one column is what produced this question, and alternative 1
-resolves it by throwing one of them away.
-
-It is also consistent with what was just decided next door. [OQ-DES-D7](#open-questions) chose to
-make a column that meant two things mean one thing, and rejected splitting into two columns
-there — but that rejection was because the two columns would have restated **one** fact and could
-drift apart with nothing to catch it. Here the two columns hold different facts, so that
-objection does not apply, and the same principle — one column, one meaning — points the other
-way.
-
-Alternative 3 is the more elegant answer if the register is heading toward
-[OQ-DES-D7](#open-questions)'s alternative 5, where every row is evaluated against a measured
-feature on a named part, since a row spanning two parts has no single part to be measured on.
-**That is worth revisiting once IP-FC-108 is under way**, and it is the reason not to treat this
-decision as permanent.
-
-*Implementation: section 2's register table, and `CARRIED_BY` in `tools/drawing_families.py`.*
-
-### OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is
-
-**The problem.**
-
-*Self-contained; everything it relies on is defined here.*
-
-**The joint.** A skin panel seats against the outer face of a bulkhead. That face is a flat strip
-running along one side of the bulkhead, set `panel_thickness + panel_tolerance` in from the
-airframe's outer surface so that the panel, once laid into it, finishes flush. Two numbers
-describe it: **where the face sits**, and **how wide the strip is**. The width is what decides how
-much of the panel is actually supported.
-
-Where it sits is `unit_width/2 − panel_thickness − panel_tolerance`, which is 45.1375 mm at 1U
-with a 3/16 in panel. How wide it is comes to
-`unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` — 65.475 mm at 1U, and the built
-face measures 392.8500 mm², which is that width times the bulkhead's 6 mm thickness.
-
-**The bulkhead drawings state the first and not the second.** Every bulkhead sheet locates the
-seating face. None of them dimensions how wide it is, so a reader has to derive the width from
-four other numbers on the sheet — if they realize they need to.
-
-**Why this surfaced now.** [OQ-DES-D7](#open-questions), decided 2026-08-30, requires every
-register row to state the whole size of its fit rather than only the clearance gap. Row 5 now
-states both the position and the width. The automatic completeness test reads that row and
-requires the bulkhead's drawing to state every parameter in it, and two of them —
-`panel_offset` and `panel_overlap`, which appear only in the width — are on no bulkhead sheet.
-Built on 2026-08-30 under IP-FC-107, the test reports:
-
-| Family | Missing |
-| --- | --- |
-| `bulkhead-end_anchor_end_bolt-f0c1af` | `panel_offset`, `panel_overlap` |
-| `bulkhead-interconnect-ef3bf3` | `panel_offset`, `panel_overlap` |
-| `bulkhead-end_anchor_end_bolt-254446` | — |
-| `bulkhead-interconnect-155b00` | — |
-
-**The two clean families are clean by accident, and that is worth seeing.** They are the ones
-where a *different* dimension on the sheet — the corner seating offset — happens to be computed
-from `panel_overlap + panel_offset`, because on those variants the panel branch of that
-dimension's `max` governs. On the other two the bore branch governs, the same dimension is
-computed from the longeron instead, and the names vanish. **So the coverage follows which branch
-of an unrelated expression wins**, which is the exact failure mode OQ-DES-D7 was decided against.
-
-**What is not at stake.** The parts are correct and unchanged; this is entirely about what the
-drawing says. No sheet is redrawn by any answer that does not add a dimension, and adding one
-changes only the bulkhead sheets.
-
-**Alternatives.**
-
-**1. Dimension the exposed width on the bulkhead sheet.**
-
-Add a dimension across the seating face, from one end of the strip to the other, with a callout
-naming the parameters that set it.
-
-*What it looks like.* One more horizontal dimension on each bulkhead sheet, reading 65.475 at 1U
-with a 3/16 in panel, spanning between the two corner arms. In the value table it becomes one
-more column.
-
-*Benefits.* The number a reader wants is on the drawing instead of being derivable from four
-others. It closes the completeness gap on all four families at once, and it removes the accidental
-coverage — the width would then be stated because it is the width, not because another
-dimension's `max` happened to pick a branch.
-
-*Drawbacks.* Every bulkhead sheet gains a dimension and the value table gains a column, on sheets
-that already run to 13–16 columns. Section 5.2's placement constraints have to accommodate it,
-and this dimension spans the full width of the part, which is where the view is already busiest.
-
-*Needs.* A placement that satisfies section 5.2, and a decision on whether it is dimensioned on
-the face view or called out in the table only.
-
-**2. State it in the value table without drawing a dimension line.**
-
-The sheet declares the width as a table quantity — a named value with its parameters — but no
-dimension line is placed on the view.
-
-*What it looks like.* One more row in the sheet's value block, `panel_span 65.475`, with the
-callout letters naming `unit_width`, `corner_radius`, `panel_offset` and `panel_overlap`.
-
-*Benefits.* Closes the same gap without touching the view or its placement problem. Cheapest
-answer that is not "do nothing".
-
-*Drawbacks.* [OQ-DES-D2](#open-questions), decided 2026-08-22, established that a joint is stated
-by **the pair** — a dimension carrying the feature and a callout beside it carrying the
-parameter. A table entry with no dimension is half of that, and it sets a precedent that the
-completeness test can be satisfied by a table row alone, which would weaken every other joint's
-guarantee.
-
-*Needs.* A decision on whether the pair rule admits an exception, which is reopening a decided
-question.
-
-**3. Take the width out of row 5 and let the register state the position only.**
-
-Row 5 reverts to `unit_width/2 − panel_thickness − panel_tolerance` alone. Nothing is added to
-any drawing.
-
-*What it looks like.* Row 5's cell loses its second expression. The completeness test goes green
-immediately.
-
-*Benefits.* No drawing work, and the register still states a whole size rather than a clearance,
-so OQ-DES-D7's decision is not violated in the letter.
-
-*Drawbacks.* `corner_radius` then stops being demanded of the bulkhead entirely, and the analysis
-under OQ-DES-D7 established that the joint genuinely does consume it — through the width. So this
-buys a green report by removing the obligation rather than meeting it, which is the same trade
-OQ-DES-D7 rejected as alternative 4. It also leaves the two "clean by accident" families
-undisturbed and unexplained.
-
-*Needs.* Nothing.
-
-**4. Dimension the width on the *panel* drawing instead.**
-
-[OQ-DES-D4](#open-questions), decided 2026-08-22, made the panel outer-mold-line a part in its
-own right. The supported width is arguably the panel's business, so its drawing carries it and
-row 5's *carried by* names the panel.
-
-*What it looks like.* The panel gains a sheet obligation; the bulkhead sheets are untouched.
-
-*Benefits.* Puts the number on the part whose fit it describes, and the panel's drawing is nearly
-empty by comparison, so there is room.
-
-*Drawbacks.* The panel has no drawing family in the partition today — `CARRIED_BY` has no entry
-for it — so this is not a small change. And the width is a property of the *bulkhead's* face; the
-panel is what lands on it. Dimensioning a feature of one part on another part's drawing is
-something this project does deliberately elsewhere, but as an addition rather than a relocation.
-
-*Needs.* The panel brought into the drawing partition, which is IP-FC work that does not exist
-yet.
-
-**Recommendation: alternative 1.**
-
-The width is a number a person building or inspecting the joint wants, and it is currently
-derivable-but-unstated, which is the condition the completeness test exists to find. It found it.
-Alternative 3 makes the report green by deleting the question, and OQ-DES-D7 was decided against
-exactly that trade one row over. Alternative 2 is cheap but pays for it by weakening the pair rule
-for every joint, not just this one.
-
-Alternative 4 is the better long-run home for this number and should be revisited when the panel
-enters the drawing partition — but it is not available now, and leaving the gap open until it is
-would mean carrying a known-incomplete sheet for the sake of a tidier eventual answer.
-
-**The placement question inside alternative 1 is real and is not answered here**: this dimension
-spans the full width of the part, and section 5.2's constraints on the busiest region of the view
-are what decide whether it goes above, below, or on a detail. That is drafting work with a rule
-to follow, not a further decision.
-
-*Implementation: `freecad/sheet_annotations.py`'s bulkhead quantities and dimensions.*
+### ~~OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart~~ — DECIDED 2026-09-09: alternative 2, split into two columns
+
+**Resolution note.** **Alternative 2.** Section 2's register now carries *Clearance on* (which
+part's geometry the gap is cut out of) and *Stated by* (every drawing section 3's completeness
+test obliges to state the joint) as two columns instead of one. Row 3 is the only row known to
+diverge: *Clearance on* stays `corner`, and *Stated by* becomes `corner, seated bulkhead`,
+matching what the bulkhead's sheet has done since OQ-DES-D6 (`corner_seat_offset`) — the register
+now says so rather than leaving the drawing ahead of the obligation. Every other row carries the
+same value in both columns, since no other divergence is established; rows 7 and 8 were flagged
+as candidates worth the same review and have not had it.
+
+**`seated bulkhead`, not the bare `bulkhead` row 6 already uses.** Found 2026-09-09 while giving
+the boom bulkhead its own annotation set (IP-FC-21): `CARRIED_BY['bulkhead']` names both the
+frame and boom families, and `CARRIED_BY_FEATURE` gates by the carrier phrase, not by row. Naming
+row 3's second carrier plain `bulkhead` would have let a boom bulkhead's sheet inherit row 3's
+demand too — and a boom bulkhead has no corner-seating flat to have (`corner_seat_span` returns
+`None` for it; the feature is `'absent'`, not merely small). Row 6's collet joint has nothing to
+do with that feature and must stay ungated for both families, so the two can't share one phrase.
+`seated bulkhead` is `CARRIED_BY['bulkhead', 'boom_bulkhead']` gated by
+`CARRIED_BY_FEATURE['corner seating flat', (True,)]` — the same feature `topology_of()` already
+computes for the corner's own partition, referred to rather than restated, which is the same
+discipline OQ-DES-D12 applied one row over.
+
+**The rationale.** The two facts are genuinely different — one is how the geometry is built (why
+`corner_middle_shape` takes a `corner_tolerance` argument the bulkhead passes as zero), the other
+is what the completeness test enforces — and both are used elsewhere in this document. Collapsing
+them into one column is what produced the question; alternative 1 would have resolved it by
+discarding the gap-attribution fact, which is load-bearing for a reader working from the geometry
+rather than the drawings.
+
+**Why not alternative 3** (split row 3 into two rows, one per part): it turns one fit into two
+register entries and forces a decision about where the clearance value goes on a row that no
+longer has a single part to carry it — worth revisiting if OQ-DES-D7's alternative 5 is ever
+adopted, not before.
+
+*Implementation: section 2's register table (done, above), and `CARRIED_BY`/`read_register` in
+[`tools/drawing_families.py`](../../src/Fuselage/tools/drawing_families.py) — the register now
+parses six columns and a *Stated by* cell may name more than one part.*
+
+### ~~OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is~~ — DECIDED 2026-09-09: alternative 1, dimension the exposed width
+
+**Resolution note.** **Alternative 1.** Each bulkhead sheet gains a dimension across the panel
+seating face's actual exposed span — `unit_width − 2·(corner_radius + panel_offset) −
+2·panel_overlap`, 65.475 mm at 1U with a 3/16 in panel — with a callout naming the four
+parameters that set it. This closes the completeness gap on all four families that had it and
+removes the "clean by accident" coverage: the width is now stated because it is the width, not
+because an unrelated dimension's `max` happened to pick the panel branch.
+
+**The rationale.** Alternative 3 (drop the width back out of row 5) would have made the report
+green by deleting the obligation OQ-DES-D7 was just decided to add — rejected for the same reason
+one row over. Alternative 2 (a table entry with no dimension line) would have weakened
+OQ-DES-D2's pair rule — a dimension carrying the feature, a callout carrying the parameter — for
+every joint, not just this one, to save one dimension line.
+
+**Alternative 4 is the better long-run home and is deferred, not rejected.** The panel became a
+part in its own right under OQ-DES-D4, and the width is arguably its dimension to carry rather
+than the bulkhead's. But the panel has no drawing family in the partition today, so putting it
+there is new IP-FC work rather than a documentation change — revisit once that exists.
+
+**The placement question inside alternative 1** — this dimension spans the full width of the
+part, so where it goes relative to the busiest region of the view is section 5.2's placement
+rule to apply, not a further decision.
+
+*Implementation: [`freecad/sheet_annotations.py`](../../src/Fuselage/freecad/sheet_annotations.py)'s
+bulkhead quantities and dimensions (done, `panel_span`) — unblocks
+[IP-FC-109](../implementation/freecad_migration.md).*
 
 ### ~~OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint~~ — DECIDED 2026-09-06: a row applies to the families that have its joint
 

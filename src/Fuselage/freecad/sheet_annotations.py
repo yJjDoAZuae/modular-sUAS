@@ -109,6 +109,8 @@ DESCRIPTIONS = {
     'panel_pocket': 'PANEL POCKET DEPTH',
     'panel_thickness': 'PANEL THICKNESS',
     'panel_tolerance': 'PANEL FIT CLEARANCE',
+    # Shared by both bulkhead kinds (IP-FC-135)
+    'enclosed_span': 'ENCLOSED SPAN',
     # The bulkhead
     'mold_half_width': 'MOLD LINE HALF-WIDTH',
     'longeron_offset': 'LONGERON AXIS OFFSET',
@@ -117,6 +119,13 @@ DESCRIPTIONS = {
     'bolt_diameter': 'BOLT HOLE DIA',
     'boss_diameter': 'BOLT BOSS DIA',
     'corner_seat_offset': 'CORNER SEAT OFFSET',
+    'panel_span': 'PANEL SEAT EXPOSED SPAN',
+    # The boom bulkhead
+    'collet_diameter': 'BOOM COLLET DIA',
+    'collet_clearance': 'COLLET DIA CLEARANCE',
+    'boom_diameter': 'BOOM TUBE DIA',
+    'boom_y_position': 'BOOM AXIS, HORIZONTAL',
+    'boom_z_position': 'BOOM AXIS, VERTICAL',
 }
 
 
@@ -779,6 +788,13 @@ def bulkhead_annotations(params, product=FAMILY):
     measuring the post against the corner's socket finds a 0.05 discrepancy and no statement of
     which one is deliberate.
 
+    **DES-3's interior aperture is dimensioned on the plan, `enclosed_span` -- IP-FC-135,
+    closing the gap OQ-DES-D3 decided on 2026-08-22.** It is the ring's inner boundary past
+    the flange, `unit_width - 2*(panel_thickness + panel_tolerance) - 2*flange_thickness`, and
+    it is declared unconditionally rather than only when panelled: at `panel_thickness = 0`
+    the pocket term vanishes and the expression still names a real pair of parallel faces, the
+    flange's own inner boundary with no panel setback ahead of it.
+
     **What this does not carry, and it is not an oversight.** The cowling type's
     flange -- section 2's joint 7, and the only thing on a frame bulkhead that
     consumes `cowl_flange_tolerance`,
@@ -826,6 +842,14 @@ def bulkhead_annotations(params, product=FAMILY):
     pocket = thickness + panel_fit
     seat = half - pocket
 
+    # DES-3 / OQ-DES-D3 (resolved 2026-08-22): the interior aperture, the ring's own inner
+    # boundary past the flange -- IP-FC-135. Unconditional, not gated by `panelled`: at
+    # panel_thickness = 0 the pocket vanishes and this reduces to `half - flange_thickness`,
+    # which is still a real pair of parallel faces on an unpanelled part. Verified against
+    # the design doc's own worked example, 1U/3-16in: 50 - 4.8625 - 1.2 = 43.9375.
+    aperture_half = seat - params['flange_thickness']
+    enclosed_span = 2.0 * aperture_half
+
     # Register joint 3's face. Present or absent for the whole family, since OQ-DES-D6 put the
     # condition in the topology signature -- so this is not a per-variant dodge, it is asking
     # which of two families this sheet is for.
@@ -857,6 +881,8 @@ def bulkhead_annotations(params, product=FAMILY):
         Quantity('longeron_diameter', 2.0 * longeron, ('longeron_radius',)),
         Quantity('longeron_clearance', 2.0 * longeron_fit, ('longeron_tolerance',),
                  constant=True),
+        Quantity('enclosed_span', enclosed_span,
+                 ('unit_width', 'panel_thickness', 'panel_tolerance', 'flange_thickness')),
     ]
     if has_bolt:
         declared += [
@@ -870,11 +896,23 @@ def bulkhead_annotations(params, product=FAMILY):
                      ('longeron_radius', 'longeron_tolerance', 'greeble_thickness')),
             Quantity('nub_diameter', 2.0 * nub_radius, ()),
         ]
+    # Register joint 5's width, OQ-DES-D11: the seating face's own exposed span, not the
+    # panel's full corner-to-corner extent (`bulkhead_construction`'s reference rectangle,
+    # `2 * (axis - panel_offset)`). Near each corner the flat face gives way to the corner's own
+    # extension -- the corner supports the panel for that last `panel_overlap` at each end, per
+    # register row 4 -- so what remains flat on the bulkhead itself is narrower by
+    # `2 * panel_overlap`. Verified on the built solid at 1U/3-16in: half_span 32.7375 mm, and
+    # the real face at y = seat measures exactly `2 * half_span * bulkhead_thickness` =
+    # 392.8500 mm2, matching this row's own worked example to four decimals.
+    half_span = axis - params['panel_offset'] - params['panel_overlap']
+    span = 2.0 * half_span
     if panelled:
         declared += [
             Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
             Quantity('panel_thickness', thickness, ('panel_thickness',)),
             Quantity('panel_tolerance', panel_fit, ('panel_tolerance',), constant=True),
+            Quantity('panel_span', span,
+                     ('unit_width', 'corner_radius', 'panel_offset', 'panel_overlap')),
         ]
     # **Register joint 3's offset, and it carries what actually sets it.** Where the bore
     # branch wins -- every member of a family the seating flat exists on, since OQ-DES-D6 put
@@ -915,6 +953,10 @@ def bulkhead_annotations(params, product=FAMILY):
         # Where the corner sits.
         (by_name['longeron_offset'], (0.0, 0.0, 0.0), (axis, 0.0, 0.0),
          dp.HORIZONTAL, axis),
+        # DES-3's aperture, IP-FC-135: taken along the interior face itself, at
+        # y = aperture_half, the same convention `panel_span` uses at y = seat.
+        (by_name['enclosed_span'], (-aperture_half, aperture_half, 0.0),
+         (aperture_half, aperture_half, 0.0), dp.HORIZONTAL, enclosed_span),
     ]
     if has_bolt:
         # The bolt from the longeron axis, taken between the two hole axes because that is
@@ -936,6 +978,12 @@ def bulkhead_annotations(params, product=FAMILY):
         dimensions.append(
             (by_name['panel_pocket'], (axis, seat, 0.0), (axis, half, 0.0),
              dp.VERTICAL, pocket))
+        # OQ-DES-D11: the seating face's own exposed width, on the plan rather than the detail
+        # -- it spans nearly the whole plate and has no room inside DETAIL A's corner clip.
+        # Taken along the same y = seat line the pocket's own dimension and note use.
+        dimensions.append(
+            (by_name['panel_span'], (-half_span, seat, 0.0), (half_span, seat, 0.0),
+             dp.HORIZONTAL, span))
     # The corner seating faces, register joint 3, dimensioned where the diagonal crosses the
     # line through the longeron axis -- which is the offset the geometry is built from.
     #
@@ -1036,8 +1084,15 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
     if panelled:
         detail_dimensions.append('panel_pocket')
         detail_notes.append('seat')
+    # OQ-DES-D11: the seating face's exposed span is a whole-plate dimension, like the mold
+    # line and the longeron offset, and belongs on the plan rather than crowded into the
+    # corner detail alongside the pocket depth. `enclosed_span` (IP-FC-135) joins it there for
+    # the same reason -- it spans nearly the whole plate and is declared unconditionally.
+    plan_dimensions = (('mold_half_width', 'longeron_offset', 'enclosed_span', 'panel_span')
+                       if panelled else
+                       ('mold_half_width', 'longeron_offset', 'enclosed_span'))
     return [
-        SheetView('PLAN', dimensions=('mold_half_width', 'longeron_offset')),
+        SheetView('PLAN', dimensions=plan_dimensions),
         SheetView('DETAIL A', clip=(axis, axis, radius),
                   dimensions=detail_dimensions, notes=detail_notes,
                   caption='DETAIL A -- CORNER, 4 PLACES'),
@@ -1122,10 +1177,159 @@ def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat
     return construction
 
 
+def boom_bulkhead_annotations(params, product=FAMILY):
+    """The boom bulkhead's interface quantities, dimensions and OQ-DES-D2 notes.
+
+    **The view is the plate face, looking down the boom axis**, the same frame
+    `bulkhead_annotations` uses -- the plate's local origin is the boom's own axis, and the
+    longeron bores sit at the same `(+/-axis, +/-axis)` the frame bulkhead's do, since
+    `boom_oml.py` is the same octant-tiled construction shared with it (IP-FC-12).
+
+    **Only one mirror is real, and it is the only centre line drawn.** Measured 2026-09-09 by
+    reflecting the built solid and intersecting it with itself, at all three boom types: `x = 0`
+    recovers 1.000000 of the volume in every case, and `y = 0` recovers 0.847 (`offset_single`),
+    0.994 (`center_single`) and 0.769 (`dual`) -- close for `center_single` but not exact, because
+    `boom_bulkhead.py`'s own docstring says why: the lower web is a **second, independent**
+    evaluation of the web builder rather than a mirror of the upper one, and the two differ in
+    area even when the boom sits on the centreline (2888.83 against 2868.85 at `center_single`).
+    So a `y = 0` centre line would assert a mirror the part does not have, for any type, and is
+    not drawn. The four longeron bores are still identically placed by construction -- the same
+    tiling both mirrors -- so one `longeron_offset` dimension states all four, with a note saying
+    so rather than a line implying it.
+
+    **The collet's position is stated as data, not as a dimension line, and that is deliberate.**
+    `boom_y_position` is exactly 0 on `center_single`, and a dimension line from 0 to 0 is exactly
+    the degenerate-zero case section 5.2's H5 refuses -- a dimensioned coincidence with nothing to
+    inspect. `dual` places a second collet at `(-boom_y_position, boom_z_position)` through the
+    same real `x = 0` mirror rather than a separate parameter, confirmed on the built solid:
+    2026-09-09, `boom_y_position = 20`, two collet bores at `(-20, 20)` and `(20, 20)`.
+
+    **DES-3's interior aperture is dimensioned here too, `enclosed_span` -- IP-FC-135, closing
+    a gap the frame bulkhead's sheet shared with this one.** `unit_width - 2*(panel_thickness +
+    panel_tolerance) - 2*web_width`, 78.275 mm at 1U with 3/16 in panel, declared unconditionally
+    for the same reason `bulkhead_annotations` gives: at `panel_thickness = 0` the pocket term
+    vanishes and the expression still names the web's real inner boundary. **The span and the
+    clear opening are two different numbers here, and only the span is dimensioned** -- the span
+    between the interior faces is 78.275 both ways, but the collet intrudes from one side, so the
+    clear opening is 78.275 x 66.402 on `offset_single`. No note states that: it is visible in
+    this same unclipped PLAN view, which already draws the collet bore, and OQ-DES-D3's own
+    resolution says a reader asking what fits through has to look at the view and not only the
+    number -- adding a note here would be restating that decision, not applying it.
+
+    **What this does not carry.** Section 2's register row 10 (the corner bolt) is absent:
+    `CARRIED_BY` does not name the boom bulkhead for it, since the part has no bolt boss of that
+    kind at all.
+    """
+    half = params['unit_width'] / 2.0
+    radius = params['corner_radius']
+    axis = half - radius
+    longeron = params['longeron_radius']
+    longeron_fit = params['longeron_tolerance']
+    bore = longeron + longeron_fit
+
+    collet_radius = (params['boom_diameter'] / 2.0 + params['boom_collet_thickness']
+                     + params['boom_tolerance'])
+    y_pos = params['boom_y_position']
+    z_pos = params['boom_z_position']
+
+    thickness = params['panel_thickness']
+    panel_fit = params['panel_tolerance']
+    panelled = abs(thickness) > dp.ZERO_MM
+    pocket = thickness + panel_fit
+    seat = half - pocket
+    half_span = axis - params['panel_offset'] - params['panel_overlap']
+    span = 2.0 * half_span
+    # DES-3 / OQ-DES-D3, IP-FC-135 -- see the docstring.
+    aperture_half = seat - params['web_width']
+    enclosed_span = 2.0 * aperture_half
+
+    declared = [
+        Quantity('mold_half_width', half, ('unit_width',)),
+        Quantity('longeron_offset', axis, ('corner_radius',)),
+        Quantity('bore_diameter', 2.0 * bore, ('longeron_radius', 'longeron_tolerance')),
+        Quantity('longeron_diameter', 2.0 * longeron, ('longeron_radius',)),
+        Quantity('longeron_clearance', 2.0 * longeron_fit, ('longeron_tolerance',),
+                 constant=True),
+        Quantity('enclosed_span', enclosed_span,
+                 ('unit_width', 'panel_thickness', 'panel_tolerance', 'web_width')),
+        Quantity('collet_diameter', 2.0 * collet_radius,
+                 ('boom_diameter', 'boom_collet_thickness', 'boom_tolerance')),
+        Quantity('boom_diameter', params['boom_diameter'], ('boom_diameter',)),
+        Quantity('collet_clearance', 2.0 * params['boom_tolerance'], ('boom_tolerance',),
+                 constant=True),
+        # Stated in the collet note as data, not drawn as a dimension line -- see the docstring.
+        # `constant=True` is correct because within one family (one boom type) neither position
+        # ever varies with `U` or the panel axis; it differs only between families, the same way
+        # the family split already separates `offset_single` from `center_single` from `dual`.
+        Quantity('boom_y_position', y_pos, ('boom_y_position',), constant=True),
+        Quantity('boom_z_position', z_pos, ('boom_z_position',), constant=True),
+    ]
+    if panelled:
+        declared += [
+            Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
+            Quantity('panel_span', span,
+                     ('unit_width', 'corner_radius', 'panel_offset', 'panel_overlap')),
+        ]
+
+    quantities = issue_letters(declared)
+    by_name = {q.name: q for q in quantities}
+
+    def w(name):
+        return by_name[name].written(product)
+
+    dimensions = [
+        (by_name['mold_half_width'], (0.0, 0.0, 0.0), (0.0, half, 0.0), dp.VERTICAL, half),
+        (by_name['longeron_offset'], (0.0, 0.0, 0.0), (axis, 0.0, 0.0), dp.HORIZONTAL, axis),
+        # DES-3's aperture, IP-FC-135. Vertical, on the part's left side rather than
+        # the horizontal lane `panel_span` and both notes already crowd -- measured
+        # 2026-09-09, the square aperture reads the same span in either axis.
+        (by_name['enclosed_span'], (-aperture_half, -aperture_half, 0.0),
+         (-aperture_half, aperture_half, 0.0), dp.VERTICAL, enclosed_span),
+    ]
+    if panelled:
+        dimensions.append(
+            (by_name['panel_pocket'], (axis, seat, 0.0), (axis, half, 0.0),
+             dp.VERTICAL, pocket))
+        dimensions.append(
+            (by_name['panel_span'], (-half_span, seat, 0.0), (half_span, seat, 0.0),
+             dp.HORIZONTAL, span))
+
+    def on_circle(center, r, degrees):
+        angle = math.radians(degrees)
+        return (center[0] + r * math.cos(angle), center[1] + r * math.sin(angle), 0.0)
+
+    notes = [
+        ('bore', on_circle((axis, axis), bore, 115.0),
+         ('%s%s BORE' % (DIA, w('bore_diameter')),
+          'FOR %s%s LONGERON' % (DIA, w('longeron_diameter')),
+          '%s DIA CLEARANCE' % w('longeron_clearance'),
+          'EACH CORNER, 4 PLACES')),
+        ('collet', on_circle((y_pos, z_pos), collet_radius, 135.0),
+         ('%s%s COLLET' % (DIA, w('collet_diameter')),
+          'FOR %s%s BOOM TUBE' % (DIA, w('boom_diameter')),
+          '%s DIA CLEARANCE' % w('collet_clearance'),
+          'AT (%s, %s) FROM CENTER' % (w('boom_y_position'), w('boom_z_position')))),
+    ]
+
+    construction = center_marks(
+        [(sx * axis, sy * axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)], bore)
+    # One collet, or two through the real x = 0 mirror -- `dual` places a second at
+    # `-boom_y_position` rather than taking a parameter of its own (verified above).
+    construction += center_marks(
+        sorted({(sx * y_pos, z_pos) for sx in (-1.0, 1.0)}), collet_radius)
+    construction.append(axis_line((0.0, 1.0), half))
+
+    views = [SheetView('PLAN',
+                       dimensions=tuple(q.name for q, _p1, _p2, _a, _v in dimensions),
+                       notes=tuple(key for key, _anchor, _lines in notes))]
+    return quantities, dimensions, notes, construction, views
+
+
 # The kinds that have an annotation set. Read from both sides of the boundary: `drawing.py`
 # uses it to draw a sheet and `tools/drawing_families.py` to tabulate one, which is the whole
 # reason this module exists apart from `drawing.py`.
-ANNOTATIONS = {'corner': corner_annotations, 'bulkhead': bulkhead_annotations}
+ANNOTATIONS = {'corner': corner_annotations, 'bulkhead': bulkhead_annotations,
+              'boom_bulkhead': boom_bulkhead_annotations}
 
 
 def quantities_for(kind, params):

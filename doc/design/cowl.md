@@ -735,8 +735,6 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42 entirely**, the nose base offset included: 0.5 mm stays, written as `1 × 0.6 + (−0.1)`, and OQ-DES-CW10 confirms that is the correct built value |
 | OQ-DES-CW10 | Is the nose cowl's base offset a function of the nozzle? | ~~Resolved 2026-08-21~~ — **yes**: the nose shape seats on the cowl's perimeter shell and is bonded there, and the inset gives that joint both its alignment and its bonding surface. `nose_flange_tolerance = -0.1`, so the offset is 0.5 mm at the sweep's 0.6 — **the built value, unchanged**. The `0.4 + 0.1` decomposition that twice argued for 0.7 is void: the hand drivers' 0.4 is a development test value and was never a tuning |
 | OQ-DES-CW11 | Which group does the overhang angle belong in? | ~~Resolved 2026-08-21~~ — **`slicing`**: choosing an overhang angle is a slicing concern, and it fails `printer`'s own membership rule because it does not move with the nozzle. Renamed `cone_angle` → `overhang_angle_from_bed` and moved from four places to one. **Not a free parameter**: it has to agree with where the nose/cowl break line falls and changing it means adjusting the buttresses, neither of which is enforced in code. `slicing` gained a per-key validator, since a perimeter count and an angle cannot share one rule. **Unblocks IP-FC-28** |
-| OQ-DES-CW12 | What measures whether a ported part is correct, now that `Shape.Volume` cannot? | Not blocking — the port proceeds on the tessellated volume, alternative 1 |
-| OQ-DES-CW13 | Where does the tail's folded aft closure get fixed? | Not blocking — the closure is rebuilt at import, alternative 1 |
 | OQ-DES-CW16 | How is a cowl document built and shipped, when FreeCAD's own document booleans produce wrong geometry for this part? | Blocking the claim that a cowl `.FCStd` can be re-solved by someone who has only FreeCAD |
 | OQ-DES-CW17 | Two defects make the tail correct only near `U` = 1: the OML blank's faces are too coarsely subdivided for the cut, and the overlapping tools are fused before cutting. Fixing both, plus an exact C1 conversion that doubles the margin, holds the tail within 0.004% of OpenSCAD at every swept `U` and costs nothing on recompute. Adopt alternatives 3, 6 and 7 as one change? | Blocking the tail on the FreeCAD backend for every `U` except 1 |
 | OQ-DES-CW18 | `plate_thickness`, the two plate flange dimensions and `nose_flange_height` are swept per `U` but were never tuned — 3.2 mm against the reference's 0.8 mm at `U` = 4, a factor of 4.8 in the plate's material. Should they scale, hold fixed, or be derived from the printer? | Not blocking the port — but the committed reference cannot check the nose plate or nose tip above `U` = 1 until it is settled |
@@ -1435,77 +1433,75 @@ the renamed signatures.
 
 *Implementation: IP-FC-28, complete.*
 
-### OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot
+### ~~OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot~~ — RESOLVED 2026-09-09: alternative 1, adopted, with alternative 2 also built
 
-**Problem.** The FreeCAD port checks each part it builds by comparing the volume of material
-it encloses against the volume of the same part built by the existing OpenSCAD generator, and
-accepts the part when the two agree to within 0.010%. IP-FC-12 records the boom bulkhead
-passing at 0.00110%.
+**Both recommended alternatives are in the codebase, not just the recommendation.** Alternative
+1 — tessellated volume in place of `Shape.Volume` — is what every cowl comparison in IP-FC-12
+and IP-FC-13 has run on since 2026-08-31: the nose cowl and tail agreements quoted there
+(**−0.0000%**, **+0.0136%** and the rest) are all tessellated figures, and the 0.02 mm export
+deflection this item measures convergence against is the same value `build_part.py` exports
+the cowls at.
 
-That check reads the volume from FreeCAD's `Shape.Volume`, which computes it from the
-mathematical surfaces bounding the solid rather than from any approximation of them. Measured
-2026-08-31, that figure is not accurate enough for parts whose surfaces are **freeform** —
-the smoothly curving surfaces used for an aircraft's outer shape, stored as control points —
-rather than the planes, cylinders and cones every part ported so far is made of:
+Alternative 2 — comparing surfaces directly rather than volumes — was also built and promoted,
+under IP-FC-33: [`mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) samples the
+mesh against the B-rep surface and reports **max 0.000158 mm, mean 0.000025 mm** over 300
+points on a matching part against 57.310369 mm on a mismatched one — five orders of magnitude
+of separation, and it is now the tier IP-FC-33 records as strongest for exactly the reason this
+item gives: it never tessellates the B-rep side, so FreeCAD's own mesher never enters the
+comparison as a third variable.
 
-| shape | reported volume error |
-| --- | --- |
-| a sphere built as a primitive | **0.000000%** at r = 5, 25, 50 and 100 mm |
-| the *same sphere*, converted to a freeform surface | **−0.0437%**, identically at all four radii |
-| the nose cowl's outer surface | **+0.077%** |
-| the tail cowl's outer surface | **+6.79%** |
+Alternative 3 was not adopted, for the reason already given: a tolerance loose enough to
+absorb `Shape.Volume`'s error is loose enough to miss a real defect.
 
-The tail's figure is not caused by the defect in [OQ-DES-CW13](#open-questions) — it is
-unchanged after that defect is repaired. Three independent measurements of the tail (summing
-the volume enclosed by its triangles, summing each surface patch's contribution separately,
-and the triangle mesh OpenVSP exports directly) agree with one another to better than 0.02%
-and all disagree with `Shape.Volume`.
+*Implementation: [`freecad/mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) (surface
+distance) and the tessellated-volume checks throughout [IP-FC-12](../implementation/freecad_migration.md), [IP-FC-13](../implementation/freecad_migration.md) and [IP-FC-33](../implementation/freecad_migration.md).*
 
-So the acceptance tolerance is four times tighter than the instrument's own error on the
-simplest possible freeform shape, and roughly 700 times tighter than its error on the tail.
-Every cowl would fail the check while being geometrically correct. The more serious risk runs
-the other way: because the error is not bounded in a known direction or magnitude, a cowl that
-really is wrong could pass.
+### ~~OQ-DES-CW13 — Where the tail's folded aft closure gets fixed~~ — RESOLVED: alternative 1, as recommended and already implemented; alternative 2's provoking feature is now identified and confirmed
 
-Parts already ported are unaffected. The corner, both bulkheads and the boom bulkhead are
-built entirely from planes, cylinders and cones, where the figure is exact — the sphere
-primitive row above is the evidence that the instrument is sound on those.
+**Alternative 2 update (2026-09-09).** The provoking feature this alternative's own prerequisite asked for has been found and confirmed causally, not just correlated. `Tail`'s `XSecSurf` has 4 stations: `XS_POINT`, `XS_ROUNDED_RECTANGLE`, `XS_ROUNDED_RECTANGLE`, `XS_POINT` -- the aft closure sits at the last, a point. Surveying every station's skinning-continuity group (OpenVSP container `SkinXSec`, holding `AllSym`/`TBSym`/`RLSym` and the four sides' tangent angle and strength) across **both** `Nose` and `Tail` finds exactly one asymmetric station in either component: **`Tail` station 2**, the rounded-rectangle immediately before the aft point --
 
-**Alternatives.**
+    Top(angle=0.0deg, strength=0.75)   Bottom(angle=-30.0deg, strength=1.25)
+    Left(angle=-12.5deg, strength=3.00) Right(angle=-12.5deg, strength=3.00)
 
-1. **Measure the volume enclosed by the triangles instead.** Convert the finished solid to a
-   triangle mesh at the tessellation setting the export already uses, and sum the volume those
-   triangles enclose. *Benefits:* it is the same quantity the OpenSCAD side reports, since that
-   side is triangles all the way down, so the comparison becomes like-for-like rather than
-   surface-against-triangles; it needs about fifteen lines and no new dependency; and it agreed
-   with OpenVSP's own mesh to 0.001% on the tail. *Drawbacks:* the answer depends on the
-   tessellation setting, so the tolerance has to be stated against a fixed one; it is slower,
-   by roughly a second on the tail. *Prerequisites:* none.
-2. **Compare the surfaces directly, with `tools/surface_distance.py`.** Ask how far the ported
-   surface lies from the reference surface at its worst point. *Benefits:* it answers the
-   question the tolerance is really asking — has the shape moved — in millimetres, which is
-   inspectable against a print tolerance; a volume check can pass while a surface is locally
-   wrong by compensating errors. *Drawbacks:* it needs a reference mesh for every part, which
-   only the cowls currently have; it is much slower. *Prerequisites:* deciding the acceptance
-   distance, which is not the same question as the acceptance volume.
-3. **Keep `Shape.Volume` but loosen the tolerance for freeform parts.** *Benefits:* no new
-   code. *Drawbacks:* the loosened tolerance would have to be about 10%, which is wide enough
-   to admit a badly wrong part; and it would have to be justified per part rather than
-   derived, since the error is not predictable from the shape. *Prerequisites:* none.
-4. **Compare cross-sectional areas at stations along the part.** *Benefits:* localizes a
-   disagreement instead of reporting one number, which would have shortened this
-   investigation considerably. *Drawbacks:* substantially more code; sectioning a freeform
-   solid has its own failure modes, several of which were hit while diagnosing CW13.
-   *Prerequisites:* none.
+Left and Right agree with each other; Top and Bottom do not, by 30 degrees and a factor of 1.67
+in strength. Every other station in both components -- including `Nose`'s own point-terminated
+aft end, the "same kind of feature" that exports clean -- has Top = Bottom = Left = Right
+exactly, angle and strength both.
 
-**Recommendation.** Alternative 1, because it makes the two sides of the comparison the same
-kind of measurement, and it is the smallest change. Alternative 2 is worth adding afterwards
-for the cowls specifically, since a cowl is a shape rather than an assembly of features and
-"the surface has not moved by more than *x* mm" is the statement that actually matters for
-one. Alternative 3 should be rejected: a tolerance wide enough to accommodate this instrument
-is too wide to catch the errors the check exists to catch.
+**A name collision in OpenVSP's own parm set nearly hid this.** `GetXSecParmIDs` returns two
+unrelated parms both named `AllSym` (and `TBSym`, `RLSym`) on every station: the skinning
+group above (container `SkinXSec`) and an always-inert Chevron group (container `Ellipse`,
+`Chevron_Type = 0` on every station checked). A name-keyed dict over the returned parm IDs
+silently keeps whichever comes last, which is the Chevron one -- so a first attempt to test
+this by setting "`AllSym`" to 1 and re-exporting changed nothing, because it was toggling a
+flag with no effect on the geometry. Disambiguating by `GetParmContainer`/`GetContainerName`
+rather than by name alone is what finds the real parm.
 
-### OQ-DES-CW13 — Where the tail's folded aft closure gets fixed
+**Confirmed causal, not merely correlated.** Two exports of `Tail` alone, otherwise identical:
+setting the real `SkinXSec.AllSym` parm to 1 on station 2 (which propagates Bottom, Left and
+Right to Top's values -- 0.0deg, strength 0.75, all four sides) and re-exporting removes the
+fold entirely.
+
+| export | faces | folded faces | volume |
+| --- | --- | --- | --- |
+| unmodified | 12 | **4** (`[8, 9, 10, 11]`, exactly the closure `repair_closure` already targets) | -17970.614 |
+| station 2 symmetrized | 12 | **0** | -18100.276 |
+
+The volume moves 0.72% -- this is a real model change, not a repair confined to the importer,
+which is exactly alternative 2's own tradeoff as originally stated: it fixes the export at the
+source but changes the airframe definition, invalidating the recorded provenance hash and every
+already-exported artifact.
+
+**This does not change the recommendation, and is not itself an instruction to make the change.**
+Alternative 1 remains adopted and is unaffected -- it is shape-preserving and already shipped.
+What this finding does is remove alternative 2's own prerequisite ("finding the provoking
+feature, which needs an experiment") and its stated blocker ("not yet known what in the model
+provokes it, so the work is open-ended"). The recommendation's original condition for revisiting
+alternative 2 -- "once the port is running, at which point there is a working comparison to
+verify a model change against" -- is now met, since [OQ-DES-CW17](#open-questions) closed with
+the tail correct across the full swept range. Whether to actually flatten station 2's tangent
+asymmetry in the `.vsp3` is a decision about the airframe definition, not a drawing or port
+question, and is not made here.
 
 **Problem.** The tail's outer surface is exported from OpenVSP as twelve freeform patches.
 Four of them — the flat closure across the aft opening — are malformed. All four lie in a
@@ -1942,7 +1938,19 @@ last and should not be adopted on convenience grounds — it trades a correct pa
 convenient toolchain, which is the wrong way round, and the measurements above show the failure
 is not simply a matter of the slot being too narrow.
 
-### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1
+### ~~OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1~~ — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
+
+**Resolution note (2026-09-09).** The measured cure below — the blank reparameterised to C1,
+subdivided at every third knot into 129 faces, and the eleven tail tools cut individually
+rather than fused — is not just recommended, it is in the shipped code:
+[`oml_blank.condition()`](../../src/Fuselage/freecad/oml_blank.py) carries the reparameterisation
+and the subdivision and is called from `surface()`, and
+[`cowl_tree.tail_cowl()`](../../src/Fuselage/freecad/cowl_tree.py) builds one `Safe` cut per
+tool rather than cutting by a fused group. The domain check in alternative 1 was never added as
+a separate guard and is not needed — it was a stopgap for before the cure landed, superseded by
+alternatives 3, 6 and 7 actually fixing the whole swept range rather than merely fencing off the
+broken part of it. The investigation below is kept in full because it is what the fix rests on;
+read the header only for current status.
 
 **Problem.** `U` is the airframe's size multiplier: every dimension of the aircraft is written
 as a multiple of it, and the project sweeps `U` from 0.5 to 4.0. The tail cowl is made by
