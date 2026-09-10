@@ -157,18 +157,20 @@ def is_literal(value):
 #
 # Keyed by alias rather than by module because aliases are already effectively global:
 # `merge_params` refuses one that means two different things on a shared sheet.
-# **The last four entries are a symptom, not a design.** They are on the bulkhead's sheet only
-# because `bulkhead_section` merges `corner_tree.PARAMS` to reuse `corner_end`, and no bulkhead
-# geometry reads any of them -- setting FX to 7.0 on a built bulkhead and recomputing leaves
-# the volume unchanged to the last digit, as does perturbing the other three. Exempting them
-# here keeps `check_unseeded` honest in the meantime; IP-FC-56 is to stop them reaching that
-# sheet at all, after which these entries go with them.
+# **`FX`, `unit_length`, `greeble_tolerance` and `mid_h` were here, exempted as a symptom
+# rather than fixed.** They reached the bulkhead's sheet only because `bulkhead_section`
+# merged the whole of `corner_tree.PARAMS` to reuse `corner_end`, and no bulkhead geometry read
+# any of them -- setting FX to 7.0 on a built bulkhead and recomputing left the volume unchanged
+# to the last digit, as did perturbing the other three, confirmed independently by
+# `check_reachable_rows.py`'s expression-graph walk across all seven type/panel combinations a
+# bulkhead has. **IP-FC-56, done 2026-09-10**: `bulkhead_section.py` now merges a filtered view
+# of `corner_tree.PARAMS` that drops these and 22 more rows proved dead the same way, so none
+# of the 26 reach the bulkhead's sheet at all and none of them need an exemption here anymore.
+# `corner_tree.py` itself is untouched -- the corner's own sheet still carries every one of
+# them, `FX` and `greeble_tolerance` genuinely are the corner's own design parameters, and its
+# geometry reads both.
 #
-# `greeble_tolerance` and `FX` ARE design parameters -- of the corner. The corner's table
-# supplies both and its geometry reads both. What is wrong is their presence on the *other*
-# part's sheet, not their status.
-#
-# `corner_tolerance` is NOT one of those four, and is placed with `gt_tolerance` instead. The
+# `corner_tolerance` is NOT one of those, and is placed with `gt_tolerance` instead. The
 # bulkhead does read it -- `bulkhead_section` reuses `corner_end` to cut the greeble socket --
 # and the value it reads is a deliberate 0, exactly as `gt_tolerance` is.
 UNSEEDED = {
@@ -192,17 +194,6 @@ UNSEEDED = {
                         'is what enforces it -- bulkhead_parameters() does not export the row, '
                         'exactly as it does not export greeble_tolerance. On the CORNER\'s '
                         'sheet the row is seeded normally, from corner_parameters(). OQ-DES-C5',
-
-    # Inherited from corner_tree onto the bulkhead's sheet, read by nothing it builds.
-    # Measured, not assumed -- see the note above this table. IP-FC-56 removes them.
-    'FX': 'a bulkhead is independent of bay length (OQ-DES-C3), so it has no FX. This row is '
-          'corner_tree\'s, and the corner\'s table does supply it',
-    'unit_length': 'the corner\'s bay length, `=U * FX * 100`. Same inheritance as FX, and '
-                   'the bulkhead has no bay',
-    'greeble_tolerance': 'the CORNER-side fit clearance, and the corner\'s table supplies it. '
-                         'The bulkhead post is nominal, which the port states as gt_tolerance '
-                         'above rather than through this row',
-    'mid_h': 'the corner\'s middle section, which a bulkhead does not have',
 }
 
 

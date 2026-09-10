@@ -117,8 +117,23 @@ ANGULAR_DEFLECTION = 0.5
 # move both of those. The prismatic parts pass today; extending this to them is a separate
 # question and needs its own measurement.
 COWL_LINEAR_DEFLECTION = 0.02
-COWL_KINDS = ('nose_cowl', 'nose_nose', 'nose_plate', 'tail',
-              'nose_cowl_shell', 'tail_shell')
+COWL_KINDS = ('nose_cowl', 'nose_nose', 'tail', 'nose_cowl_shell', 'tail_shell')
+
+# **`nose_plate` was here and it was a miscategorization, not a design choice -- IP-FC-136.**
+# It reads like a cowl kind because `nose_render` builds it, but `cowl.nose_plate()` is three
+# `Part.makeCylinder`/`Part.makeCone` calls fused and cut -- exactly the "planes, cylinders and
+# cones" shape the comment above says a mesher covers cheaply at any deflection, not the
+# freeform OpenVSP surface `COWL_LINEAR_DEFLECTION` exists for. Carrying it here anyway cost
+# real accuracy: at `U` = 1 `COWL_LINEAR_DEFLECTION * U` = 0.02 mm gave a mesh 0.0148% off the
+# part's own exact B-rep volume (2883.546217 mm3, read from the FCStd `compare_backends`
+# `--keep` preserved), nearly three times `LINEAR_DEFLECTION`'s 0.001mm mesh (0.0007% off the
+# same shape) -- and it was the reason `nose_plate` failed its own `TOL_EXACT` cross-backend
+# check at `U` = 1, 2 and 3 while passing at `U` = 0.5, where the coarser deflection happened
+# to still be fine enough. Re-meshed at `LINEAR_DEFLECTION` and re-measured against the same
+# OpenSCAD reference: 0.00395%, 0.00452%, 0.00487%, 0.00496% at `U` = 0.5, 1, 2, 3 -- comfortably
+# inside 0.006% at every one, where OpenSCAD's own fixed-resolution mesh was the entire
+# remaining gap. Not a tolerance loosened to pass a check: the same tolerance, a part correctly
+# excused from a coarsening it never needed.
 
 # Do NOT reach for `Mesh.Volume` to check any of this. It accumulates in single precision and
 # gets *worse* as the mesh gets finer: on the 173 408-facet mesh above it reports

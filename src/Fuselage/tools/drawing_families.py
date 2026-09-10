@@ -245,6 +245,13 @@ DIMENSION_SCHEME = os.path.join(
 # of the two actually carries it falls out of the mapping intersection, since a boom collet's
 # names exist only in the boom mapping.
 #
+# **A register row's *Stated by* cell may name more than one part**, decided in OQ-DES-D10 on
+# 2026-09-09 -- `read_register` returns it as a tuple, and `interface_fields` demands the row's
+# names of `kind` if *any* name in the tuple carries `kind`. Row 3 is the one row that does this
+# today: `corner, bulkhead`, since the bulkhead has always dimensioned the corner's seating
+# faces too (`corner_seat_offset`, OQ-DES-D6) and the register previously named only the corner,
+# which was the *clearance* attribution rather than the *drawing obligation* one.
+#
 # **A row may name a type instead of a part**, decided in OQ-DES-D6 on 2026-08-28. The mapping
 # intersection cannot separate the frame bulkhead's five types, because they share one
 # parameter mapping -- so a joint that only one type has was being demanded of all five. Row 7
@@ -260,6 +267,10 @@ DIMENSION_SCHEME = os.path.join(
 # IP-FC-110: row 5 reads *panelled bulkhead* for the same reason, decided generally in
 # OQ-DES-D12 on 2026-09-06 -- a bulkhead with no panel was still being asked for `panel_offset`,
 # since that name stays nonzero whether or not the part has a panel to offset.
+#
+# OQ-DES-D10: row 3's second carrier is `seated bulkhead`, not the bare `bulkhead` row 6 already
+# uses -- the two rows need different gating (below) and `CARRIED_BY_FEATURE` gates by phrase,
+# not by row, so sharing one phrase between them would force one gate onto both.
 CARRIED_BY = {
     'corner': ('corner',),
     'bulkhead': ('bulkhead', 'boom_bulkhead'),
@@ -267,6 +278,7 @@ CARRIED_BY = {
     'cowling bulkhead': ('bulkhead',),
     'bolted bulkhead': ('bulkhead',),
     'panelled bulkhead': ('bulkhead', 'boom_bulkhead'),
+    'seated bulkhead': ('bulkhead', 'boom_bulkhead'),
 }
 
 # A carried-by entry may be restricted to the families that have its *feature*, decided in
@@ -298,6 +310,15 @@ CARRIED_BY_FEATURE = {
     'panelled bulkhead': ('panel.thickness != 0', (True,)),
     'cowling bulkhead': ('bulkhead.type', ('COWLING',)),
     'bolted bulkhead': ('bulkhead.type', ('END', 'COWLING')),
+    # OQ-DES-D10: row 3's corner-seating-flat joint, referred to via the same
+    # `PRESENCE_CONDITIONS` predicate the family partition already computes rather than a second
+    # copy of it. Found while giving the boom bulkhead its own annotation set (IP-FC-21): the
+    # boom bulkhead has no corner seating flat at all -- `corner_seat_span` returns `None` for
+    # it, so `topology_of()` writes `'absent'`, which is not `True` and so does not match. A
+    # frame bulkhead family where the panel branch wins also reads `False`, not `True`, so the
+    # gate correctly narrows there too -- `bulkhead_annotations` still states the joint on those
+    # families, under the panel-branch names its `corner_seat_offset` quantity already carries.
+    'seated bulkhead': ('corner seating flat', (True,)),
 }
 
 
@@ -317,7 +338,14 @@ def _identifiers(cell, aliases):
 
 
 def read_register(path=None):
-    """Section 2's interface register, as rows of (number, consumed names, clearance, part).
+    """Section 2's interface register, as rows of (number, consumed names, clearance, parts).
+
+    **`parts` is a tuple, not a single name**, since OQ-DES-D10 split the register's carrier
+    column into *Clearance on* and *Stated by* and a *Stated by* cell may name more than one
+    drawing -- row 3 reads `corner, bulkhead` because the bulkhead has always dimensioned the
+    corner's seating faces too (`corner_seat_offset`, OQ-DES-D6), and the register said so only
+    for the manufacturing fact, not for the drawing obligation. `interface_fields` asks whether
+    `kind` is carried by *any* name in the tuple.
 
     **Why the register and not only the constants file.** Section 3 says the completeness test
     rides on `design_constants.json`, on the argument that each tolerance entry's `why`
@@ -360,14 +388,16 @@ def read_register(path=None):
     rows = []
     for line in body.splitlines():
         cells = [c.strip() for c in line.strip().strip('|').split('|')]
-        if len(cells) != 5 or not cells[0].isdigit():
+        if len(cells) != 6 or not cells[0].isdigit():
             continue
-        number, _joint, expression, clearance, part = cells
+        number, _joint, expression, clearance, _clearance_on, stated_by = cells
+        parts = tuple(p.strip() for p in stated_by.split(','))
         rows.append((int(number), _identifiers(expression + ' ' + clearance, aliases),
-                     _identifiers(clearance, aliases), part))
+                     _identifiers(clearance, aliases), parts))
     if not rows:
         raise RuntimeError('no register rows parsed out of %s -- the table in section 2 is '
-                           'not in the five-column form this reads'
+                           'not in the six-column form this reads (OQ-DES-D10 split the '
+                           'carrier column into "Clearance on" and "Stated by")'
                            % (path or DIMENSION_SCHEME))
     return rows
 
@@ -386,15 +416,17 @@ def interface_fields(kind, mapping_keys, register=None, signature=None):
     """
     wanted = set()
     have = dict(signature) if signature is not None else None
-    for _number, names, _clearance, part in (register or read_register()):
-        if kind not in CARRIED_BY.get(part, ()):
-            continue
-        gate = CARRIED_BY_FEATURE.get(part)
-        if gate is not None and have is not None:
-            key, values = gate
-            if have.get(key) not in values:
+    for _number, names, _clearance, parts in (register or read_register()):
+        for part in parts:
+            if kind not in CARRIED_BY.get(part, ()):
                 continue
-        wanted |= names
+            gate = CARRIED_BY_FEATURE.get(part)
+            if gate is not None and have is not None:
+                key, values = gate
+                if have.get(key) not in values:
+                    continue
+            wanted |= names
+            break
     return sorted(wanted & set(mapping_keys))
 
 
@@ -445,7 +477,7 @@ def check_register(register=None):
             problems.append(
                 '%s is a clearance in design_constants.json with no row in the interface '
                 'register, so no drawing is obliged to carry its joint' % name)
-    for part in sorted({p for _n, _names, _c, p in register}):
+    for part in sorted({p for _n, _names, _c, parts in register for p in parts}):
         if part not in CARRIED_BY:
             problems.append(
                 'the register says a joint is carried by %r, which is not a part this '

@@ -82,7 +82,11 @@ PARAMS = [
     ('ic_x_center', '=-sqrt((ic_big_r + web_fillet_radius) ^ 2 - min(step_y, 0) ^ 2)'),
     ('ic_y_end', '=max(step_y * ic_big_r / (ic_big_r + web_fillet_radius), step_y)'),
     ('ic_x_end', '=ic_x_center * ic_big_r / (ic_big_r + web_fillet_radius)'),
-    ('ic_y_end_lo', '=min(ic_y_end, 0)'),
+    # `ic_y_end_lo` (`=min(ic_y_end, 0)`) was here, mirroring the source's own
+    # `[x_end, min(y_end, 0)]` -- but the port took that branch in Python instead
+    # (`if y_end >= 0.0:` below, reading `ic_y_end` directly), so nothing ever read this row.
+    # IP-FC-56: removed 2026-09-10, confirmed by grep that its only appearance in this file
+    # was its own declaration.
 ]
 
 
