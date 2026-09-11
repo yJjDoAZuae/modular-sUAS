@@ -287,6 +287,7 @@ def main(argv):
     bodies = []
     note_text = []
     table_drawn = None
+    table_anchor = None
     for run in ('a', 'b'):
         doc = App.newDocument('check_drawing_' + kind + '_' + run)
         try:
@@ -373,7 +374,15 @@ def main(argv):
             # pass whatever it drew.
             table = None
             if family is not None and family.get('quantity_blocks'):
-                table = sheet_table.layout(family['quantity_blocks'], family['letters'])
+                # `drawing.sheet_blocks`, not a bare `sheet_table.layout` call, so this is
+                # laid out at the same text height the real sheet was -- `build_sheets` picks
+                # the largest of several that fits, and a bare `layout()` call defaults to one
+                # height regardless, which is only the same one by chance. Found 2026-09-10:
+                # the anchor `sheet_blocks` also returns is what `page_point` needs below, and
+                # its absence was the actual bug -- the call there was missing it entirely.
+                table, _key, _coverage, _height, anchors = drawing.sheet_blocks(
+                    family, exported.get('variant'), siblings)
+                table_anchor = anchors[0]
                 band = std.table_region_mm()
                 print('  value table         %.1f x %.1f mm into a %.1f x %.1f band, '
                       '%d cells, %d rules'
@@ -470,8 +479,8 @@ def main(argv):
         placed = dxf_lines(text)
         want = set()
         for (x1, y1), (x2, y2) in table_drawn.rules:
-            a = drawing.page_point((x1, y1))
-            b = drawing.page_point((x2, y2))
+            a = drawing.page_point((x1, y1), table_anchor)
+            b = drawing.page_point((x2, y2), table_anchor)
             want.add((round(min(a[0], b[0]), 2), round(min(a[1], b[1]), 2),
                       round(max(a[0], b[0]), 2), round(max(a[1], b[1]), 2)))
         found = want & placed
