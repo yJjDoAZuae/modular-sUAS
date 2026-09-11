@@ -594,10 +594,18 @@ def layout_at(shape, direction, x_direction, scale, frame, dimensions, notes,
     against its own region, at its own scale.
     """
 
+    # IP-FC-84: `dp.Dimension`'s `letter` is the object-naming key ("DimA"), never what the
+    # sheet displays -- `quantity.written(product)` answers that second question and is
+    # right for a note's own text, but calling it here for `letter` handed a rendered number
+    # like '10.00' to a slot that validates against the callout alphabet, and the check
+    # correctly refused it the moment single-variant sheets were built for the first time.
+    # `quantity.letter` is always a real letter for anything that reaches this loop: a
+    # constant quantity is never given one, and by convention (`sheet_annotations.py`) a
+    # constant is never put on a dimension line either.
     placed_dimensions = []
     for quantity, p1, p2, axis, value in dimensions:
         placed_dimensions.append(dp.Dimension(
-            quantity.written(product),
+            quantity.letter,
             project(p1, direction, x_direction, scale),
             project(p2, direction, x_direction, scale),
             axis, value,
@@ -850,7 +858,8 @@ def arrangement_score(built):
 
 
 def place_views(page, tip, specs, direction, x_direction, regions,
-                dimensions, notes, construction, suffix='', all_specs=None):
+                dimensions, notes, construction, suffix='', all_specs=None,
+                product=FAMILY):
     """Build every view into its region, or raise `PlacementError` naming the one that failed.
 
     Returns a list of `BuiltView`. Each view searches its own scale against its own region,
@@ -887,7 +896,7 @@ def place_views(page, tip, specs, direction, x_direction, regions,
         try:
             scale, layout, ceiling = choose_scale(
                 source.Shape, direction, x_direction, frame, unit_offset,
-                view_dimensions, view_notes, view_construction)
+                view_dimensions, view_notes, view_construction, product)
         except dp.PlacementError as exc:
             raise dp.PlacementError(
                 'the %s view, given %.1f x %.1f mm, could not be placed:'
@@ -1392,7 +1401,13 @@ def build_sheets(doc, kind, params_path, params, family=None, variant=None,
         say('  blocks at %.1f mm lettering; each view has %.1f%% of its frame'
             % (table_height, 100.0 * (frame_h - band_depth) / frame_h))
 
-    _quantities, dimensions, notes, declared, specs = ANNOTATIONS[kind](params, FAMILY)
+    # IP-FC-84: a sheet with no family carries no value table to look a callout letter up
+    # in, so its view has to carry the number instead -- `sheet_blocks` already returns
+    # `(None, None, None, ...)` for this case, this is the other half. `family is not None`
+    # rather than a caller-stated flag: the two have never disagreed before now, and a
+    # single source keeps them from being asked to.
+    product = FAMILY if family is not None else VARIANT
+    _quantities, dimensions, notes, declared, specs = ANNOTATIONS[kind](params, product)
     unaccounted = sheet_annotations.check_views(specs, dimensions, notes)
     if unaccounted:
         raise dp.PlacementError(
@@ -1409,7 +1424,7 @@ def build_sheets(doc, kind, params_path, params, family=None, variant=None,
             built = place_views(page, tip, [spec], direction, x_direction, [region],
                                 dimensions, notes, construction,
                                 suffix='' if number == 1 else str(number),
-                                all_specs=specs)
+                                all_specs=specs, product=product)
         except dp.PlacementError as exc:
             raise dp.PlacementError(
                 'sheet %d of %d, the %s view:' % (number, len(specs), spec.name) + NEWLINE

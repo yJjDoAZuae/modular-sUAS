@@ -3,6 +3,16 @@
     freecadcmd build_sheet.py --pass params.json --pass families.json --pass kind=corner \\
         --pass key=corner-corner-7faa02 --pass out=C:/path/without/extension
 
+**IP-FC-84: a `families.json` and `key` are how a family sheet is asked for, and a
+single-variant sheet is not one of those** -- there is nothing to look up a callout letter in,
+which `drawing.build_sheets` has known since 2026-09-10 (`family=None` draws the numbers
+instead). So the second and third arguments are optional here too: passing only `params.json`
+and `kind=` builds that one variant's own sheet, letters replaced by the values they would have
+pointed at.
+
+    freecadcmd build_sheet.py --pass params.json --pass kind=corner \\
+        --pass out=C:/path/without/extension
+
 **Why this exists next to `check_drawing.py` rather than inside it.** `drawing.py` can build a
 sheet and `drawing_families.py` says which sheets the set needs, and until now the only thing
 joining them was a *checker* -- `check_drawing.py` builds one sheet, for one kind, from one
@@ -96,13 +106,16 @@ def export(sheets, stem):
 def main():
     argv = script_args()
     paths = [a for a in argv if a.endswith('.json')]
-    if len(paths) < 2:
-        print('usage: build_sheet.py --pass params.json --pass families.json '
-              '--pass kind=KIND --pass key=FAMILY_KEY --pass out=STEM')
+    if not paths:
+        print('usage: build_sheet.py --pass params.json '
+              '[--pass families.json --pass key=FAMILY_KEY] --pass kind=KIND --pass out=STEM')
         return 2
-    params_path, families_path = paths[0], paths[1]
+    params_path = paths[0]
+    families_path = paths[1] if len(paths) > 1 else None
     kind = _opt('kind')
-    key = _opt('key')
+    # `''` rather than the usual default-means-required: a single-variant sheet has no key to
+    # give, and `_opt`'s own default of `None` would refuse a run that correctly omitted one.
+    key = _opt('key', '') or None
     stem = _opt('out')
 
     if kind not in sheet_annotations.ANNOTATIONS:
@@ -114,32 +127,37 @@ def main():
         exported = json.load(handle)
     params = exported[check_drawing.PARAMS_KEY[kind]]
 
-    with open(families_path, encoding='utf-8') as handle:
-        document = json.load(handle)
+    family = None
+    siblings = []
+    if families_path is not None:
+        if key is None:
+            print('usage: key=FAMILY_KEY is required alongside a families.json')
+            return 2
+        with open(families_path, encoding='utf-8') as handle:
+            document = json.load(handle)
 
-    named = [f for f in document['families'] if f['key'] == key]
-    if not named:
-        print('no family keyed %r in %s' % (key, families_path))
-        return 2
-    family = named[0]
+        named = [f for f in document['families'] if f['key'] == key]
+        if not named:
+            print('no family keyed %r in %s' % (key, families_path))
+            return 2
+        family = named[0]
 
-    # Told which, and worked out which. Both, because they can disagree.
-    derived = check_drawing.family_of(
-        document, kind, params, (exported.get('variant') or {}).get('bulkhead_type_name'))
-    if derived is None or derived['key'] != family['key']:
-        print('REFUSED: asked for %s, but these parameters belong to %s. A sheet drawn '
-              'against the wrong family carries a table of columns this part has no '
-              'dimensions for.'
-              % (key, derived['key'] if derived else 'no family of this kind'))
-        return 1
+        # Told which, and worked out which. Both, because they can disagree.
+        derived = check_drawing.family_of(
+            document, kind, params, (exported.get('variant') or {}).get('bulkhead_type_name'))
+        if derived is None or derived['key'] != family['key']:
+            print('REFUSED: asked for %s, but these parameters belong to %s. A sheet drawn '
+                  'against the wrong family carries a table of columns this part has no '
+                  'dimensions for.'
+                  % (key, derived['key'] if derived else 'no family of this kind'))
+            return 1
+        siblings = [f for f in document['families'] if f.get('kind') == kind]
 
-    doc = App.newDocument('sheet_' + key.replace('-', '_'))
+    doc = App.newDocument('sheet_' + (key.replace('-', '_') if key else kind))
     try:
         sheets = drawing.build_sheets(
             doc, kind, params_path, params, family,
-            variant=exported.get('variant'),
-            siblings=[f for f in document['families'] if f.get('kind') == kind],
-            say=print)
+            variant=exported.get('variant'), siblings=siblings, say=print)
     except dp.PlacementError as exc:
         # Section 5.6: an unplaceable sheet is a drafting decision to be made deliberately,
         # and a traceback is a worse way to say so than the refusal's own words.
@@ -159,12 +177,13 @@ def main():
         os.makedirs(folder)
     written = export(sheets, stem)
 
+    label = key or kind
     for sheet in sheets:
         layout = sheet.view.layout
         scale = sheet.view.scale
         print('  %-42s %2d dimensions, %2d note(s), scale %s'
-              % ('%s (sheet %d of %d)' % (key, sheet.number, len(sheets))
-                 if len(sheets) > 1 else key,
+              % ('%s (sheet %d of %d)' % (label, sheet.number, len(sheets))
+                 if len(sheets) > 1 else label,
                  len(layout), len(layout.notes),
                  '%g:1' % scale if scale >= 1.0 else '1:%g' % (1.0 / scale)))
     for path in written:
