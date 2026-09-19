@@ -2,7 +2,7 @@
   "captured_at_repo_commit": "fcfeefa453f472d815cca545a22f52786217cd5b",
   "captured_utc": "2026-08-18T13:45:09+00:00",
   "manifest_version": 1,
-  "note": "This tree is NOT a render of this repository. Its stored .stl.scad files name their library under the pre-migration Archive/Alex/Designs/modular_sUAS/Fuselage tree, so no commit here produced it and none should be recorded as though one had. It is the frozen reference for the FreeCAD port per OQ-ARCH-15, and is retired only after the PartDesign end state, on a reviewed sign-off.",
+  "note": "This tree is NOT a render of this repository. Its stored .stl.scad files name their library under a personal, machine-local pre-migration directory that no longer resolves, so no commit here produced it and none should be recorded as though one had. It is the frozen reference for the FreeCAD port per OQ-ARCH-15, and is retired only after the PartDesign end state, on a reviewed sign-off.",
   "part_count": 576,
   "parts": {
     "U_0.5/imperial/panel_1_32in/bulkhead/U_0.5__imperial_panel_1_32in__boom_bulkhead_center_single.stl": {
@@ -6918,7 +6918,7 @@
       "volume": 38035749.163755074
     }
   },
-  "source_repository": "pre-migration Archive/Alex/Designs/modular_sUAS -- see note",
+  "source_repository": "personal, machine-local pre-migration directory -- see note",
   "tree_name": "variant_output_baseline",
   "unreadable": []
 }

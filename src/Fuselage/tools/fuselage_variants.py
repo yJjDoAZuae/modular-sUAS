@@ -1524,8 +1524,8 @@ def relativize_scad_references(scad_path):
     solid2's resolve_scad_filename() calls .absolute() unconditionally, so every
     generated file records the exact directory it was produced in. The
     2025-09-22 sweep was run from a mapped drive, and all 1774 of its .scad
-    files still say `use <R:\\Alex\\...>` -- a path that resolves nowhere now, so
-    none of them can be re-rendered.
+    files still name a personal, machine-local directory that no longer
+    resolves, so none of them can be re-rendered.
 
     OpenSCAD resolves `use` and `include` against the directory of the file
     containing them, so a path relative to the generated file is both correct

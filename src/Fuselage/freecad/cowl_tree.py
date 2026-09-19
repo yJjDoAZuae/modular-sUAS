@@ -142,7 +142,7 @@ class _ShapeBoolean(object):
     only for 7-bit ASCII, and the value is read *once at module load* (`AppPart.cpp`), so setting
     the parameter from a running session does nothing. Whether the port adopts that -- it is a
     per-install setting, and a file that silently depends on one fails as a wrong part rather
-    than an error -- is alternative 6 of OQ-DES-CW16, which is Alex's call, not this module's.
+    than an error -- is alternative 6 of OQ-DES-CW16, which is the maintainer's call, not this module's.
 
     **1.1.3 fixes the cut and only the cut.** `PartDesign::Boolean` gains a `FuzzyTolerance`
     property, and at 0 it reproduces the reference solid exactly, zero symmetric difference,

@@ -4,9 +4,11 @@ The bulkhead is built ONCE: it never sees the tolerance. Its socket is cut from 
 description at zero, so the joint carries the clearance once, on the corner.
 """
 import json
+import os
 import sys
 
-sys.path.insert(0, '//mrhorse/Archive/Alex/modular-sUAS-project/modular-sUAS/src/Fuselage/freecad')
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 '..', '..', 'freecad'))
 
 import FreeCAD as App
 import Part

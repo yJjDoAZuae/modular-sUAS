@@ -2540,8 +2540,8 @@ reviewed in detail — part by part, against the ledger — and only then is
 a person signing off on the accumulated difference, not a side effect of a convenient moment.
 
 **One thing to fix regardless.** `variant_output_baseline` is not a render of this repository:
-its stored `.stl.scad` files name their library under a local, pre-migration
-`Archive\Designs\modular_sUAS\Fuselage\` tree, and no tree in the corpus records the
+its stored `.stl.scad` files name their library under a personal, machine-local
+pre-migration directory that no longer resolves, and no tree in the corpus records the
 commit that produced it. Freezing a reference makes recording its provenance more important
 rather than less, since the ledger's entries are meaningless without knowing what they are
 departures *from*. The manifest proposed as alternative 2 is therefore still wanted — not to

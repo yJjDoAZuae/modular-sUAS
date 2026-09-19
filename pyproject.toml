@@ -26,6 +26,12 @@ dev = [
     # without these the notebook cannot be opened in this environment at all.
     "jupyterlab>=4.0",
     "ipykernel>=6.29",
+    # Strips outputs and metadata from every .ipynb in the repo on commit -- installed
+    # as a git filter via `uv run nbstripout --install` (see .gitattributes: the rule
+    # is `*.ipynb`, not tied to any one notebook). Without it, a captured cell output
+    # is committed verbatim, including whatever path or machine-local detail happened
+    # to be on screen when the cell last ran.
+    "nbstripout>=0.7",
 ]
 
 [tool.uv]

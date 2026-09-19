@@ -11,8 +11,8 @@ Freezing a reference raises two questions this module answers, and one it cannot
 
 **What is the baseline?** Nothing recorded it. The tree carries no statement of the
 commit that produced it, and it is not in fact a render of this repository at all: its
-stored `.stl.scad` files name their library under a local, pre-migration
-`Archive\\Designs\\modular_sUAS\\Fuselage\\` tree. A ledger of departures means
+stored `.stl.scad` files name their library under a personal, machine-local
+pre-migration directory that no longer resolves. A ledger of departures means
 nothing without a statement of what they depart from, so the manifest records that
 provenance explicitly rather than leaving it to be rediscovered by whoever next reads a
 generated file.
@@ -60,8 +60,9 @@ MANIFEST_VERSION = 1
 # happened to be at capture time. See the module docstring.
 PROVENANCE_NOTE = (
     "This tree is NOT a render of this repository. Its stored .stl.scad files name their "
-    "library under a local, pre-migration Archive/Designs/modular_sUAS/Fuselage tree, so "
-    "no commit here produced it and none should be recorded as though one had. It is the "
+    "library under a personal, machine-local pre-migration directory that no longer "
+    "resolves, so no commit here produced it and none should be recorded as though one "
+    "had. It is the "
     "frozen reference for the FreeCAD port per OQ-ARCH-15, and is retired only after the "
     "PartDesign end state, on a reviewed sign-off."
 )
@@ -106,7 +107,7 @@ def capture(tree: Path, out: Path) -> int:
         "note": PROVENANCE_NOTE,
         "captured_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "captured_at_repo_commit": git_head(),
-        "source_repository": "local, pre-migration Archive/Designs/modular_sUAS -- see note",
+        "source_repository": "personal, machine-local pre-migration directory -- see note",
         "part_count": len(parts),
         "unreadable": bad,
         "parts": parts,
