@@ -1370,8 +1370,15 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # assembling the same set -- cut the ribs out of this and cut the result out of the
         # blank, or cut this out of the blank and fuse back the part the ribs occupy -- and the
         # comparison only means anything if both are assembled from the *identical* operands.
-        # Handing the surface out here is what makes that one fit instead of two. Nothing in
-        # production passes a report at all: `cowl_tree` calls `shell_solid` without one.
+        # Handing the surface out here is what makes that one fit instead of two.
+        #
+        # **Production does pass a report, since 2026-09-11** -- `cowl_tree._CowlShell` wants
+        # `partition_slip` out of `shell_solid` for IP-FC-117's soak, and this is the channel
+        # that already existed for it. It was true until then that nothing in production
+        # passed one, and the note is kept rather than deleted because what it was guarding
+        # still holds: everything put in here is either already computed for the `note` below
+        # or a length, so a report costs a build nothing measurable, and it must stay that
+        # way. The shapes handed out are references, dropped when the caller's dict goes.
         report.update(stations=chosen, smooth_volume=smooth.Volume,
                       smooth_faces=len(smooth.Faces), smooth_shape=smooth)
     note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
@@ -1383,6 +1390,27 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # and partially fails on another -- the failure is silent, because a cavity with a rib left
     # in it is still a valid closed solid. Fusing first costs a few seconds and gives the
     # kernel one boolean to reason about instead of twenty-two.
+    #
+    # **IP-FC-116's route (a) -- cut one tool at a time with the residue check after each --
+    # was tried here and reverted, 2026-09-11.** The item cites a harness measurement of 202 s
+    # against 256 s for cutting one at a time. Run end to end on the real tail at `U` = 1
+    # instead of in that harness, cutting one at a time cost **485 s** against this route's
+    # **330 s** -- 47% slower, not faster, and a second attempt deferring `removeSplitter` to
+    # once after the loop, in case 22 cleanup passes over a growing shape were the cause,
+    # measured 498 s, no better. **What says the geometry was unaffected is the residue and
+    # the topology, not the volume**: both variants closed with 0.000000 mm3 of rib left
+    # inside, one valid solid, and a worst wall error matching this route's to the fourth
+    # decimal (0.0480 against 0.0479). Their `Shape.Volume` figures agree to 0.07% as well,
+    # but that is not evidence and is recorded only so the numbers are not mistaken for it --
+    # IP-FC-119 measured `Shape.Volume` wrong by 0.16 to 0.24% on exactly these B-spline
+    # solids, so a 0.07% agreement sits *inside* the instrument's own error and would look
+    # the same whether the walls matched or not. So the geometry was never in question on
+    # the evidence that can carry it, only the time, and cutting one
+    # tool at a time against a solid whose face count grows with every prior cut is simply
+    # more expensive than fusing the tools first and handing the kernel one clean cut against
+    # the pristine interior. The harness that produced 202/256 was not this function and
+    # evidently was not representative of it; kept as the reference for what to re-examine if
+    # this is revisited, not as a result to trust unverified again.
     ribs = dilated_notches(notches, t, report)
     at = time.time()
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()

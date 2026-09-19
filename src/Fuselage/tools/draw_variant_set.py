@@ -166,6 +166,13 @@ def build_set(u, panel, out_dir, freecadcmd, say=print):
     return drawn, owed
 
 
+def pair_dir(out_dir, u, panel):
+    """Where one (`U`, panel) set lives under `out_dir`. Factored out so
+    `sweep_variant_sets.py`, which calls `build_set` directly rather than through `main`,
+    names the same directory `main` would -- one string literal, not two copies to drift."""
+    return os.path.join(out_dir, 'U%s_%s' % (u, str(panel).replace('/', '-')))
+
+
 def main(argv):
     if len(argv) < 2:
         print('usage: draw_variant_set.py U PANEL [--out DIR]')
@@ -175,7 +182,7 @@ def main(argv):
     out_dir = DEFAULT_OUT
     if '--out' in argv:
         out_dir = argv[argv.index('--out') + 1]
-    out_dir = os.path.join(out_dir, 'U%s_%s' % (u, panel.replace('/', '-')))
+    out_dir = pair_dir(out_dir, u, panel)
 
     try:
         freecadcmd = freecad_render.freecadcmd_path()

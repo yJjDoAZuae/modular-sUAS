@@ -39,6 +39,7 @@ sys.path.insert(0, HERE)
 import FreeCAD as App
 
 import corner_common
+import cowl_interior
 import parameters
 import part_kinds
 from corner_common import is_entry_point
@@ -305,7 +306,19 @@ def main():
     opt = parse(sys.argv[1:])
 
     doc = App.newDocument('build')
-    tip = build(doc, opt['kind'], opt['params'])
+    # **`PreconditionFailed` is caught here, not left to propagate.** It is how P1, P2, P4 and
+    # IP-FC-137's `U` floor all say the same thing -- this input is outside the domain the
+    # construction was written for -- and an uncaught exception here does not exit non-zero:
+    # freecadcmd tears the interpreter down and reports 0 regardless, which is exactly the
+    # "exit code that means what it says" this module's own docstring promises and the isValid
+    # check below exists to keep. Measured 2026-09-12 before this catch was added: a `tail_shell`
+    # refused for being under IP-FC-137's `U` floor printed its message and still exited 0.
+    try:
+        tip = build(doc, opt['kind'], opt['params'])
+    except cowl_interior.PreconditionFailed as exc:
+        sys.stderr.write('build_part: %s: %s\n' % (opt['kind'], exc))
+        sys.stdout.flush()
+        return 1
     doc.recompute()
 
     shape = tip.Shape

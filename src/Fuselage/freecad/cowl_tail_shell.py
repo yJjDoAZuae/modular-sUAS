@@ -15,13 +15,36 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import cowl_interior
 import cowl_tree
 from corner_common import is_entry_point
 
 PARAMS = cowl_tree.PARAMS_TAIL_SHELL
 
+#: IP-FC-137, measured 2026-09-12: the lowest `U` this construction is known to build at, not a
+#: theoretical bound and not a tolerance to widen -- no fix for the underlying rib cut is known
+#: (steps 1-2 named the operand and confirmed the residue is real, not a `Shape.Volume`
+#: artefact; step 4 is this floor). Every `U` tried below it failed, and not gracefully: `U` =
+#: 0.5, 0.7 and 0.75 raised `ValueError: Null shape` on the rib-cut retry in every one of three
+#: independent builds each (residue 5540.9-6006.8, 15982.45, and 5931.8-18333.3 mm3
+#: respectively -- 0.7 is *worse* than 0.5, not partway to safe); `U` = 0.6 additionally varied
+#: between builds of identical inputs (residue 0, 681.8 and 4082.6 mm3, one of the three failing
+#: one step later instead, at the final wall cut). Every `U` tried at or above this floor built
+#: cleanly. Nose is unaffected at any of these -- it is the tail's 22-tool cut, not the shared
+#: path -- so this guard is here and not in `cowl_tree`.
+MIN_U = 0.8
+
+_DEFAULT_U = float(dict(PARAMS)['U'])
+
 
 def emit(doc, seed=None, overlay=None):
+    u = float(seed['U']) if seed and 'U' in seed else _DEFAULT_U
+    if u < MIN_U:
+        raise cowl_interior.PreconditionFailed(
+            'tail_shell at U=%.4g is below %.4g, the lowest U this construction is known to '
+            'build at (IP-FC-137). U=0.5, 0.6, 0.7 and 0.75 all fail cavity()\'s rib cut in '
+            'direct testing; U=0.8 and above have not. Refusing now rather than spending the '
+            'build only to hand back a null shape at the end.' % (u, MIN_U))
     return cowl_tree.emit(doc, seed, PARAMS, cowl_tree.tail_shell)
 
 

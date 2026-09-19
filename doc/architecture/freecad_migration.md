@@ -753,6 +753,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 | ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 | ARCH-18 | ~~withdrawn~~ 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
+| ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
 
 ### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
 
@@ -2919,6 +2920,99 @@ where one side is only ever a mesh.
 **Implemented under IP-FC-122.** What is not yet shown is that the comparison still passes at
 `U` ≠ 1, since every FreeCAD cowl STL there now changes; that needs a `compare_backends` run over
 the cowl kinds at several `U`.
+
+### OQ-ARCH-21 — How is the reproducibility criterion sampled?
+
+[OQ-ARCH-19](#open-questions) decided when two builds of one part are the same part: the
+symmetric difference `XOR / (A · 100U)` at most **1.0e-6**, and no sampled surface gap over
+**5.0e-5** of `100U`. Both numbers come from `solid_measure.surface_difference`, which
+estimates them by scattering points over one solid's surface and measuring each one's distance
+to the other solid. The decision fixed the two **thresholds**. It did not fix the **sampling** —
+how many points, under which random seed, and how repeated estimates combine.
+`SURFACE_SAMPLES` defaults to 800 and the function's `seed` defaults to 99, both by
+convenience rather than by decision.
+
+Near the thresholds, that omission decides the answer. Measured 2026-09-12 on the first pair
+IP-FC-117's soak judged — two independent builds of `nose_cowl_shell` at `U` = 0.5:
+
+| samples | seed | `XOR / (A · 100U)` | `max gap / (100U)` |
+| ---: | ---: | ---: | ---: |
+| 400 | 99 | 7.369e-07 | 5.002e-05 |
+| 800 | 99 | 6.889e-07 | 5.002e-05 |
+| 1200 | 99 | 7.434e-07 | 5.002e-05 |
+| 2400 | 99 | 7.027e-07 | 5.002e-05 |
+| 800 | 7 | **1.087e-06** | **5.284e-05** |
+| 800 | 1234 | 7.010e-07 | 4.940e-05 |
+
+Two things fall out. **The gap half does not converge with sample count**, because it is a
+maximum and a maximum cannot average down — here it is pinned at 0.00250 mm from 400 samples
+on, since it is finding a real, spatially extended feature of the gap field rather than a rare
+outlier. **And both halves move with the seed**, far enough to cross both thresholds: the XOR
+ratio spans 6.889e-07 to 1.087e-06 across a 1.0e-6 bar, and the gap ratio 4.940e-05 to
+5.284e-05 across a 5.0e-5 bar. One run of one comparison returns "same part" or "differs"
+according to which seed it was handed.
+
+This only bites near the bar. The tail pair at `U` = 1 that calibrated the thresholds measured
+2.45e-7 and 1.28e-5, about four times inside, and no plausible seed moves that.
+
+**A related observation, offered as a hypothesis and not as a finding, because it rests on one
+pair.** The gap threshold scales the allowed gap with `U`: 5.0e-5 × `100U` is 2.5 µm at
+`U` = 0.5, 5 µm at `U` = 1 and 20 µm at `U` = 4. If build-to-build disagreement is set by the
+fit's own **absolute** tolerance τ = 0.05 mm rather than by how big the part is, then the
+disagreement is roughly constant in millimetres and a `U`-normalised budget is hardest to meet
+on the smallest parts. The one pair measured is consistent with that — the `U` = 0.5 nose uses
+100 % of its budget where the `U` = 1 tail used 26 % — and IP-FC-117's soak is exactly the
+evidence that would establish or refute it. **It should not be decided ahead of that run.**
+
+**Alternatives**
+
+1. **State a sampling protocol; keep the thresholds.** Name the sample count, a fixed list of
+   seeds, and the rule for combining them — for instance 800 samples at seeds 99, 7 and 1234,
+   with a pair passing only if every seed passes.
+   *Benefits*: makes the criterion reproducible, which is the one thing it is currently not;
+   costs nothing but writing the numbers down; the thresholds keep the meaning they were
+   calibrated with. *Drawbacks*: three seeds cost three times one; and "every seed must pass"
+   is marginally stricter than the single-seed run the thresholds were set against, so a pair
+   near the bar that used to pass may now fail. *Prerequisites*: none.
+
+2. **Judge against a confidence bound rather than a point estimate.** `surface_difference`
+   already returns a standard error for the XOR half; require its upper bound to sit inside the
+   threshold. *Benefits*: statistically honest, and no arbitrary seed list. *Drawbacks*: does
+   nothing for the gap half, which is a maximum and has no standard error — the half that
+   actually failed here; and it needs a confidence level, which is one more number to decide.
+   *Prerequisites*: a way to put an interval on a maximum, which this method does not offer.
+
+3. **Replace the maximum gap with a high quantile** — a 99th percentile, say, which converges
+   with sample count where a maximum does not. *Benefits*: makes the second half behave like
+   the first, with error bars, and removes the main source of seed sensitivity. *Drawbacks*:
+   changes what the criterion means. OQ-ARCH-19 kept a surface distance precisely because the
+   volume metric "averages away a local excursion", and a quantile puts some of that averaging
+   back. The 5.0e-5 threshold was calibrated against a maximum and would have to be re-derived.
+   *Prerequisites*: re-measure the calibration pair under the new statistic.
+
+4. **Raise the thresholds until nothing sits near them.** *Benefits*: trivial to do.
+   *Drawbacks*: picks the answer instead of measuring it. The thresholds were deliberately set
+   at about four times what reproduction costs; widening them to clear a marginal case throws
+   away the sensitivity the soak exists to have. Listed for completeness.
+
+5. **Change nothing; treat `MARGINAL` as a real third verdict.** Report the spread across seeds
+   and call a straddling pair neither same nor different. *Benefits*: no change to a decided
+   criterion, and it is honest — the implementation does this today. *Drawbacks*: a soak that
+   returns `MARGINAL` for many pairs has not answered its question, and it hands the same
+   decision to every future reader of the report.
+
+**Recommendation**
+
+**Alternative 1, with alternative 5 kept alongside it.** Writing down the sampling protocol
+costs nothing, is precisely what the criterion is missing, and leaves thresholds that were set
+by measurement untouched. Keeping `MARGINAL` as a reportable verdict is the honest treatment of
+pairs the method genuinely cannot separate from the bar, rather than forcing them one way on
+the strength of a seed.
+
+Alternative 3 is the better long-run answer **if** the soak shows `MARGINAL` is common rather
+than a one-off at the small end — but it requires re-deriving a calibrated threshold, so it
+should be decided on the soak's evidence rather than in advance of it. The `U`-normalisation
+question above is in the same position and for the same reason.
 
 ## References
 
