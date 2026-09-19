@@ -463,6 +463,31 @@ by `solid_measure.converged_difference`, which cancels discretisation between ma
 partitions and refuses mismatched ones, or by `solid_measure.surface_difference`, which is
 indifferent to face layout altogether.
 
+**Two limits on the above, measured 2026-09-11 under IP-FC-117.**
+
+**The partition identity's blind spot grows linearly with `U`.** `PARTITION_TOL` is taken
+against the **blank**, and the wall is a shrinking share of the blank as the part grows: the
+wall goes as `U²`, because `n_p·w` = 0.6 mm is a property of the nozzle and not of the
+airframe, while the blank goes as `U³`. So the same 1e-4 is **37.6 mm³ at `U` = 1, 0.39 % of
+that nose wall, and 2408 mm³ at `U` = 4, 1.54 % of that one** — four times less sensitive, for
+the same reason the shell is proportionally thinner. Nothing is failing: the slips actually
+measured are ~1e-6, three orders inside. What it says is that the identity's power to catch
+*lost wall material* decays as parts grow, so at the large end it is a gross-failure detector
+and nothing more. (An earlier draft of this paragraph put the `U` = 4 figure at 16 %, by
+dividing into `Shape.Volume`'s own reading of the wall — which is exactly the instrument the
+next paragraph says is unusable there. 1.54 % is against the wall's real volume.)
+
+**And the two instruments named above are not equally safe.** `converged_difference` reaches
+the geometry through `mesh_volume`, which integrates the divergence theorem and therefore needs
+a **closed** tessellation — and on these shells at `U` ≥ 2 a fixed 0.001 mm tessellation came
+back with **1200–1400 unpaired edges**, every such reading wrong by two to four orders of
+magnitude while every closed one was sane. Refining does not rescue it: 0.00025 mm took the
+count to **12320**, about ten times worse, because a finer mesh has more facets and so more
+places to leave a gap. `surface_difference` samples points on the surface and calls
+`distToShape`; it never integrates, so an open mesh cannot corrupt it. **Where the mesh may be
+open — which is the large end of the `U` range — `surface_difference` is the one to reach
+for**, and a mesh-volume figure should not be believed without its unpaired-edge count.
+
 ### 9.7 Measured, at `U` = 1
 
 | | nose | tail |
@@ -540,6 +565,64 @@ established, and each is a work item in
   the thinnest shell, and the most surface to hold inside a fixed 0.05 mm tolerance. The OML
   blank conditioning that makes the tail correct above `U` = 1 landed under IP-FC-12 and has
   never been exercised through the shell path.
+
+- **A second scale has now been tried, and the tail has a floor rather than a single working
+  point** (IP-FC-137, measured 2026-09-11 through 2026-09-12). At `U` = 0.5 the smooth interior
+  fuses clean and then the rib cut
+  leaves **5540.9 mm³** of rib inside the cavity against `RIB_RESIDUE`'s 0.01 — 554 000× over
+  — so `cavity`'s single retry fires, and that retry returns a **null shape**. Reproduced four
+  times from identical inputs, agreeing to four decimals. The nose builds clean at the same
+  `U`, so this is the tail's 22-tool cut rather than the shared path. Two things follow for
+  this document. **§9.6's rib residue did its job** — it is an identity, not a tolerance, and
+  it refused a cavity that had a quarter of its rib material still inside rather than passing a
+  wall that would have come apart. **But the repair path is not specified here and is not
+  sound**: §4.2 says what the cut must achieve and says nothing about what to do when it does
+  not, and the one retry that exists in the implementation can return a null shape, which
+  reaches the caller as an *empty part* rather than as a failure, because `execute()` cannot
+  raise through `recompute()`.
+
+  **Settled 2026-09-12, by stating the domain rather than fixing the cut — nobody has a fix.**
+  Walking the size axis (IP-FC-137) found the failure is not confined to `U` = 0.5 and does not
+  shrink gracefully toward it: `U` = 0.6 built inconsistently from identical inputs (residue 0,
+  681.8 and 4082.6 mm³ across three tries, one of the clean ones failing one step later instead,
+  at the wall cut rather than the rib cut), and `U` = 0.7 failed *harder* than 0.5 — residue
+  15982.45 mm³, agreeing to five figures across three builds, not noise. `U` = 0.75, the sweep's
+  own second CSV row and the one value in the gap that mattered, also failed, three of three.
+  `U` = 0.8, 0.9 and 1.0 each built cleanly every time tried. **The floor is `U` ≥ 0.8** — the
+  lowest value measured to work, not a derived bound — enforced in `cowl_tail_shell.py`'s
+  `emit`, the one function every caller of this kind goes through, before the expensive build
+  ever starts. A `tail_shell` request under the floor is refused in under a second with a named
+  reason, not built into a null shape forty minutes later. **The empty-part risk above is also
+  closed, one level up**: the refusal is `PreconditionFailed`, which was going uncaught in
+  `build_part.py`'s entry point and exiting 0 regardless — measured before the fix — so it is
+  now caught there and reported the same way an invalid shape already was, which incidentally
+  closes the identical gap for P1, P2 and P4. So `U` ≥ 0.8 is a fact about where this
+  construction has been found to work, and the nose is untouched by any of it — confirmed clean
+  at `U` = 0.5 in the same reproduction, so the floor lives beside the tail's own parameters and
+  not in the shared tree.
+
+  **The leading hypothesis for *why* was tested directly, 2026-09-12/13, and it is wrong —
+  wrong in its own predicted direction.** If a fixed 0.6 mm rib dilation against a local
+  curvature radius that shrinks with `U` were the mechanism, a *thicker* dilation should need
+  proportionally *larger* `U` to clear the same ratio: doubling it should double the floor.
+  Measured instead: `U` = 0.8 and `U` = 2.0 both built cleanly at double thickness (1.2 mm), on
+  every attempt, including `U` = 0.8 — the exact case the hypothesis said would now break. A
+  facet-count confound in that test (doubling the dilation also trips `dilated_notches`'s own
+  comb-degeneracy floor, IP-FC-116, forcing more facets alongside the thickness) was ruled out
+  rather than assumed away: `U` = 0.7 at the *original* 0.6 mm with the same extra facets and no
+  thickness change still failed, three of three, the same magnitude as before. **So thickness
+  itself is the lever, and it runs the other way from the hypothesis** — a thicker dilation makes
+  the cut more robust, not less, which turns "does a thicker wall need a bigger `U`" into "does a
+  thicker wall tolerate a smaller one." **Tested against `U` = 0.5, the worst case measured: it
+  still fails, but the margin it fails by collapses.** Residue 354.09 mm³, agreeing to four
+  decimals across three builds, against ~5540.9 mm³ at the original 0.6 mm — a 15.6× drop for a
+  2× increase in dilation, steeper than linear, but still about 35 000× over the identity's
+  tolerance. So the same thickness that was already enough at `U` = 0.8 is not enough at 0.5:
+  the margin a given `t` buys is not uniform across `U`, which reads as 0.5 being a genuinely
+  harder case rather than as thickness being beside the point. Whether a larger `t` than double
+  would clear it, and what shape that falloff actually has with only two points on it, is
+  untested. Either way, the ratio-to-curvature story is ruled out as stated, and no curvature
+  has still ever been measured at any station.
 
 ## See also
 

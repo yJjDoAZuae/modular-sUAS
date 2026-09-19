@@ -203,6 +203,28 @@ class _ShapeBoolean(object):
         return None
 
 
+def _add_slip(obj):
+    """`PartitionSlip`, added where it is missing rather than only in `__init__`.
+
+    **A document restored from disk never runs `__init__`.** FreeCAD rebuilds a
+    `Part::FeaturePython` from the properties in the file and re-attaches the proxy through
+    `loads`, so a property added to this class after a `.FCStd` was written does not exist on
+    that document -- and `_shell` will not add it either, since it only constructs a
+    `_CowlShell` when the node has no proxy at all. `execute` then assigns to a property that
+    is not there and the recompute dies with `AttributeError`. That is not an abstract
+    concern here: the saved document *is* the deliverable (UC-2, and IP-FC-14 made writing it
+    non-optional precisely so it can be opened and edited), so every cowl document written
+    before 2026-09-11 would fail on its first recompute after this property was introduced.
+    """
+    if not hasattr(obj, 'PartitionSlip'):
+        obj.addProperty('App::PropertyFloat', 'PartitionSlip', 'Shell',
+                        'shell_solid\'s own partition-identity check: |wall + kept - blank| '
+                        '/ blank, by Shape.Volume on both sides so the error mostly cancels '
+                        '(IP-FC-119). A gross-failure detector, not a precision measurement '
+                        '-- see PARTITION_TOL. Exposed for IP-FC-117\'s soak, which was the '
+                        'first caller that needed it outside the pass/fail guard.')
+
+
 class _CowlShell(object):
     """IP-FC-17: the notched blank with its interior cavity removed.
 
@@ -231,6 +253,7 @@ class _CowlShell(object):
                         'The horizontal inset: cowl_n_perimeters * extrusion_width, in mm')
         obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
                         'overhang_angle_from_bed, which P1 is asserted against')
+        _add_slip(obj)
         obj.Proxy = self
 
     def execute(self, obj):
@@ -242,9 +265,12 @@ class _CowlShell(object):
             normal = App.Vector(*[float(v) for v in text.split(',')])
             normal.normalize()
             shapes = shapes + [s.mirror(App.Vector(0, 0, 0), normal) for s in shapes]
+        report = {}
         obj.Shape = cowl_interior.shell_solid(
             obj.Base.Shape, obj.Body.Shape, Part.makeCompound(shapes),
-            obj.Inset, obj.Overhang)
+            obj.Inset, obj.Overhang, report=report)
+        _add_slip(obj)
+        obj.PartitionSlip = report.get('partition_slip', 0.0)
 
     def dumps(self):
         return None
