@@ -381,7 +381,7 @@ The roadmap requires the sweep to run headless, because the FreeCAD MCP drives a
 session and a batch of thousands of parts must not. Confirmed on this machine, 2026-08-06:
 
 ```text
-C:\Users\Alex\AppData\Local\Programs\FreeCAD 1.1\bin\freecadcmd.exe
+C:\Users\<user>\AppData\Local\Programs\FreeCAD 1.1\bin\freecadcmd.exe
     FreeCAD 1.1.1
     GuiUp = 0
 ```
@@ -2540,8 +2540,8 @@ reviewed in detail — part by part, against the ledger — and only then is
 a person signing off on the accumulated difference, not a side effect of a convenient moment.
 
 **One thing to fix regardless.** `variant_output_baseline` is not a render of this repository:
-its stored `.stl.scad` files name their library under the pre-migration
-`Archive\Alex\Designs\modular_sUAS\Fuselage\` tree, and no tree in the corpus records the
+its stored `.stl.scad` files name their library under a local, pre-migration
+`Archive\Designs\modular_sUAS\Fuselage\` tree, and no tree in the corpus records the
 commit that produced it. Freezing a reference makes recording its provenance more important
 rather than less, since the ledger's entries are meaningless without knowing what they are
 departures *from*. The manifest proposed as alternative 2 is therefore still wanted — not to

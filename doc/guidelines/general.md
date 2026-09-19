@@ -444,7 +444,7 @@ Review checklist:
 
 ## Version Control
 
-- **Claude does not commit.** Alex performs all commits, merges, and pushes. Claude uses
+- **Claude does not commit.** The maintainer performs all commits, merges, and pushes. Claude uses
   read-only git only. See [CLAUDE.md](../../../CLAUDE.md) for the full rule.
 - Commit messages use imperative mood: "Anchor sweep paths to `__file__`" not "Anchored…".
 - Each commit is self-contained and leaves the repository in a runnable state.
