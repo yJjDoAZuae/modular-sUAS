@@ -383,6 +383,37 @@ def condition(solid, max_spans=MAX_SPANS):
     return out, report
 
 
+def _symmetrize_y(solid):
+    """Force exact left-right symmetry about y = 0 rather than trust OpenVSP's own
+    independently evaluated surface on each side to already agree past a few microns.
+
+    OQ-DES-CW13 found the tail's aft station's skin-continuity parms equal by value on the
+    `Left` and `Right` sides, yet the exported surface is only symmetric to about 0.001 mm at
+    this scale (`raw_oml_symmetry_exact.py`, IP-FC-137) -- consistent with OpenVSP evaluating
+    each side's NURBS independently from matching parameters rather than literally mirroring
+    one side to build the other. That residual carries through repair, sewing and conditioning
+    unchanged and lands in the production tail body as a genuine, if small (~0.0003% of
+    volume), asymmetry -- fatal to `cowl_tree._CowlShell.execute()`, which cuts the 11 real
+    buttresses against the true body directly but gets the other 11 by mirroring the tool
+    geometry mathematically. That is only correct if the body is exactly symmetric, and 100%
+    of IP-FC-137's rib-cut residue traced to exactly those mirrored tools.
+
+    Keeps the y >= 0 half -- the side the real, unmirrored buttress cuts are built against --
+    and replaces y < 0 with an exact mirror of it, the same "half fused with its own mirror
+    about the touching plane" pattern already measured valid and exact elsewhere in this
+    codebase (`bulkhead_full.py`, `bulkhead_cuts.py`), rather than inventing a new mechanism.
+    """
+    bb = solid.BoundBox
+    half_space = Part.makeBox(bb.XLength + 2, bb.YMax + 1, bb.ZLength + 2,
+                               App.Vector(bb.XMin - 1, 0, bb.ZMin - 1))
+    half = solid.common(half_space)
+    mirrored = half.mirror(App.Vector(0, 0, 0), App.Vector(0, 1, 0))
+    result = half.fuse(mirrored).removeSplitter()
+    if not result.isClosed() or not result.isValid():
+        raise ValueError('symmetrizing about y = 0 did not produce a closed, valid solid')
+    return result
+
+
 def surface(name):
     """The named OML surface as a solid, in the STEP's own units, repaired and conditioned.
 
@@ -391,6 +422,9 @@ def surface(name):
     Conditioning happens here rather than in either cowl because both import through this one
     function, and two cowls conditioned by two different mechanisms is the trap `nose_cowl()`
     already names for its booleans: the path that is never exercised is the one that breaks.
+    Symmetrizing about y = 0 happens here for the same reason and ahead of conditioning, so
+    conditioning's own knot-interval work runs once, on the shape each cowl actually uses,
+    rather than needing to be re-run after a later symmetrizing boolean disturbs it.
     """
     path = os.path.join(OML_DIR, name + '.step')
     if not os.path.exists(path):
@@ -405,6 +439,7 @@ def surface(name):
     solid = Part.makeSolid(shell)
     if not solid.isClosed():
         raise ValueError('%s did not sew into a closed shell' % name)
+    solid = _symmetrize_y(solid)
     solid, conditioning = condition(solid)
     return solid, list(repairs) + [dict(conditioning, kind='conditioning')]
 
