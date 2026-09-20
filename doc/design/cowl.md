@@ -738,7 +738,6 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW16 | How is a cowl document built and shipped, when FreeCAD's own document booleans produce wrong geometry for this part? | Blocking the claim that a cowl `.FCStd` can be re-solved by someone who has only FreeCAD |
 | OQ-DES-CW17 | Two defects make the tail correct only near `U` = 1: the OML blank's faces are too coarsely subdivided for the cut, and the overlapping tools are fused before cutting. Fixing both, plus an exact C1 conversion that doubles the margin, holds the tail within 0.004% of OpenSCAD at every swept `U` and costs nothing on recompute. Adopt alternatives 3, 6 and 7 as one change? | Blocking the tail on the FreeCAD backend for every `U` except 1 |
 | OQ-DES-CW18 | `plate_thickness`, the two plate flange dimensions and `nose_flange_height` are swept per `U` but were never tuned — 3.2 mm against the reference's 0.8 mm at `U` = 4, a factor of 4.8 in the plate's material. Should they scale, hold fixed, or be derived from the printer? | Not blocking the port — but the committed reference cannot check the nose plate or nose tip above `U` = 1 until it is settled |
-
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
 **Problem.** The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
@@ -2527,6 +2526,49 @@ Under this resolution that is correct behaviour rather than a defect, since the 
 and a shallower layer plane simply cuts it wider. It does mean a shape parameter moves a
 structural dimension with no note anywhere that it does, which is the same class of unenforced
 coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
+
+### ~~OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced?~~ — RESOLVED 2026-09-20
+
+**Resolution: enforce it by construction order, not by a defensive patch — reduce to the half
+immediately, do all construction on the half, mirror only the finished result.** Raised in
+conversation: since the OML and everything built from it must be symmetric, there is no
+construction order that enforces this correctly other than working entirely in the half's
+symmetry cell and mirroring once, at the very end. That is not one alternative among several —
+it is the only order that makes asymmetry structurally impossible rather than something to
+detect and patch, and reading `cowl_tree.py` found the codebase already agrees: `tail_cowl()`
+(`cowl_tree.py:641-712`), which builds the tail's outer/print solid, already does exactly this —
+it clips to the `y >= 0` half (`half_mask`, line 574), applies all 11 buttress cuts to that half
+alone, and only then mirrors the *finished, already-cut* half
+(`_mirror_union(doc, 'TailCowl', cut, (0, -1, 0))`, line 712). That path has never had this
+defect.
+
+**The actual bug is that a second, separate construction pass does not reuse that same half.**
+`_CowlShell` — which builds the interior rib-notch geometry for the printable shelled part, not
+the outer solid — takes a different route: `pieces()` (`cowl_tree.py:709`) hands it `lower`, the
+un-notched body with only an *axial* mask applied (`lower_mask`, line 558 — both `y` signs still
+present), as `Body`; `_CowlShell.execute()` (`cowl_tree.py:259-273`) then takes the half-cell's
+buttress-cutting tools, mirrors *only the tools* (line 267), and cuts the mirrored-and-original
+tool set against that separately-sourced `lower` — never touching the correctly-built `half` at
+all. Two different construction disciplines coexist in the same file: the outer solid is immune
+to this class of error by construction, the interior shell is not.
+
+This also explains why `body_symmetry_check.py` measures `lower` itself as asymmetric
+(0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0) even though it descends from `_symmetrize_y()`'s
+exactly-symmetric output: `_common(doc, 'Lower', body, lower_mask(...))` (line 678) is a
+whole-body boolean applied *after* the symmetrize step, and OCC's general boolean kernel has no
+obligation to preserve bit-for-bit mirror symmetry through an operation run on the combined
+geometry — only an actual mirror-copy, computed from one side's numbers rather than
+independently recomputed, is immune to that. This is a real, plausible hypothesis for the
+`lower`/`body` asymmetry, not yet independently confirmed by measurement; tracking it to ground
+(whether it is this step, the raw OpenVSP/STEP export itself, or the measurement tooling) is
+[IP-FC-138](../implementation/freecad_migration.md), pursued on its own merits regardless of this
+resolution. The construction fix itself, [IP-FC-139](../implementation/freecad_migration.md), does
+not need IP-FC-138's answer: reusing `half`'s own already-correct construction for the interior
+shell removes the dependency on `lower`'s symmetry entirely, rather than explaining it away.
+
+Only the tail was ever affected. The nose builds its OML by mirroring one octant three times and
+was audited directly (`nose_symmetry_check.py`, `nose_diagonal_check.py`) at exactly 0.000000 mm
+about all three planes it uses, so it needs no equivalent fix.
 
 ## See also
 
