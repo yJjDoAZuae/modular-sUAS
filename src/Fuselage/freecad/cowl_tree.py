@@ -246,14 +246,11 @@ class _CowlShell(object):
         obj.addProperty('App::PropertyLink', 'Body', 'Shell',
                         'The same blank before any notch reached it')
         obj.addProperty('App::PropertyLinkList', 'Notches', 'Shell',
-                        'The cutting tools, in the symmetry cell they were built in')
+                        'The cutting tools, in the symmetry cell they were built in -- never '
+                        'mirrored (OQ-DES-CW20)')
         obj.addProperty('App::PropertyStringList', 'Mirrors', 'Shell',
-                        'The mirror normals that take that cell out to the whole part')
-        obj.addProperty('App::PropertyLink', 'MirrorCell', 'Shell',
-                        'IP-FC-139: when set (single mirror only), mirror the finished cavity '
-                        'clipped to this cell instead of mirroring the tools -- the tool-mirror '
-                        'route was measured not to produce a symmetric cut outcome even from an '
-                        'exactly symmetric Body')
+                        'The mirror normals that take that cell out to the whole part, applied '
+                        'once to the finished cavity (OQ-DES-CW20)')
         obj.addProperty('App::PropertyFloat', 'Inset', 'Shell',
                         'The horizontal inset: cowl_n_perimeters * extrusion_width, in mm')
         obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
@@ -266,25 +263,16 @@ class _CowlShell(object):
         if obj.Base is None or obj.Body is None or not obj.Notches or not obj.Inset:
             return
         report = {}
-        if obj.MirrorCell is not None and len(obj.Mirrors) == 1:
-            # IP-FC-139: cut the cell's own notches only, then mirror the finished cavity --
-            # never the tools -- since mirroring tools against a shared surface was measured to
-            # not produce a symmetric cut outcome even from an exactly symmetric Body.
-            normal = App.Vector(*[float(v) for v in obj.Mirrors[0].split(',')])
-            normal.normalize()
-            notches = Part.makeCompound([n.Shape for n in obj.Notches])
-            obj.Shape = cowl_interior.shell_solid(
-                obj.Base.Shape, obj.Body.Shape, notches, obj.Inset, obj.Overhang,
-                report=report, mirror=(normal, obj.MirrorCell.Shape))
-        else:
-            shapes = [n.Shape for n in obj.Notches]
-            for text in obj.Mirrors:
-                normal = App.Vector(*[float(v) for v in text.split(',')])
-                normal.normalize()
-                shapes = shapes + [s.mirror(App.Vector(0, 0, 0), normal) for s in shapes]
-            obj.Shape = cowl_interior.shell_solid(
-                obj.Base.Shape, obj.Body.Shape, Part.makeCompound(shapes),
-                obj.Inset, obj.Overhang, report=report)
+        # OQ-DES-CW20: the notches are the cell's own tools, never mirrored, and `Body` is the
+        # cell itself -- `cowl_interior.cavity` fits and cuts entirely within it and hands back
+        # a cell-bounded cavity; `shell_solid` mirrors that result, once, through `Mirrors`, the
+        # same normals and the same order `cowl_tree` used to assemble `Base` from that cell.
+        # One function, one order of operations, for the nose's three mirrors and the tail's one.
+        notches = Part.makeCompound([n.Shape for n in obj.Notches])
+        mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in obj.Mirrors]
+        obj.Shape = cowl_interior.shell_solid(
+            obj.Base.Shape, obj.Body.Shape, notches, obj.Inset, obj.Overhang, mirrors,
+            report=report)
         _add_slip(obj)
         obj.PartitionSlip = report.get('partition_slip', 0.0)
 
@@ -295,7 +283,7 @@ class _CowlShell(object):
         return None
 
 
-def _shell(doc, name, tip, body, notches, mirrors, cell=None):
+def _shell(doc, name, tip, body, notches, mirrors):
     """One `_CowlShell`, wired to the tree the print representation already built.
 
     **The tools are handed over as a compound, not as a fused solid.** `cowl_interior` only
@@ -304,10 +292,11 @@ def _shell(doc, name, tip, body, notches, mirrors, cell=None):
     `body - notched` instead was measured at 47 s a part, and leaves a 202-face solid that is
     slower to section than the eleven slabs are.
 
-    **`cell`, IP-FC-139:** the symmetry-cell clip (e.g. the tail's `HalfMask`-derived `half`)
-    that lets `_CowlShell` mirror the finished cavity instead of the tools, when there is exactly
-    one mirror. `None` for the nose, which has three and keeps the tool-mirror route it has
-    always used correctly.
+    **`body` is the symmetry cell itself, for both cowls -- OQ-DES-CW20.** `octant` for the
+    nose, `half` for the tail: the un-notched blank reduced to the same partial geometry the
+    notches were cut in, never a full or reconstructed part. `mirrors` is the ordered list of
+    normals that takes that cell out to the whole part, which `_CowlShell` applies to the
+    finished cavity in the same order `cowl_tree` applied it to build `tip`.
     """
     node = C._owned(doc, 'Part::FeaturePython', name)
     if getattr(node, 'Proxy', None) is None:
@@ -316,7 +305,6 @@ def _shell(doc, name, tip, body, notches, mirrors, cell=None):
     node.Body = body
     node.Notches = list(notches)
     node.Mirrors = ['%g,%g,%g' % m for m in mirrors]
-    node.MirrorCell = cell
     node.setExpression('Inset', '%(p)scowl_n_perimeters * %(p)sextrusion_width' % {'p': P})
     node.setExpression('Overhang', '%soverhang_angle_from_bed' % P)
     return node
@@ -621,9 +609,9 @@ def _common(doc, name, base, tool):
 
 
 #: What the shelled kinds need out of a built cowl and cannot recover from the tip alone: the
-#: un-notched body, the cutting tools in the cell they were built in, the mirrors that take that
-#: cell out to the whole part, and (IP-FC-139) the cell itself, for a construction with exactly
-#: one mirror to clip and mirror the finished cavity by instead of the tools. Recorded by the
+#: un-notched symmetry cell (OQ-DES-CW20 -- `octant` for the nose, `half` for the tail, never a
+#: full or reconstructed body), the cutting tools built in that same cell and never mirrored,
+#: and the ordered mirror normals that take the cell out to the whole part. Recorded by the
 #: builders rather than looked up by node name afterwards, because a name is a coincidence and
 #: this is the actual wiring -- a lookup that silently found nothing would shell a cowl with no
 #: notches in it, which is a plausible solid and the wrong part.
@@ -631,11 +619,7 @@ _PIECES = {}
 
 
 def pieces(doc):
-    """`(body, tools, mirrors, cell)` for the cowl just built into `doc`.
-
-    `cell` is `None` for a construction with more than one mirror (the nose), which keeps
-    mirroring the tools -- correct there, since its raw import measures exactly symmetric.
-    """
+    """`(cell_body, tools, mirrors)` for the cowl just built into `doc` -- OQ-DES-CW20."""
     if doc.Name not in _PIECES:
         raise KeyError('no cowl has been built into %r' % doc.Name)
     return _PIECES[doc.Name]
@@ -657,8 +641,10 @@ def nose_cowl(doc):
     cut = _shape_bool(doc, 'OctantCut', 'cut', octant, [tool])
 
     # `mirror_x(mirror_y(mirror_xy(...)))`, and the order matters: the diagonal runs first, so
-    # it acts on the octant alone rather than on an already-doubled quadrant.
-    _PIECES[doc.Name] = (lower, [tool], [(1, -1, 0), (0, -1, 0), (-1, 0, 0)], None)
+    # it acts on the octant alone rather than on an already-doubled quadrant. OQ-DES-CW20: the
+    # interior shell needs the un-notched *cell* -- `octant`, not `lower` -- since `lower` spans
+    # the full azimuth and is not the partial geometry every operation has to run on.
+    _PIECES[doc.Name] = (octant, [tool], [(1, -1, 0), (0, -1, 0), (-1, 0, 0)])
 
     quad = _mirror_union(doc, 'Diag', cut, (1, -1, 0))
     half = _mirror_union(doc, 'HalfY', quad, (0, -1, 0))
@@ -704,21 +690,18 @@ def tail_cowl(doc):
     body = blank(doc, 'Blank', 'vsp_tail')
     lower = _common(doc, 'Lower', body, lower_mask(doc, 'LowerMask'))
     half = _common(doc, 'Half', lower, half_mask(doc, 'HalfMask'))
-    # IP-FC-139: `lower` is measurably asymmetric (body_symmetry_check.py) even though `blank()`
-    # already forces exact symmetry onto the raw import, because `_common`'s boolean against
-    # `LowerMask` runs *after* that guarantee and is not itself guaranteed to preserve it -- OCC's
-    # general boolean kernel has no obligation to produce bit-for-bit mirror-symmetric output from
-    # mirror-symmetric input. `_CowlShell` (via `pieces()`) needs the *interior-shell* body to be
-    # exactly symmetric, since `cowl_interior.cavity()` fits one smooth surface through it and then
-    # cuts that surface with both the real notch tools and `Shape.mirror()` copies of them --
-    # correct only if the surface itself is exactly symmetric. `half` is already exactly the
-    # `y >= 0` clip needed; mirroring and fusing it back, the same pattern `_symmetrize_y()` and
-    # `bulkhead_full.py`/`bulkhead_cuts.py` already use, makes that true by construction rather
-    # than by trusting the mask boolean. The outer print solid (`cut`, `TailCowl` below) already
-    # only ever touches `half` and mirrors the *finished cut*, so it was never exposed to this and
-    # needs no change.
-    lower_sym = _mirror_union(doc, 'LowerSym', half, (0, -1, 0))
-
+    # OQ-DES-CW20: `half` is the symmetry cell, and every operation the interior shell needs --
+    # the surface fit, the rib cuts, the wall -- runs entirely on it, in `cowl_interior.cavity`.
+    # It is never mirrored or fused into a full body first: a prior attempt at that (`lower_sym`,
+    # `half.fuse(mirror(half))`) made the outer solid `lower_sym` measure exactly symmetric, but
+    # the rib-cut residue it was meant to fix was unchanged at U = 0.7 and worse at U = 0.5,
+    # because the defect was never the body's own asymmetry -- it was fitting a surface through a
+    # full loop (mirrored or not) at all, which cannot hold a straight construction edge straight
+    # and a curved OML edge curved at the same point. `cowl_interior.open_arc` removes that
+    # construction edge before anything is fitted instead. `half`'s own possible asymmetry
+    # (IP-FC-138, still open) does not need fixing for this: the cell is used exactly as it comes
+    # off `_common`, and only the *finished, already-closed* cavity is ever mirrored, once, in
+    # `shell_solid` -- the same thing the outer print solid below already does with `cut`.
     sides = [side_buttress(doc, 'Side%d' % i, 'side', '%sside%d_angle' % (P, i),
                            '%sside%d_x' % (P, i), BODY_LEN) for i in (1, 2, 3)]
     tops = [top_buttress(doc, 'Top%d' % i, 'top', '%stop%d_angle' % (P, i),
@@ -747,7 +730,7 @@ def tail_cowl(doc):
     # **The safes, not the raw slabs.** The core is a region the cuts may not enter, so the
     # material actually removed is the tool minus the core; handing the shell the slabs would
     # dilate a notch the part does not have, right where the bulkhead interface is.
-    _PIECES[doc.Name] = (lower_sym, safes, [(0, -1, 0)], half)
+    _PIECES[doc.Name] = (half, safes, [(0, -1, 0)])
 
     cut = _shape_bool(doc, 'Cut', 'cut', half, safes)
     return _mirror_union(doc, 'TailCowl', cut, (0, -1, 0))
@@ -756,15 +739,15 @@ def tail_cowl(doc):
 def nose_cowl_shell(doc):
     """IP-FC-17: the nose cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
     tip = nose_cowl(doc)
-    body, tools, mirrors, cell = pieces(doc)
-    return _shell(doc, 'NoseCowlShell', tip, body, tools, mirrors, cell=cell)
+    body, tools, mirrors = pieces(doc)
+    return _shell(doc, 'NoseCowlShell', tip, body, tools, mirrors)
 
 
 def tail_shell(doc):
     """IP-FC-17: the tail cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
     tip = tail_cowl(doc)
-    body, tools, mirrors, cell = pieces(doc)
-    return _shell(doc, 'TailShell', tip, body, tools, mirrors, cell=cell)
+    body, tools, mirrors = pieces(doc)
+    return _shell(doc, 'TailShell', tip, body, tools, mirrors)
 
 
 # --------------------------------------------------------------------------------

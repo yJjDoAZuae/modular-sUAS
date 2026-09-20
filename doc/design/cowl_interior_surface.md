@@ -426,16 +426,23 @@ therefore falls.
 As built, each row is a `Part.BSplineCurve.interpolate(..., PeriodicFlag=True)`, and the surface
 is skinned from those curves' poles with `buildFromPolesMultsKnots(..., vperiodic=True)`.
 
-**This section describes the tail's pre-2026-09-20 architecture, and it changes under
-[cowl.md OQ-DES-CW20](cowl.md#open-questions).** Periodicity is a requirement of fitting one
-continuous 360° surface directly, not of the geometry itself — it exists here because the
-construction this section describes always worked on the full, both-sides body. OQ-DES-CW20
-requires every operation, including this fit, to run on the un-mirrored symmetry cell only, with
-mirroring deferred to the single, final wall. A cell-bounded fit needs no periodic flag and
-produces an *open* patch instead, bounded by the cell's own edges; the seam this section measures
-is then produced once, by mirroring the finished wall, rather than by declaring a surface
-periodic. Tracked as [IP-FC-139](../implementation/freecad_migration.md); this section stays as
-the record of why the previous, full-body architecture needed periodicity at all.
+**This section describes the tail's pre-2026-09-20 architecture, superseded under
+[cowl.md OQ-DES-CW20](cowl.md#open-questions) and implemented as of the same date (IP-FC-139,
+done).** Periodicity was a requirement of fitting one continuous 360° surface directly, not of
+the geometry itself — it existed only because the construction this section describes always
+worked on the full, both-sides body. The implemented fit runs on the un-mirrored symmetry cell
+only (`cowl_interior.open_arc`, `cowl_tree`'s `octant`/`half`), with mirroring deferred to the
+single, final wall (`cowl_interior.mirror_cavity`). It needs no periodic flag: `_fit` builds an
+*open* patch bounded by the cell's own construction planes, `PeriodicFlag=False` in both the row
+curves and `buildFromPolesMultsKnots`'s `vperiodic` argument, and the seam this section measures
+is produced once, by mirroring the finished wall, rather than by declaring a surface periodic.
+Measured after implementation: the tail at `U` = 0.5 and 0.7 and the nose at `U` = 0.5 all build a
+valid wall with the partition identity holding to 10⁻⁶ or better, and both measured cases (tail
+0.5, nose 0.5) came out symmetric to `0.000000000` mm³ about every mirror plane — see
+[cowl.md OQ-DES-CW20](cowl.md#open-questions) for the numbers and the two further defects
+(`_Polyline`'s implicit closed-loop wraparound, and a `fuse`-vs-sew boolean fragility at the exact
+seam) that surfaced only once this architecture was actually run. This section stays as the
+record of why the previous, full-body architecture needed periodicity at all.
 
 ### 9.6 Two acceptance checks §6 does not have
 
