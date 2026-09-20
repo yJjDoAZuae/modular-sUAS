@@ -670,6 +670,16 @@ each one valid solid. What is not yet established — the construction alternati
 compared, the cost of the dilation, and verification at any `U` but 1 — is
 [cowl_interior_surface.md §10](cowl_interior_surface.md), as IP-FC-115, IP-FC-116 and IP-FC-117.
 
+**Standing construction discipline, [OQ-DES-CW20](#open-questions):** every operation that
+builds either representation — masking, the interior surface fit, the notch cuts, the wall —
+runs on the un-mirrored symmetry cell only (the octant for the nose, the half for the tail); no
+full-part intermediate is ever constructed; mirroring happens exactly once, as the final
+operation, on the finished result; and the same functions do this for both parts, differing only
+in cell shape and mirror count. This is not optional hardening — a full-part intermediate
+constructed before the end was tried twice and measured to reintroduce the defect it was meant
+to prevent, since it is a fresh boolean operation OCC's kernel is free to get wrong independent
+of whether its inputs were symmetric.
+
 ---
 
 ## 7. Print orientation
@@ -2529,46 +2539,60 @@ coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
 
 ### ~~OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced?~~ — RESOLVED 2026-09-20
 
-**Resolution: enforce it by construction order, not by a defensive patch — reduce to the half
-immediately, do all construction on the half, mirror only the finished result.** Raised in
-conversation: since the OML and everything built from it must be symmetric, there is no
-construction order that enforces this correctly other than working entirely in the half's
-symmetry cell and mirroring once, at the very end. That is not one alternative among several —
-it is the only order that makes asymmetry structurally impossible rather than something to
-detect and patch, and reading `cowl_tree.py` found the codebase already agrees: `tail_cowl()`
-(`cowl_tree.py:641-712`), which builds the tail's outer/print solid, already does exactly this —
-it clips to the `y >= 0` half (`half_mask`, line 574), applies all 11 buttress cuts to that half
-alone, and only then mirrors the *finished, already-cut* half
-(`_mirror_union(doc, 'TailCowl', cut, (0, -1, 0))`, line 712). That path has never had this
-defect.
+**Resolution, stated precisely after two earlier attempts at this resolution each proved too
+weak: every geometry operation — the mask, the interior surface fit, the notch cuts, the wall —
+is performed on the un-mirrored symmetry cell (the `y >= 0` half for the tail, the octant for
+the nose). No full, mirrored body or other full-part intermediate is ever constructed. Mirroring
+is applied exactly once, as the last operation of the entire construction, to the finished
+cell-local wall — and by the same shared mechanism for both the nose and the tail, differing
+only in cell shape and mirror count, never in code path.**
 
-**The actual bug is that a second, separate construction pass does not reuse that same half.**
-`_CowlShell` — which builds the interior rib-notch geometry for the printable shelled part, not
-the outer solid — takes a different route: `pieces()` (`cowl_tree.py:709`) hands it `lower`, the
-un-notched body with only an *axial* mask applied (`lower_mask`, line 558 — both `y` signs still
-present), as `Body`; `_CowlShell.execute()` (`cowl_tree.py:259-273`) then takes the half-cell's
-buttress-cutting tools, mirrors *only the tools* (line 267), and cuts the mirrored-and-original
-tool set against that separately-sourced `lower` — never touching the correctly-built `half` at
-all. Two different construction disciplines coexist in the same file: the outer solid is immune
-to this class of error by construction, the interior shell is not.
+This is stricter than "reduce to the half and mirror the result," which was tried first and is
+not sufficient: constructing *any* full-part shape before the end — even one built as "half
+fused with its own mirror," the pattern already validated elsewhere in this codebase — is a
+fresh boolean operation that OCC's kernel is free to get wrong independently of whether its
+inputs were symmetric. Measured directly: forcing `lower` to be exactly symmetric this way
+(`lower_sym`, `0.000000000` mm³ by the same fuse-with-mirror pattern `_symmetrize_y()` uses)
+left the `U` = 0.7 rib-cut residue completely unchanged and made `U` = 0.5's worse, because nothing
+about the surface *fit* was ever un-mirrored — it was still computed as one continuous 360° loop.
+A second attempt — cut the cell's own notches only, then fuse the resulting *cavity* with its own
+mirror — fixed `U` = 0.7 completely, but at `U` = 0.5 the fuse of the two mirrored cavity halves
+itself failed on a genuine near-tangency sliver at the seam, and working around that with a
+different boolean API (`generalFuse`) only moved the same failure one step further downstream, to
+the final wall cut. Every one of these remaining failures is a boolean between two *already-full*
+shapes that were each independently mirrored into existence — exactly the class of operation the
+resolution above forbids.
 
-This also explains why `body_symmetry_check.py` measures `lower` itself as asymmetric
-(0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0) even though it descends from `_symmetrize_y()`'s
-exactly-symmetric output: `_common(doc, 'Lower', body, lower_mask(...))` (line 678) is a
-whole-body boolean applied *after* the symmetrize step, and OCC's general boolean kernel has no
-obligation to preserve bit-for-bit mirror symmetry through an operation run on the combined
-geometry — only an actual mirror-copy, computed from one side's numbers rather than
-independently recomputed, is immune to that. This is a real, plausible hypothesis for the
-`lower`/`body` asymmetry, not yet independently confirmed by measurement; tracking it to ground
-(whether it is this step, the raw OpenVSP/STEP export itself, or the measurement tooling) is
-[IP-FC-138](../implementation/freecad_migration.md), pursued on its own merits regardless of this
-resolution. The construction fix itself, [IP-FC-139](../implementation/freecad_migration.md), does
-not need IP-FC-138's answer: reusing `half`'s own already-correct construction for the interior
-shell removes the dependency on `lower`'s symmetry entirely, rather than explaining it away.
+**Why full-part construction can be avoided even for the interior surface fit.** The existing
+fit builds one continuous, periodic 360° B-spline surface per station
+(`Part.BSplineCurve.interpolate(..., PeriodicFlag=True)`,
+[cowl_interior_surface.md §9.5](cowl_interior_surface.md)) — periodic *because* the old
+architecture always worked on a full body. Periodicity is not a requirement of the geometry
+being fitted; it is a requirement of trying to build a closed loop directly. A construction that
+never mirrors anything until the finished wall never needs a closed loop at all: it fits an
+*open* patch bounded by the cell's own edges (`y = 0`, for the tail), cuts the cell's own notches
+against it, computes the cell's own wall, and only then mirrors that wall — once — into the whole
+part. `cowl_interior.py`'s surface fit has to stop requiring a periodic loop to make this
+possible; that is real, shared work, tracked as [IP-FC-139](../implementation/freecad_migration.md).
 
-Only the tail was ever affected. The nose builds its OML by mirroring one octant three times and
-was audited directly (`nose_symmetry_check.py`, `nose_diagonal_check.py`) at exactly 0.000000 mm
-about all three planes it uses, so it needs no equivalent fix.
+**Root cause of `lower`'s own asymmetry is still open, and still independent of this resolution.**
+`body_symmetry_check.py` measured `lower` (the un-notched body with only an axial mask applied)
+as asymmetric by 0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0, even though it descends from
+`_symmetrize_y()`'s exactly-symmetric output — plausibly because `_common(doc, 'Lower', body,
+lower_mask(...))` is a whole-body boolean run after the symmetrize step, with no obligation to
+preserve exact symmetry through it, but this is not yet confirmed by measurement. Tracking it to
+ground (this step, the raw OpenVSP/STEP export, or the measurement tooling) is
+[IP-FC-138](../implementation/freecad_migration.md), wanted for its own sake regardless of the
+construction fix, since the resolution above works by never depending on `lower`'s symmetry at
+all rather than by explaining or fixing it.
+
+Only the tail was ever affected by the residue defect. The nose builds its OML by mirroring one
+octant three times and was audited directly (`nose_symmetry_check.py`, `nose_diagonal_check.py`)
+at exactly 0.000000 mm about all three planes it uses. It still needs the same construction
+discipline applied to its own interior-shell pass, though, not because it is broken today but
+because sharing one mechanism between both parts is itself part of this resolution — a
+special-cased fix for the tail alone was tried and rejected in conversation for exactly this
+reason.
 
 ## See also
 

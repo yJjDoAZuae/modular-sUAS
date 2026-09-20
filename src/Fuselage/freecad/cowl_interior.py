@@ -1474,7 +1474,7 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 PARTITION_TOL = 1.0e-4
 
 
-def shell_solid(notched, body, notches, t, overhang_deg, tau=TAU, report=None):
+def shell_solid(notched, body, notches, t, overhang_deg, tau=TAU, report=None, mirror=None):
     """The wall: the notched blank with its cavity removed.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
@@ -1488,8 +1488,26 @@ def shell_solid(notched, body, notches, t, overhang_deg, tau=TAU, report=None):
     surfaces measured inside `TAU` at every station and between them. Until that is fixed the
     build must at least refuse to emit the wrong answer, because every check downstream of here
     is a check on the wall it is handed.
+
+    **`mirror`, if given, is `(normal, cell)`.** `notches` is then understood to cover only one
+    symmetry cell (e.g. the tail's `y >= 0` half), and the cavity computed from it is clipped to
+    `cell` and fused with its own mirror about `normal` before the wall is cut, instead of the
+    caller mirroring the tools and cutting once against the shared surface. IP-FC-139 measured
+    directly that the tool-mirroring route does not produce a symmetric outcome even when `body`
+    itself is made exactly symmetric first (`0.000000000` mm3 by construction): at `U` = 0.7 the
+    residue was unchanged to four figures and at `U` = 0.5 it changed but did not clear, so the
+    boolean kernel's success on this near-tangent cut depends on something other than input
+    symmetry. Computing the cell's cavity once and mirroring the *result* is immune to that by
+    construction, the same way `tail_cowl()`'s outer solid already is -- it never asks the kernel
+    to reproduce a mirrored relationship, only to copy a number.
     """
     inside = cavity(notched, body, notches, t, overhang_deg, tau=tau, report=report)
+    if mirror is not None:
+        normal, cell = mirror
+        cell_inside = inside.common(cell)
+        inside = cell_inside.fuse(cell_inside.mirror(App.Vector(0, 0, 0), normal)).removeSplitter()
+        if report is not None:
+            report.update(mirrored_cavity_volume=inside.Volume)
     wall = notched.cut(inside)
 
     kept = notched.common(inside)
