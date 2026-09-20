@@ -2594,6 +2594,50 @@ because sharing one mechanism between both parts is itself part of this resoluti
 special-cased fix for the tail alone was tried and rejected in conversation for exactly this
 reason.
 
+**Implemented and measured, 2026-09-20 — IP-FC-139 is done, not merely planned.** `cowl_interior.py`
+now fits the open, cell-bounded patch this resolution calls for (`open_arc`, `_fit` without a
+periodic flag), and `cowl_tree.py` reduces both cowls to their symmetry cell before any notch is
+cut (`octant`/`half`, never `lower`). Two further defects surfaced only once real geometry was run
+through the corrected construction, both fixed and both worth recording because either would have
+silently reproduced a version of this same resolved question elsewhere:
+
+- **`_Polyline`, the class every wall-thickness measurement in this module goes through, silently
+  closed an open contour.** It measures a point's distance to a polyline by walking its segments,
+  and it built the last segment by wrapping the final sample back to the first (`np.roll`) —
+  correct for a closed loop around a full body, and wrong for the open cell arc this resolution
+  fits: it drew a phantom chord straight across the arc's own two cell-plane ends, and a point near
+  either end (which is exactly where an eroded interior arc's own ends sit, by construction) then
+  measured a few nanometres from that chord instead of from the true exterior. The symptom was
+  exact and reproducible: the worst wall error on the tail at `U` = 0.5 read precisely 0.6000 mm —
+  the inset itself — unmoving across four refinement passes, because the check was seeing the
+  chord, not the surface. Fixed by giving `_Polyline` a `closed` flag, `False` wherever it measures
+  an open arc.
+- **A `fuse` of the finished cell cavity against its own mirror failed with `ValueError: Null
+  shape`, even once the shared cap face was exact.** This is the specific case the whole
+  resolution above predicted would go away once nothing full-part was built before the end, and
+  the fuse *input* is indeed exact now (one planar face, 0.000000000 mm from the origin, both
+  operands individually valid) — but the OCC boolean kernel's general intersection machinery is
+  not the reliable path for two solids that share their *entire* boundary over one face and
+  overlap nowhere else, exact inputs or not. The fix does not ask the kernel to intersect anything:
+  `mirror_cavity` removes the shared cap face from each side, mirrors the resulting open shell, and
+  sews the two open shells together along their now-identical shared edge instead.
+
+Measured end to end after both fixes, calling `cowl_interior.cavity`/`shell_solid` directly
+(bypassing the document/recompute path so a real traceback surfaces rather than being swallowed):
+the tail at `U` = 0.5 (the worst historical case) built a valid single-solid wall, partition slip
+1.9×10⁻⁶, symmetric about `y = 0` to `0.000000000` mm³ both directions; the tail at `U` = 0.7 built
+a valid single-solid wall with partition slip 4.4×10⁻⁸ (its own mirror-symmetry cut was not run to
+completion — an expensive diagnostic on a large solid, not a build step — but the wall itself is
+built and measured sound); the nose at `U` = 0.5 built a valid single-solid wall through all three
+mirror steps, partition slip 1.5×10⁻⁷, symmetric to `0.000000000` mm³ about all three of its planes.
+**`MIN_U` = 0.8 was never an acceptable design parameter.** It is a refusal threshold IP-FC-137
+chose empirically to stop the tool silently handing back a null shape for a defect nobody had
+fixed yet — its own status line says so directly ("domain stated and enforced rather than the cut
+fixed") — not a bound the design actually requires. Now that the defect it stood in for is fixed
+rather than merely raised, retiring it (re-running IP-FC-137's reproduction across the swept `U`
+range, then removing or lowering the guard) is real, separate work still to do, not an optional
+revisit.
+
 ## See also
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2

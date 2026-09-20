@@ -350,7 +350,7 @@ def _seg_distance(px, py, ax, ay, bx, by):
 
 
 class _Polyline(object):
-    """A closed polyline you can measure many points against at once.
+    """A polyline you can measure many points against at once, closed by default.
 
     **Vectorised because the measurement, not the geometry, was the cost.** Section 5 compares
     every sample of a contour against a dense polyline of another, both sides, at every
@@ -360,16 +360,28 @@ class _Polyline(object):
     a point-to-segment distance, which is the same three lines for every pair, so it belongs in
     numpy rather than in a loop.
 
+    **`closed=False` for an open cell arc, and that is not optional.** The default wraps the
+    last point back to the first with `np.roll`, which is right for a full loop and wrong for
+    an open one: it silently adds a chord straight across the two cut-plane ends, and a point
+    near that end -- which is exactly where an eroded interior arc's own ends sit, by
+    construction -- then measures as a few nanometres from the *chord* rather than from the
+    true exterior, reporting a wall gap of zero instead of `t`. Measured on the tail at
+    `U` = 0.5: the worst wall error read exactly 0.6000 mm, unmoving across four refinement
+    passes, because the check was seeing the chord, not the surface.
+
     Queries run in chunks: the full (points x segments) matrix would be hundreds of megabytes
     at the resolutions this now uses, and nothing is gained by materialising it at once.
     """
 
     CHUNK = 256
 
-    def __init__(self, pts):
+    def __init__(self, pts, closed=True):
         self.pts = pts
         a = np.asarray(pts, dtype=float)
         b = np.roll(a, -1, axis=0)
+        if not closed:
+            a = a[:-1]
+            b = b[:-1]
         self.ax, self.ay = a[:, 0], a[:, 1]
         self.dx, self.dy = b[:, 0] - a[:, 0], b[:, 1] - a[:, 1]
         self.den = self.dx * self.dx + self.dy * self.dy
@@ -502,6 +514,277 @@ def eroded_body(wire, t, z, tol=REFIT_TOL):
         '%.4f mm. Last: %s. The wall is measured from this curve, so a refit that does not '
         'reproduce the section is a changed exterior, and one that will not offset is the '
         'IP-FC-54 failure.' % (wire.Length, z, t, why))
+
+
+# --------------------------------------------------------------------------------
+# The symmetry cell -- OQ-DES-CW20
+# --------------------------------------------------------------------------------
+#
+# **Every operation below runs on the un-mirrored cell body, never on a full or reconstructed
+# part.** `body` is `half` for the tail and `octant` for the nose -- a real solid, cut from the
+# blank by the same masks that bound the cutting tools, so its section at any station is a
+# closed loop only because it carries the cell's own flat construction faces alongside the true
+# OML arc. Two prior attempts (`lower_sym`, and mirroring the finished cavity after fitting one
+# periodic surface through the whole loop) both treated that loop as if it were the true
+# exterior and fitted a closed, periodic surface through it -- which cannot hold a straight
+# construction edge straight and a curved OML edge curved at the same point, so it rounds the
+# corner, and the two halves' surfaces then meet only approximately once mirrored back
+# together. That approximate meeting is what `removeSplitter` could not clean up: a near-zero
+# area sliver face at the seam, and a `fuse`/cut that failed on it with `ValueError: Null shape`
+# even though each half was individually valid.
+#
+# The fix removes the corner from the problem rather than refining against it: the cell's own
+# flat faces are found directly from its geometry (`cell_boundary_planes`), the construction
+# edges they contribute to each section are stripped out before anything is fitted
+# (`open_arc`), and the surface fitted through what remains is genuinely open -- no periodic
+# flag, no seam. The flat boundary is restored afterwards as its own exact flat face
+# (`_lid`, `_side_caps`), which is what makes the later mirror-fuse exact rather than
+# approximate: a mirror of an exact flat face is that same face, not a near-duplicate of it.
+
+
+def cell_boundary_planes(cell, tol=1.0e-6):
+    """The symmetry cell's own flat construction faces, as unit normals through the origin.
+
+    **Found from the cell's own geometry, not from the mirror chain that reassembles it.** The
+    nose's octant is bounded by two of its three eventual mirrors -- the diagonal and the `x`
+    plane -- and not by the third, `y = 0`, which only becomes a boundary once the diagonal
+    mirror has already produced a quadrant. Reading the planes off `cell` directly is what makes
+    this correct for both cowls without having to say, in code, which mirrors are cell walls and
+    which are reassembly steps.
+
+    A cell wall is planar, perpendicular to the layer plane (its normal has no `z` component --
+    every wall here contains the part's own axis), and passes through the origin, which is what
+    tells it apart from the two z-end mask faces (planar but normal along `z`) and from the OML
+    itself (never planar). `octant_mask`'s own size limit contributes a fourth planar face on
+    some builds; it survives the `common` only where the mask happens to reach past the real
+    body, and even then it fails the origin test, so it is excluded without having to be named.
+    """
+    planes = []
+    for f in cell.Faces:
+        if not isinstance(f.Surface, Part.Plane):
+            continue
+        normal = f.Surface.Axis
+        normal.normalize()
+        if abs(normal.z) > tol:
+            continue
+        if abs(f.Surface.Position.dot(normal)) > tol:
+            continue
+        if not any((normal - p).Length < tol or (normal + p).Length < tol for p in planes):
+            planes.append(normal)
+    if not planes:
+        raise PreconditionFailed(
+            'the body has no flat face through its own axis and perpendicular to the layer '
+            'plane -- it was not reduced to a symmetry cell before this ran (OQ-DES-CW20)')
+    return planes
+
+
+def _on_plane(edge, planes, tol):
+    lo, hi = edge.FirstParameter, edge.LastParameter
+    for i in range(7):
+        p = edge.valueAt(lo + (hi - lo) * i / 6.0)
+        if not any(abs(p.x * n.x + p.y * n.y + p.z * n.z) < tol for n in planes):
+            return False
+    return True
+
+
+def _chain(edges, tol=1.0e-6):
+    """`edges` reordered tail to head into one open run, or a failure if they do not chain.
+
+    Not assumed of `wire.Edges` order, because what is being reordered here is *the edges left
+    after removing some of a closed wire's edges* -- a subset the wire's own traversal order
+    was never a promise about once part of it is gone.
+    """
+    remaining = list(edges)
+    chain = [remaining.pop(0)]
+    while remaining:
+        tail = chain[-1].Vertexes[-1].Point
+        for i, e in enumerate(remaining):
+            a, b = e.Vertexes[0].Point, e.Vertexes[-1].Point
+            if tail.distanceToPoint(a) < tol:
+                chain.append(remaining.pop(i))
+                break
+            if tail.distanceToPoint(b) < tol:
+                chain.append(e.reversed())
+                remaining.pop(i)
+                break
+        else:
+            raise PreconditionFailed(
+                'a cell section\'s arc edges do not chain into one open run once its '
+                'construction boundaries are removed')
+    return chain
+
+
+def open_arc(wire, planes, tol=1.0e-6):
+    """The true-exterior portion of a cell section: `wire` with its construction edges removed.
+
+    Returns `(arc, plane_at_start, plane_at_end, flip)`. For the tail's one plane the two ends
+    are the same plane, by construction -- the half's section is a "D", cut once. For the
+    nose's two planes the ends differ, and `plane_at_start` is always `planes[0]` -- but which
+    physical end of `arc` that actually is depends on wherever OCC happened to start it, which
+    is not a promise this function relies on.
+
+    **`flip` says whether a caller's own discretisation of `arc` needs reversing to reach that
+    order, and every caller must apply it themselves rather than trust `arc`'s own vertex order
+    or a `reversed()` copy of it.** Measured on the nose's octant: `Part.Wire`, both as built
+    here and after calling its own `.reversed()`, can report `Vertexes[0]` at the same physical
+    point regardless of the edge order or orientation handed to the constructor -- so neither
+    the edge list going in nor the wire's topological orientation coming out is a reliable
+    handle on which end its own `Vertexes`/`discretize` will call first. A plain Python list of
+    points has no such ambiguity, which is why every consumer here (`_smoothed_open`,
+    `open_contour`, `eroded_arc`) discretizes `arc` itself and then reverses the *list*, once,
+    using `flip`, rather than asking a wire to have been built facing the other way.
+    """
+    keep = [e for e in wire.Edges if not _on_plane(e, planes, tol)]
+    if not keep:
+        raise PreconditionFailed(
+            'a cell section has no arc left once its %d construction boundary(ies) are '
+            'removed -- every edge of this section lies in a cell plane' % len(planes))
+    arc = Part.Wire(_chain(keep, tol))
+    if arc.isClosed():
+        raise PreconditionFailed(
+            'a cell section\'s arc came back closed once its construction boundaries were '
+            'removed -- the body was not actually reduced to a cell')
+    if len(planes) == 1:
+        return arc, planes[0], planes[0], False
+
+    def which(point):
+        for i, n in enumerate(planes):
+            if abs(point.x * n.x + point.y * n.y + point.z * n.z) < 1.0e-3:
+                return i
+        raise PreconditionFailed(
+            'a cell arc\'s end at (%.4f, %.4f, %.4f) is not on any of its %d construction '
+            'planes to 1e-3 mm' % (point.x, point.y, point.z, len(planes)))
+
+    probe = arc.discretize(Number=10)
+    i0, i1 = which(probe[0]), which(probe[-1])
+    if i0 == i1:
+        raise PreconditionFailed(
+            'a cell arc\'s two ends are both on the same construction plane, but the cell has '
+            '%d of them -- each end should sit on a different one' % len(planes))
+    return arc, planes[0], planes[1], i0 != 0
+
+
+def _resample_open(dense, n):
+    """`n` points along the open polyline `dense`, evenly spaced by arc length, ends preserved
+    exactly -- the open-arc counterpart of `contour`'s arc-length resampling."""
+    cum = [0.0]
+    for i in range(len(dense) - 1):
+        x1, y1 = dense[i]
+        x2, y2 = dense[i + 1]
+        cum.append(cum[-1] + math.hypot(x2 - x1, y2 - y1))
+    total = cum[-1]
+    if total <= 0.0:
+        raise PreconditionFailed('a cell arc has zero length')
+    out = []
+    j = 0
+    for k in range(n):
+        target = total * k / float(n - 1)
+        while j + 2 < len(dense) and cum[j + 1] < target:
+            j += 1
+        span = cum[j + 1] - cum[j]
+        f = 0.0 if span <= 0.0 else (target - cum[j]) / span
+        x1, y1 = dense[j]
+        x2, y2 = dense[j + 1]
+        out.append((x1 + f * (x2 - x1), y1 + f * (y2 - y1)))
+    return out
+
+
+def _disc(wire, n, flip):
+    """`wire.discretize(Number=n)`, reversed if `flip` -- see `open_arc`."""
+    pts = wire.discretize(Number=n)
+    return list(reversed(pts)) if flip else pts
+
+
+def open_contour(wire, n, flip=False):
+    """`n` points along an open arc, evenly spaced by arc length, and the dense polyline they
+    were taken from -- the open-arc counterpart of `contour`, with no anchor or wraparound
+    needed, since the two ends are already the cell's own construction boundary."""
+    dense = [(p.x, p.y) for p in _disc(wire, max(DENSE_FACTOR * n, 400), flip)]
+    return _resample_open(dense, n), _Polyline(dense, closed=False)
+
+
+def _smoothed_open(wire, n, flip, tol=REFIT_TOL):
+    """`smoothed`'s open counterpart: one open cubic B-spline through `n` points of `wire`,
+    verified the same way."""
+    pts = _disc(wire, n, flip)
+    curve = Part.BSplineCurve(pts, None, None, False, 3, None, False)
+    shape = curve.toShape()
+    dense = _Polyline([(p.x, p.y) for p in shape.discretize(Number=4 * n)], closed=False)
+    worst = float(dense.distances([(p.x, p.y) for p in _disc(wire, 2 * n, flip)]).max())
+    return Part.Wire(shape), worst
+
+
+def eroded_arc(arc, t, z, p_start, p_end, flip, tol=REFIT_TOL):
+    """The open arc, refit and offset inward by `t`, its two ends snapped exactly onto the
+    cell's own planes.
+
+    **Snapped, not trusted.** An inward 2-D offset moves each point along the curve's own local
+    normal, which for a genuinely symmetric exterior crossing its own cell plane head-on is
+    already that plane's direction -- but `body` is not guaranteed exactly symmetric (IP-FC-138
+    is the separate, still-open investigation into why), and the offset has no way to know the
+    plane exists at all. Projecting the two ends onto it exactly is what makes the eventual
+    mirror-fuse exact rather than approximate: both halves' surfaces then meet at bit-identical
+    points, not merely close ones.
+
+    **The refit curve is built by `_smoothed_open` from `arc` in the already-canonical order**
+    (`flip` applied there), so its own start and end need no further reordering here -- only the
+    offset's own start/end get snapped, to `p_start`/`p_end` respectively.
+    """
+    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(arc.Length / SAMPLE_SPACING)))
+    why = None
+    for n in (n0, 2 * n0, 4 * n0):
+        refit, moved = _smoothed_open(arc, n, flip, tol)
+        if moved > tol:
+            why = ('refitting the arc at %d points moved it %.6f mm, over the %.6f mm '
+                   'allowed' % (n, moved, tol))
+            continue
+        try:
+            offset = refit.makeOffset2D(-t, 0, False, True, True)
+        except Exception as exc:                        # noqa: BLE001 -- reported below
+            why = 'the arc refit at %d points (%.6f mm) would not offset: %s' % (n, moved, exc)
+            continue
+        if offset is None or not offset.Edges:
+            why = 'the arc refit at %d points offset to nothing' % n
+            continue
+        # `refit` was built directly from the canonically-ordered points above, so its own
+        # offset's discretisation needs no `flip` -- it already starts at the `p_start` end.
+        pts = [App.Vector(p.x, p.y, z) for p in offset.discretize(Number=max(2 * n, 400))]
+        for i, plane in ((0, p_start), (-1, p_end)):
+            d = pts[i].dot(plane)
+            pts[i] = pts[i] - plane * d
+        return [(p.x, p.y) for p in pts]
+    raise PreconditionFailed(
+        'P3: no refit of the %.3f mm cell arc at z = %.4f both reproduced it and eroded by '
+        '%.4f mm. Last: %s.' % (arc.Length, z, t, why))
+
+
+def _side_caps(surf, planes):
+    """The flat face(s) that close a patch across the cell's construction boundary(ies), along
+    its whole axial run -- the long edges `_lid` does not reach.
+
+    One plane (the tail's half): both long edges already sit on it, so one face bounded by both
+    of them, plus a straight closer at each end, closes the whole run at once.
+
+    Two planes (the nose's octant): the long edges sit on two different planes that meet only
+    at the part's own axis, so a single face across both would cut the near-axis corner off.
+    Each edge instead gets its own face, closed at each end by a line to the axis point there --
+    the two faces then share that axis line, which is ordinary shell topology, not a defect.
+    """
+    u0, u1, v0, v1 = surf.bounds()
+    edge_lo = surf.vIso(v0).toShape()
+    edge_hi = surf.vIso(v1).toShape()
+    p_lo, p_hi = edge_lo.Vertexes[0].Point, edge_lo.Vertexes[-1].Point
+    q_lo, q_hi = edge_hi.Vertexes[0].Point, edge_hi.Vertexes[-1].Point
+    if len(planes) <= 1:
+        wire = Part.Wire([edge_lo, Part.makeLine(p_hi, q_hi), edge_hi.reversed(),
+                          Part.makeLine(q_lo, p_lo)])
+        return [Part.Face(wire)]
+    axis_lo, axis_hi = App.Vector(0, 0, p_lo.z), App.Vector(0, 0, p_hi.z)
+    wire_a = Part.Wire([edge_lo, Part.makeLine(p_hi, axis_hi),
+                       Part.makeLine(axis_hi, axis_lo), Part.makeLine(axis_lo, p_lo)])
+    wire_b = Part.Wire([edge_hi, Part.makeLine(q_hi, axis_hi),
+                       Part.makeLine(axis_hi, axis_lo), Part.makeLine(axis_lo, q_lo)])
+    return [Part.Face(wire_a), Part.Face(wire_b)]
 
 
 def slab_normal(tool):
@@ -981,39 +1264,6 @@ def feature_stations(notches, z_lo, z_hi):
     return out
 
 
-def anchor_direction(notch_wires, body_face):
-    """Where to put the parameter origin: the direction furthest from any notch.
-
-    Section 4.3 asks for the correspondence to be anchored to a feature and traversed in a
-    fixed direction. What it must *not* be anchored to is a feature that **moves**, and a notch
-    is exactly that -- its depth ramps with z, so a ray through one crosses the contour in a
-    place that shifts from station to station. `contour` records what that cost.
-
-    So the anchor is derived from the notches rather than chosen despite them: take the angle
-    of every notch about the section centre and point at the middle of the widest gap between
-    consecutive angles. On the nose, whose eight buttresses sit on the axes, that is a diagonal;
-    on the tail, whose eleven sit between 0 and 30 degrees, it is the empty side. Neither is
-    written down anywhere -- both fall out of where the tools actually are.
-    """
-    centre = body_face.CenterOfMass
-    angles = []
-    for wire in notch_wires:
-        if not wire.isClosed():
-            continue
-        middle = wire.BoundBox.Center
-        angles.append(math.atan2(middle.y - centre.y, middle.x - centre.x) % (2 * math.pi))
-    if not angles:
-        return 0.0
-    angles.sort()
-    best, at = -1.0, 0.0
-    for i in range(len(angles)):
-        lo = angles[i]
-        hi = angles[(i + 1) % len(angles)] + (2 * math.pi if i + 1 == len(angles) else 0.0)
-        if hi - lo > best:
-            best, at = hi - lo, 0.5 * (lo + hi)
-    return at % (2 * math.pi)
-
-
 def _patches(z_lo, z_hi, features):
     edges = [z_lo] + list(features) + [z_hi]
     return [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)
@@ -1045,35 +1295,23 @@ def _fit(rows):
     nor generally (2). What the requirement asks for is an approximation with continuity
     constraints, which is the class of construction OpenVSP uses for the exterior.
 
-    **The surface is genuinely periodic in the circumferential direction, and it has to be
-    built that way rather than told to be that way afterwards.** `BSplineSurface.interpolate`
-    takes no periodic flag -- checked against the API, its only signatures are `(points)` and
-    the gridded-float form -- and `setVPeriodic()` applied to the result does not make the seam
-    continuous, it only relabels it. What that leaves is a surface with a real defect at the
-    parameter origin, and the defect is worst where the contour curves most.
+    **The surface is open in the circumferential direction, not periodic -- OQ-DES-CW20.** Each
+    row is the cell's own open arc, bounded at both ends by a construction plane rather than
+    wrapping onto itself, so there is no seam to hold continuous and no anchor needed: the two
+    ends are already fixed, at the cell's own boundary, the same one at every station. This
+    replaced a genuinely periodic fit through the *whole* body (`cowl_interior_surface.md`
+    section 9.5, now superseded): that surface had no way to keep a construction edge straight
+    and an OML edge curved at the same point, and the two halves it produced met only
+    approximately once mirrored back together -- an approximation `removeSplitter` could not
+    clean up, surfacing as a near-zero-area seam face and a `fuse`/cut that failed on it. An open
+    fit has nothing to round, because the boundary it is asked to hold is a real edge of the
+    thing being fitted, not an artefact of how the loop was closed.
 
-    That is exactly where the anchor puts it. `anchor_direction` chooses the direction furthest
-    from any notch, which on the nose's eight axis-aligned buttresses is the diagonal -- the
-    corner arc of the rounded-rectangle section. Measured 2026-09-03 on the nose at U = 1, worst
-    |wall - t| round the section, 9 rows and no refinement:
-
-        interpolate + setVPeriodic          0.1552 at a row   0.1456 at a midpoint
-        interpolate + repeated column       0.1409             0.1372
-        repeated column + setVPeriodic      0.1409             0.1372
-        skinned, genuinely V-periodic       0.0039             0.0084
-
-    and in the first three the error sits *at the seam* -- 0.0040 away from it. A closed curve
-    interpolated with `PeriodicFlag=True` holds the wall to 0.0025 mm with the seam on that same
-    corner, so periodicity, not the anchor and not the sampling, is what was missing. This is
-    what made section 5 refine forever against a floor: no number of axial stations fixes a
-    circumferential seam, and the floor halved when the fit spacing halved because the seam gap
-    is proportional to the spacing there.
-
-    So the periodicity comes from curves that really have it, and is carried into the surface by
-    `buildFromPolesMultsKnots`, which does take the flag. Every row carries the same number of
-    points and is given the same explicit parameterisation, so every row curve comes out with
-    the same knot vector and the same pole count -- which is what makes a pole track something
-    it is meaningful to interpolate along.
+    The periodicity comes from curves that really have it, and is carried into the surface by
+    `buildFromPolesMultsKnots`. Every row carries the same number of points and is given the
+    same explicit parameterisation, so every row curve comes out with the same knot vector and
+    the same pole count -- which is what makes a pole track something it is meaningful to
+    interpolate along.
 
     A patch seeded with two stations comes out degree 1 in the axial direction. That is not a
     violation of requirement (4): a patch is bounded by two genuine creases in the exterior,
@@ -1084,15 +1322,16 @@ def _fit(rows):
     zs = [z for z, _pts in rows]
     n = len(rows[0][1])
 
-    # V: one genuinely periodic curve per row. The parameterisation is given explicitly rather
-    # than left to chord length so that every row lands on the same knot vector -- rows differ
-    # in perimeter, and chord length would give each its own.
-    vparams = [i / float(n) for i in range(n + 1)]
+    # V: one open curve per row, its two ends the cell's own construction plane. The
+    # parameterisation is given explicitly rather than left to chord length so that every row
+    # lands on the same knot vector -- rows differ in perimeter, and chord length would give
+    # each its own.
+    vparams = [i / float(n - 1) for i in range(n)]
     curves = []
     for z, pts in rows:
         curve = Part.BSplineCurve()
         curve.interpolate(Points=[App.Vector(x, y, z) for x, y in pts],
-                          PeriodicFlag=True, Parameters=vparams)
+                          PeriodicFlag=False, Parameters=vparams)
         curves.append(curve)
 
     # U: interpolate each pole track through the stations. Same argument for giving the
@@ -1114,33 +1353,41 @@ def _fit(rows):
         grid,
         tracks[0].getMultiplicities(), curves[0].getMultiplicities(),
         tracks[0].getKnots(), curves[0].getKnots(),
-        False, True,
+        False, False,
         tracks[0].Degree, curves[0].Degree)
     return surf
 
 
-def _lid(surf, u):
-    """A patch's cap at one of its two ends, taken from the surface's own iso curve.
+def _lid(surf, u, z, planes):
+    """A patch's cap at one of its two axial ends, taken from the surface's own iso curve and
+    closed across the cell's construction boundary(ies) -- OQ-DES-CW20.
 
-    From the surface rather than from the sample polygon, so the cap edge *is* the surface
-    edge and the piece closes without a tolerance argument. The interpolated boundary passes
-    exactly through a row of points that all share one z, so it should be planar; the filled
-    face is kept as a fallback for the case where the kernel disagrees, since it bounds the
-    same wire without requiring planarity.
+    From the surface rather than from the sample polygon, so the cap edge *is* the surface edge
+    and the piece closes without a tolerance argument. `surf.uIso(u)` is now open, not closed --
+    its two ends are the cell's own construction plane(s), not a wrap of the same point -- so
+    closing it is never optional the way the old wire's own occasional non-closure was.
+
+    One plane (the tail's half): both ends already sit on it, so a single straight chord between
+    them closes the loop, in the plane, exactly. Two planes (the nose's octant): the ends sit on
+    two different planes that share only the part's own axis, so a chord would cut that corner
+    off; the wedge closes correctly by routing through the axis point at this station instead,
+    one straight segment in each plane.
     """
     wire = Part.Wire([surf.uIso(u).toShape()])
-    if not wire.isClosed():
-        a = wire.Vertexes[0].Point
-        b = wire.Vertexes[-1].Point
-        if a.distanceToPoint(b) > Z_TOL:
-            wire = Part.Wire(wire.Edges + [Part.makeLine(b, a)])
+    a, b = wire.Vertexes[0].Point, wire.Vertexes[-1].Point
+    if len(planes) <= 1:
+        closers = [Part.makeLine(b, a)]
+    else:
+        axis = App.Vector(0, 0, z)
+        closers = [Part.makeLine(b, axis), Part.makeLine(axis, a)]
+    wire = Part.Wire(wire.Edges + closers)
     try:
         return Part.Face(wire)
     except Exception:                                  # noqa: BLE001 -- non-planar boundary
         return Part.makeFilledFace(wire.Edges)
 
 
-def _refine(fit_at, outer_at, zs, t, tau, budget, n_check, anchor):
+def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
     """Section 5: refine until the fitted interior holds the wall, then stop.
 
     **The criterion is the wall, measured in the layer plane.** At each candidate station the
@@ -1174,17 +1421,18 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check, anchor):
             z_m = 0.5 * (z_a + z_b)
             # **An insertion has two possible causes and they are not the same failure.**
             # Either the wall is measurably wrong -- which more stations fix -- or the surface
-            # would not section into one closed loop at all, which more stations do not fix and
+            # would not section into one open arc at all, which more stations do not fix and
             # which subdividing turns into a silent loop that runs to the budget. They are
-            # counted apart so the progress line can say which is happening.
+            # counted apart so the progress line can say which is happening. The surface is open
+            # now, not periodic, so the wanted section is the one open wire, not a closed one.
             sliced = _slice_wires(face, z_m)
-            cut = [w for w in sliced if w.isClosed()]
+            cut = [w for w in sliced if not w.isClosed()]
             if len(cut) != 1:
                 unsliceable += 1
-                shapes.append('%d wire(s), %d closed' % (len(sliced), len(cut)))
+                shapes.append('%d wire(s), %d open' % (len(sliced), len(cut)))
                 wanted.append((i, z_m))
                 continue
-            here, _dense = contour(cut[0], n_check, anchor)
+            here, _dense = open_contour(cut[0], n_check)
             gap = float(np.abs(outer_at(z_m).distances(here) - t).max())
             worst = max(worst, gap)
             if gap > tau:
@@ -1214,77 +1462,84 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check, anchor):
 # --------------------------------------------------------------------------------
 
 def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
-    """The solid the wall encloses: sections 4 and 4.5.
+    """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
-    `notched` is the finished print representation, `body` the same blank before any notch
-    reached it, and `notches` the cutting tools. The tools are taken as given rather than
-    recovered as `body - notched`: that difference is the same set inside the body, and
-    measured 2026-09-02 it costs 47 s a part to compute and leaves a 202-face solid that is
-    slower to section than the tools are.
+    `notched` is the finished print representation, `body` the un-mirrored symmetry cell before
+    any notch reached it (`half` for the tail, `octant` for the nose -- OQ-DES-CW20), and
+    `notches` the cutting tools that were built in that same cell, never mirrored. The tools are
+    taken as given rather than recovered as `body - notched`: that difference is the same set
+    inside the body, and measured 2026-09-02 it costs 47 s a part to compute and leaves a
+    202-face solid that is slower to section than the tools are.
 
-    **Two steps, not one.** The surface is fitted through the eroded *body* -- a rounded
-    rectangle, smooth everywhere -- and the ribs are then subtracted from the closed result as
-    a solid. `dilated_notches` records what fitting a surface through the creased contour
-    instead cost, and why the identity is evaluated in 3-D here rather than station by station
-    in 2-D.
+    **Every station's section is a cell, not a full loop, and it is treated as one.** `body` is
+    a real solid with a flat construction face wherever it was cut to make the cell, so its
+    section is a closed loop only in the topological sense; the loop's straight portion is that
+    construction cut, not part of the OML. `open_arc` removes it before anything is fitted, and
+    the flat cap that restores it (`_lid`, `_side_caps`) is added back afterwards as its own
+    exact planar face, so the fitted surface itself is genuinely open with two ends, never
+    periodic. `shell_solid` mirrors the finished result across the same planes exactly once, and
+    an exact flat face mirrors onto itself, which is what makes that mirror-fuse exact instead
+    of the near-miss the two superseded attempts left at the seam.
+
+    **Two steps, not one, within the cell.** The surface is fitted through the eroded cell body
+    -- an open rounded-rectangle arc, smooth everywhere but at its own two known ends -- and the
+    ribs (the cell's own tools only) are then subtracted from the closed result as a solid.
+    `dilated_notches` records what fitting a surface through the creased contour instead cost,
+    and why the identity is evaluated in 3-D here rather than station by station in 2-D.
     """
+    planes = cell_boundary_planes(body)
     lo, hi = z_extent(body)
     z_lo, z_hi = lo + END_INSET, hi - END_INSET
 
-    body_faces = {}
+    arcs = {}
     outers = {}
     fits = {}
 
     def key(z):
         return round(z / Z_TOL)
 
-    def body_face(z):
-        """`(refit wire, its face, the face eroded by t)`, cached -- P1 wants the first, P2 the
-        second, and the erosion the third, and all three cost one refit."""
+    def body_arc(z):
+        """`(open arc, plane at its start, plane at its end, flip)`, cached -- every user of a
+        station's true exterior goes through this, so the cell's construction edges are
+        stripped out, and the arc's orientation fixed, exactly once per station."""
         k = key(z)
-        if k not in body_faces:
+        if k not in arcs:
             wires = _slice_wires(body, z)
             if len(wires) != 1:
                 raise PreconditionFailed(
-                    'P2: the body sections into %d loops at z = %.4f, not one'
+                    'P2: the cell body sections into %d loops at z = %.4f, not one'
                     % (len(wires), z))
-            body_faces[k] = eroded_body(wires[0], t, z)
-        return body_faces[k]
+            arcs[k] = open_arc(wires[0], planes)
+        return arcs[k]
 
     # **One sample count for the whole part, taken from its widest section.** The fit needs a
     # rectangular grid, so every station in a patch must carry the same number of points; taking
     # it from the widest section makes the spacing finest where the contour is longest and never
     # coarser than `FIT_ARC` anywhere.
-    widest = max(body_face(z)[0].Length
+    widest = max(body_arc(z)[0].Length
                  for z in (z_lo, 0.5 * (z_lo + z_hi), z_hi))
     n_fit = fit_samples(widest)
     n_check = check_samples(widest)
 
-    # The anchor is fixed once for the part and every station is parameterised from it. It has
-    # to be one direction for the whole part: the correspondence only means anything if
-    # consecutive rows start from the same place.
-    mid = 0.5 * (z_lo + z_hi)
-    anchor = anchor_direction(_slice_wires(notches, mid), body_face(mid)[1])
-
     def fit_at(z):
-        """The eroded body contour at `z`, at fit resolution: one row of the grid."""
+        """The eroded cell arc at `z`, at fit resolution: one row of the grid."""
         k = key(z)
         if k not in fits:
-            _refit, _face, inner = body_face(z)
-            fits[k] = contour(_one_region(inner, z, None), n_fit, anchor)[0]
+            arc, p_start, p_end, flip = body_arc(z)
+            fits[k] = _resample_open(eroded_arc(arc, t, z, p_start, p_end, flip), n_fit)
         return fits[k]
 
     def outer_at(z):
         """The exterior at `z` as a dense polyline: what the wall is measured out to."""
         k = key(z)
         if k not in outers:
-            outers[k] = contour(body_face(z)[0], n_check, anchor)[1]
+            arc, _p0, _p1, flip = body_arc(z)
+            outers[k] = open_contour(arc, n_check, flip)[1]
         return outers[k]
 
     note('interior: z %.3f .. %.3f, %d fit points (%.3f mm apart), %d check points '
-         '(%.3f mm apart), anchor %.1f deg'
-         % (z_lo, z_hi, n_fit, widest / n_fit, n_check, widest / n_check,
-            math.degrees(anchor)))
+         '(%.3f mm apart), %d cell plane(s)'
+         % (z_lo, z_hi, n_fit, widest / n_fit, n_check, widest / n_check, len(planes)))
 
     # **The body's own creases, not the notches'.** The surface follows the un-notched blank
     # now, so a rib start is not a boundary for it -- the rib is subtracted afterwards and
@@ -1311,15 +1566,18 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         at = time.time()
         zs = _seed(p_lo, p_hi, p_lo <= z_lo, p_hi >= z_hi)
 
-        # P1 over the patch, on the un-notched body, before anything is fitted.
+        # P1 over the patch, on the un-notched cell body, before anything is fitted. The two
+        # contours being compared must be in the same order -- point i means the same place on
+        # the section at both z -- which is exactly what `flip` guarantees across stations.
         prev = None
         for z in zs:
-            here, _d = contour(body_face(z)[0], n_check, anchor)
+            arc, _p0, _p1, flip = body_arc(z)
+            here, _d = open_contour(arc, n_check, flip)
             if prev is not None:
                 _check_slope(prev[1], here, prev[0], z, overhang_deg)
             prev = (z, here)
 
-        rows, surf, worst = _refine(fit_at, outer_at, zs, t, tau, budget, n_check, anchor)
+        rows, surf, worst = _refine(fit_at, outer_at, zs, t, tau, budget, n_check)
         stations += len(rows)
         worst_wall = max(worst_wall, worst)
         # **The positions, not only the count.** Two builds that both settle on 16 stations
@@ -1328,14 +1586,16 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # changing the surface, the cavity and the wall.
         chosen.extend(z for z, _pts in rows)
 
-        # Section 4.5: both cowls are open -- the tail at both ends, the nose body where it is
-        # cut to the closure parts -- so a patch is closed by the two contours it already has
-        # and there is no turnover to handle. The caps come from the fitted surface's own iso
+        # Section 4.5: both cowls are open axially -- the tail at both ends, the nose body where
+        # it is cut to the closure parts -- so a patch is closed by the two contours it already
+        # has and there is no turnover to handle. The caps come from the fitted surface's own iso
         # curves rather than from the sample polygon, so the cap edge *is* the surface edge and
-        # the piece closes without a tolerance argument.
+        # the piece closes without a tolerance argument. `_side_caps` closes the *other* pair of
+        # free edges, along the cell's construction plane(s), which `_lid` does not reach.
         u0, u1, _v0, _v1 = surf.bounds()
-        lids = [_lid(surf, u) for u in (u0, u1)]
-        pieces.append(Part.Solid(Part.Shell([surf.toShape()] + lids)))
+        lids = [_lid(surf, u0, rows[0][0], planes), _lid(surf, u1, rows[-1][0], planes)]
+        sides = _side_caps(surf, planes)
+        pieces.append(Part.Solid(Part.Shell([surf.toShape()] + lids + sides)))
 
         note('patch %d/%d  z %9.4f .. %9.4f (%6.3f mm)  %2d seeded -> %2d stations  '
              'worst wall %.4f  %5.1f s  [%.0f s total]'
@@ -1474,7 +1734,69 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 PARTITION_TOL = 1.0e-4
 
 
-def shell_solid(notched, body, notches, t, overhang_deg, tau=TAU, report=None, mirror=None):
+def _strip_seam(solid, normal, tol=1.0e-6):
+    """`solid`'s own faces, minus every exact flat cap lying in the mirror plane through the
+    origin -- the open shell a mirror should be sewn onto rather than fused against.
+
+    **Sewn, not fused, and that is the fix for the seam OQ-DES-CW20 kept finding.** A plain
+    `fuse` of two solids that meet only at one shared face routinely returned `ValueError: Null
+    shape` here even though the shared face is exact by construction (measured 2026-09-20: one
+    planar face at 0.000000000 mm from the origin, area 2009.22 mm2, both operands individually
+    valid) -- the boolean kernel's general-purpose intersection machinery is simply not the
+    robust path for a case this degenerate, two solids abutting over their *entire* shared
+    boundary with zero overlap. Removing that face from each side first and sewing the two open
+    shells along their now-open edge is the operation this case actually is: not an
+    intersection to compute, but two boundaries that are already identical to be zipped
+    together.
+
+    **Every** matching face is removed, not exactly one. The tail's half ever has one cap per
+    plane, but the nose's octant, three mirrors in, can carry two: mirroring doubles a plane's
+    own cap along with everything else, so by the third step (`x = 0`) there is the octant's
+    original cap and a second one produced by mirroring it across `y = 0` in the second step,
+    both in the same plane and both due to cancel.
+    """
+    keep = []
+    removed = 0
+    for f in solid.Faces:
+        if not isinstance(f.Surface, Part.Plane):
+            keep.append(f)
+            continue
+        axis = f.Surface.Axis
+        axis.normalize()
+        if abs(abs(axis.dot(normal)) - 1.0) < tol and abs(f.Surface.Position.dot(normal)) < tol:
+            removed += 1
+        else:
+            keep.append(f)
+    if removed < 1:
+        raise PreconditionFailed(
+            'expected at least one flat cap face in the mirror plane %s, found none -- the '
+            'cell cavity was not closed the way OQ-DES-CW20 expects' % normal)
+    return keep
+
+
+def mirror_cavity(inside, normal):
+    """The cell cavity carried one mirror step further: its cell-boundary cap removed, the
+    open shell mirrored, and the two sewn together along their now-identical shared edge.
+
+    See `_strip_seam` for why this replaces a `fuse` of the capped solid against its mirror.
+    """
+    n = App.Vector(normal)
+    n.normalize()
+    faces = _strip_seam(inside, n)
+    mirrored = [f.mirror(App.Vector(0, 0, 0), n) for f in faces]
+    sewn = Part.Shell(faces + mirrored)
+    sewn.sewShape()
+    solid = Part.Solid(sewn)
+    if not solid.isValid() or not solid.Solids:
+        raise Unconverged(
+            'mirroring the cell cavity about %s did not close into one valid solid: %d '
+            'solid(s), valid=%s. The two open shells should meet exactly along their shared '
+            'edge -- the same curve, mirrored onto itself -- so a failure here means that edge '
+            'is not as exact as OQ-DES-CW20 assumes.' % (normal, len(solid.Solids), solid.isValid()))
+    return solid
+
+
+def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None):
     """The wall: the notched blank with its cavity removed.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
@@ -1489,25 +1811,26 @@ def shell_solid(notched, body, notches, t, overhang_deg, tau=TAU, report=None, m
     build must at least refuse to emit the wrong answer, because every check downstream of here
     is a check on the wall it is handed.
 
-    **`mirror`, if given, is `(normal, cell)`.** `notches` is then understood to cover only one
-    symmetry cell (e.g. the tail's `y >= 0` half), and the cavity computed from it is clipped to
-    `cell` and fused with its own mirror about `normal` before the wall is cut, instead of the
-    caller mirroring the tools and cutting once against the shared surface. IP-FC-139 measured
-    directly that the tool-mirroring route does not produce a symmetric outcome even when `body`
-    itself is made exactly symmetric first (`0.000000000` mm3 by construction): at `U` = 0.7 the
-    residue was unchanged to four figures and at `U` = 0.5 it changed but did not clear, so the
-    boolean kernel's success on this near-tangent cut depends on something other than input
-    symmetry. Computing the cell's cavity once and mirroring the *result* is immune to that by
-    construction, the same way `tail_cowl()`'s outer solid already is -- it never asks the kernel
-    to reproduce a mirrored relationship, only to copy a number.
+    **`mirrors` is the same ordered list of normals that assembled `notched` from its own cell**
+    (one for the tail's half, three for the nose's octant -- `cowl_tree.pieces`), and it is
+    applied here to the *cavity* in that identical order, never to the tools and never before
+    `cavity` has finished: `body` and `notches` are the un-mirrored cell throughout `cavity`
+    (OQ-DES-CW20), and only the finished cell cavity is carried out to the whole part, the same
+    way `_mirror_union` already carries the tip out to the whole part. Two earlier attempts
+    mirrored something *before* the surface fit was done -- a reconstructed full body, and a
+    once-mirrored set of tools -- and IP-FC-139 measured both not to produce a symmetric cut
+    outcome even from an exactly symmetric input. Mirroring the finished, already-closed cavity
+    is immune to that by construction: each of `cavity`'s flat cell-boundary faces is exact, so
+    its mirror image is that same face, not a near-duplicate of it. Even so, a plain `fuse` of
+    the capped cell against its own mirror was measured to fail (`ValueError: Null shape`) on
+    exactly this exact-face case -- `mirror_cavity` sews the two open shells instead, which is
+    what `_strip_seam` records the reasoning for.
     """
     inside = cavity(notched, body, notches, t, overhang_deg, tau=tau, report=report)
-    if mirror is not None:
-        normal, cell = mirror
-        cell_inside = inside.common(cell)
-        inside = cell_inside.fuse(cell_inside.mirror(App.Vector(0, 0, 0), normal)).removeSplitter()
-        if report is not None:
-            report.update(mirrored_cavity_volume=inside.Volume)
+    for normal in mirrors:
+        inside = mirror_cavity(inside, normal)
+    if report is not None:
+        report.update(mirrored_cavity_volume=inside.Volume)
     wall = notched.cut(inside)
 
     kept = notched.common(inside)
