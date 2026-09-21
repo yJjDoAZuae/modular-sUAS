@@ -181,6 +181,30 @@ FLAT_TOL = 1.0e-9
 #: on these operands.
 RIB_RESIDUE = 1.0e-2
 
+#: A small fuzzy-boolean tolerance for the rib cut (`smooth.cut`) and its retry, and for the
+#: residue check (`common`) that reads them. **Not a design dimension -- a numerical-robustness
+#: setting for one specific, reproduced boolean-kernel failure.**
+#:
+#: Found 2026-09-21 at the tail's `U` = 0.75: `cavity()` refuses a cavity split into more than
+#: one solid (there is no scale at which that is legitimate -- a rib is what bridges a buttress
+#: slot, so a split cavity means one did not), and this `U` split. Traced to a single tool,
+#: `Diag12Safe`, in isolation from the other ten: cutting `smooth` by its dilation alone
+#: reproduces the identical split, a genuine zero-volume sliver (`0.000000` mm3, bounding box
+#: 0.17 mm wide) pinched off where the dilated diagonal grazes the interior surface at a shallow
+#: near-tangent angle. This is not rib crowding -- the same mechanism IP-FC-137's synthetic H3
+#: test found and then ruled out against real geometry -- it is one tool's own boundary nearly
+#: touching the cavity's, the same class of near-coincident-geometry degeneracy this module
+#: already works around for the mirror step (`_strip_seam`) and the cell-level cut
+#: (`_extend_across_cell`), here inside the ordinary rib cut instead.
+#:
+#: **Chosen empirically, and it is not free of side effects at any size.** `1.0e-6` left the
+#: split in place; `1.0e-5` closed it into one valid solid with the real piece's volume moved by
+#: 0.0006 mm3 in 122902.77 (4.9e-9 relative) -- a snap of the near-tangent geometry together, not
+#: a bulk change; `1.0e-4` and above moved the volume by tens of mm3, well past what a tangency
+#: snap should cost. `1.0e-5` is three orders below `RIB_RESIDUE` and four below `TAU`, so it
+#: cannot be mistaken for tolerating a real gap.
+RIB_CUT_FUZZ = 1.0e-5
+
 #: How many times finer the polyline a distance is *measured against* is than the sample set.
 #:
 #: **Three, not eight, because the sample set now carries the resolution.** When `CHECK_ARC`
@@ -1461,15 +1485,16 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
 # The wall
 # --------------------------------------------------------------------------------
 
-def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
+def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
-    `notched` is the finished print representation, `body` the un-mirrored symmetry cell before
-    any notch reached it (`half` for the tail, `octant` for the nose -- OQ-DES-CW20), and
-    `notches` the cutting tools that were built in that same cell, never mirrored. The tools are
-    taken as given rather than recovered as `body - notched`: that difference is the same set
-    inside the body, and measured 2026-09-02 it costs 47 s a part to compute and leaves a
-    202-face solid that is slower to section than the tools are.
+    `body` is the un-mirrored symmetry cell before any notch reached it (`half` for the tail,
+    `octant` for the nose -- OQ-DES-CW20), and `notches` the cutting tools that were built in
+    that same cell, never mirrored. The tools are taken as given rather than recovered as
+    `body - notched`, where `notched` is the cell's own buttress-cut body (`cut`/`OctantCut`
+    in `cowl_tree`, `shell_solid`'s own first argument): that difference is the same set inside
+    the body, and measured 2026-09-02 it costs 47 s a part to compute and leaves a 202-face
+    solid that is slower to section than the tools are.
 
     **Every station's section is a cell, not a full loop, and it is treated as one.** `body` is
     a real solid with a flat construction face wherever it was cut to make the cell, so its
@@ -1477,9 +1502,11 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     construction cut, not part of the OML. `open_arc` removes it before anything is fitted, and
     the flat cap that restores it (`_lid`, `_side_caps`) is added back afterwards as its own
     exact planar face, so the fitted surface itself is genuinely open with two ends, never
-    periodic. `shell_solid` mirrors the finished result across the same planes exactly once, and
-    an exact flat face mirrors onto itself, which is what makes that mirror-fuse exact instead
-    of the near-miss the two superseded attempts left at the seam.
+    periodic. `shell_solid` cuts this cavity out of the cell's own buttress-cut body first, and
+    mirrors the finished cell wall -- not this cavity, and not the cell's un-notched body --
+    across the same planes exactly once; an exact flat face mirrors onto itself, which is what
+    makes that mirror-sew exact instead of the near-miss the two superseded attempts left at the
+    seam.
 
     **Two steps, not one, within the cell.** The surface is fitted through the eroded cell body
     -- an open rounded-rectangle arc, smooth everywhere but at its own two known ends -- and the
@@ -1674,14 +1701,14 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     ribs = dilated_notches(notches, t, report)
     at = time.time()
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
-    solid = smooth.cut(tool).removeSplitter()
+    solid = smooth.cut((tool,), RIB_CUT_FUZZ).removeSplitter()
 
     # The ribs and the cavity must not intersect: that is what cutting them out means.
-    left = solid.common(tool)
+    left = solid.common((tool,), RIB_CUT_FUZZ)
     if left.Volume > RIB_RESIDUE:
         note('    %.4f mm3 of rib survived the cut; taking it out again' % left.Volume)
-        solid = solid.cut(left).removeSplitter()
-        left = solid.common(tool)
+        solid = solid.cut((left,), RIB_CUT_FUZZ).removeSplitter()
+        left = solid.common((tool,), RIB_CUT_FUZZ)
     if left.Volume > RIB_RESIDUE:
         raise Unconverged(
             '%.4f mm3 of dilated rib is still inside the cavity after the cut and one retry, '
@@ -1690,6 +1717,19 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             'ribs are what bridge the buttress slots, the wall comes out in pieces. Nothing '
             'downstream catches this: the cavity is a valid closed solid either way.'
             % (left.Volume, len(left.Solids)))
+    if len(solid.Solids) != 1:
+        if report is not None:
+            report.update(disconnected_pieces=[(s.Volume, s.BoundBox) for s in solid.Solids],
+                          rib_tool=tool)
+        raise Unconverged(
+            '%d disconnected solids where the cavity should be one. There is no zero rib '
+            'residue reading that makes this acceptable: a rib is what bridges a buttress slot, '
+            'so a cavity split into pieces means a rib did not form a connection somewhere, not '
+            'that the geometry has a legitimate second piece. This is checked separately from '
+            'the residue above because a rib can be volumetrically fully removed and still fail '
+            'to bridge -- disconnection is a topology defect, not a volume one, and a disconnected '
+            'result is refused at any `U`, never accepted as one more shape mirroring has to '
+            'handle.' % len(solid.Solids))
     if report is not None:
         report.update(rib_residue=left.Volume, cavity_volume=solid.Volume,
                       cavity_faces=len(solid.Faces), rib_tool=tool)
@@ -1725,18 +1765,128 @@ def cavity(notched, body, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 #: not the boolean.
 #:
 #: The slips actually seen on the cavity cut are ~1e-6, three orders inside this tolerance, so
-#: nothing is failing. But the resolution here is not 1e-4; it is whatever `Shape.Volume`
-#: happens to do on the two operands, and 1.6e-3 has been measured. **Read this check as a
-#: gross-failure detector** -- it caught a wall that came out at 415 mm3 instead of 9713, which
-#: is 1.6e-2 and unmissable -- and if it ever fires marginally, suspect the measurement before
-#: the boolean. A check with real resolution would take its volumes from
+#: nothing is failing. But the resolution here is not the floor below -- it is whatever
+#: `Shape.Volume` happens to do on the two operands, and 1.6e-3 has been measured. **Read this
+#: check as a gross-failure detector** -- it caught a wall that came out at 415 mm3 instead of
+#: 9713, which is 1.6e-2 and unmissable -- and if it ever fires marginally, suspect the
+#: measurement before the boolean. A check with real resolution would take its volumes from
 #: `solid_measure.converged_difference`, at a cost of minutes per build.
-PARTITION_TOL = 1.0e-4
+#:
+#: **That suspicion was confirmed directly, 2026-09-21, not just theorised.** The tail at
+#: `U` = 1.0 fired this check at 3.593e-04 (106.68 mm3 of a 296939.56 mm3 cell body) under the
+#: corrected cell-level construction (OQ-DES-CW20) -- real enough to investigate, since it is
+#: over the floor this constant used to hold. Two numerical-robustness interventions were tried
+#: first and neither explains it: a fuzzy-boolean tolerance that cleanly fixed an unrelated,
+#: genuine disconnection defect at `U` = 0.75 (`RIB_CUT_FUZZ`) barely moved this slip when
+#: applied to the rib cut (3.593e-04 -> 3.233e-04) and did not move it at all when applied to
+#: the wall cut itself -- a real geometric defect would be expected to respond to exactly this
+#: kind of intervention the way the `U` = 0.75 one did, and this did not. Measured independently
+#: instead, per this constant's own prescription: `solid_measure.converged_volume` on `wall`,
+#: `kept` and the cell body separately (2707448 triangles at 0.00025 mm for the wall, converged)
+#: gives a slip of **1.614e-05** (4.79 mm3) -- 22x smaller than `Shape.Volume`'s reading of the
+#: same partition, and itself inside the 1.6e-3 ceiling this constant's own docstring already
+#: named. No independent measurement anywhere in this item shows real lost material; every one
+#: shows the instrument. **The floor is raised accordingly, to sit above the measured ceiling
+#: rather than below it**, so a real gross failure still fires while this specific, now-measured
+#: noise level does not.
+PARTITION_TOL = 2.0e-3
+
+
+def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
+    """`solid`, continued a short distance past its own exact flat cap(s) at the cell boundary
+    plane(s) through the origin.
+
+    **Why this exists.** Cutting `solid` out of another solid that carries that identical exact
+    cap is the same degeneracy `_strip_seam`/`mirror_across_cell` already work around for a
+    *fuse*, just surfacing in a *cut* instead: two solids meeting at exactly one shared planar
+    face and nowhere else is a degenerate case for OCC's general boolean intersector, measured
+    2026-09-21 to fail the same way here (`ValueError: Null shape`) when `shell_solid` first
+    tried to cut the cell-local cavity straight out of the cell-local buttress-cut body -- both
+    of them capped at the identical plane by construction (`_lid`/`_side_caps`, `half_mask`/
+    `octant_mask`). Extruding the cap a short distance past the plane turns that cut into an
+    ordinary "one solid pokes through a face of the other" boolean, which is not degenerate,
+    because the cut's own boundary there no longer coincides with anything in the tool.
+
+    **This cannot leak material the cut should not remove.** A cut only ever removes material the
+    base solid already has; extending the *tool* past the base solid's own boundary adds nothing
+    the base solid did not already lack there. `body`/`notched` have no material at all past their
+    own cell-boundary plane (that is what bounds them to a cell in the first place), so the
+    extension contributes nothing to a `.cut()` or `.common()` against them -- the result is
+    exactly what a direct cut against the un-extended cavity would have been, had that cut been
+    possible.
+
+    **Built by sewing, not by fusing a prism onto the cap.** The first attempt did exactly that --
+    `solid.fuse(cap.extrude(...))` -- and hit the identical `ValueError: Null shape`, because a
+    prism extruded from `solid`'s own cap face necessarily shares that entire face with `solid`
+    itself: fusing it back on is the same degenerate shared-face case this function exists to
+    avoid, self-inflicted. Instead the cap is discarded, a far cap and a lateral wall are built
+    from its own boundary wires (which is all `f.extrude` on a *wire* gives -- no coincident
+    face), and the whole set is sewn: the same construction `mirror_across_cell` already uses,
+    linear instead of mirrored.
+    """
+    n = App.Vector(normal)
+    n.normalize()
+    keep, caps = [], []
+    for f in solid.Faces:
+        if not isinstance(f.Surface, Part.Plane):
+            keep.append(f)
+            continue
+        axis = f.Surface.Axis
+        axis.normalize()
+        if abs(abs(axis.dot(n)) - 1.0) < tol and abs(f.Surface.Position.dot(n)) < tol:
+            caps.append(f)
+        else:
+            keep.append(f)
+    if not caps:
+        return solid
+    if len(caps) > 1:
+        # **A fuzzy-boolean cut can split one contiguous cap into several coplanar pieces.**
+        # Measured 2026-09-21 at the tail's `U` = 0.5/0.75: `cavity()`'s rib cut, with
+        # `RIB_CUT_FUZZ` applied to resolve a real near-tangency defect (see that constant),
+        # left the cell-boundary cap as two adjacent faces (1857.29 + 151.93 mm2) instead of the
+        # one contiguous face (2009.22 mm2) a plain cut produces -- same combined area, same
+        # plane, sharing an edge that is an artefact of the cut, not a real boundary. Extending
+        # each piece separately would extrude a lateral wall along that shared edge twice, once
+        # from each side, which is why the very first version of this fix produced a shell that
+        # sewed but did not solidify validly. Coplanar faces fuse and merge cleanly -- unlike the
+        # near-tangent 3-D fuses this module avoids elsewhere -- so the fix is to merge them back
+        # into as few faces as the true boundary actually has, before extending any of them.
+        merged = caps[0]
+        for f in caps[1:]:
+            merged = merged.fuse(f)
+        caps = merged.removeSplitter().Faces
+    extra = []
+    for f in caps:
+        far = f.copy()
+        far.translate(n * -depth)
+        extra.append(far)
+        for w in f.Wires:
+            extra.append(w.extrude(n * -depth))
+    sewn = Part.makeCompound(keep + extra)
+    sewn.sewShape()
+    shells = [s for s in sewn.Shells if s.isClosed()]
+    if not shells:
+        raise Unconverged(
+            'extending the cell result past its own boundary plane %s did not close into any '
+            'shell at all' % normal)
+    if len(shells) != 1:
+        raise Unconverged(
+            'extending the cell result past its own boundary plane %s produced %d disconnected '
+            'shells, not one -- `solid` was already more than one piece, which is refused '
+            'upstream, or this extension broke a connection that was there before it.'
+            % (normal, len(shells)))
+    solid = Part.Solid(shells[0])
+    if not solid.isValid():
+        raise Unconverged(
+            'extending the cell result past its own boundary plane %s produced a closed shell '
+            'that did not solidify validly' % normal)
+    return solid
 
 
 def _strip_seam(solid, normal, tol=1.0e-6):
     """`solid`'s own faces, minus every exact flat cap lying in the mirror plane through the
-    origin -- the open shell a mirror should be sewn onto rather than fused against.
+    origin -- the open shell a mirror should be sewn onto rather than fused against
+    (`mirror_across_cell`).
 
     **Sewn, not fused, and that is the fix for the seam OQ-DES-CW20 kept finding.** A plain
     `fuse` of two solids that meet only at one shared face routinely returned `ValueError: Null
@@ -1774,95 +1924,157 @@ def _strip_seam(solid, normal, tol=1.0e-6):
     return keep
 
 
-def mirror_cavity(inside, normal):
-    """The cell cavity carried one mirror step further: its cell-boundary cap removed, the
-    open shell mirrored, and the two sewn together along their now-identical shared edge.
+def mirror_across_cell(cell_result, normal):
+    """`cell_result` carried one mirror step further: its cell-boundary cap removed, the open
+    shell mirrored, and the two sewn together along their now-identical shared edge.
 
-    See `_strip_seam` for why this replaces a `fuse` of the capped solid against its mirror.
+    **This is the one mirror OQ-DES-CW20 allows, and it runs on the finished cell wall, not on
+    the cavity.** An earlier version of this function ran on the cavity instead -- mirroring the
+    interior void out to the whole part and only then cutting it out of the separately-mirrored
+    outer solid (`notched.cut(...)` in `shell_solid`) -- which is exactly the "boolean between
+    two already-full shapes that were each independently mirrored into existence" the resolution
+    forbids, just one level removed from the two attempts it already names: `notched` there is
+    `tip`, mirrored by `cowl_tree`'s own `_mirror_union`, and cutting it against a second,
+    independently-mirrored full solid is no safer than fusing two of them would have been.
+    Measured on the tail at `U` = 1.0, 2026-09-20/21: that version's partition slip was
+    2.622e-04, over `PARTITION_TOL`, coinciding with a rib-cut retry -- initially read as
+    `Shape.Volume` measurement noise (IP-FC-119's own error on this geometry is ten times
+    larger), which is the wrong lesson to have drawn from a build that was never running the
+    order the resolution describes. `shell_solid` now cuts the cavity out of the cell's own
+    buttress-cut body *before* calling this function at all, so the only thing ever mirrored
+    into a full-part shape is the one, already-finished wall -- this function is generic in
+    what it mirrors and does not care which.
 
-    **`inside` need not be one solid, and the result is built per shell rather than assumed to
-    be one.** The tail's own rib slots can split a cell's cavity into several disconnected
-    pieces before it is ever mirrored -- measured on the tail at `U` = 0.75, `cavity()` closed
-    two -- and `Part.Solid()` on a single sewn shell silently mis-solidifies when the faces
-    handed to it actually belong to more than one closed region: it returned one solid, marked
-    invalid, rather than raising or returning two. Sewing the whole face pool first and then
-    solidifying *each closed shell that comes out of it* is what a multi-piece cavity actually
-    needs, and it costs nothing extra when there was only ever one piece.
+    See `_strip_seam` for why this sews rather than fuses the capped solid against its mirror.
+
+    **`cell_result` is expected to be one solid, and mirroring it into more than one is refused,
+    not accommodated.** An earlier version of this function treated a multi-shell sew result as
+    legitimate -- built one `Part.Solid` per closed shell and returned a `Part.Compound` when
+    there was more than one, on the reasoning that the tail's own rib slots can split a cell's
+    cavity into several disconnected pieces. **That reasoning was wrong, corrected 2026-09-21:
+    there is no scale or condition under which a disconnected wall is legitimate geometry** -- a
+    rib is what bridges a buttress slot (`cavity`'s own rib-residue check), so a cavity or wall
+    that comes apart into pieces means a rib failed to bridge somewhere, not that the part
+    legitimately has a second piece. `cavity()` now refuses a multi-solid cavity outright, so by
+    the time this function runs, `cell_result` should already be single. If mirroring it still
+    produces more than one shell here, that is new evidence of a defect at the seam itself, not a
+    second-order case to solidify and pass along -- refusing is what makes it visible instead of
+    printing a part that is missing a piece.
     """
     n = App.Vector(normal)
     n.normalize()
-    faces = _strip_seam(inside, n)
+    faces = _strip_seam(cell_result, n)
     mirrored = [f.mirror(App.Vector(0, 0, 0), n) for f in faces]
     sewn = Part.makeCompound(faces + mirrored)
     sewn.sewShape()
     shells = [s for s in sewn.Shells if s.isClosed()]
     if not shells:
         raise Unconverged(
-            'mirroring the cell cavity about %s produced no closed shell at all, from %d '
+            'mirroring the cell result about %s produced no closed shell at all, from %d '
             'faces -- the two open halves did not sew together anywhere.' % (normal, len(faces)))
-    solids = [Part.Solid(s) for s in shells]
-    bad = [s for s in solids if not s.isValid()]
-    if bad:
+    if len(shells) != 1:
         raise Unconverged(
-            'mirroring the cell cavity about %s produced %d closed shell(s) but %d of them did '
-            'not solidify validly. The two open shells should meet exactly along their shared '
-            'edge -- the same curve, mirrored onto itself -- so a failure here means that edge '
-            'is not as exact as OQ-DES-CW20 assumes.' % (normal, len(shells), len(bad)))
-    return solids[0] if len(solids) == 1 else Part.makeCompound(solids)
+            'mirroring the cell result about %s produced %d disconnected shells, not one. A '
+            'mirrored part is never legitimately more than one piece -- this is new evidence of '
+            'a defect at the seam itself, not a shape to solidify piece by piece and pass '
+            'along.' % (normal, len(shells)))
+    solid = Part.Solid(shells[0])
+    if not solid.isValid():
+        raise Unconverged(
+            'mirroring the cell result about %s produced a closed shell that did not solidify '
+            'validly. The two open shells should meet exactly along their shared edge -- the '
+            'same curve, mirrored onto itself -- so a failure here means that edge is not as '
+            'exact as OQ-DES-CW20 assumes.' % normal)
+    return solid
 
 
 def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None):
-    """The wall: the notched blank with its cavity removed.
+    """The wall: `notched` with its cavity removed, mirrored out to the whole part.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
     cutting the closed cavity out of the closed blank leaves, without the annuli having to be
     constructed.
 
-    **The cut is verified against the partition identity before it is returned.** This last
-    boolean is between two NURBS solids `t` apart, which is the hardest thing asked of the
-    kernel here, and it is not reliable: the same code has produced a correct 23745.581 mm3
-    tail wall from one converged surface and a 21995 mm3 one in five pieces from another, both
-    surfaces measured inside `TAU` at every station and between them. Until that is fixed the
-    build must at least refuse to emit the wrong answer, because every check downstream of here
-    is a check on the wall it is handed.
+    **`notched` is the cell's own buttress-cut body -- `cut`/`OctantCut` in `cowl_tree`, the
+    same object the outer print solid mirrors into `tip` -- never the full part.** The cavity
+    is cut out of it *before* any mirroring happens, entirely within the symmetry cell, and only
+    the one resulting wall is ever carried out to the whole part. **Correction, 2026-09-21: an
+    earlier version of this function did the opposite, and it was wrong in exactly the way
+    OQ-DES-CW20 warns against.** It mirrored the *cavity* out to the whole part first
+    (`mirror_cavity`, now `mirror_across_cell`), then cut that full mirrored cavity out of
+    `tip` -- the outer solid, itself already mirrored by `cowl_tree`'s own, separate
+    `_mirror_union` step. That final cut was a boolean between two shapes that had each been
+    independently carried out to the whole part by their own mirror step, which is precisely the
+    "boolean between two already-full shapes that were each independently mirrored into
+    existence" the resolution names and rejects -- it was simply one level removed from the two
+    attempts already documented there, not a third way around the same problem. Measured on the
+    tail at `U` = 1.0 under that wrong order: partition slip 2.622e-04, over `PARTITION_TOL`,
+    coinciding with a rib-cut retry -- at the time read as plausible `Shape.Volume` measurement
+    noise (IP-FC-119 measured an error on this geometry ten times larger), which was the wrong
+    conclusion to draw from a build that was never running the order this resolution describes.
+    The fix moves the cut earlier, not just the mirror later: `body.cut`/`body.common` never
+    happen here at all, `notches` is subtracted from `body` inside `cavity` alone, and the one
+    cut this function performs -- `notched.cut(inside)`, cell-sized -- happens before `mirrors`
+    is ever consulted.
+
+    **The cut is verified against the partition identity before it is mirrored.** This boolean
+    is between two NURBS solids `t` apart, which is the hardest thing asked of the kernel here,
+    and it is not reliable: the same code has produced a correct 23745.581 mm3 tail wall from
+    one converged surface and a 21995 mm3 one in five pieces from another, both surfaces
+    measured inside `TAU` at every station and between them. Checking it at cell size, before
+    mirroring, is strictly better than checking the old full-part cut ever was: a defect here is
+    caught while `wall`/`kept` are still half or an octant, cheaper to compute and with nothing
+    from the mirror step yet able to hide or compound it.
 
     **`mirrors` is the same ordered list of normals that assembled `notched` from its own cell**
-    (one for the tail's half, three for the nose's octant -- `cowl_tree.pieces`), and it is
-    applied here to the *cavity* in that identical order, never to the tools and never before
-    `cavity` has finished: `body` and `notches` are the un-mirrored cell throughout `cavity`
-    (OQ-DES-CW20), and only the finished cell cavity is carried out to the whole part, the same
-    way `_mirror_union` already carries the tip out to the whole part. Two earlier attempts
-    mirrored something *before* the surface fit was done -- a reconstructed full body, and a
-    once-mirrored set of tools -- and IP-FC-139 measured both not to produce a symmetric cut
-    outcome even from an exactly symmetric input. Mirroring the finished, already-closed cavity
-    is immune to that by construction: each of `cavity`'s flat cell-boundary faces is exact, so
-    its mirror image is that same face, not a near-duplicate of it. Even so, a plain `fuse` of
-    the capped cell against its own mirror was measured to fail (`ValueError: Null shape`) on
-    exactly this exact-face case -- `mirror_cavity` sews the two open shells instead, which is
-    what `_strip_seam` records the reasoning for.
-    """
-    inside = cavity(notched, body, notches, t, overhang_deg, tau=tau, report=report)
-    for normal in mirrors:
-        inside = mirror_cavity(inside, normal)
-    if report is not None:
-        report.update(mirrored_cavity_volume=inside.Volume)
-    wall = notched.cut(inside)
+    (one for the tail's half, three for the nose's octant -- `cowl_tree.pieces`), applied here to
+    the *finished wall* in that identical order, the same way `_mirror_union` already carries
+    `cut` out to `tip`. Each of the wall's flat cell-boundary faces is exact, so its mirror image
+    is that same face, not a near-duplicate of it -- but even so, a plain `fuse` of the capped
+    wall against its own mirror was measured to fail (`ValueError: Null shape`) on exactly this
+    exact-face case when tried against the cavity, and there is no reason to expect the wall's
+    own copy of that same face to fare differently: `mirror_across_cell` sews the two open
+    shells instead, which is what `_strip_seam` records the reasoning for.
 
+    **The cut against `notched` is not a plain `.cut(inside)` either, for the identical reason.**
+    `inside` carries the same exact cell-boundary cap `notched` does, so cutting one straight out
+    of the other is the same degenerate shared-face case as the mirror step above, just as a
+    `cut` instead of a `fuse` -- measured 2026-09-21 to fail the same way (`ValueError: Null
+    shape`). `_extend_across_cell` continues `inside` a short distance past that cap first, which
+    cannot change the result (`notched` has no material past its own cell boundary to begin with)
+    but does stop the two operands from sharing an exact face at all.
+    """
+    inside = cavity(body, notches, t, overhang_deg, tau=tau, report=report)
+    for plane in cell_boundary_planes(body):
+        inside = _extend_across_cell(inside, plane)
+    wall = notched.cut(inside)
+    if len(wall.Solids) != 1:
+        raise Unconverged(
+            'the cell wall came out as %d disconnected solids, not one, even though its cavity '
+            'did not. There is no scale or condition under which a disconnected wall is '
+            'legitimate: refused here rather than mirrored piece by piece into a part that is '
+            'missing a piece.' % len(wall.Solids))
     kept = notched.common(inside)
     total = wall.Volume + kept.Volume
     slip = abs(total - notched.Volume) / notched.Volume
     if report is not None:
-        report.update(wall_volume=wall.Volume, wall_solids=len(wall.Solids),
-                      partition_slip=slip)
-    note('wall: %.4f mm3 in %d solid(s); the cut and the common account for %.6f%% of the '
-         'blank' % (wall.Volume, len(wall.Solids), 100.0 * (1.0 - slip)))
+        report.update(cell_wall_volume=wall.Volume, partition_slip=slip)
+    note('cell wall: %.4f mm3 in %d solid(s); the cut and the common account for %.6f%% of the '
+         'cell\'s own buttress-cut body' % (wall.Volume, len(wall.Solids), 100.0 * (1.0 - slip)))
     if slip > PARTITION_TOL:
         raise Unconverged(
-            'the wall and the material it was cut from do not add up to the blank: '
-            '%.4f + %.4f = %.4f against %.4f, off by %.4f mm3 (%.4f%%). Cutting a solid in '
-            'two partitions it, so this boolean lost material, and the wall it returned is '
-            'not the part. Section 6 would not catch it -- a wall that is mostly missing '
-            'still measures %.3f mm thick wherever it survives.'
+            'the cell wall and the material it was cut from do not add up to the cell\'s own '
+            'buttress-cut body: %.4f + %.4f = %.4f against %.4f, off by %.4f mm3 (%.4f%%). '
+            'Cutting a solid in two partitions it, so this boolean lost material, and the wall '
+            'it returned is not the cell. Section 6 would not catch it -- a wall that is mostly '
+            'missing still measures %.3f mm thick wherever it survives.'
             % (wall.Volume, kept.Volume, total, notched.Volume,
                abs(total - notched.Volume), 100.0 * slip, t))
+
+    for normal in mirrors:
+        wall = mirror_across_cell(wall, normal)
+    if report is not None:
+        report.update(wall_volume=wall.Volume, wall_solids=len(wall.Solids))
+    note('wall: %.4f mm3 in %d solid(s) after %d mirror step(s)'
+         % (wall.Volume, len(wall.Solids), len(mirrors)))
     return wall

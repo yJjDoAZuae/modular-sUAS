@@ -2539,142 +2539,52 @@ coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
 
 ### ~~OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced?~~ — RESOLVED 2026-09-20
 
-**Resolution, stated precisely after two earlier attempts at this resolution each proved too
-weak: every geometry operation — the mask, the interior surface fit, the notch cuts, the wall —
-is performed on the un-mirrored symmetry cell (the `y >= 0` half for the tail, the octant for
-the nose). No full, mirrored body or other full-part intermediate is ever constructed. Mirroring
-is applied exactly once, as the last operation of the entire construction, to the finished
-cell-local wall — and by the same shared mechanism for both the nose and the tail, differing
-only in cell shape and mirror count, never in code path.**
+**Resolution: every cowl is built as one symmetry cell — the `y >= 0` half for the tail, one
+octant for the nose — with every operation (the mask, the interior surface fit, the notch cuts,
+the wall) performed entirely inside that cell, and mirroring applied exactly once, as the last
+operation of the entire construction, to the finished wall. No full, mirrored body or other
+full-part intermediate is ever constructed at any earlier step, for either cowl, by the same
+shared mechanism.** See
+[cowl_interior_surface.md §4.5](cowl_interior_surface.md#45-closing-the-solid) for the
+construction itself, including why the finished wall's own mirror step has to sew rather than
+fuse; this note records the decision and why weaker alternatives do not hold.
 
-This is stricter than "reduce to the half and mirror the result," which was tried first and is
-not sufficient: constructing *any* full-part shape before the end — even one built as "half
-fused with its own mirror," the pattern already validated elsewhere in this codebase — is a
-fresh boolean operation that OCC's kernel is free to get wrong independently of whether its
-inputs were symmetric. Measured directly: forcing `lower` to be exactly symmetric this way
-(`lower_sym`, `0.000000000` mm³ by the same fuse-with-mirror pattern `_symmetrize_y()` uses)
-left the `U` = 0.7 rib-cut residue completely unchanged and made `U` = 0.5's worse, because nothing
-about the surface *fit* was ever un-mirrored — it was still computed as one continuous 360° loop.
-A second attempt — cut the cell's own notches only, then fuse the resulting *cavity* with its own
-mirror — fixed `U` = 0.7 completely, but at `U` = 0.5 the fuse of the two mirrored cavity halves
-itself failed on a genuine near-tangency sliver at the seam, and working around that with a
-different boolean API (`generalFuse`) only moved the same failure one step further downstream, to
-the final wall cut. Every one of these remaining failures is a boolean between two *already-full*
-shapes that were each independently mirrored into existence — exactly the class of operation the
-resolution above forbids.
+Two weaker alternatives were tried first and rejected by measurement, not by argument. Making the
+tail's un-notched body exactly symmetric before fitting anything (`lower_sym`, fused with its own
+mirror — the same pattern `_symmetrize_y()` already uses elsewhere) left the `U` = 0.7 rib-cut
+residue completely unchanged and made `U` = 0.5's worse, because the surface fit itself was still
+computed as one continuous 360° loop through a body that is only a cell topologically. Cutting the
+cell's own notches and then mirror-fusing the resulting *cavity* fixed `U` = 0.7 completely, but
+at `U` = 0.5 the fuse of the two mirrored cavity halves failed outright on a near-tangency sliver
+at the seam, and a different boolean API (`generalFuse`) only moved the same failure one step
+further downstream, to the final wall cut. Both alternatives are a boolean between two shapes that
+had each already been carried out to a full or reconstructed part — exactly the class of operation
+the resolution above forbids, whether or not the inputs were themselves exactly symmetric.
 
-**Why full-part construction can be avoided even for the interior surface fit.** The existing
-fit builds one continuous, periodic 360° B-spline surface per station
-(`Part.BSplineCurve.interpolate(..., PeriodicFlag=True)`,
-[cowl_interior_surface.md §9.5](cowl_interior_surface.md)) — periodic *because* the old
-architecture always worked on a full body. Periodicity is not a requirement of the geometry
-being fitted; it is a requirement of trying to build a closed loop directly. A construction that
-never mirrors anything until the finished wall never needs a closed loop at all: it fits an
-*open* patch bounded by the cell's own edges (`y = 0`, for the tail), cuts the cell's own notches
-against it, computes the cell's own wall, and only then mirrors that wall — once — into the whole
-part. `cowl_interior.py`'s surface fit has to stop requiring a periodic loop to make this
-possible; that is real, shared work, tracked as [IP-FC-139](../implementation/freecad_migration.md).
+**Root cause of the raw body's own measured asymmetry is still open, and independent of this
+resolution.** `body_symmetry_check.py` measured the tail's un-notched, axially-masked body
+(`lower`) as asymmetric by 0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0, even though it descends
+from `_symmetrize_y()`'s exactly-symmetric output. Tracking that to ground — this step, the raw
+OpenVSP/STEP export, or the measurement tooling — is
+[IP-FC-138](../implementation/freecad_migration.md), wanted for its own sake regardless of this
+resolution, since the construction above works by never depending on `lower`'s symmetry at all
+rather than by explaining or fixing it.
 
-**Root cause of `lower`'s own asymmetry is still open, and still independent of this resolution.**
-`body_symmetry_check.py` measured `lower` (the un-notched body with only an axial mask applied)
-as asymmetric by 0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0, even though it descends from
-`_symmetrize_y()`'s exactly-symmetric output — plausibly because `_common(doc, 'Lower', body,
-lower_mask(...))` is a whole-body boolean run after the symmetrize step, with no obligation to
-preserve exact symmetry through it, but this is not yet confirmed by measurement. Tracking it to
-ground (this step, the raw OpenVSP/STEP export, or the measurement tooling) is
-[IP-FC-138](../implementation/freecad_migration.md), wanted for its own sake regardless of the
-construction fix, since the resolution above works by never depending on `lower`'s symmetry at
-all rather than by explaining or fixing it.
+Only the tail was ever affected by the residue defect the two weaker alternatives were tried
+against. The nose builds its OML by mirroring one octant three times and was audited directly
+(`nose_symmetry_check.py`, `nose_diagonal_check.py`) at exactly 0.000000 mm about all three planes
+it uses; it gets the same construction discipline for its interior-shell pass regardless, because
+sharing one mechanism between both cowls — never a special case for the tail alone — is itself
+part of this resolution.
 
-Only the tail was ever affected by the residue defect. The nose builds its OML by mirroring one
-octant three times and was audited directly (`nose_symmetry_check.py`, `nose_diagonal_check.py`)
-at exactly 0.000000 mm about all three planes it uses. It still needs the same construction
-discipline applied to its own interior-shell pass, though, not because it is broken today but
-because sharing one mechanism between both parts is itself part of this resolution — a
-special-cased fix for the tail alone was tried and rejected in conversation for exactly this
-reason.
-
-**Implemented and measured, 2026-09-20 — IP-FC-139 is done, not merely planned.** `cowl_interior.py`
-now fits the open, cell-bounded patch this resolution calls for (`open_arc`, `_fit` without a
-periodic flag), and `cowl_tree.py` reduces both cowls to their symmetry cell before any notch is
-cut (`octant`/`half`, never `lower`). Two further defects surfaced only once real geometry was run
-through the corrected construction, both fixed and both worth recording because either would have
-silently reproduced a version of this same resolved question elsewhere:
-
-- **`_Polyline`, the class every wall-thickness measurement in this module goes through, silently
-  closed an open contour.** It measures a point's distance to a polyline by walking its segments,
-  and it built the last segment by wrapping the final sample back to the first (`np.roll`) —
-  correct for a closed loop around a full body, and wrong for the open cell arc this resolution
-  fits: it drew a phantom chord straight across the arc's own two cell-plane ends, and a point near
-  either end (which is exactly where an eroded interior arc's own ends sit, by construction) then
-  measured a few nanometres from that chord instead of from the true exterior. The symptom was
-  exact and reproducible: the worst wall error on the tail at `U` = 0.5 read precisely 0.6000 mm —
-  the inset itself — unmoving across four refinement passes, because the check was seeing the
-  chord, not the surface. Fixed by giving `_Polyline` a `closed` flag, `False` wherever it measures
-  an open arc.
-- **A `fuse` of the finished cell cavity against its own mirror failed with `ValueError: Null
-  shape`, even once the shared cap face was exact.** This is the specific case the whole
-  resolution above predicted would go away once nothing full-part was built before the end, and
-  the fuse *input* is indeed exact now (one planar face, 0.000000000 mm from the origin, both
-  operands individually valid) — but the OCC boolean kernel's general intersection machinery is
-  not the reliable path for two solids that share their *entire* boundary over one face and
-  overlap nowhere else, exact inputs or not. The fix does not ask the kernel to intersect anything:
-  `mirror_cavity` removes the shared cap face from each side, mirrors the resulting open shell, and
-  sews the two open shells together along their now-identical shared edge instead.
-
-Measured end to end after both fixes, calling `cowl_interior.cavity`/`shell_solid` directly
-(bypassing the document/recompute path so a real traceback surfaces rather than being swallowed):
-the tail at `U` = 0.5 (the worst historical case) built a valid single-solid wall, partition slip
-1.9×10⁻⁶, symmetric about `y = 0` to `0.000000000` mm³ both directions; the tail at `U` = 0.7 built
-a valid single-solid wall with partition slip 4.4×10⁻⁸ (its own mirror-symmetry cut was not run to
-completion — an expensive diagnostic on a large solid, not a build step — but the wall itself is
-built and measured sound); the nose at `U` = 0.5 built a valid single-solid wall through all three
-mirror steps, partition slip 1.5×10⁻⁷, symmetric to `0.000000000` mm³ about all three of its planes.
-**`MIN_U` = 0.8 was never an acceptable design parameter.** It is a refusal threshold IP-FC-137
-chose empirically to stop the tool silently handing back a null shape for a defect nobody had
-fixed yet — its own status line says so directly ("domain stated and enforced rather than the cut
-fixed") — not a bound the design actually requires. Now that the defect it stood in for is fixed
-rather than merely raised, retiring it (re-running IP-FC-137's reproduction across the swept `U`
-range, then removing or lowering the guard) is real, separate work still to do, not an optional
-revisit.
-
-**Verified across the full swept range, 2026-09-20.** The tail `U` = 0.7 case above needed a
-different verification method, not a different construction: its own mirror-and-cut symmetry
-check (build the full mirrored wall, then boolean-cut it against itself) is an expensive OCC
-boolean on a large, ~200000 mm³, multi-face NURBS solid, and it degrades further — not just
-slower, genuinely inconclusive within a practical wall-clock budget — exactly because the two
-operands are *meant* to be identical: near-coincident geometry is the same class of degenerate
-case the fuse-vs-sew fix above already worked around, here inside the general boolean intersector
-rather than the solid-builder. Replaced with a point-sampling check that never asks the kernel to
-intersect anything: sample points off each face's own tessellation, mirror each point, and measure
-its distance back to the original shape with `Part.Vertex.distToShape`. Validated to agree with
-the slow boolean method exactly — `0.000000000` mm — on the one case both could complete (tail
-`U` = 0.5), then cleared `U` = 0.7 in well under a minute.
-
-A further defect surfaced only once the fast check let the full `U` = 0.5 to 4.0 sweep (both
-cowls, the values `nose_size_variants.csv` actually specifies) run to completion: **`mirror_cavity`
-assumed its sewn result was always exactly one closed shell.** At tail `U` = 0.75 the cavity
-legitimately splits into two disconnected regions, and `Part.Solid()` on the sewn compound
-silently returned one invalid solid instead of two valid ones, rather than raising. Fixed by
-iterating `sewn.Shells`, building one `Part.Solid` per closed shell, validating each, and returning
-a `Part.Compound` when there is more than one.
-
-**Result of the full sweep, after both fixes:** the nose builds a valid, exactly symmetric wall
-(`0.000000000` mm³ about all three mirror planes) at all eight swept `U` values, 0.5 through 4.0.
-The tail does the same at seven of eight — 0.5, 0.75, 1.5, 2.0, 2.5, 3.0, 4.0 — leaving `U` = 1.0
-as the one case not yet confirmed: its partition slip (`|wall + kept − blank| / blank`) measures 2.622e-04,
-over `PARTITION_TOL`, a 155.7 mm³ gap on a 593878.7 mm³ blank (0.026%), coinciding with
-`cavity()`'s built-in rib-cut retry needing to remove 977.6833 mm³ of rib residue on its first pass
-(reproducible across two independent runs). Whether this is genuinely lost material or
-`Shape.Volume`'s own already-documented 0.16-0.24% inaccuracy on this exact B-spline geometry
-([IP-FC-119](../implementation/freecad_migration.md)) — a range roughly ten times larger than the
-slip being investigated — is not yet settled: an attempted independent tessellated cross-check was
-itself found to be broken (it returned essentially zero for the blank's own volume, which is
-obviously wrong) and its result is explicitly not trusted. Tracked as
-[IP-FC-140](../implementation/freecad_migration.md), not treated as a defect in this resolution,
-since the construction discipline itself — cell-bounded, single deferred mirror, shared between
-nose and tail — is what this question asked and is what is now verified at 15 of 16 swept
-combinations.
+**Implementation status, verification numbers, and the defects found while building this are
+tracked in the implementation plan, not here** — see
+[freecad_migration.md IP-FC-139](../implementation/freecad_migration.md) (the construction itself,
+including a wrong-order mistake found and corrected on 2026-09-21 after the first implementation
+mirrored the cavity rather than the wall) and
+[IP-FC-140](../implementation/freecad_migration.md) (an open partition-slip measurement question).
+This note records the decision; it is not the place to look for whether a given build currently
+passes.
 
 ## See also
 

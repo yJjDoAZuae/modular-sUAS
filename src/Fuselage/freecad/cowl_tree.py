@@ -242,15 +242,17 @@ class _CowlShell(object):
 
     def __init__(self, obj):
         obj.addProperty('App::PropertyLink', 'Base', 'Shell',
-                        'The notched blank -- the print representation, unchanged')
+                        'The symmetry cell with its buttress tools already cut into it -- '
+                        '"Cut"/"OctantCut", never the full, already-mirrored "tip" (OQ-DES-CW20)')
         obj.addProperty('App::PropertyLink', 'Body', 'Shell',
-                        'The same blank before any notch reached it')
+                        'The same cell before any notch reached it')
         obj.addProperty('App::PropertyLinkList', 'Notches', 'Shell',
                         'The cutting tools, in the symmetry cell they were built in -- never '
                         'mirrored (OQ-DES-CW20)')
         obj.addProperty('App::PropertyStringList', 'Mirrors', 'Shell',
                         'The mirror normals that take that cell out to the whole part, applied '
-                        'once to the finished cavity (OQ-DES-CW20)')
+                        'once to the finished wall, after the cavity is cut out of Base at cell '
+                        'size (OQ-DES-CW20)')
         obj.addProperty('App::PropertyFloat', 'Inset', 'Shell',
                         'The horizontal inset: cowl_n_perimeters * extrusion_width, in mm')
         obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
@@ -264,10 +266,12 @@ class _CowlShell(object):
             return
         report = {}
         # OQ-DES-CW20: the notches are the cell's own tools, never mirrored, and `Body` is the
-        # cell itself -- `cowl_interior.cavity` fits and cuts entirely within it and hands back
-        # a cell-bounded cavity; `shell_solid` mirrors that result, once, through `Mirrors`, the
-        # same normals and the same order `cowl_tree` used to assemble `Base` from that cell.
-        # One function, one order of operations, for the nose's three mirrors and the tail's one.
+        # un-notched cell -- `cowl_interior.cavity` fits and cuts entirely within it and hands
+        # back a cell-bounded cavity, which `shell_solid` cuts out of `Base` (the cell *with*
+        # its buttress tools, not `Body`) at that same cell size, then mirrors the one finished
+        # wall, once, through `Mirrors` -- the same normals and the same order `cowl_tree` used
+        # to carry `Base` itself out to `tip`. One function, one order of operations, for the
+        # nose's three mirrors and the tail's one.
         notches = Part.makeCompound([n.Shape for n in obj.Notches])
         mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in obj.Mirrors]
         obj.Shape = cowl_interior.shell_solid(
@@ -283,8 +287,9 @@ class _CowlShell(object):
         return None
 
 
-def _shell(doc, name, tip, body, notches, mirrors):
-    """One `_CowlShell`, wired to the tree the print representation already built.
+def _shell(doc, name, cell_cut, body, notches, mirrors):
+    """One `_CowlShell`, wired to the cell-local pieces the print representation's own
+    construction already built -- never to `tip` itself.
 
     **The tools are handed over as a compound, not as a fused solid.** `cowl_interior` only
     sections them and reads their vertices, and neither wants a union: overlapping wires at a
@@ -294,14 +299,19 @@ def _shell(doc, name, tip, body, notches, mirrors):
 
     **`body` is the symmetry cell itself, for both cowls -- OQ-DES-CW20.** `octant` for the
     nose, `half` for the tail: the un-notched blank reduced to the same partial geometry the
-    notches were cut in, never a full or reconstructed part. `mirrors` is the ordered list of
-    normals that takes that cell out to the whole part, which `_CowlShell` applies to the
-    finished cavity in the same order `cowl_tree` applied it to build `tip`.
+    notches were cut in, never a full or reconstructed part. **`cell_cut` is that same cell with
+    its own buttress tools already cut into it -- `OctantCut`/`Cut`, not `tip`.** Correction,
+    2026-09-21: `_CowlShell` used to take `tip` here, and `cowl_interior.shell_solid` cut the
+    (separately, fully mirrored) cavity out of it -- a boolean between two independently
+    mirrored full shapes, exactly what OQ-DES-CW20's resolution forbids. `shell_solid` now cuts
+    the cavity out of `cell_cut` at cell size, before `mirrors` -- the same ordered list of
+    normals that takes that cell out to the whole part -- is ever consulted, matching the order
+    `cowl_tree` already uses to carry `cell_cut` itself out to `tip`.
     """
     node = C._owned(doc, 'Part::FeaturePython', name)
     if getattr(node, 'Proxy', None) is None:
         _CowlShell(node)
-    node.Base = tip
+    node.Base = cell_cut
     node.Body = body
     node.Notches = list(notches)
     node.Mirrors = ['%g,%g,%g' % m for m in mirrors]
@@ -619,7 +629,13 @@ _PIECES = {}
 
 
 def pieces(doc):
-    """`(cell_body, tools, mirrors)` for the cowl just built into `doc` -- OQ-DES-CW20."""
+    """`(cell_body, tools, mirrors, cell_cut)` for the cowl just built into `doc` -- OQ-DES-CW20.
+
+    `cell_body` is the un-notched cell (`octant`/`half`), for the interior surface fit.
+    `cell_cut` is that same cell with its buttress tools already cut into it (`OctantCut`/`Cut`)
+    -- the object the outer solid mirrors into `tip` -- for `shell_solid`'s own material cut,
+    which must happen at cell size, before any mirroring, not against `tip` itself.
+    """
     if doc.Name not in _PIECES:
         raise KeyError('no cowl has been built into %r' % doc.Name)
     return _PIECES[doc.Name]
@@ -643,8 +659,10 @@ def nose_cowl(doc):
     # `mirror_x(mirror_y(mirror_xy(...)))`, and the order matters: the diagonal runs first, so
     # it acts on the octant alone rather than on an already-doubled quadrant. OQ-DES-CW20: the
     # interior shell needs the un-notched *cell* -- `octant`, not `lower` -- since `lower` spans
-    # the full azimuth and is not the partial geometry every operation has to run on.
-    _PIECES[doc.Name] = (octant, [tool], [(1, -1, 0), (0, -1, 0), (-1, 0, 0)])
+    # the full azimuth and is not the partial geometry every operation has to run on. `cut` is
+    # the same cell with its own buttress tool already in it -- what the shell's material cut
+    # runs against, at cell size, before `quad`/`half`/`NoseCowl` mirror it into `tip`.
+    _PIECES[doc.Name] = (octant, [tool], [(1, -1, 0), (0, -1, 0), (-1, 0, 0)], cut)
 
     quad = _mirror_union(doc, 'Diag', cut, (1, -1, 0))
     half = _mirror_union(doc, 'HalfY', quad, (0, -1, 0))
@@ -700,8 +718,9 @@ def tail_cowl(doc):
     # and a curved OML edge curved at the same point. `cowl_interior.open_arc` removes that
     # construction edge before anything is fitted instead. `half`'s own possible asymmetry
     # (IP-FC-138, still open) does not need fixing for this: the cell is used exactly as it comes
-    # off `_common`, and only the *finished, already-closed* cavity is ever mirrored, once, in
-    # `shell_solid` -- the same thing the outer print solid below already does with `cut`.
+    # off `_common`, `shell_solid` cuts the cavity out of `cut` (below) at that same cell size,
+    # and only the *finished wall* is ever mirrored, once -- the same thing the outer print solid
+    # below already does with `cut` itself, not a second, independent mirror of some other shape.
     sides = [side_buttress(doc, 'Side%d' % i, 'side', '%sside%d_angle' % (P, i),
                            '%sside%d_x' % (P, i), BODY_LEN) for i in (1, 2, 3)]
     tops = [top_buttress(doc, 'Top%d' % i, 'top', '%stop%d_angle' % (P, i),
@@ -730,24 +749,28 @@ def tail_cowl(doc):
     # **The safes, not the raw slabs.** The core is a region the cuts may not enter, so the
     # material actually removed is the tool minus the core; handing the shell the slabs would
     # dilate a notch the part does not have, right where the bulkhead interface is.
-    _PIECES[doc.Name] = (half, safes, [(0, -1, 0)])
-
     cut = _shape_bool(doc, 'Cut', 'cut', half, safes)
+    # `cut` -- `half` with the eleven buttress tools already in it -- is what the shell's
+    # material cut runs against, at cell size, before this same object is mirrored into `tip`
+    # below. Computed before `_PIECES` is set, not after, so `pieces()` never hands out a stale
+    # reference to an object that does not exist yet.
+    _PIECES[doc.Name] = (half, safes, [(0, -1, 0)], cut)
+
     return _mirror_union(doc, 'TailCowl', cut, (0, -1, 0))
 
 
 def nose_cowl_shell(doc):
     """IP-FC-17: the nose cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
-    tip = nose_cowl(doc)
-    body, tools, mirrors = pieces(doc)
-    return _shell(doc, 'NoseCowlShell', tip, body, tools, mirrors)
+    nose_cowl(doc)
+    body, tools, mirrors, cell_cut = pieces(doc)
+    return _shell(doc, 'NoseCowlShell', cell_cut, body, tools, mirrors)
 
 
 def tail_shell(doc):
     """IP-FC-17: the tail cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
-    tip = tail_cowl(doc)
-    body, tools, mirrors = pieces(doc)
-    return _shell(doc, 'TailShell', tip, body, tools, mirrors)
+    tail_cowl(doc)
+    body, tools, mirrors, cell_cut = pieces(doc)
+    return _shell(doc, 'TailShell', cell_cut, body, tools, mirrors)
 
 
 # --------------------------------------------------------------------------------
