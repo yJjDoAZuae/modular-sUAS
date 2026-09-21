@@ -240,6 +240,33 @@ The wall is bounded by the exterior, the interior, and an annulus at each open e
 are open — the tail at both ends, the nose body where it is cut to the closure parts — so
 there is no cap to construct and no turnover to handle.
 
+**Both cowls are one symmetry cell, not a full body — [cowl.md OQ-DES-CW20](cowl.md#open-questions).**
+The tail is built as its `y ≥ 0` half, the nose as one octant; every step above — the sections,
+the erosion, the surface fit, the notch cuts, the wall — runs entirely inside that cell, bounded
+by the cell's own construction planes, and produces a cell-local result only. A full, mirrored
+body is never constructed as an intermediate at any point in this construction.
+
+**Mirroring happens exactly once, as the very last step, to the finished wall — never earlier,
+and never to any other intermediate.** The cavity is cut out of the cell's own notched body while
+still inside the cell; the resulting wall is what gets carried out to the whole part, by the same
+mechanism and in the same mirror order the outer OML solid already uses to build itself from that
+same cell. Nothing here mirrors a partial result — the cavity, the un-notched body, or any other
+earlier intermediate — and finishes construction on it afterward: a boolean between two shapes
+that were each already carried out to the whole part by an independent mirror step is not
+trustworthy regardless of whether both are exactly symmetric, since OCC's boolean kernel is free
+to introduce asymmetry or fail outright on a full-size operation even when its inputs are exact,
+and this project has measured it doing both. One symmetry cell, one deferred mirror, one code
+path for both cowls, differing only in which cell and how many mirrors — never in order of
+operations.
+
+**Mirroring a solid that still carries the flat cap where it was cut from its cell is itself not
+safe to do by an ordinary boolean fuse.** Two solids that share their entire boundary over exactly
+one face and nothing else are a degenerate case for OCC's general boolean intersector, measured to
+fail outright (`ValueError: Null shape`) even when that shared face is exact to machine precision.
+The cap is instead stripped from the finished wall, the remaining open shell mirrored, and the two
+open shells sewn together along their now-identical shared edge — construction, not a boolean
+asked to discover a relationship its two inputs already have exactly.
+
 ---
 
 ## 5. The refinement criterion
@@ -427,25 +454,16 @@ As built, each row is a `Part.BSplineCurve.interpolate(..., PeriodicFlag=True)`,
 is skinned from those curves' poles with `buildFromPolesMultsKnots(..., vperiodic=True)`.
 
 **This section describes the tail's pre-2026-09-20 architecture, superseded under
-[cowl.md OQ-DES-CW20](cowl.md#open-questions) and implemented as of the same date (IP-FC-139,
-done).** Periodicity was a requirement of fitting one continuous 360° surface directly, not of
-the geometry itself — it existed only because the construction this section describes always
-worked on the full, both-sides body. The implemented fit runs on the un-mirrored symmetry cell
-only (`cowl_interior.open_arc`, `cowl_tree`'s `octant`/`half`), with mirroring deferred to the
-single, final wall (`cowl_interior.mirror_cavity`). It needs no periodic flag: `_fit` builds an
-*open* patch bounded by the cell's own construction planes, `PeriodicFlag=False` in both the row
-curves and `buildFromPolesMultsKnots`'s `vperiodic` argument, and the seam this section measures
-is produced once, by mirroring the finished wall, rather than by declaring a surface periodic.
-Measured after implementation across the full swept `U` = 0.5 to 4.0 range for both cowls: the
-nose builds a valid, exactly symmetric wall (`0.000000000` mm³ about all three mirror planes) at
-every one of the eight swept values; the tail does the same at seven of the eight, the exception
-being `U` = 1.0, whose partition slip (0.026%) has not yet been confirmed as real or as
-measurement noise — an unfinished investigation, tracked separately as IP-FC-140, not attributed
-to periodicity or to this fit. See [cowl.md OQ-DES-CW20](cowl.md#open-questions) for the full numbers
-and the three defects (`_Polyline`'s implicit closed-loop wraparound, a `fuse`-vs-sew boolean
-fragility at the exact seam, and a `mirror_cavity` single-shell assumption) that surfaced only
-once this architecture was actually run at scale. This section stays as the record of why the
-previous, full-body architecture needed periodicity at all.
+[cowl.md OQ-DES-CW20](cowl.md#open-questions) — see §4.5 above for the construction that replaced
+it.** Periodicity was a requirement of fitting one continuous 360° surface directly, not of the
+geometry itself — it existed only because the construction this section describes always worked
+on the full, both-sides body. The fit that replaced it (`cowl_interior.open_arc`, `_fit` with
+`PeriodicFlag=False`) builds an *open* patch bounded by the cell's own construction planes
+instead, and the seam this section measures is produced once, by mirroring the finished wall
+(§4.5), rather than by declaring a surface periodic. This section stays as the record of why the
+previous, full-body architecture needed periodicity at all; implementation status and verification
+numbers are tracked in [freecad_migration.md IP-FC-139](../implementation/freecad_migration.md),
+not here.
 
 ### 9.6 Two acceptance checks §6 does not have
 
@@ -484,14 +502,29 @@ by `solid_measure.converged_difference`, which cancels discretisation between ma
 partitions and refuses mismatched ones, or by `solid_measure.surface_difference`, which is
 indifferent to face layout altogether.
 
-**Two limits on the above, measured 2026-09-11 under IP-FC-117.**
+**That rule was exercised for real, not just stated, 2026-09-21 — the tail at `U` = 1.0 fired
+the partition-slip check at 3.593e-04, over the floor in force at the time.** Two fuzzy-boolean
+numerical-robustness interventions were tried first and neither explained it: the same small
+tolerance that cleanly fixed a genuine, unrelated disconnection defect at `U` = 0.75 (a single
+buttress tool's dilation grazing the interior surface at a near-tangent angle, pinching off a
+literal zero-volume sliver) barely moved this slip when applied to the rib cut and did not move
+it at all when applied to the wall cut — a real defect would be expected to respond to exactly
+that kind of intervention, and this did not. Measured instead with `solid_measure.converged_volume`
+on the wall, the kept material, and the cell body independently: the slip by converged
+tessellation is **1.614e-05** (4.79 mm³), 22 times smaller than `Shape.Volume`'s reading of the
+identical partition, and itself inside the 1.6e-3 ceiling already named below. `PARTITION_TOL`
+is raised to `2.0e-3` in consequence — above the measured noise ceiling rather than below it, so
+a real gross failure (415 mm³ against 9713, 1.6e-2) still fires and a measured noise level does
+not.
+
+**Two further limits on the above, measured 2026-09-11 under IP-FC-117.**
 
 **The partition identity's blind spot grows linearly with `U`.** `PARTITION_TOL` is taken
 against the **blank**, and the wall is a shrinking share of the blank as the part grows: the
 wall goes as `U²`, because `n_p·w` = 0.6 mm is a property of the nozzle and not of the
-airframe, while the blank goes as `U³`. So the same 1e-4 is **37.6 mm³ at `U` = 1, 0.39 % of
-that nose wall, and 2408 mm³ at `U` = 4, 1.54 % of that one** — four times less sensitive, for
-the same reason the shell is proportionally thinner. Nothing is failing: the slips actually
+airframe, while the blank goes as `U³`. So the *pre-2026-09-21* 1e-4 was **37.6 mm³ at `U` = 1,
+0.39 % of that nose wall, and 2408 mm³ at `U` = 4, 1.54 % of that one** — four times less
+sensitive, for the same reason the shell is proportionally thinner. Nothing is failing: the slips actually
 measured are ~1e-6, three orders inside. What it says is that the identity's power to catch
 *lost wall material* decays as parts grow, so at the large end it is a gross-failure detector
 and nothing more. (An earlier draft of this paragraph put the `U` = 4 figure at 16 %, by
@@ -518,6 +551,50 @@ for**, and a mesh-volume figure should not be believed without its unpaired-edge
 | wall | 9714.2617 mm³ | 23685.2264 mm³ |
 | solids / faces | 1 / 503 | 1 / 2480 |
 | rib residue | 0.000000 mm³ | 0.000000 mm³ |
+
+### 9.8 A disconnected cavity or wall is refused at any scale, not accommodated
+
+**There is no `U` or condition under which the cavity or the wall is legitimately more than one
+solid.** A rib is what bridges a buttress slot across the erosion identity in §4.2 — where
+`dilate(B, t)` locally consumes all of `erode(A, t)` at a station, the identity's result there
+is zero width, not a thin one, and if that zero-width point is the only thing connecting two
+otherwise-separate regions, the result comes apart. An earlier version of `cavity()` and
+`mirror_across_cell` treated a multi-solid result as legitimate — solidifying each disconnected
+shell and returning a `Part.Compound` when there was more than one — on the grounds that the
+tail's own rib slots can split a cavity into disconnected pieces. **That is wrong, corrected
+2026-09-21: a disconnected result means a rib failed to bridge, and refusing it is what makes
+that visible instead of printing a part that is missing a piece.** `cavity()` now raises if its
+own cut does not close into exactly one solid, checked separately from the rib-residue identity
+above because a rib can be volumetrically fully removed and still fail to bridge — disconnection
+is a topology defect, not a volume one. `mirror_across_cell` and `_extend_across_cell` raise the
+same way rather than solidify a multi-shell sew result.
+
+**Found this way, at the tail's `U` = 0.75: a single buttress tool's dilation grazing the
+interior surface at a near-tangent angle, not rib crowding.** Traced to `Diag12Safe` in
+isolation from the other ten real tools — cutting the smooth interior by its dilation alone
+reproduces the identical split, a literal zero-volume sliver (`0.000000` mm³, a 0.17 mm wide
+bounding box) pinched off where the tool's boundary nearly touches the cavity's. This is not the
+rib-crowding-near-a-corner mechanism IP-FC-137's synthetic H3 test found and then ruled out
+against real geometry — it is the same class of near-coincident-geometry degeneracy this section
+already documents for the mirror step (§4.5) and the cell-level cut, here inside the ordinary
+rib cut instead, one tool at a time rather than between two full-part shapes. Fixed the same way
+those were: not by discarding the artefact, but by making the boolean itself robust to it — a
+small fuzzy tolerance (`cowl_interior.RIB_CUT_FUZZ`, chosen empirically at the smallest value
+that closed this case, three orders below `RIB_RESIDUE`) on `cavity()`'s rib cut and its retry.
+
+**That fuzzy tolerance has its own side effect, found the same day: it can split one contiguous
+cell-boundary cap into several coplanar pieces.** At the tail's `U` = 0.5 and 0.75, the fuzzy
+rib cut left the cap as two adjacent faces (1857.29 + 151.93 mm² instead of one 2009.22 mm² face)
+— same combined area, same plane, sharing an edge that is an artefact of the cut rather than a
+real boundary. `_extend_across_cell` extends every cap face it finds independently before
+sewing, so two pieces of one true cap produced two overlapping lateral walls along their shared
+artefact edge, and the sewn result no longer solidified validly — a second, distinct defect from
+the disconnection above, surfaced only because the fix for the first one changed the cap's own
+topology. Fixed by merging same-plane cap faces (`.fuse()` then `.removeSplitter()` — a plain
+coplanar merge, not the near-tangent 3-D case this module otherwise avoids) back into as few
+faces as the true boundary has, before extending any of them. Verified end to end after all
+three fixes: both cowls build a valid, exactly symmetric wall at every one of the eight swept
+`U` values, 16 of 16.
 
 ---
 
