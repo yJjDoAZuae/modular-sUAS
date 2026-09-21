@@ -436,13 +436,16 @@ single, final wall (`cowl_interior.mirror_cavity`). It needs no periodic flag: `
 *open* patch bounded by the cell's own construction planes, `PeriodicFlag=False` in both the row
 curves and `buildFromPolesMultsKnots`'s `vperiodic` argument, and the seam this section measures
 is produced once, by mirroring the finished wall, rather than by declaring a surface periodic.
-Measured after implementation: the tail at `U` = 0.5 and 0.7 and the nose at `U` = 0.5 all build a
-valid wall with the partition identity holding to 10⁻⁶ or better, and both measured cases (tail
-0.5, nose 0.5) came out symmetric to `0.000000000` mm³ about every mirror plane — see
-[cowl.md OQ-DES-CW20](cowl.md#open-questions) for the numbers and the two further defects
-(`_Polyline`'s implicit closed-loop wraparound, and a `fuse`-vs-sew boolean fragility at the exact
-seam) that surfaced only once this architecture was actually run. This section stays as the
-record of why the previous, full-body architecture needed periodicity at all.
+Measured after implementation across the full swept `U` = 0.5 to 4.0 range for both cowls: the
+nose builds a valid, exactly symmetric wall (`0.000000000` mm³ about all three mirror planes) at
+every one of the eight swept values; the tail does the same at seven of the eight, the exception
+being `U` = 1.0, whose partition slip (0.026%) has not yet been confirmed as real or as
+measurement noise — an unfinished investigation, tracked separately as IP-FC-140, not attributed
+to periodicity or to this fit. See [cowl.md OQ-DES-CW20](cowl.md#open-questions) for the full numbers
+and the three defects (`_Polyline`'s implicit closed-loop wraparound, a `fuse`-vs-sew boolean
+fragility at the exact seam, and a `mirror_cavity` single-shell assumption) that surfaced only
+once this architecture was actually run at scale. This section stays as the record of why the
+previous, full-body architecture needed periodicity at all.
 
 ### 9.6 Two acceptance checks §6 does not have
 

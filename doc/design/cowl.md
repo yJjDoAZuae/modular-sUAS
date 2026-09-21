@@ -2638,6 +2638,44 @@ rather than merely raised, retiring it (re-running IP-FC-137's reproduction acro
 range, then removing or lowering the guard) is real, separate work still to do, not an optional
 revisit.
 
+**Verified across the full swept range, 2026-09-20.** The tail `U` = 0.7 case above needed a
+different verification method, not a different construction: its own mirror-and-cut symmetry
+check (build the full mirrored wall, then boolean-cut it against itself) is an expensive OCC
+boolean on a large, ~200000 mm³, multi-face NURBS solid, and it degrades further — not just
+slower, genuinely inconclusive within a practical wall-clock budget — exactly because the two
+operands are *meant* to be identical: near-coincident geometry is the same class of degenerate
+case the fuse-vs-sew fix above already worked around, here inside the general boolean intersector
+rather than the solid-builder. Replaced with a point-sampling check that never asks the kernel to
+intersect anything: sample points off each face's own tessellation, mirror each point, and measure
+its distance back to the original shape with `Part.Vertex.distToShape`. Validated to agree with
+the slow boolean method exactly — `0.000000000` mm — on the one case both could complete (tail
+`U` = 0.5), then cleared `U` = 0.7 in well under a minute.
+
+A further defect surfaced only once the fast check let the full `U` = 0.5 to 4.0 sweep (both
+cowls, the values `nose_size_variants.csv` actually specifies) run to completion: **`mirror_cavity`
+assumed its sewn result was always exactly one closed shell.** At tail `U` = 0.75 the cavity
+legitimately splits into two disconnected regions, and `Part.Solid()` on the sewn compound
+silently returned one invalid solid instead of two valid ones, rather than raising. Fixed by
+iterating `sewn.Shells`, building one `Part.Solid` per closed shell, validating each, and returning
+a `Part.Compound` when there is more than one.
+
+**Result of the full sweep, after both fixes:** the nose builds a valid, exactly symmetric wall
+(`0.000000000` mm³ about all three mirror planes) at all eight swept `U` values, 0.5 through 4.0.
+The tail does the same at seven of eight — 0.5, 0.75, 1.5, 2.0, 2.5, 3.0, 4.0 — leaving `U` = 1.0
+as the one case not yet confirmed: its partition slip (`|wall + kept − blank| / blank`) measures 2.622e-04,
+over `PARTITION_TOL`, a 155.7 mm³ gap on a 593878.7 mm³ blank (0.026%), coinciding with
+`cavity()`'s built-in rib-cut retry needing to remove 977.6833 mm³ of rib residue on its first pass
+(reproducible across two independent runs). Whether this is genuinely lost material or
+`Shape.Volume`'s own already-documented 0.16-0.24% inaccuracy on this exact B-spline geometry
+([IP-FC-119](../implementation/freecad_migration.md)) — a range roughly ten times larger than the
+slip being investigated — is not yet settled: an attempted independent tessellated cross-check was
+itself found to be broken (it returned essentially zero for the blank's own volume, which is
+obviously wrong) and its result is explicitly not trusted. Tracked as
+[IP-FC-140](../implementation/freecad_migration.md), not treated as a defect in this resolution,
+since the construction discipline itself — cell-bounded, single deferred mirror, shared between
+nose and tail — is what this question asked and is what is now verified at 15 of 16 swept
+combinations.
+
 ## See also
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2

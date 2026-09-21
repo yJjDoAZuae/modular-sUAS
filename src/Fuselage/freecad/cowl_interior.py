@@ -1779,21 +1779,36 @@ def mirror_cavity(inside, normal):
     open shell mirrored, and the two sewn together along their now-identical shared edge.
 
     See `_strip_seam` for why this replaces a `fuse` of the capped solid against its mirror.
+
+    **`inside` need not be one solid, and the result is built per shell rather than assumed to
+    be one.** The tail's own rib slots can split a cell's cavity into several disconnected
+    pieces before it is ever mirrored -- measured on the tail at `U` = 0.75, `cavity()` closed
+    two -- and `Part.Solid()` on a single sewn shell silently mis-solidifies when the faces
+    handed to it actually belong to more than one closed region: it returned one solid, marked
+    invalid, rather than raising or returning two. Sewing the whole face pool first and then
+    solidifying *each closed shell that comes out of it* is what a multi-piece cavity actually
+    needs, and it costs nothing extra when there was only ever one piece.
     """
     n = App.Vector(normal)
     n.normalize()
     faces = _strip_seam(inside, n)
     mirrored = [f.mirror(App.Vector(0, 0, 0), n) for f in faces]
-    sewn = Part.Shell(faces + mirrored)
+    sewn = Part.makeCompound(faces + mirrored)
     sewn.sewShape()
-    solid = Part.Solid(sewn)
-    if not solid.isValid() or not solid.Solids:
+    shells = [s for s in sewn.Shells if s.isClosed()]
+    if not shells:
         raise Unconverged(
-            'mirroring the cell cavity about %s did not close into one valid solid: %d '
-            'solid(s), valid=%s. The two open shells should meet exactly along their shared '
+            'mirroring the cell cavity about %s produced no closed shell at all, from %d '
+            'faces -- the two open halves did not sew together anywhere.' % (normal, len(faces)))
+    solids = [Part.Solid(s) for s in shells]
+    bad = [s for s in solids if not s.isValid()]
+    if bad:
+        raise Unconverged(
+            'mirroring the cell cavity about %s produced %d closed shell(s) but %d of them did '
+            'not solidify validly. The two open shells should meet exactly along their shared '
             'edge -- the same curve, mirrored onto itself -- so a failure here means that edge '
-            'is not as exact as OQ-DES-CW20 assumes.' % (normal, len(solid.Solids), solid.isValid()))
-    return solid
+            'is not as exact as OQ-DES-CW20 assumes.' % (normal, len(shells), len(bad)))
+    return solids[0] if len(solids) == 1 else Part.makeCompound(solids)
 
 
 def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None):
