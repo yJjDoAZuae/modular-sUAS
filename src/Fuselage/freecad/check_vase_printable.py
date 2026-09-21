@@ -6,7 +6,7 @@
 **What DES-12 says.** A cowl stays printable in spiral vase mode: the solid exported for
 printing carries one closed contour per layer and no interior geometry whatsoever. Vase mode
 spirals a single continuous contour up the part, so the wall comes from the slicer and not
-from the model ([cowl.md](../../../doc/design/cowl.md) OQ-DES-CW6).
+from the model ([cowl.md section 6.4](../../../doc/design/cowl.md)).
 
 **Why it needs a check at all, when every other requirement here is about a number.** The
 failure is silent in the strongest sense: a cowl given a modelled wall still builds, still

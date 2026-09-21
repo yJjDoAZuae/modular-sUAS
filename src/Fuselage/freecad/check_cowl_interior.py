@@ -52,12 +52,15 @@ def wall_thickness(wall, z, expect, tol):
     `expect`, because the wall follows the notch in and back out and the inner contour dips
     with it; samples reading *less* are the failure, and there should be none.
     """
-    # **Measured per solid, because a shelled cowl need not be one.** The tail's buttress
-    # slots cut through the full depth of the wall, so it comes out in five pieces
-    # (`build_part.MULTI_SOLID_KINDS` records the measurement). Taking the two longest loops of
-    # the whole section pairs an outer loop of one piece with an inner loop of another and
-    # reports a distance across the cavity rather than across the wall -- 13 to 31 mm against a
-    # 0.6 mm wall, which is how this check read before it was fixed.
+    # **Measured per solid, though `build_part.py` (line ~328) now requires exactly one.**
+    # Before IP-FC-139/140/141's mirror-order fix, the tail's buttress slots cut through the
+    # full depth of the wall and it came out in five pieces; taking the two longest loops of
+    # the whole section then paired an outer loop of one piece with an inner loop of another
+    # and reported a distance across the cavity rather than across the wall -- 13 to 31 mm
+    # against a 0.6 mm wall, which is how this check read before it was fixed. The loop over
+    # `wall.Solids` is kept rather than assuming a single solid outright, since it costs
+    # nothing when there is exactly one and this is the check that would notice if the
+    # single-solid invariant ever regressed.
     d = []
     for solid in wall.Solids:
         loops = [w for w in solid.slice(App.Vector(0, 0, 1), z) if w.isClosed()]

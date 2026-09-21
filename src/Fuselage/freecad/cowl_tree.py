@@ -17,8 +17,8 @@ Everything here is an ordinary `Part::` document object reading the sheet, the s
   OML, and `Part::Feature` has a placement but no scale -- so a document where changing `U`
   moved every buttress and left the blank at its built size. `Draft::Clone` carries an
   expression-bound `Scale` and recomputes headless, which closes that gap.
-* **The buttress placements are sheet rows**, per OQ-DES-CW4 (resolved 2026-08-09: "the full
-  fix wants a list of buttress placements"). They are the cowl's structure -- the slots are
+* **The buttress placements are sheet rows** (cowl.md section 4.3, resolving OQ-DES-CW4: "the
+  full fix wants a list of buttress placements"). They are the cowl's structure -- the slots are
   what make the printed wall fold into a rib -- so they are data, not literals in code.
 
 Two nodes here are not stock `Part::` features, and both are that way for a measured reason
@@ -138,11 +138,17 @@ class _ShapeBoolean(object):
     `BooleanFuzzy = 0` under `BaseApp/Preferences/Mod/Part/Boolean` and `Part::MultiFuse` records
     2.12e-07 instead of 2.63e-04 and `Part::Cut` returns the reference solid at zero symmetric
     difference; both whole cowls then build from stock objects alone, matching this construction
-    exactly (74 faces tail, 64 nose). Two things hid it: an earlier search of the binaries looked
+    exactly -- measured 2026-09-01 at 74 faces tail, 64 nose, against the OML blank as it stood
+    then (nine raw faces). Stale as of OQ-DES-CW17's `condition()` fix (2026-09-09), which
+    subdivides that same blank into 129 faces: the current reference build measures 306 faces
+    tail, 88 nose, and the stock-vs-scripted comparison has not been re-run against it -- see
+    OQ-DES-CW16's 2026-09-21 note before trusting "matches exactly" at face value. Two things
+    hid the fuzz preference originally: an earlier search of the binaries looked
     only for 7-bit ASCII, and the value is read *once at module load* (`AppPart.cpp`), so setting
-    the parameter from a running session does nothing. Whether the port adopts that -- it is a
-    per-install setting, and a file that silently depends on one fails as a wrong part rather
-    than an error -- is alternative 6 of OQ-DES-CW16, which is the maintainer's call, not this module's.
+    the parameter from a running session does nothing. Adopting that -- a per-install setting,
+    where a file that silently depends on one fails as a wrong part rather than an error -- was
+    alternative 6 of OQ-DES-CW16; resolved 2026-09-21 against it, in favor of alternative 7
+    (register this checkout as a trusted module location, no global preference involved).
 
     **1.1.3 fixes the cut and only the cut.** `PartDesign::Boolean` gains a `FuzzyTolerance`
     property, and at 0 it reproduces the reference solid exactly, zero symmetric difference,
@@ -158,7 +164,9 @@ class _ShapeBoolean(object):
     have no such thing as a curve-intersection tolerance.
 
     The deployment consequence -- FreeCAD will not restore this class from a document unless
-    its module is an addon -- is OQ-DES-CW16, which carries the alternatives.
+    its module resolves from a location FreeCAD's restore check trusts -- is OQ-DES-CW16,
+    resolved 2026-09-21: register this project's own checkout with `-M`/`AdditionalModulePaths`
+    rather than shipping a copy. Not yet wired into the toolchain.
 
     **Every boolean in both cowls goes through this**, not only the ones that need it. The
     nose's single octant cut is easy enough that a stock `Part::Cut` survives it, but building
@@ -243,16 +251,17 @@ class _CowlShell(object):
     def __init__(self, obj):
         obj.addProperty('App::PropertyLink', 'Base', 'Shell',
                         'The symmetry cell with its buttress tools already cut into it -- '
-                        '"Cut"/"OctantCut", never the full, already-mirrored "tip" (OQ-DES-CW20)')
+                        '"Cut"/"OctantCut", never the full, already-mirrored "tip" '
+                        '(cowl_interior_surface.md section 4.5)')
         obj.addProperty('App::PropertyLink', 'Body', 'Shell',
                         'The same cell before any notch reached it')
         obj.addProperty('App::PropertyLinkList', 'Notches', 'Shell',
                         'The cutting tools, in the symmetry cell they were built in -- never '
-                        'mirrored (OQ-DES-CW20)')
+                        'mirrored (cowl_interior_surface.md section 4.5)')
         obj.addProperty('App::PropertyStringList', 'Mirrors', 'Shell',
                         'The mirror normals that take that cell out to the whole part, applied '
                         'once to the finished wall, after the cavity is cut out of Base at cell '
-                        'size (OQ-DES-CW20)')
+                        'size (cowl_interior_surface.md section 4.5)')
         obj.addProperty('App::PropertyFloat', 'Inset', 'Shell',
                         'The horizontal inset: cowl_n_perimeters * extrusion_width, in mm')
         obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
@@ -265,8 +274,9 @@ class _CowlShell(object):
         if obj.Base is None or obj.Body is None or not obj.Notches or not obj.Inset:
             return
         report = {}
-        # OQ-DES-CW20: the notches are the cell's own tools, never mirrored, and `Body` is the
-        # un-notched cell -- `cowl_interior.cavity` fits and cuts entirely within it and hands
+        # cowl_interior_surface.md section 4.5: the notches are the cell's own tools, never
+        # mirrored, and `Body` is the un-notched cell -- `cowl_interior.cavity` fits and cuts
+        # entirely within it and hands
         # back a cell-bounded cavity, which `shell_solid` cuts out of `Base` (the cell *with*
         # its buttress tools, not `Body`) at that same cell size, then mirrors the one finished
         # wall, once, through `Mirrors` -- the same normals and the same order `cowl_tree` used
@@ -297,13 +307,14 @@ def _shell(doc, name, cell_cut, body, notches, mirrors):
     `body - notched` instead was measured at 47 s a part, and leaves a 202-face solid that is
     slower to section than the eleven slabs are.
 
-    **`body` is the symmetry cell itself, for both cowls -- OQ-DES-CW20.** `octant` for the
+    **`body` is the symmetry cell itself, for both cowls** (design authority:
+    cowl_interior_surface.md section 4.5). `octant` for the
     nose, `half` for the tail: the un-notched blank reduced to the same partial geometry the
     notches were cut in, never a full or reconstructed part. **`cell_cut` is that same cell with
     its own buttress tools already cut into it -- `OctantCut`/`Cut`, not `tip`.** Correction,
     2026-09-21: `_CowlShell` used to take `tip` here, and `cowl_interior.shell_solid` cut the
     (separately, fully mirrored) cavity out of it -- a boolean between two independently
-    mirrored full shapes, exactly what OQ-DES-CW20's resolution forbids. `shell_solid` now cuts
+    mirrored full shapes, exactly what section 4.5 forbids. `shell_solid` now cuts
     the cavity out of `cell_cut` at cell size, before `mirrors` -- the same ordered list of
     normals that takes that cell out to the whole part -- is ever consulted, matching the order
     `cowl_tree` already uses to carry `cell_cut` itself out to `tip`.
@@ -429,7 +440,7 @@ def _buttress_sketch(doc, name, group, body_len_expr):
     Two of the six carry `r_inset`, and they are why this is not a trapezoid: they step the
     profile inward over a rise of `r_inset * tan(overhang)`, which keeps both ends of the cut
     at or above the angle the part prints at. `overhang_angle_from_bed` is degrees from the bed
-    (OQ-DES-CW2), so the tangent is of the angle as written.
+    (cowl.md section 4.2), so the tangent is of the angle as written.
     """
     g = P + group + '_'
     rise = ('(%(p)sunit_width * %(p)sbuttress_r_inset '
@@ -619,8 +630,9 @@ def _common(doc, name, base, tool):
 
 
 #: What the shelled kinds need out of a built cowl and cannot recover from the tip alone: the
-#: un-notched symmetry cell (OQ-DES-CW20 -- `octant` for the nose, `half` for the tail, never a
-#: full or reconstructed body), the cutting tools built in that same cell and never mirrored,
+#: un-notched symmetry cell (cowl_interior_surface.md section 4.5 -- `octant` for the nose,
+#: `half` for the tail, never a full or reconstructed body), the cutting tools built in that
+#: same cell and never mirrored,
 #: and the ordered mirror normals that take the cell out to the whole part. Recorded by the
 #: builders rather than looked up by node name afterwards, because a name is a coincidence and
 #: this is the actual wiring -- a lookup that silently found nothing would shell a cowl with no
@@ -629,7 +641,8 @@ _PIECES = {}
 
 
 def pieces(doc):
-    """`(cell_body, tools, mirrors, cell_cut)` for the cowl just built into `doc` -- OQ-DES-CW20.
+    """`(cell_body, tools, mirrors, cell_cut)` for the cowl just built into `doc`
+    (cowl_interior_surface.md section 4.5).
 
     `cell_body` is the un-notched cell (`octant`/`half`), for the interior surface fit.
     `cell_cut` is that same cell with its buttress tools already cut into it (`OctantCut`/`Cut`)
@@ -657,8 +670,9 @@ def nose_cowl(doc):
     cut = _shape_bool(doc, 'OctantCut', 'cut', octant, [tool])
 
     # `mirror_x(mirror_y(mirror_xy(...)))`, and the order matters: the diagonal runs first, so
-    # it acts on the octant alone rather than on an already-doubled quadrant. OQ-DES-CW20: the
-    # interior shell needs the un-notched *cell* -- `octant`, not `lower` -- since `lower` spans
+    # it acts on the octant alone rather than on an already-doubled quadrant.
+    # cowl_interior_surface.md section 4.5: the interior shell needs the un-notched *cell* --
+    # `octant`, not `lower` -- since `lower` spans
     # the full azimuth and is not the partial geometry every operation has to run on. `cut` is
     # the same cell with its own buttress tool already in it -- what the shell's material cut
     # runs against, at cell size, before `quad`/`half`/`NoseCowl` mirror it into `tip`.
@@ -708,8 +722,9 @@ def tail_cowl(doc):
     body = blank(doc, 'Blank', 'vsp_tail')
     lower = _common(doc, 'Lower', body, lower_mask(doc, 'LowerMask'))
     half = _common(doc, 'Half', lower, half_mask(doc, 'HalfMask'))
-    # OQ-DES-CW20: `half` is the symmetry cell, and every operation the interior shell needs --
-    # the surface fit, the rib cuts, the wall -- runs entirely on it, in `cowl_interior.cavity`.
+    # cowl_interior_surface.md section 4.5: `half` is the symmetry cell, and every operation
+    # the interior shell needs -- the surface fit, the rib cuts, the wall -- runs entirely on
+    # it, in `cowl_interior.cavity`.
     # It is never mirrored or fused into a full body first: a prior attempt at that (`lower_sym`,
     # `half.fuse(mirror(half))`) made the outer solid `lower_sym` measure exactly symmetric, but
     # the rib-cut residue it was meant to fix was unchanged at U = 0.7 and worse at U = 0.5,
@@ -717,7 +732,9 @@ def tail_cowl(doc):
     # full loop (mirrored or not) at all, which cannot hold a straight construction edge straight
     # and a curved OML edge curved at the same point. `cowl_interior.open_arc` removes that
     # construction edge before anything is fitted instead. `half`'s own possible asymmetry
-    # (IP-FC-138, still open) does not need fixing for this: the cell is used exactly as it comes
+    # (IP-FC-138 -- resolved 2026-09-21: re-measured exactly symmetric, both face-level and by
+    # the original whole-solid method, at every U the earlier figures were reported for) was
+    # never something this needed to fix anyway: the cell is used exactly as it comes
     # off `_common`, `shell_solid` cuts the cavity out of `cut` (below) at that same cell size,
     # and only the *finished wall* is ever mirrored, once -- the same thing the outer print solid
     # below already does with `cut` itself, not a second, independent mirror of some other shape.
@@ -786,8 +803,8 @@ def tail_shell(doc):
 #
 # The **placements** are relationships and are written as expressions, because the source
 # states them that way in the geometry itself (`translate([-unit_width*0.30, 0, 0])`). This is
-# OQ-DES-CW4's "list of buttress placements" -- the ribs are the cowl's structure, so where
-# they sit is data on the sheet rather than a literal in code.
+# cowl.md section 4.3's "list of buttress placements" -- the ribs are the cowl's structure, so
+# where they sit is data on the sheet rather than a literal in code.
 _OML_ROWS = [('oml_scale_m_per_mm', 1e-3), ('oml_length_m', 0.05),
              ('oml_offset_x_m', 0.0), ('oml_reversed', 0.0)]
 

@@ -12,9 +12,9 @@ single-variant sheets, numbers on the view rather than callout letters, since th
 one size to look up (`drawing.build_sheets` has drawn those since 2026-09-10).
 
 **Eleven parts are owed and nine can be drawn today.** 1 corner, 5 bulkhead types, 3 boom
-bulkhead types, nose and tail. Nose and tail are always OWED: IP-FC-12/13's cowl port is
-blocked on OQ-DES-CW16 and OQ-DES-CW18, and this backend does not build either kind at all
-yet, not just at this variant.
+bulkhead types, nose and tail. Nose and tail are always OWED: this backend does not build
+either kind at all yet, not just at this variant (OQ-DES-CW16 and OQ-DES-CW18, both once cited
+here as blockers, are resolved as of 2026-09-21 -- neither is why these two are still owed).
 
 **Some of the nine are also legitimately absent at particular `U`/panel pairs, and that is
 reported, not silently skipped.** The cowling types have no panel joint of their own --
@@ -91,8 +91,8 @@ FIXED_PANEL = {
 }
 
 #: Owed regardless of `U` or panel: this backend does not build either kind at all.
-ALWAYS_OWED = [('nose', 'IP-FC-12/13 blocked on OQ-DES-CW16 and OQ-DES-CW18'),
-              ('tail', 'IP-FC-12/13 blocked on OQ-DES-CW16 and OQ-DES-CW18')]
+ALWAYS_OWED = [('nose', 'IP-FC-12/13: this backend does not build cowls yet'),
+              ('tail', 'IP-FC-12/13: this backend does not build cowls yet')]
 
 #: What a sheet leaves behind, and what has to be gone before it is drawn again -- the same
 #: set `draw_set.clear` uses, duplicated rather than imported because that module also drags

@@ -670,15 +670,16 @@ each one valid solid. What is not yet established — the construction alternati
 compared, the cost of the dilation, and verification at any `U` but 1 — is
 [cowl_interior_surface.md §10](cowl_interior_surface.md), as IP-FC-115, IP-FC-116 and IP-FC-117.
 
-**Standing construction discipline, [OQ-DES-CW20](#open-questions):** every operation that
-builds either representation — masking, the interior surface fit, the notch cuts, the wall —
-runs on the un-mirrored symmetry cell only (the octant for the nose, the half for the tail); no
-full-part intermediate is ever constructed; mirroring happens exactly once, as the final
-operation, on the finished result; and the same functions do this for both parts, differing only
-in cell shape and mirror count. This is not optional hardening — a full-part intermediate
-constructed before the end was tried twice and measured to reintroduce the defect it was meant
-to prevent, since it is a fresh boolean operation OCC's kernel is free to get wrong independent
-of whether its inputs were symmetric.
+**Standing construction discipline** (design authority:
+[cowl_interior_surface.md §4.5](cowl_interior_surface.md#45-closing-the-solid); decided by
+[OQ-DES-CW20](#open-questions)): every operation that builds either representation — masking,
+the interior surface fit, the notch cuts, the wall — runs on the un-mirrored symmetry cell only
+(the octant for the nose, the half for the tail); no full-part intermediate is ever constructed;
+mirroring happens exactly once, as the final operation, on the finished result; and the same
+functions do this for both parts, differing only in cell shape and mirror count. This is not
+optional hardening — a full-part intermediate constructed before the end was tried twice and
+measured to reintroduce the defect it was meant to prevent, since it is a fresh boolean
+operation OCC's kernel is free to get wrong independent of whether its inputs were symmetric.
 
 ---
 
@@ -732,22 +733,8 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 ## Open questions
 
-| ID | Summary | Blocking |
-| --- | --- | --- |
-| OQ-DES-CW1 | Should the metre-valued OML fields carry unit suffixes? | ~~Resolved 2026-08-09~~ — yes; renamed and verified geometry-identical |
-| OQ-DES-CW2 | What does `cone_angle` measure, and about which axis? | ~~Resolved 2026-08-09~~ — the overhang angle, from the bed; both call sites correct |
-| OQ-DES-CW3 | Is `buttress.thickness` a wall or a cut clearance? | ~~Resolved 2026-08-09~~ — neither: it is the cut that *makes* the rib |
-| OQ-DES-CW4 | Should buttress placement become parametric? | ~~Resolved 2026-08-09~~ — scaling is intended and already correct; placement becomes a list at the port, general siting deferred |
-| OQ-DES-CW5 | Are the OML sections rounded rectangles? | ~~Resolved 2026-08-07~~ — yes, 10 of 16 stations |
-| OQ-DES-CW6 | How is the slicer-generated interior rib represented in a solid model? | ~~Resolved 2026-08-09~~ — modelled nominally; the notched blank stays the print export, because vase mode depends on it. **Unblocks IP-FC-17, IP-FC-23** |
-| OQ-DES-CW7 | Is the committed `.vsp3` current, and what keeps it and the OML in step? | ~~Resolved 2026-08-08~~ — both alternatives delivered |
-| OQ-DES-CW8 | Is the factor of two in the buttress extrude a per-side convention or an error? | ~~Resolved 2026-08-18~~ — fold the doubling into the value: `buttress_cut_thickness = 0.1`, no `2*`, geometry unchanged. **Unblocks IP-FC-43** |
-| OQ-DES-CW9 | Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? | ~~Decided 2026-08-18~~ — a **per-part** `slicing` group, not one figure for the airframe. `cowl_n_perimeters` feeds the rib thickness, the cowling bulkhead's flange radius and the nose base offset — the *cowl's* count in all three. **Unblocks IP-FC-42 entirely**, the nose base offset included: 0.5 mm stays, written as `1 × 0.6 + (−0.1)`, and OQ-DES-CW10 confirms that is the correct built value |
-| OQ-DES-CW10 | Is the nose cowl's base offset a function of the nozzle? | ~~Resolved 2026-08-21~~ — **yes**: the nose shape seats on the cowl's perimeter shell and is bonded there, and the inset gives that joint both its alignment and its bonding surface. `nose_flange_tolerance = -0.1`, so the offset is 0.5 mm at the sweep's 0.6 — **the built value, unchanged**. The `0.4 + 0.1` decomposition that twice argued for 0.7 is void: the hand drivers' 0.4 is a development test value and was never a tuning |
-| OQ-DES-CW11 | Which group does the overhang angle belong in? | ~~Resolved 2026-08-21~~ — **`slicing`**: choosing an overhang angle is a slicing concern, and it fails `printer`'s own membership rule because it does not move with the nozzle. Renamed `cone_angle` → `overhang_angle_from_bed` and moved from four places to one. **Not a free parameter**: it has to agree with where the nose/cowl break line falls and changing it means adjusting the buttresses, neither of which is enforced in code. `slicing` gained a per-key validator, since a perimeter count and an angle cannot share one rule. **Unblocks IP-FC-28** |
-| OQ-DES-CW16 | How is a cowl document built and shipped, when FreeCAD's own document booleans produce wrong geometry for this part? | Blocking the claim that a cowl `.FCStd` can be re-solved by someone who has only FreeCAD |
-| OQ-DES-CW17 | Two defects make the tail correct only near `U` = 1: the OML blank's faces are too coarsely subdivided for the cut, and the overlapping tools are fused before cutting. Fixing both, plus an exact C1 conversion that doubles the margin, holds the tail within 0.004% of OpenSCAD at every swept `U` and costs nothing on recompute. Adopt alternatives 3, 6 and 7 as one change? | Blocking the tail on the FreeCAD backend for every `U` except 1 |
-| OQ-DES-CW18 | `plate_thickness`, the two plate flange dimensions and `nose_flange_height` are swept per `U` but were never tuned — 3.2 mm against the reference's 0.8 mm at `U` = 4, a factor of 4.8 in the plate's material. Should they scale, hold fixed, or be derived from the printer? | Not blocking the port — but the committed reference cannot check the nose plate or nose tip above `U` = 1 until it is settled |
+*No open questions currently.*
+
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
 **Problem.** The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
@@ -1605,10 +1592,81 @@ OML provenance record ([OQ-DES-CW7](#open-questions)) already exists to make tha
 visible, and it is the point at which a real question could be asked with a real case behind
 it.
 
-### OQ-DES-CW16 — How is a cowl document built, when FreeCAD's document booleans get it wrong?
+### ~~OQ-DES-CW16 — Should the cowl construction move off scripted booleans, onto stock objects plus `BooleanFuzzy = 0` (alternative 6), so a `.FCStd` re-solves in stock FreeCAD?~~ — RESOLVED: alternative 7 adopted
 
-**Problem.** A cowl is made by cutting slots into the aircraft's outer surface. The outer
-surface arrives as a NURBS solid (the tail's is nine faces of degree 5×3 with 139 control
+**Resolution note (2026-09-21).** Alternative 7 is adopted, in the path-registration form
+described in that alternative's 2026-09-21 revisions below — not a vendored copy of
+`cowl_tree.py`/`cowl_interior.py`, but the project's own checkout registered as a location
+FreeCAD's document-restore permission check recognizes. The rationale: anyone who needs to
+change a shape's parameters and regenerate it already has the checkout (Alex, 2026-09-21),
+and exposing these construction functions from inside the FreeCAD GUI is itself a standing
+roadmap item, not a use case invented to justify this addon — so there is no scenario this
+project needs to serve where the scripts are shipped separately from a document that depends
+on them, and therefore nothing to vendor or keep in version-sync.
+
+The open prerequisite this alternative's write-up flagged — whether FreeCAD's restore check
+recognizes a directory registered by path rather than one holding a physically-placed copy —
+is now confirmed, not assumed. Checked directly 2026-09-21 against `App/PropertyPythonObject.cpp`
+on FreeCAD's `main`: `PropertyPythonObject::isAllowedModule()` resolves an unloaded module with
+`importlib.util.find_spec()` (without importing it) and permits it if that spec's origin path
+falls under any entry of `FreeCAD.__ModDirs__`/`__MacroDirs__` — and `Application.cpp` populates
+`__ModDirs__` from `AdditionalModulePaths`, which is set verbatim from the `-M`/`--module-path`
+command-line option, scanned "flat" (the named directory itself is registered, with no `Init.py`
+or package structure required). Verified empirically the same day on FreeCAD 1.1.3
+(`freecadcmd.exe`): a document with a scripted `Part::FeaturePython` object, whose Proxy class
+lives in a plain module in an arbitrary scratch directory (no `Mod` placement, no symlink, no
+copy), fails to restore with exactly the `blocked import of module` error when opened by a
+fresh `freecadcmd` with no flags, and restores correctly — Proxy attached, `execute()` runs, a
+changed property recomputes a new shape — when the same `freecadcmd` is given
+`-M "<that same directory>"` and nothing else. So a bare, unmodified checkout directory named
+on the command line is sufficient by itself; the "or a stub package that extends `sys.path`"
+and "symlink under a real `Mod` directory" fallbacks that alternative 7's write-up hedged with
+are not needed.
+
+**Not yet done:** this closes the design question — which alternative, and why — not the
+implementation. Wiring `-M`/`AdditionalModulePaths` (or a small addon that sets it, per
+alternative 7's original framing) into the actual toolchain — the sweep, `build_part.py`,
+and whatever mechanism hands a `.FCStd` to someone who is not running the sweep — is
+unstarted follow-up work, not implied by this resolution.
+
+The investigation below is kept in full because it is what the decision rests on; read this
+note only for current status.
+
+**Two things this recommendation does not reach, worth stating plainly rather than
+discovering by surprise if alternative 6 is ever picked up.**
+
+*"Fuzzy" means two unrelated things here, and only one of them is what alternative 6 turns
+off.* `BooleanFuzzy` is a global preference (`Mod/Part/Boolean`), read once at FreeCAD
+startup, that makes *document-object* booleans (`Part::Cut`, `Part::MultiFuse`,
+`PartDesign::Boolean`) silently apply an automatic tolerance scaled to the part's
+bounding-box size — that is the mechanism this whole investigation measures as wrong for
+this part, and alternative 6 sets it to `0` to disable it. `cowl_interior.py`'s
+`RIB_CUT_FUZZ = 1.0e-5` (added this session, fixing the `Diag12Safe` near-tangency sliver in
+`cavity()`'s rib cut) is a different thing entirely: an explicit tolerance this project's own
+code passes as an argument to `Part.Shape.cut((tool,), fuzz)`, the bare geometry API, never
+through a document object. This item's own measurements show why the two do not interact —
+sweeping `Part.Shape.cut`'s fuzzy argument reproduces the document layer's automatic
+behavior, meaning the automatic fuzz is applied *by the document-object feature*, on top of
+an otherwise-unfuzzed shape call, not by `Part.Shape.cut` itself. So `BooleanFuzzy = 0` would
+not touch `RIB_CUT_FUZZ`'s call in either direction: that call never goes through a document
+object's automatic-fuzz code path to begin with.
+
+*Alternative 6 could not reach `_CowlShell` even if adopted in full.* Everything this item
+measures is about `cowl_tree.py`'s outer-solid buttress cuts (`_ShapeBoolean`, building
+`tip` — the print/blank kinds, `nose_cowl` and `tail`). The shelled kinds (`nose_cowl_shell`,
+`tail_shell`) are a separate scripted `Part::FeaturePython` object, `_CowlShell`
+(`cowl_tree.py`), which did not exist when this item was written and calls
+`cowl_interior.shell_solid()` — B-spline surface fitting, structuring-element dilation, and
+sewing, none of which has a stock `Part::` equivalent to convert to. No setting or
+document-object substitution makes that construction stock-restorable; `_CowlShell` would
+stay a scripted, non-re-solving node regardless of what happens to `_ShapeBoolean`. So even a
+fully successful alternative 6 delivers stock-restorable `.FCStd` files for the print/blank
+kinds only, not for the shelled ones — a narrower win than "cowls re-solve in stock FreeCAD"
+suggests on its own.
+
+**Problem, as originally framed** (kept for the investigation it introduces, not because the
+construction is still uncertain). A cowl is made by cutting slots into the aircraft's outer
+surface. The outer surface arrives as a NURBS solid (the tail's is nine faces of degree 5×3 with 139 control
 points along the body). The slots are 0.1 mm wide and do not scale with the aircraft — they
 are fold lines for vase-mode printing, not gaps, and two of the tail's eleven slots cross each
 other inside the solid at ±30°. Cutting a 0.1 mm slot across another 0.1 mm slot in a curved
@@ -1771,6 +1829,23 @@ So the three things that could not previously hold at once — correct geometry,
 re-solves in stock FreeCAD, and nothing of this project's installed — **all hold**, at the cost
 of one preference set on each machine that opens the file. That is alternative 6.
 
+**Stale, checked 2026-09-21: those face counts no longer describe the current construction,
+and this comparison needs re-measuring before alternative 6 is acted on.** `74 faces tail, 64
+nose` was measured against the OML blank as it stood on 2026-09-01 — nine raw faces per
+surface. [OQ-DES-CW17](#open-questions), resolved 2026-09-09, landed
+`oml_blank.condition()` afterward, reparameterising and subdividing that same blank into 129
+faces (measured directly, `condition()`'s own report: `faces_in=9, faces_out=129`) as part of
+fixing the tail's off-`U`=1 correctness. Building the current `tail_cowl()`/`nose_cowl()` at
+the reference configuration today gives **306 faces (tail), 88 faces (nose)** — both valid,
+single-solid, matching this session's own direct measurement — not 74 and 64. The `Part.Shape`
+vs. stock-object comparison this alternative rests on was never re-run against that
+now-standard 129-face input; it still describes construction from before the fix that made the
+tail correct off `U` = 1. Whether stock objects plus `BooleanFuzzy = 0` still reproduce the
+current construction exactly is unverified, not simply a stale number to correct in place —
+the file count more than quadrupling on the tail is exactly the kind of change that a boolean
+kernel's tolerance handling can be sensitive to, so this needs a fresh measurement against
+today's blank, not an inference from one taken against yesterday's.
+
 *Further arrangements ruled out on 1.1.3*, adding to the list above: cutting by the eleven
 tools separately rather than by their union (69 faces, +1496 mm³, tolerance 0.266); cutting by
 a `BooleanFragments` decomposition of the overlapping group into 32 disjoint pieces, which is
@@ -1913,39 +1988,164 @@ This affects nobody in the project's own toolchain: the sweep and `build_part.py
    setting travels with the file, and — since the value is read once at startup — making the
    sweep and `build_part.py` set it before FreeCAD loads rather than after.
 
-**Recommendation (revised 2026-09-01).** **Alternative 6.** It is the one that gives up
-nothing, and unlike alternative 4 it is measured and available today rather than waiting on an
-unreleased version. Everything below this paragraph was written before `BooleanFuzzy` was
-found and is kept because the reasoning still holds for the other five: it is the argument for
-why, *if the fuzz cannot be turned off*, the remaining alternatives all trade something away.
-The premise it rests on — that correct geometry requires the `Part.Shape` API — is exactly what
-alternative 6 removes.
+7. **Added 2026-09-21, raised in conversation. Ship a small, purpose-built addon that supplies
+   only the scripted Proxy classes needed to recompute, not the project's build pipeline.**
+   FreeCAD's restore restriction is on which *module* a scripted object's class comes from, not
+   how much code that module contains — so instead of placing `cowl_tree.py` and its sweep/CSV/
+   parameter machinery under a `Mod` path (alternative 2's actual drawback), package only what
+   `execute()` needs to recompute: `_ShapeBoolean`, and everything `_CowlShell.execute()` calls.
 
-The one thing alternative 6 needs decided is how the preference travels with a file, because a
-document that depends on a setting nobody mentions fails by producing a *wrong part* rather
-than an error. Alternative 5 pairs with it as a safety net: a flattened copy is correct on any
-install regardless of the setting, so shipping both a live document and a flattened one covers
-the recipient who never sets the preference.
+   The two classes are not equally cheap. `_ShapeBoolean` is about thirty lines, has not changed
+   in this whole engagement, and depends on nothing but `Part.Shape.cut`/`fuse`/`common` — no
+   cowl-specific logic at all, and it has not needed one either. Extracting it into its own
+   tiny, generic addon module is close to free, and it reaches everything alternative 6 does
+   (the print/blank kinds) without alternative 6's silent-wrong-part failure mode: a missing
+   addon shows the same visible "blocked import" error alternative 1 already accepts, not a
+   quietly wrong solid, and it needs no global preference that changes boolean behaviour for
+   everything else on that install.
 
-Superseded reasoning follows. Pursue alternative 4 first, because it is the only one that gives up
-nothing. Correct geometry requires the `Part.Shape` API; using that API inside a document
-requires a scripted object; and FreeCAD 1.1 will not restore a scripted object whose module is
-not an addon. Those three facts are what make the other alternatives trade something away —
-under FreeCAD 1.1.1 and 1.1.3 alike, *correct geometry*, *a document that re-solves in stock
-FreeCAD*, and *nothing installed* cannot all hold at once, and no arrangement of the model
-changes that (see the ruled-out list above). Alternative 4 attacks the premise instead of
-choosing among the consequences, and its cost is one afternoon with a second FreeCAD build.
-That afternoon has now been spent. 1.1.3 did not pay, and 26.3 has been checked at source and
-will not either — it keeps the automatic fuzz, keeps the default at 10.0, and adds no override
-to the `Part::` booleans. Alternative 4 is closed.
+   `_CowlShell` is the harder case, but not for the reason alternative 2 was rejected.
+   `execute()` calls `cowl_interior.shell_solid()`, which is 2082 lines — but checked directly,
+   that module imports nothing from this project (`math`, `os`, `sys`, `time`, `numpy`,
+   `FreeCAD`, `Part` only), so it can be vendored into the addon standalone, without dragging in
+   `cowl_tree.py`, `corner_common.py`, `build_part.py`, the CSVs, or the sweep. That is a real,
+   substantial reduction in scope from "the whole repository as an addon" — but the module
+   itself is not small, and it is the most actively developed file in the project: this single
+   engagement rewrote large parts of it repeatedly (IP-FC-137/139/140/141, this session's own
+   `RIB_CUT_FUZZ`). Vendoring it means a disciplined release step — cut a version, copy it into
+   the addon, tag which commit it came from — every time it changes, or the addon silently
+   recomputes an old algorithm against a new document. That is alternative 2's real drawback,
+   inherited in full for this one file, even though the rest of the repository is no longer
+   part of it.
 
-If no version computes it correctly, then the trade has to be made and it should be made in
-this order: alternative 1 or 5, which keep the part right and give up live re-solving; then
-alternative 2, if handing out editable cowl files turns out to be a real requirement rather
-than a preference, since it is the only one that delivers a live document. Alternative 3 is
-last and should not be adopted on convenience grounds — it trades a correct part for a
-convenient toolchain, which is the wrong way round, and the measurements above show the failure
-is not simply a matter of the slot being too narrow.
+   *Benefits:* reaches **both** representations — unlike alternative 6, a `tail_shell.FCStd`
+   becomes fully re-solvable too — with no design change, no global preference, and a visible
+   rather than silent failure mode when the addon is missing or stale. *Drawbacks:* still an
+   addon a recipient must install (alternative 2's core cost, just narrower); `_CowlShell`'s
+   half needs an actual release discipline for `cowl_interior.py`, not a one-time packaging
+   step, given how often that module has changed; and a version mismatch between the addon and
+   the document that produced it is a new failure mode to design for (does the addon check
+   a stamped version and refuse to recompute rather than recompute wrongly?). *Prerequisites:*
+   deciding whether that release discipline is worth taking on now, versus deferring it until
+   `cowl_interior.py`'s own churn has settled.
+
+   **Revised 2026-09-21, in conversation: the release-discipline cost above assumed a
+   deployment scenario that does not hold in practice.** The scenario that made vendoring a
+   real cost was a `.FCStd` reaching someone who has FreeCAD but not the project checkout —
+   for that person, the addon's copy of `cowl_interior.py` and the project's own copy can drift
+   apart. But the actual case this project needs to serve is narrower: anyone who changes a
+   shape's parameters and regenerates it already has the project checkout, because that is
+   where the parameters live. The addon is not a bridge to people without the scripts; its
+   purpose is letting FreeCAD's own restore permission recognize scripts that are already
+   there — and the reason to have it at all is a standing item on the development roadmap
+   (stated 2026-09-21, not previously written down here): making these construction functions
+   usable from inside the FreeCAD GUI, which needs the modules present and importable on that
+   same machine regardless of this question.
+
+   That removes the reason to distinguish "package only the Proxy classes" from "package the
+   whole pipeline": there is no second copy to keep in sync in either case, because nothing
+   needs to be vendored. The addon only needs to make the project's own
+   `src/Fuselage/freecad` directory resolve as an installed location — a `Mod`-registered path,
+   or a stub package that extends `sys.path` to the checkout in place — not a duplicated copy.
+   `cowl_tree.py`, `cowl_interior.py` and everything else stay exactly where they are and
+   change exactly as often as they already do; there is only ever one copy of the code, so
+   there is nothing to fall out of step.
+
+   *Unverified, and the actual prerequisite now:* whether FreeCAD's restore check ("Only
+   modules from FreeCAD or installed addons are permitted") passes a module by where it
+   resolves from — a `Mod`-registered path pointing at the existing checkout, which this would
+   satisfy — or requires the file to be physically placed under a `Mod` directory, in which
+   case a symlink there would still avoid copying, but a bare `sys.path` addition from a stub
+   addon might not. This has not been tested in this investigation; it is the concrete next
+   step before treating either class as settled, and it is a narrower, cheaper check than
+   anything alternative 6's `BooleanFuzzy` measurement required.
+
+   If it works as hoped, this also folds away most of alternative 2's drawback: alternative 2
+   was rejected partly because its addon copy would need to be "kept in step with the
+   repository," but registering the checkout itself has nothing to keep in step, since it *is*
+   the repository. What alternative 2 still costs that this does not resolve is the standing
+   choice of deployment posture — the project becoming a FreeCAD extension — which the stated
+   roadmap intent to expose these functions in the FreeCAD GUI suggests is a direction already
+   intended, not one incurred solely to close this question.
+
+**Recommendation (revised 2026-09-21, withdrawing the 2026-09-01 choice of alternative 6 —
+not just re-measuring it; revised again the same day once script access was clarified).**
+**Alternative 7, in its path-registration form, for both representations — pending the one
+prerequisite above.** The split first drafted the same day (alternative 7 for the outer solid,
+alternative 1 for the interior shell until `cowl_interior.py` stabilizes) rested on a vendoring
+cost that assumed a deployment scenario — a document reaching someone without the project
+checkout — that does not describe how this project is actually used. Once the addon is
+understood as registering the existing checkout rather than shipping a second copy of it,
+there is no asymmetry left between the two Proxy classes to justify treating them differently:
+neither needs vendoring, so neither needs release discipline. The one open item is the
+`Mod`-path-vs-`sys.path` prerequisite above; if that check comes back unfavorable for a bare
+path addition, the fallback is a symlink under a real `Mod` directory pointing at the checkout,
+which is still not a copy and carries none of alternative 2's synchronization cost.
+
+Alternative 6 is withdrawn, for three independent reasons, each sufficient alone. Its own
+comparison ("matching this construction exactly, 74 faces tail, 64 nose") was measured
+against the OML blank as it stood on 2026-09-01; [OQ-DES-CW17](#open-questions), resolved
+2026-09-09, subdivided that same blank to 129 faces as part of fixing the tail's off-`U`=1
+correctness, and the current reference build measures 306 faces tail, 88 nose — the
+comparison has not been re-run against the construction that actually ships. Independent of
+that: `_CowlShell` did not exist on 2026-09-01, and both `tail_shell()` and
+`nose_cowl_shell()` build it *on top of* the full `_ShapeBoolean` outer-solid tree, so
+alternative 6 — even re-verified and fully implemented — can only ever make the print/blank
+kinds (`tail`, `nose_cowl`, serving mainly UC-1 export, normally regenerated from the sweep
+rather than hand-edited) stock-restorable. `tail_shell.FCStd`/`nose_cowl_shell.FCStd` — the
+kinds UC-2, UC-3, UC-4, UC-7 and UC-8 actually use (§6.4's table) — stay exactly as scripted
+as they are today regardless, because `_CowlShell` has no stock equivalent to convert to
+(B-spline surface fitting through eroded contour rows, structuring-element dilation, sewing).
+And it would leave the outer solid and the interior shell, built into the same document
+seconds apart, correct by two different mechanisms — stock objects plus a global preference
+for one, the `Part.Shape` API directly for the other — which is the special-casing this
+project avoids elsewhere on principle (one mechanism for both cowls, one construction path
+for both representations, §6.4). None of this is new evidence against `Part.Shape` as the
+correct-geometry mechanism; it is evidence that *stock objects*, alternative 6's specific
+proposal, buy less than believed and cost a silent-wrong-part failure mode alternative 1
+never had.
+
+**Alternative 7 supersedes it for both representations.** FreeCAD's restore restriction is on
+which *module* a scripted object's class comes from, not how much code that module contains —
+and, per the 2026-09-21 clarification above, the module does not need to be a second, vendored
+copy either; it can be the project's own `cowl_tree.py`/`cowl_interior.py`, made visible to
+FreeCAD's restore check by registering the checkout itself as an installed location.
+`_ShapeBoolean` is about thirty lines, unchanged this entire engagement, and depends on
+nothing but `Part.Shape.cut`/`fuse`/`common`; `cowl_interior.py`, which `_CowlShell.execute()`
+calls, is 2082 lines and the single most actively rewritten file in this engagement
+(IP-FC-137/139/140/141, this session's own `RIB_CUT_FUZZ`) — but that churn is a reason a
+*vendored copy* would need release discipline, not a reason the *original file*, registered in
+place, would drift from itself. With no copy involved, both classes reach the same outcome the
+same way: a missing or unregistered addon fails *visibly* (a missing-module error, like
+alternative 1 already accepts) rather than silently producing a wrong solid, and there is no
+version to fall out of step because there is only the one file, wherever it is imported from.
+
+**Confirming this isn't a case the interior-shell work's own newer techniques already solve
+differently.** Neither of the two fixes those newer investigations found bears on this item's
+crossing-slot problem. `RIB_CUT_FUZZ` (`cowl_interior.py`) adds a small *positive* tolerance
+for a genuine near-zero-volume sliver at one tool's own near-tangency — a real geometric
+degeneracy a fuzz-free cut can legitimately stumble on. This item's cut has no such
+degeneracy: `Part.Shape.cut` with *no* fuzz argument already returns the exact, 39-face valid
+answer (what `_ShapeBoolean` runs today); the defect here is the opposite shape, a
+*document-object* layer applying unwanted automatic fuzz on top of an operation that needed
+none. And "sew the open shells instead of fusing" (`mirror_across_cell`/`_strip_seam`) fixes
+two mirror-image solids meeting at exactly one shared face, a different topology from eleven
+buttress slabs genuinely overlapping in 3-D — a volumetric union to compute, not a seam to
+zip. Both confirm rather than reopen this item's own finding that the `Part.Shape` API is
+what gets this part's geometry right.
+
+**Ranking kept for the case alternative 7 does not pan out either**, unchanged from the
+2026-09-01 analysis except that alternative 6 no longer sits above it: pursue
+alternative 4 first if revisited (an unfuzzed FreeCAD build) — it is the only remaining
+alternative that gives up nothing — but it is already closed as of 2026-09-01: 1.1.3 does not
+compute this correctly, and FreeCAD `main` (the future 26.3) was checked at source and keeps
+the automatic fuzz with no override for `Part::` booleans, so waiting for a release changes
+nothing. Failing that, alternative 1 or 5 (keep the part right, give up live re-solving) rank
+above alternative 2 (ship the whole build pipeline as an addon, only worth it if editable
+files turn out to be a hard requirement), and alternative 3 (widen the slots) ranks last —
+adopting it on convenience grounds trades a correct part for a convenient toolchain, the
+wrong way round, and the measurements throughout this item show the failure is not simply a
+matter of the slot being too narrow.
 
 ### ~~OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1~~ — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
 
@@ -2385,9 +2585,37 @@ default. Alternative 5 should not be adopted: it trades the printed part for a c
 toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
 closed — the section is C1-but-not-C2 by design and no free re-parameterisation preserves that.
 
-### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`?
+### ~~OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`?~~ — RESOLVED: alternative 2 adopted
 
-**Problem.** `U` is the airframe's size multiplier: every dimension is written as a multiple of
+**Resolution note (2026-09-21).** Alternative 2 — all four values stay in the per-`U` table
+and scale with `U`, as the current derivation already does. Alex's reasoning: `plate_thickness`,
+`plate_flange_width`, `plate_flange_height` and `nose_flange_height` are ordinary swept
+dimensions, the same class as every other geometric quantity `nose_size_variants.csv` varies by
+`U` (e.g. `plate_diam`) — not manufacturing tolerances in the sense §6.3 uses for
+`cut_thickness`/`tolerance`/`flange_inset`, which stay fixed regardless of `U` because they are
+properties of the slicer rather than the airframe. That rejects alternative 1 (hold all four
+fixed, treating them as tolerances) and alternative 3 (split them, treating the flange
+dimensions as a fixed joint fit while only `plate_thickness` scales) on the same grounds — all
+four are being decided together, as the same kind of thing. Alternative 4 (derive them from
+`n_layers`/`extrusion_width`, removing them from the sweep table entirely) is rejected because
+that is the opposite of what "table values like other sweep parameters" asks for.
+
+**What this does not settle.** The four values already in the table are still the untuned
+linear placeholders this item's own investigation found — generated by plain scaling when the
+sweep was set up in 2026-08, never checked against a print or a load case. Deciding that they
+*should* scale as ordinary table values is not the same as deciding the rate they scale at;
+tuning the actual numbers against a print or a load case is separate, unstarted work.
+
+**What this settles that was blocking something concrete.** The committed archive
+(`variant_output_original/...`) holds all four fixed at their `U` = 1 values, which this
+resolution makes the wrong reading — the archive needs regenerating against the scaling table,
+not the reverse, before it can check the nose plate or the nose tip at any `U` other than 1.
+That regeneration is implementation, not documentation, and is not done by this resolution.
+
+The investigation below is kept in full because it is what the decision rests on; read this
+note only for current status.
+
+**Problem, as originally framed.** `U` is the airframe's size multiplier: every dimension is written as a multiple of
 it, and the project sweeps `U` from 0.5 to 4.0. Four values in `nose_size_variants.csv` are
 given a separate column per `U` and increase linearly with it:
 
@@ -2561,14 +2789,17 @@ further downstream, to the final wall cut. Both alternatives are a boolean betwe
 had each already been carried out to a full or reconstructed part — exactly the class of operation
 the resolution above forbids, whether or not the inputs were themselves exactly symmetric.
 
-**Root cause of the raw body's own measured asymmetry is still open, and independent of this
-resolution.** `body_symmetry_check.py` measured the tail's un-notched, axially-masked body
+**The raw body's own measured asymmetry, once independent of this resolution, is now confirmed
+not to exist.** `body_symmetry_check.py` had measured the tail's un-notched, axially-masked body
 (`lower`) as asymmetric by 0.4485/1.236/3.621 mm³ at `U` = 0.5/0.7/1.0, even though it descends
-from `_symmetrize_y()`'s exactly-symmetric output. Tracking that to ground — this step, the raw
-OpenVSP/STEP export, or the measurement tooling — is
-[IP-FC-138](../implementation/freecad_migration.md), wanted for its own sake regardless of this
-resolution, since the construction above works by never depending on `lower`'s symmetry at all
-rather than by explaining or fixing it.
+from `_symmetrize_y()`'s exactly-symmetric output — tracking that to ground was
+[IP-FC-138](../implementation/freecad_migration.md). Rebuilding `lower` through the current
+pipeline at those same three `U` and re-measuring, both by the original whole-solid method and by
+a face-level check sampling every OML-derived face's interior against its mirror, found it
+exactly symmetric (`0.000000` mm) by both methods at all three points — the original figures do
+not reproduce against the code as it stands, most likely fixed as a side effect of the
+`oml_blank.py` work done since. The construction above never depended on `lower`'s symmetry
+either way, so this was always independent of the resolution here, not a prerequisite for it.
 
 Only the tail was ever affected by the residue defect the two weaker alternatives were tried
 against. The nose builds its OML by mirroring one octant three times and was audited directly
@@ -2581,8 +2812,9 @@ part of this resolution.
 tracked in the implementation plan, not here** — see
 [freecad_migration.md IP-FC-139](../implementation/freecad_migration.md) (the construction itself,
 including a wrong-order mistake found and corrected on 2026-09-21 after the first implementation
-mirrored the cavity rather than the wall) and
-[IP-FC-140](../implementation/freecad_migration.md) (an open partition-slip measurement question).
+mirrored the cavity rather than the wall), [IP-FC-140](../implementation/freecad_migration.md) (the
+partition-slip measurement question, resolved) and
+[IP-FC-141](../implementation/freecad_migration.md) (the disconnected-cavity defects, resolved).
 This note records the decision; it is not the place to look for whether a given build currently
 passes.
 
