@@ -541,7 +541,7 @@ def eroded_body(wire, t, z, tol=REFIT_TOL):
 
 
 # --------------------------------------------------------------------------------
-# The symmetry cell -- OQ-DES-CW20
+# The symmetry cell -- design authority is cowl_interior_surface.md section 4.5
 # --------------------------------------------------------------------------------
 #
 # **Every operation below runs on the un-mirrored cell body, never on a full or reconstructed
@@ -598,7 +598,8 @@ def cell_boundary_planes(cell, tol=1.0e-6):
     if not planes:
         raise PreconditionFailed(
             'the body has no flat face through its own axis and perpendicular to the layer '
-            'plane -- it was not reduced to a symmetry cell before this ran (OQ-DES-CW20)')
+            'plane -- it was not reduced to a symmetry cell before this ran '
+            '(cowl_interior_surface.md section 4.5)')
     return planes
 
 
@@ -899,7 +900,8 @@ def dilated_notches(notches, t, report=None):
         # the layer plane offers no such path, so the feature would have to be formed between
         # layers instead, which thin-wall perimeter slicing cannot do, and it comes out
         # malformed. Horizontal ribs are therefore not used, which is also what keeps the rib
-        # thickness `2*n_p*w + t_cut / sin(theta)` away from its singularity (OQ-DES-CW19).
+        # thickness `2*n_p*w + t_cut / sin(theta)` away from its singularity
+        # (cowl.md section 6.4).
         #
         # Asserted here rather than left true: this is the one place that sees every cutting
         # tool. It used to be visible only to `check_cowl_interior.in_plane_width`, which
@@ -1319,7 +1321,7 @@ def _fit(rows):
     nor generally (2). What the requirement asks for is an approximation with continuity
     constraints, which is the class of construction OpenVSP uses for the exterior.
 
-    **The surface is open in the circumferential direction, not periodic -- OQ-DES-CW20.** Each
+    **The surface is open in the circumferential direction, not periodic** (section 4.5). Each
     row is the cell's own open arc, bounded at both ends by a construction plane rather than
     wrapping onto itself, so there is no seam to hold continuous and no anchor needed: the two
     ends are already fixed, at the cell's own boundary, the same one at every station. This
@@ -1384,7 +1386,7 @@ def _fit(rows):
 
 def _lid(surf, u, z, planes):
     """A patch's cap at one of its two axial ends, taken from the surface's own iso curve and
-    closed across the cell's construction boundary(ies) -- OQ-DES-CW20.
+    closed across the cell's construction boundary(ies) (section 4.5).
 
     From the surface rather than from the sample polygon, so the cap edge *is* the surface edge
     and the piece closes without a tolerance argument. `surf.uIso(u)` is now open, not closed --
@@ -1489,7 +1491,7 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
     `body` is the un-mirrored symmetry cell before any notch reached it (`half` for the tail,
-    `octant` for the nose -- OQ-DES-CW20), and `notches` the cutting tools that were built in
+    `octant` for the nose), and `notches` the cutting tools that were built in
     that same cell, never mirrored. The tools are taken as given rather than recovered as
     `body - notched`, where `notched` is the cell's own buttress-cut body (`cut`/`OctantCut`
     in `cowl_tree`, `shell_solid`'s own first argument): that difference is the same set inside
@@ -1920,7 +1922,7 @@ def _strip_seam(solid, normal, tol=1.0e-6):
     if removed < 1:
         raise PreconditionFailed(
             'expected at least one flat cap face in the mirror plane %s, found none -- the '
-            'cell cavity was not closed the way OQ-DES-CW20 expects' % normal)
+            'cell cavity was not closed the way section 4.5 requires' % normal)
     return keep
 
 
@@ -1928,11 +1930,11 @@ def mirror_across_cell(cell_result, normal):
     """`cell_result` carried one mirror step further: its cell-boundary cap removed, the open
     shell mirrored, and the two sewn together along their now-identical shared edge.
 
-    **This is the one mirror OQ-DES-CW20 allows, and it runs on the finished cell wall, not on
+    **This is the one mirror section 4.5 allows, and it runs on the finished cell wall, not on
     the cavity.** An earlier version of this function ran on the cavity instead -- mirroring the
     interior void out to the whole part and only then cutting it out of the separately-mirrored
     outer solid (`notched.cut(...)` in `shell_solid`) -- which is exactly the "boolean between
-    two already-full shapes that were each independently mirrored into existence" the resolution
+    two already-full shapes that were each independently mirrored into existence" section 4.5
     forbids, just one level removed from the two attempts it already names: `notched` there is
     `tip`, mirrored by `cowl_tree`'s own `_mirror_union`, and cutting it against a second,
     independently-mirrored full solid is no safer than fusing two of them would have been.
@@ -1984,7 +1986,7 @@ def mirror_across_cell(cell_result, normal):
             'mirroring the cell result about %s produced a closed shell that did not solidify '
             'validly. The two open shells should meet exactly along their shared edge -- the '
             'same curve, mirrored onto itself -- so a failure here means that edge is not as '
-            'exact as OQ-DES-CW20 assumes.' % normal)
+            'exact as section 4.5 assumes.' % normal)
     return solid
 
 
@@ -2000,7 +2002,7 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     is cut out of it *before* any mirroring happens, entirely within the symmetry cell, and only
     the one resulting wall is ever carried out to the whole part. **Correction, 2026-09-21: an
     earlier version of this function did the opposite, and it was wrong in exactly the way
-    OQ-DES-CW20 warns against.** It mirrored the *cavity* out to the whole part first
+    section 4.5 warns against.** It mirrored the *cavity* out to the whole part first
     (`mirror_cavity`, now `mirror_across_cell`), then cut that full mirrored cavity out of
     `tip` -- the outer solid, itself already mirrored by `cowl_tree`'s own, separate
     `_mirror_union` step. That final cut was a boolean between two shapes that had each been
