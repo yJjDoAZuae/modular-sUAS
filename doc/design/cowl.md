@@ -2606,11 +2606,17 @@ sweep was set up in 2026-08, never checked against a print or a load case. Decid
 *should* scale as ordinary table values is not the same as deciding the rate they scale at;
 tuning the actual numbers against a print or a load case is separate, unstarted work.
 
-**What this settles that was blocking something concrete.** The committed archive
-(`variant_output_original/...`) holds all four fixed at their `U` = 1 values, which this
-resolution makes the wrong reading — the archive needs regenerating against the scaling table,
-not the reverse, before it can check the nose plate or the nose tip at any `U` other than 1.
-That regeneration is implementation, not documentation, and is not done by this resolution.
+**Withdrawn 2026-09-21: this did not settle anything that needed settling.** An earlier version
+of this note claimed the committed archive (`variant_output_original/...`, which holds all four
+fixed at their `U` = 1 values) needed regenerating against the scaling table before it could be
+used to check the nose plate or the nose tip at any `U` other than 1. That claim was never
+checked against what actually verifies the port: `compare_backends.py` (IP-FC-13) renders both
+engines fresh, at the same current parameters, every time it runs — measured 2026-09-01, and
+nothing in this codebase reads `variant_output_original` at all. It is a one-time, hand-inspected
+snapshot from 2025-09-22 with no role in any live check, so nothing about this resolution
+requires it to change, and it should not be touched — it also predates the current sweep's
+filename convention entirely (a separate fact, unrelated to this OQ, discovered and reverted
+2026-09-21 after `variant_output_original` was briefly and wrongly modified).
 
 The investigation below is kept in full because it is what the decision rests on; read this
 note only for current status.

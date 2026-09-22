@@ -45,10 +45,22 @@ from corner_common import is_entry_point, prism
 # in two places, and the one that moved would win silently. `U` and `unit_width` are both
 # carried so a reader of a generated document can see the size it was built at.
 #
-# **The geometry does not yet read these rows through expressions.** It is built from the seed
-# and the sheet records it, where the corner and bulkhead sheets actually drive their features.
-# So a cowl document is inspectable but not yet re-solvable by editing `U` -- that is the
-# remaining half of IP-FC-12 and it is a genuine gap, not a simplification.
+# **The geometry built from these four tables does not read the rows through expressions.**
+# It is built from the seed and the sheet records it, where the corner and bulkhead sheets
+# actually drive their features. So a document built from `PARAMS_NOSE_TIP` here is
+# inspectable but not yet re-solvable by editing `U` -- that is IP-FC-12's remaining gap for
+# the nose tip specifically, and it is a genuine gap, not a simplification.
+#
+# **`PARAMS_NOSE_COWL`, `PARAMS_TAIL` and `PARAMS_NOSE_PLATE` below are dead code as of
+# 2026-09-21, kept only as the reference this module's own `main()` checks against and as
+# what the ported versions in `cowl_tree.py` were verified byte-for-byte-in-volume against.**
+# `nose_cowl`/`tail_cowl` moved to `cowl_tree.py`'s sheet-bound mechanism on 2026-09-01,
+# `nose_plate` on 2026-09-21 (`cowl_tree.PARAMS_NOSE_PLATE`/`cowl_tree.nose_plate`,
+# verified zero symmetric difference against this module's `nose_plate` at U=1 and U=4, and
+# verified to actually recompute in place when the sheet is edited, not merely to agree on a
+# fresh build). `cowl_nose_cowl.py`, `cowl_tail.py` and `cowl_nose_plate.py` all import
+# `cowl_tree` now, not this module. Only `nose_tip`/`PARAMS_NOSE_TIP` (`cowl_nose_tip.py`)
+# still builds through this module's baked path.
 _OML = [('oml_scale_m_per_mm', 1e-3), ('oml_length_m', 0.05),
         ('oml_offset_x_m', 0.0), ('oml_reversed', 0.0)]
 _COMMON = [('U', 1.0), ('unit_width', 100.0), ('overhang_angle_from_bed', 35.0)]

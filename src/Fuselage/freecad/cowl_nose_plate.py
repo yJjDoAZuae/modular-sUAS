@@ -11,15 +11,29 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import cowl
+import cowl_tree
 from corner_common import is_entry_point
 
-PARAMS = cowl.PARAMS_NOSE_PLATE
+PARAMS = cowl_tree.PARAMS_NOSE_PLATE
 
 
 def emit(doc, seed=None, overlay=None):
-    return cowl.emit_part(doc, seed, PARAMS, cowl.nose_plate, 'NosePlate')
+    return cowl_tree.emit(doc, seed, PARAMS, cowl_tree.nose_plate)
+
+
+def main():
+    """Build at the module's own rows and report, the reference check."""
+    import FreeCAD as App
+    doc = App.newDocument('nose_plate')
+    tip = emit(doc)
+    shape = tip.Shape
+    bound = sum(len(list(getattr(o, "ExpressionEngine", []) or []))
+               for o in doc.Objects)
+    print("PART:: %s  solids=%d valid=%s  objects=%d bindings=%d"
+          % ('nose_plate', len(shape.Solids), shape.isValid(), len(doc.Objects), bound))
+    sys.stdout.flush()
+    return 0 if shape.isValid() and len(shape.Solids) == 1 else 1
 
 
 if is_entry_point(__name__):
-    raise SystemExit(cowl.main())
+    raise SystemExit(main())

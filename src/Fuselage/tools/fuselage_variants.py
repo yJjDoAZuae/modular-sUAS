@@ -2666,10 +2666,19 @@ def cowl_parameters(kind, U, dp):
                     top1_angle=15.0, top2_angle=0.0, top2_y=0.0,
                     bottom1_angle=15.0, bottom2_angle=0.0, bottom2_y=0.0, **oml)
     if kind == 'nose_nose':
-        return dict(common, cut_len=dp.cut_len,
+        # `cut_len` and `plate_diam` are fractions here, like `nose_cowl`'s own -- ported to
+        # `cowl_tree.py`'s sheet-bound mechanism 2026-09-21, which reuses `upper_mask()` (built
+        # for `nose_cowl`, expects a fraction of `unit_width`) for the tip's own upper slice.
+        # `nose_flange_height`, `nose_flange_inset`, `plate_thickness` and `plate_tol` stay
+        # absolute: none of them come from the JSON shape file scaled by `unit_width` --
+        # `nose_flange_height`/`plate_thickness` are OQ-DES-CW18's own swept table values,
+        # `nose_flange_inset` is `cowl_n_perimeters * extrusion_width + tolerance` (a printer
+        # quantity), and `plate_tol` is a fixed fit allowance, all already absolute at the
+        # point `derived_cowl_parameters()` produces them.
+        return dict(common, cut_len=frac(dp.cut_len),
                     nose_flange_height=dp.nose.flange_height,
                     nose_flange_inset=dp.nose.flange_inset,
-                    plate_diam=dp.plate.diameter, plate_thickness=dp.plate.thickness,
+                    plate_diam=frac(dp.plate.diameter), plate_thickness=dp.plate.thickness,
                     plate_tol=dp.plate.tolerance, **oml)
     if kind == 'nose_plate':
         return {'U': U, 'overhang_angle_from_bed': dp.overhang_angle_from_bed,

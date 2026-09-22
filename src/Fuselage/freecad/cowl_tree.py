@@ -776,6 +776,51 @@ def tail_cowl(doc):
     return _mirror_union(doc, 'TailCowl', cut, (0, -1, 0))
 
 
+def nose_plate(doc):
+    """The disc that closes the nose, with its own printed flange.
+
+    Ported 2026-09-21 from `cowl.py`'s baked `nose_plate()` -- the second half of IP-FC-12's
+    long-standing remaining gap (`nose_cowl` and `tail_cowl` above have been sheet-bound since
+    2026-09-01; this and `nose_tip` were not). Same construction, the same four primitives in
+    the same order, now sheet-bound so the document recomputes when a value changes instead of
+    holding a shape baked once in Python.
+
+    **Every dimension here is already absolute millimetres, not a fraction of `unit_width`.**
+    `plate_thickness`, `plate_flange_width` and `plate_flange_height` are OQ-DES-CW18's own
+    swept table values (cowl.md section 6.4's Open Questions), not derived from the cowl's JSON
+    shape file the way `cut_len` or the buttress radii are -- so unlike every function above,
+    nothing here multiplies by `unit_width`, and `cowl_parameters()`'s `nose_plate` export
+    (`fuselage_variants.py`) is unchanged: it was already handing over absolute values.
+    """
+    r = '(%splate_diam / 2)' % P
+    flare = '(%splate_flange_height / tan(%soverhang_angle_from_bed))' % (P, P)
+    eps = '0.01'
+
+    body = C._cyl(doc, 'Body', r,
+                 '(%splate_thickness + 2 * %splate_flange_height)' % (P, P),
+                 '(-%splate_thickness - 2 * %splate_flange_height)' % (P, P))
+    taper = C._cone(doc, 'Taper', '(%s + %s)' % (r, flare), r,
+                    '%splate_flange_height' % P,
+                    '(-%splate_thickness - %splate_flange_height)' % (P, P))
+    skirt = C._cyl(doc, 'Skirt', '(%s + %s)' % (r, flare), '%splate_flange_height' % P,
+                   '(-%splate_thickness - 2 * %splate_flange_height)' % (P, P))
+    fused = _shape_bool(doc, 'Fused', 'fuse', body, [taper, skirt])
+
+    height = '(2 * %splate_flange_height + %s)' % (P, eps)
+    pocket_r1 = '(%s - %splate_flange_width + %s / tan(%soverhang_angle_from_bed))' % (
+        r, P, height, P)
+    pocket_r2 = '(%s - %splate_flange_width)' % (r, P)
+    pocket = C._cone(doc, 'Pocket', pocket_r1, pocket_r2, height,
+                     '(-%splate_thickness - 2 * %splate_flange_height - %s)' % (P, P, eps))
+    cut = _shape_bool(doc, 'Cut', 'cut', fused, [pocket])
+
+    # `nose_render` wraps the OpenSCAD module in `mirror([0,0,-1])`; mirroring here keeps this
+    # part built where the one it replaces was, not merely shaped like it -- volume would not
+    # have caught a sign error here, being mirror-invariant, but a print laid out from the STL
+    # would have been upside down (the same reasoning `cowl.nose_plate`'s own docstring gives).
+    return _mirror(doc, 'NosePlate', cut, (0, 0, -1))
+
+
 def nose_cowl_shell(doc):
     """IP-FC-17: the nose cowl's solid representation. Serves UC-2, UC-3, UC-4, UC-7, UC-8."""
     nose_cowl(doc)
@@ -837,6 +882,17 @@ PARAMS_TAIL = [
      ('oml_offset_x_m', -0.25), ('oml_reversed', 1.0)]
 
 
+#: `nose_plate` shares none of `PARAMS_NOSE_COWL`/`PARAMS_TAIL`'s rows and needs no OML: it
+#: never touches the imported blank at all. Every value is already absolute millimetres (see
+#: `nose_plate`'s own docstring), so unlike the two sheets above there is no `unit_width` row
+#: and no fraction to multiply out.
+PARAMS_NOSE_PLATE = [
+    ('U', 1.0), ('overhang_angle_from_bed', 35.0),
+    ('plate_diam', 60.0), ('plate_thickness', 0.8),
+    ('plate_flange_height', 1.0), ('plate_flange_width', 2.0),
+]
+
+
 def _as_cells(rows):
     """Sheet cells are text. A literal is written as `repr(float(v))` for the same reason
     `parameters.rows()` does it -- the sweep compares definition files byte for byte, so a
@@ -863,6 +919,7 @@ PARAMS_NOSE_COWL = _as_cells(PARAMS_NOSE_COWL)
 PARAMS_TAIL = _as_cells(PARAMS_TAIL)
 PARAMS_NOSE_COWL_SHELL = _as_cells(PARAMS_NOSE_COWL_SHELL)
 PARAMS_TAIL_SHELL = _as_cells(PARAMS_TAIL_SHELL)
+PARAMS_NOSE_PLATE = _as_cells(PARAMS_NOSE_PLATE)
 
 
 def emit(doc, seed, params, builder):
