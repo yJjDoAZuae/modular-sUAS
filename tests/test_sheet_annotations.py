@@ -387,6 +387,64 @@ def test_corner_annotations_drops_panel_quantities_when_unpanelled(cowling_bulkh
     assert 'panel_extension' in names
 
 
+def test_corner_annotations_panel_extension_follows_flat_x_under_corner_tolerance(corner_params):
+    """IP-FC-111 (freecad_migration.md): panel_extension used to be bound to an expression
+    that omitted corner_tolerance, so at a nonzero corner_tolerance the dimension's stated
+    value and its drawn endpoint both silently disagreed with the built face
+    (check_derived_geometry's own 'bulkhead seating flat', flat_x = -(panel_overlap +
+    panel_offset) + corner_tolerance, extension = -flat_x). Every real corner built to date
+    has corner_tolerance=0 (OQ-DES-C5), so this regression can only be reproduced by probing
+    -- exactly what the original investigation did. At the real fixture's corner_tolerance=0
+    the two forms agree by construction; forcing corner_tolerance=0.1 makes flat_x less
+    negative by 0.1, so extension = -flat_x (and the dimension's stated value) decreases by
+    exactly 0.1, tracking flat_x rather than staying fixed."""
+    quantities, dimensions, notes, construction, views = sa.corner_annotations(corner_params)
+    by_name = _by_name(quantities)
+    baseline = by_name['panel_extension'].value
+    assert corner_params['corner_tolerance'] == pytest.approx(0.0)
+
+    probed = dict(corner_params)
+    probed['corner_tolerance'] = 0.1
+    quantities2, dimensions2, notes2, _c2, _v2 = sa.corner_annotations(probed)
+    by_name2 = _by_name(quantities2)
+    assert by_name2['panel_extension'].value == pytest.approx(baseline - 0.1, abs=1e-9)
+
+    dim = next(d for d in dimensions if d[0].name == 'panel_extension')
+    dim2 = next(d for d in dimensions2 if d[0].name == 'panel_extension')
+    _q, p1, p2, _axis, value = dim
+    _q2, p1b, p2b, _axis2, value2 = dim2
+    assert value2 == pytest.approx(value - 0.1, abs=1e-9)
+    # The dimension runs from the longeron axis (unaffected) out to -extension = flat_x (the
+    # face); only that far endpoint should move, by exactly the probed delta.
+    assert p1b == p1
+    assert p2b[0] == pytest.approx(p2[0] + 0.1, abs=1e-9)   # flat_x moves less negative
+    assert by_name2['corner_clearance'].value == pytest.approx(0.1)
+
+
+def test_corner_annotations_seat_note_is_unconditional_and_pocket_is_not(
+        corner_params):
+    """IP-FC-112 (freecad_migration.md): before this fix, corner_tolerance (register row 3,
+    joint 3's clearance) was declared nowhere on the corner's sheet -- a nonzero value would
+    be demanded-and-silent. The fix added an unconditional 'seat' note (present whether or
+    not a panel is fitted, since the joint it states exists on every corner) carrying the new
+    'corner_clearance' Quantity, bringing the note count from 3 to 4 unpanelled and 4 to 5
+    panelled, per the item's own measured counts."""
+    quantities, _dims, notes, _construction, _views = sa.corner_annotations(corner_params)
+    keys = [key for key, _anchor, _lines in notes]
+    assert 'seat' in keys
+    assert 'corner_clearance' in _by_name(quantities)
+    seat_lines = next(lines for key, _a, lines in notes if key == 'seat')
+    assert any('BULKHEAD SEAT' in line for line in seat_lines)
+    assert len(keys) == 5   # bore, socket, mold, seat, pocket -- this fixture is panelled
+
+    unpanelled_p = _load('ref_cowling_bolt.params.json', 'corner_parameters')
+    _q, _d, notes_u, _c, _v = sa.corner_annotations(unpanelled_p)
+    keys_u = [key for key, _a, _l in notes_u]
+    assert 'seat' in keys_u
+    assert 'pocket' not in keys_u
+    assert len(keys_u) == 4   # bore, socket, mold, seat -- no panel pocket note
+
+
 def test_corner_construction_marks_the_bore_and_the_one_real_diagonal(corner_params):
     construction = sa.corner_construction(
         corner_params, radius=10.0, bore=2.05, seat=5.1375, thickness=4.7625,

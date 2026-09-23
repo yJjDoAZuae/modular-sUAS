@@ -30,6 +30,7 @@ import corner_tree as C
 from corner_common import build_sheet, is_entry_point
 
 REF_VOL = 1090.6367096
+EXPECT_BBOX = (-16.0000, -16.0000, 0.0000, 6.0000, 10.0000, 6.0000)
 
 PARAMS = [
     ('bulkhead_thickness', '6'),
@@ -129,22 +130,42 @@ def positives(doc):
 
 
 def main():
+    """Found while auditing IP-TEST-11 (doc/implementation/test_coverage.md): this printed a
+    volume/delta/bbox/valid report but never turned any of it into a verdict -- no fail list,
+    no return value, and the entry-point guard below did not even call sys.exit() -- so this
+    always reported success regardless of content, the same silent-pass bug class fixed
+    throughout the rest of the freecad/ tier.
+    """
     doc = App.newDocument('simple_positives')
     tip = emit(doc)
     s = tip.Shape
     d = s.Volume - REF_VOL
     bb = s.BoundBox
+    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
 
     print('PART:: CSG tree -- bulkhead simple positives')
     print('  volume  = %.7f' % s.Volume)
     print('  ref     = %.7f  (OpenSCAD, faceted)' % REF_VOL)
     print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / REF_VOL))
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
-    print('  expect  = [-16.0000, -16.0000, 0.0000, 6.0000, 10.0000, 6.0000]')
+    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
+    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
     print('  valid   = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
+    fail = []
+    if not s.isValid():
+        fail.append('invalid shape')
+    if len(s.Solids) != 1:
+        fail.append('%d solids' % len(s.Solids))
+    if abs(d) / REF_VOL > 1e-3:
+        fail.append('volume off by more than 0.1%')
+    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
+        fail.append('bounding box moved')
+    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
+    return 1 if fail else 0
+
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)
