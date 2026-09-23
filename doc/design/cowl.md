@@ -1598,7 +1598,7 @@ it.
 described in that alternative's 2026-09-21 revisions below — not a vendored copy of
 `cowl_tree.py`/`cowl_interior.py`, but the project's own checkout registered as a location
 FreeCAD's document-restore permission check recognizes. The rationale: anyone who needs to
-change a shape's parameters and regenerate it already has the checkout (Alex, 2026-09-21),
+change a shape's parameters and regenerate it already has the checkout (design decision, 2026-09-21),
 and exposing these construction functions from inside the FreeCAD GUI is itself a standing
 roadmap item, not a use case invented to justify this addon — so there is no scenario this
 project needs to serve where the scripts are shipped separately from a document that depends
@@ -2588,7 +2588,7 @@ closed — the section is C1-but-not-C2 by design and no free re-parameterisatio
 ### ~~OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`?~~ — RESOLVED: alternative 2 adopted
 
 **Resolution note (2026-09-21).** Alternative 2 — all four values stay in the per-`U` table
-and scale with `U`, as the current derivation already does. Alex's reasoning: `plate_thickness`,
+and scale with `U`, as the current derivation already does. The reasoning: `plate_thickness`,
 `plate_flange_width`, `plate_flange_height` and `nose_flange_height` are ordinary swept
 dimensions, the same class as every other geometric quantity `nose_size_variants.csv` varies by
 `U` (e.g. `plate_diam`) — not manufacturing tolerances in the sense §6.3 uses for

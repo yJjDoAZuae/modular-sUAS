@@ -39,10 +39,10 @@ two-test-tier rules this plan exists to satisfy), [doc/guidelines/python.md](../
 | IP-TEST-5 | done | Unit tests for the verification/comparison tool cluster: `mesh_stats.py`, `baseline_ledger.py`, `baseline_manifest.py`, `surface_distance.py`, `stl_preview.py`, `brep_snapshot.py`, `scad_snapshot.py`, `params_snapshot.py`, `verify_sweep_change.py`, `verify_scad_change.py`, `verify_drivers.py`, `sweep_check.py`, `compare_backends.py` — all genuinely live verification infrastructure, not one-off tools; no scope-split like IP-TEST-4's needed here | IP-TEST-1 | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd) |
 | IP-TEST-6 | done | Unit tests for remaining `src/Fuselage/tools/` modules: `make_sheet_template.py`, `oml_export.py`, `render_variant.py`, `export_parameters.py`, `freecad_render.py`, `render_sheets.py`, `sweep_variant_sets.py`, `soak_shell_variants.py`, `audit_call_args.py`. `scan_octant_micro.py` (a one-off IP-FC-67 re-investigation script) and `fuselage_splode.py` (inherited scratch scaffolding with hardcoded magic indices, no real caller) are deliberately excluded — see Notes | IP-TEST-1 | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd) |
 | IP-TEST-7 | active | Audit `check_*.py` coverage against every function in the core FreeCAD geometry modules — `cowl_tree.py`, `cowl.py`, `cowl_interior.py`, `corner_tree.py`, `corner_common.py`, `oml_blank.py`, `boom_*.py`, `bulkhead_*.py`, `plane2d.py` (done), `flange_*.py`, `web.py`, `fillets.py`, `part_*.py` (already self-checking; found and fixed a real gap — see Notes) — and add a `check_*.py` regression for every function with none | — | [general.md §Two test tiers](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
-| IP-TEST-8 | done | Audit and add `check_*.py` coverage for the drawing/TechDraw modules: `drawing.py`, `drawing_standard.py`, `dimension_placement.py`, `sheet_annotations.py`, `sheet_table.py` all already had coverage, audited and confirmed correct; `sheet_naming.py` already covered from the pytest tier (IP-TEST-4); `render_pages.py` had none and now does, run for real through `freecad.exe` with offscreen Qt -- see Notes. Two of the audited checks surfaced real, pre-existing product defects (not test-coverage gaps), also in Notes, left for Alex to triage | — | [general.md §Two test tiers](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
+| IP-TEST-8 | done | Audit and add `check_*.py` coverage for the drawing/TechDraw modules: `drawing.py`, `drawing_standard.py`, `dimension_placement.py`, `sheet_annotations.py`, `sheet_table.py` all already had coverage, audited and confirmed correct; `sheet_naming.py` already covered from the pytest tier (IP-TEST-4); `render_pages.py` had none and now does, run for real through `freecad.exe` with offscreen Qt -- see Notes. Two of the audited checks surfaced real, pre-existing product defects (not test-coverage gaps), also in Notes, left for the project owner to triage | — | [general.md §Two test tiers](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
 | IP-TEST-9 | done | Triage the `spike_*.py` exploratory modules (`spike_eps.py`, `spike_offset2d.py`, `spike_derived_part.py`, `spike_assembly.py`, `spike_fillet.py`, `spike_techdraw.py`, `spike_partdesign.py`, `spike_csg_tree.py`, `spike_sketch_expr.py`, `spike_hand_edit.py`, `spike_link.py`): each is either promoted to covered production code or moved to `src/Fuselage/archive/` with a note on why, per [general.md's adoption-phase note](../guidelines/general.md#project-lifecycle-phase) — do not add coverage to code that turns out to be a discarded experiment | — | [general.md §Weigh a refactor against what replaces the code](../guidelines/general.md#weigh-a-refactor-against-what-replaces-the-code) |
 | IP-TEST-10 | done | Audit and add `check_*.py` coverage for remaining `src/Fuselage/freecad/` utility modules not covered above: `units.py`, `measure.py`, `solid_measure.py`, `mesh_to_brep.py`, `variants.py`, `preview.py`, `build_part.py`, `build_sheet.py`, `part_kinds.py`, `geometry_branches.py`, `pd_middle.py`, `pd_end.py`, `parameters.py` | — | [general.md §Two test tiers](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
-| IP-TEST-11 | done | Historical audit: walk every completed item in [freecad_migration.md](freecad_migration.md), identify which ones were verified only by narrative description or scratchpad scripts with no corresponding committed `check_*.py`/`tests/` entry, and add the missing regression for each. All ~141 rows read; two remaining full-sweep items and one stale cross-reference flagged for Alex rather than chased -- see Notes | — | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd) |
+| IP-TEST-11 | done | Historical audit: walk every completed item in [freecad_migration.md](freecad_migration.md), identify which ones were verified only by narrative description or scratchpad scripts with no corresponding committed `check_*.py`/`tests/` entry, and add the missing regression for each. All ~141 rows read; two remaining full-sweep items and one stale cross-reference flagged for the project owner rather than chased -- see Notes | — | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd) |
 
 ---
 
@@ -748,9 +748,35 @@ of 240 within tolerance, at all 12 stations, both parts). Recorded here rather t
 root-caused: understanding why the refit exceeds 0.005 mm on these specific real sections is a
 real geometric investigation in `cowl_interior.py`'s curve-fitting code, adjacent to but
 distinct from the `cowl_interior_surface.md` thread this session's other work touched, and is
-Alex's call whether to promote it to a tracked `IP-FC-*` item, retune the 0.005 mm tolerance, or
+the project owner's call whether to promote it to a tracked `IP-FC-*` item, retune the 0.005 mm tolerance, or
 something else -- not implied by anything here. What IS now true and load-bearing: the check
 no longer lies about having passed.
+
+**Root-caused and fixed, tracked as [IP-FC-142](freecad_migration.md).** `ci.eroded_body()` was
+not tuned wrong -- it was the wrong function for cell-shaped input, and was superseded in
+production for exactly that reason on 2026-09-21 (IP-FC-139/140/141), a fact this check's own
+`rib_gap()` had not been updated to reflect. `eroded_body()` fits one periodic B-spline through
+the *whole* raw section, which is only correct for a genuinely closed, construction-boundary-
+free loop; `body` here is the un-mirrored symmetry cell (`tip.Body`), whose raw section is a
+closed loop only topologically -- part of it is the cell's own straight construction edge, not
+OML. Forcing a single smooth periodic curve through a section that has a real straight edge in
+it is the exact anti-pattern already documented and fixed elsewhere in the same file
+(`cell_boundary_planes`'s own comment, describing why `cavity()` moved off this method): the fit
+cannot hold the straight edge straight and the curved edge curved at the same point, so it
+rounds the corner -- which is a real, fixed feature of the section, not a sampling shortfall, so
+no ladder rung (1x/2x/4x samples) ever converges on it. That is the whole explanation for why
+the 0.016-0.026 mm error was consistent across every station and did not shrink with more
+points. Fixed by moving `rib_gap()` to the same `open_arc`/`eroded_arc` cell method `cavity()`
+already uses, closing the eroded interior back into a face with the cell's own straight
+boundary exactly (one segment for the tail's single plane, two through the axis point for the
+nose's two) rather than fitting anything through it. Re-run for real after the fix: both
+`tail_shell` and `nose_cowl_shell` now report `worst error 0.0000` at all 3 rib-gap stations
+(6/6) and exit `OK`, and a negative control (the same real geometry, `t_cut` deliberately
+perturbed by 0.3 mm so the check's own expected width no longer matches the real notch) reads a
+genuine 0.3193 mm discrepancy, confirming the fixed check still discriminates rather than
+trivially passing. **No defect in the built part was ever found or claimed** -- `wall_thickness`
+already passed cleanly throughout, and this was always a defect in one verification function's
+method, not in the geometry it was checking.
 
 Cross-checked whether this same unguarded-`PreconditionFailed` bug exists anywhere else:
 grepped every call site in the tier. `build_part.py`'s `main()` already wraps it, with its own
@@ -832,7 +858,7 @@ or `sheet_table.py`).
    least six real family/kind combinations, apparently never previously surfaced** -- not
    something to improvise a fix for (the resolution is a real design decision: widen the band,
    shrink the table, split it across sheets, or accept these combinations do not get a family
-   table on the sheet), so left here as a clearly-characterized, reproducible finding for Alex
+   table on the sheet), so left here as a clearly-characterized, reproducible finding for the project owner
    to triage rather than guessed at.
 
 (Testing note for future work on this item: piping a `freecadcmd` run through `grep`/`tail`
@@ -903,7 +929,7 @@ those without a corresponding link-fixing pass across both documents, which is m
 item asks for. Judged that a clear, unambiguous docstring marker at the top of each file
 ("SUPERSEDED... do not add test coverage here", naming exactly what superseded it) delivers the
 item's real intent -- nobody mistakes these for uncovered production code needing tests -- at
-lower risk than a file move plus a documentation-repair pass. If Alex wants the physical
+lower risk than a file move plus a documentation-repair pass. If the project owner wants the physical
 relocation done anyway, the ten files and their replacement targets are listed above and the
 remaining work is purely mechanical (`git mv` plus updating the links this note found).
 
@@ -1017,7 +1043,7 @@ for a *different* purpose (pairwise reproducibility, OQ-ARCH-19), not a validity
 specific claim "all eight swept `U` build cleanly for both cowls" has no standing, committed
 regression -- only the narrative record of a one-time investigation.
 
-**Run, 2026-09-22, on Alex's go-ahead.** Added `check_cowl_u_sweep.py`: builds `tail_shell` and
+**Run, 2026-09-22, on the project owner's go-ahead.** Added `check_cowl_u_sweep.py`: builds `tail_shell` and
 `nose_cowl_shell` at each of the eight rows in `nose_size_variants.csv` directly against
 `cowl_tree`'s own `PARAMS_TAIL_SHELL`/`PARAMS_NOSE_COWL_SHELL` (only the `U` literal
 substituted, via `soak_cowl_shell.with_u()`), checking exactly what each kind's own `main()`
@@ -1084,7 +1110,7 @@ uncovered and small enough to close in this pass:
   `check_regenerate.py` already builds and reproduces this exact configuration successfully
   against real geometry this session, `TABLE`'s stated purpose is reproducibility, not sweep-
   legality, and changing the value would mean re-rendering a committed reference `.stl` -- a
-  geometry decision for Alex, not a test-coverage one.
+  geometry decision for the project owner, not a test-coverage one.
 - **`part_kinds.py`** had `KINDS` existence/shape checked only as `freecad_render.py`'s own test
   infrastructure (IP-TEST-6); `unbuilt_types()` and `geometry_roots()` had no assertions on
   their actual logic at all. Added `tests/test_part_kinds.py`.
@@ -1141,7 +1167,7 @@ new/fixed checks verified with real runs and negative controls.
 **`sheet_annotations.py`'s three per-kind builders** (`corner_annotations`,
 `bulkhead_annotations`, `boom_bulkhead_annotations`, ~150-270 lines each) were deliberately
 *not* audited formula-by-formula -- the same judgment call `cowl_tree.py`/`cowl_interior.py`
-got earlier in this item, *until Alex asked for the audit to be completed rather than scoped
+got earlier in this item, *until the project owner asked for the audit to be completed rather than scoped
 out* -- see below.
 
 **`sheet_annotations.py`'s three per-kind builders, completed 2026-09-23.** Read the whole file
@@ -1276,18 +1302,15 @@ did surface, all from the range it did read, held up cleanly and were closed:
 
 Two more candidates were examined and are real, correctly-scoped findings, but not chased
 further here -- both would need a genuine full-corpus sweep, and this project's own standing
-rule is to ask before running one, not to spend one on a documentation gap without Alex's
-go-ahead:
+rule is to ask before running one, not to spend one on a documentation gap without the project owner's
+go-ahead. **That go-ahead was given, 2026-09-23, and both were run for real -- see the
+"full sweeps, run 2026-09-23" entry below for both results.**
 
 - **IP-FC-58** claims all 484 ported bulkhead variants build and compare within tolerance
   against OpenSCAD; **IP-FC-12/13** claims the same for all 132 boom bulkhead variants.
   `tests/test_compare_backends.py`'s own docstring already says plainly that `render()`/
   `main()` -- the real subprocess build-and-compare path that produced these two numbers --
-  is out of scope for the pytest tier. Reproducing either claim exactly means a real
-  multi-hundred-part sweep; a cheaper, honest alternative in the spirit of
-  `verify_sweep_change.py`'s existing `sample_names`/`sample_parts` approach (a sampled subset
-  standing in for a claim about the whole corpus, not a substitute for it) is possible but is
-  a design choice for whoever picks this up next, not implied by anything here.
+  is out of scope for the pytest tier.
 
 One more candidate, examined and found to already be a settled, deliberate decision rather
 than an open gap: **IP-FC-66/67/68**'s micro-geometry corpus-scan numbers
@@ -1308,7 +1331,7 @@ percent-format style is unaffected, consistent with every other file in that dir
 
 **Remaining in this item, corrected and honestly scoped:** rows roughly IP-FC-1 through
 IP-FC-94 have now been triaged by the research pass (with its 8 candidates independently
-verified, 3 closed, 2 flagged as needing Alex's go-ahead for a full sweep, 1 confirmed already
+verified, 3 closed, 2 flagged as needing the project owner's go-ahead for a full sweep, 1 confirmed already
 a settled decision, 1 out of scope by design).
 
 **IP-FC-95 through IP-FC-141 (47 rows), read directly, 2026-09-23.** Not delegated this time,
@@ -1366,11 +1389,65 @@ export deflection) had no regression pinning the fix -- `check_build_part.py`'s
 itself. Added that case; confirmed it now correctly falls through to the fixed
 `LINEAR_DEFLECTION` rather than scaling with `U`.
 
-**Two items flagged, not chased, both needing a real multi-part sweep and therefore Alex's
-go-ahead first** (same standing rule as IP-FC-58/12/13 above): IP-FC-117 (an explicit,
-still-not-started ~9-hour reproducibility soak across both shell kinds and six swept `U`
-values, blocked on its own OQ-ARCH-21) and IP-FC-121 (a `compare_backends` run across four
-cowl kinds at several `U`, whose own text says "should be asked for rather than assumed").
+**Four full sweeps, run for real on the project owner's go-ahead, 2026-09-23** (IP-FC-58, IP-FC-12/13,
+IP-FC-117, IP-FC-121 -- every item this pass had flagged as needing a multi-part sweep before
+it could be closed). Launched as four detached background processes so they would survive
+independent of the interactive session; caught and fixed a real mistake in the launch itself
+before trusting any result -- see the note immediately below.
+
+- **IP-FC-121** (cowl `compare_backends`, `nose_cowl`/`nose_nose`/`nose_plate`/`tail` at
+  `U`=0.5/1.0/2.0/3.0, 16 parts): **BACKENDS AGREE.** Deltas match the historical figures
+  almost exactly (`nose_cowl` -0.004% to -0.005%, `tail` -0.008%, `nose_nose` -0.044% to
+  -0.048%, `nose_plate` +0.004% to +0.005%, worst case 0.050%) -- confirms `U`-invariance
+  still holds today across the whole range, not just at `U`=1.
+- **IP-FC-12/13** (`compare_backends --kinds boom_bulkhead --all`, 132 parts, the real current
+  corpus): **BACKENDS AGREE**, worst delta 0.00110% on
+  `U_1.0__metric_panel_1mm__boom_bulkhead_dual` -- an exact match to the historical figure.
+- **IP-FC-58** (`compare_backends --kinds bulkhead --all`, 148 parts, the real current corpus
+  -- smaller than the 484 the original claim cited, which was a larger or differently-scoped
+  sweep at the time; every variant that exists today was compared, not a partial run of an
+  old count): **BACKENDS AGREE**, worst delta 0.00327% on
+  `U_0.5__metric_panel_0mm__bulkhead_interconnect`.
+- **IP-FC-117** (the cowl reproducibility soak, both shell kinds x six swept `U` values x
+  required repeats at `U`=1.0/4.0, 28 builds total): **did not answer the reproducibility
+  question it was built for, and that is itself the finding.** All 28 builds failed at the
+  identical P3 precondition (`check_cowl_interior.py`'s rib-gap refit tolerance) already
+  flagged earlier this session as an open, unresolved defect -- but this session's earlier
+  finding was based on a handful of manually-checked stations on two builds. **This soak
+  upgrades it to a complete, exhaustive result**: both `nose_cowl_shell` and `tail_shell`,
+  every one of the six swept `U` values, and every repeat (5 at `U`=1.0, 5 at `U`=4.0, all
+  identical to each other at matching `U`) fail the same way, at the same section, by
+  comparable margins (0.014-0.026 mm against the 0.005 mm allowance). `soak_compare.py` was
+  run against the results and correctly reports 0 pairs comparable (every build failed before
+  producing a wall to compare) -- `DONE -- 0 pair(s) compared: none`. The reproducibility
+  question OQ-ARCH-21/IP-FC-117 was built to answer is now moot until the P3 defect itself is
+  addressed; this is additional, stronger evidence for that existing open finding, not a new
+  one, and does not change what is already the project owner's decision to make about it.
+
+  **The P3 defect this soak's 28/28 failures traced to is now fixed, tracked as
+  [IP-FC-142](freecad_migration.md).** It was `rib_gap()` calling the wrong (superseded)
+  refit function on the symmetry cell's raw section, not a defect in the built geometry --
+  see the fuller root-cause note on the IP-TEST-11 finding above. Both shell kinds now pass
+  `check_cowl_interior.py` cleanly at `worst error 0.0000`, so the reproducibility question
+  this soak was built to answer is open again, not moot -- re-running it is a matter for
+  whoever schedules the next full-sweep soak (per [full-sweeps-are-expensive](
+  ../guidelines/general.md)), not implied here.
+
+**A real operational mistake, caught and fixed before it could corrupt a result.** All three
+`compare_backends` sweeps were first launched sharing the same default scratch directory
+(`%TEMP%\modular_suas_compare_backends`); the boom_bulkhead run's own `ensure_wiped()` safety
+check (the IP-FC-72 hazard this module already guards against) correctly refused rather than
+silently colliding. Relaunched with distinct `--scratch` paths per sweep. A second, sharper
+mistake followed: `Stop-Process` on the original launcher PIDs killed the top-level process
+but not its already-spawned Python/OpenSCAD children (Windows does not cascade process
+termination the way `Stop-Process` on Unix would), so ten orphaned processes kept running
+against the now-deleted old scratch directory, writing failures into the same log files the
+relaunched runs were using (Windows lets multiple process handles share one file object,
+which is what made this look briefly like the *new* runs were failing). Diagnosed via
+`Get-CimInstance Win32_Process` with `ParentProcessId`/`CommandLine`, confirmed which ten PIDs
+were the orphaned tree, and killed exactly those by explicit PID -- never by process name or
+wildcard, which would have also killed the legitimate siblings. All three sweeps' actual
+results above are from the clean, post-fix runs.
 
 **One stale cross-reference found and worth flagging, not a new action item.** IP-FC-128's own
 resolution rests on `table_rows_available()` returning 13 (arguing the true figure is 13, not
@@ -1386,7 +1463,7 @@ the freecad tier are unrelated to this pass, confirmed unchanged before/after by
 against the last commit).
 
 **Remaining in this item:** none of the ~141 `IP-FC-*` rows are unread now. What could still
-be added, if Alex wants it pursued further, is closing the two flagged full-sweep items above
+be added, if the project owner wants it pursued further, is closing the two flagged full-sweep items above
 (with go-ahead) and deciding what to do about IP-FC-128's stale cross-reference. Absent those,
 this item's own scope -- finding narrative-only claims with no committed regression and adding
 one -- is now substantively complete across the whole document.
