@@ -1,4 +1,9 @@
-"""IP-FC-38: can a sketch's geometry be driven by the parameter sheet, headless?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's fully-constrained,
+expression-driven sketch pattern is now corner_tree._sketch(), used throughout the freecad/
+tier (web.py's interconnect profile, bulkhead_full.py's RampProfile, ...) -- kept in place
+rather than archived, for the historical links into it; do not add test coverage here.
+
+IP-FC-38: can a sketch's geometry be driven by the parameter sheet, headless?
 
 corner_middle decomposed entirely into half-planes, so it needed no sketches. corner_end
 does not: its wedge is a non-convex hexagon whose vertices are not collinear and whose edges

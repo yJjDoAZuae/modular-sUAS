@@ -389,15 +389,29 @@ def section(p, z0, h):
     return full.removeSplitter()
 
 
-def report(name, shape, ref_volume):
-    """Print the comparison IP-FC-5 is built to make."""
+def report(name, shape, ref_volume, tol=1e-4):
+    """Print the comparison IP-FC-5 is built to make, and say whether it passed.
+
+    **Found and fixed while writing check_plane2d.py (IP-TEST-7).** This used to print the
+    delta and nothing else -- no tolerance, no verdict, no return value -- so `part_corner.py`
+    /`part_end.py`/`part_middle.py`/`part_transition.py`'s `main()` always exited 0 whatever
+    the volume actually came out to; a real regression here was visible only to someone
+    reading the printed percentage by eye. `tol` matches `check_tree.py`'s own bar for the
+    same Part:: corner (`abs(d) / ref > 1e-4`), since this is that check's static-port
+    ancestor. Also requires a valid, single-solid shape -- a plausible volume on a shape that
+    is not one solid is not a part.
+    """
     bb = shape.BoundBox
+    valid, n_solids = shape.isValid(), len(shape.Solids)
     print('PART:: %s' % name)
     print('  volume  = %.6f' % shape.Volume)
     print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
           % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
-    print('  valid   = %s   solids=%d faces=%d'
-          % (shape.isValid(), len(shape.Solids), len(shape.Faces)))
+    print('  valid   = %s   solids=%d faces=%d' % (valid, n_solids, len(shape.Faces)))
     print('  ref     = %.6f  (OpenSCAD, faceted)' % ref_volume)
     d = shape.Volume - ref_volume
-    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * d / ref_volume))
+    rel = d / ref_volume
+    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * rel))
+    ok = valid and n_solids == 1 and abs(rel) <= tol
+    print('  result  = %s' % ('PASS' if ok else 'FAIL'))
+    return ok

@@ -12,6 +12,7 @@ negative delta here would mean an error, exactly as a positive one would in `fil
 
 Derived parameters for U=1.0 end_bolt 3/16in, make_web = true.
 """
+import math
 import os
 import sys
 
@@ -81,9 +82,15 @@ def emit(doc):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): the per-part
+    `checks` list below was printed but never aggregated into an exit code, so the script
+    always exited 0 even when it had just printed INVALID/VOLUME/SIGN -- the same gap fixed
+    in corner_common.report() for the part_*.py cluster.
+    """
     doc = App.newDocument('flange_boss')
     tips = emit(doc)
 
+    all_ok = True
     print('PART:: CSG tree -- bulkhead_flange_positive quadrant boss')
     print('  %-20s %14s %14s %12s %9s  %s'
           % ('module', 'tree', 'OpenSCAD', 'delta', 'rel', 'checks'))
@@ -100,13 +107,47 @@ def main():
             checks.append('VOLUME')
         if d < 0:
             checks.append('SIGN -- curved positive must exceed the inscribed prism')
+        if checks:
+            all_ok = False
         print('  %-20s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
               % (tip.Name, s.Volume, ref, d, 100 * d / ref,
                  ' '.join(checks) if checks else 'ok'))
         bb = s.BoundBox
         print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
               % ('', bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+    print('  result  = %s' % ('PASS' if all_ok else 'FAIL'))
+
+    # make_web=False had no coverage at all before this -- bulkhead_positive.py calls it for
+    # an interconnect's mirrored top half, which has no chamfer, so REFS (which only measures
+    # the make_web=True build against ref_flange_boss.scad) never exercised it. There is no
+    # ref_*.scad for this branch either, so it is checked against the closed form for a
+    # quarter cylinder: pi * r^2 * bulkhead_thickness / 4.
+    doc2 = App.newDocument('flange_boss_noweb')
+    C._SEEN.clear()
+    sheet(doc2)
+    P = doc2.getObject('Params')
+    r = float(P.get('flange_boss_r'))
+    thickness = float(P.get('bulkhead_thickness'))
+    plain_ref = math.pi * r * r * thickness / 4.0
+    boss2 = flange_boss(doc2, make_web=False)
+    doc2.recompute()
+    s2 = boss2.Shape
+    d2 = s2.Volume - plain_ref
+    rel2 = d2 / plain_ref
+    ok2 = s2.isValid() and len(s2.Solids) == 1 and abs(rel2) <= 1e-6
+
+    print('PART:: CSG tree -- bulkhead_flange_positive quadrant boss (make_web=False)')
+    print('  volume  = %.7f' % s2.Volume)
+    print('  ref     = %.7f  (hand-derived closed form)' % plain_ref)
+    print('  delta   = %+.7f  (%+.5f%%)' % (d2, 100 * rel2))
+    print('  valid   = %s  solids=%d faces=%d'
+          % (s2.isValid(), len(s2.Solids), len(s2.Faces)))
+    print('  result  = %s' % ('PASS' if ok2 else 'FAIL'))
+
+    return 0 if (all_ok and ok2) else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

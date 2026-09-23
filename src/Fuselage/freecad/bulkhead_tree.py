@@ -99,12 +99,23 @@ def emit(doc):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): two gaps. (1) the
+    volume delta against REF_TOOL was printed but never checked against a tolerance at all --
+    the same silent-pass gap fixed elsewhere in this cluster. (2) the OQ-DES-B12 clearance
+    checks below DID raise on failure, but via a bare `raise SystemExit(1)` inside `main()`
+    with no `sys.stdout.flush()` first -- exactly the hazard documented in general.md, live in
+    an actual failure path: every diagnostic printed above would be lost under `freecadcmd`,
+    leaving only the flushed stderr line with no numbers behind it. Both fixed by folding
+    everything into one `ok` and returning it through the standard flush-before-`sys.exit()`
+    entry-point guard, like the rest of this tier.
+    """
     doc = App.newDocument('bulkhead_tree')
     tool = emit(doc)
     doc.recompute()
 
     s = tool.Shape
     d = s.Volume - REF_TOOL
+    rel = d / REF_TOOL
     sheet = doc.getObject('Params')
 
     print('IP-FC-9 -- the greeble-forming tool')
@@ -117,11 +128,13 @@ def main():
     print('')
     print('  volume  = %.6f' % s.Volume)
     print('  ref     = %.6f  (OpenSCAD, faceted)' % REF_TOOL)
-    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * d / REF_TOOL))
+    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * rel))
     bb = s.BoundBox
     print('  z range = [%.4f, %.4f]  (expect -0.0100, 6.0200)' % (bb.ZMin, bb.ZMax))
     print('  valid   = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
+    volume_ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
+    print('  volume result = %s' % ('PASS' if volume_ok else 'FAIL'))
 
     # The clearance must appear once, on the corner's bore, and never on the post. This was
     # asserted for the bore and merely printed for the rib, which is how OQ-DES-B12 survived
@@ -139,11 +152,11 @@ def main():
     rib_ok = abs(corner_rib - post_rib) < 1e-9
     print('  rib nominal on both halves: %.6f vs %.6f  %s'
           % (corner_rib, post_rib, 'ok' if rib_ok else 'MISMATCH -- OQ-DES-B12 has regressed'))
-    if not (ok and rib_ok):
-        sys.stderr.write('FAIL: the greeble joint does not carry its clearance once\n')
-        sys.stderr.flush()
-        raise SystemExit(1)
+
+    return 0 if (volume_ok and ok and rib_ok) else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

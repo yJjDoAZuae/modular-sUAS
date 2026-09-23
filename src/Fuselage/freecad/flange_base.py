@@ -121,23 +121,64 @@ def emit(doc):
     return tip
 
 
+# flange_base_interconnect() had no coverage at all before this -- bulkhead_positive.py's
+# `is_interconnect` branch calls it instead of flange_base(), and there is no ref_*.scad for
+# it, so it is checked against a hand-derived closed form instead of an OpenSCAD reference.
+# It is two boxes with no diagonal cut (see its own docstring): the flange strip (unchanged,
+# -flange_end_x * flange_thickness * bulkhead_thickness = 40 * 1.2 * 6 = 288) fused with a
+# pad running from y=0 to y=flange_y_bot (-x_start * flange_y_bot * bulkhead_thickness =
+# 8.5625 * 3.9375 * 6 = 202.2890625), abutting at y = flange_y_bot with zero overlap:
+# 288 + 202.2890625 = 490.2890625.
+INTERCONNECT_REF_VOL = 490.2890625
+
+
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): this printed a
+    volume delta but never checked it against a tolerance, so the script always exited 0
+    regardless of whether the tree actually matched OpenSCAD -- the same gap fixed in
+    corner_common.report() for the part_*.py cluster.
+    """
     doc = App.newDocument('flange_base')
     tip = emit(doc)
     s = tip.Shape
     d = s.Volume - REF_VOL
+    rel = d / REF_VOL
     bb = s.BoundBox
+    ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
 
     print('PART:: CSG tree -- bulkhead flange base profile')
     print('  volume  = %.7f' % s.Volume)
     print('  ref     = %.7f  (OpenSCAD)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF_VOL))
+    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * rel))
     print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
           % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
     print('  expect  = [-40.0000, -8.0000, 0.0000, 0.0000, 5.1375, 6.0000]')
     print('  valid   = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
+    print('  result  = %s' % ('PASS' if ok else 'FAIL'))
+
+    doc2 = App.newDocument('flange_base_ic')
+    C._SEEN.clear()
+    sheet(doc2)
+    tip_ic = flange_base_interconnect(doc2)
+    doc2.recompute()
+    s2 = tip_ic.Shape
+    d2 = s2.Volume - INTERCONNECT_REF_VOL
+    rel2 = d2 / INTERCONNECT_REF_VOL
+    ok2 = s2.isValid() and len(s2.Solids) == 1 and abs(rel2) <= 1e-6
+
+    print('PART:: CSG tree -- bulkhead flange base profile (is_interconnect)')
+    print('  volume  = %.7f' % s2.Volume)
+    print('  ref     = %.7f  (hand-derived closed form)' % INTERCONNECT_REF_VOL)
+    print('  delta   = %+.7f  (%+.5f%%)' % (d2, 100 * rel2))
+    print('  valid   = %s  solids=%d faces=%d'
+          % (s2.isValid(), len(s2.Solids), len(s2.Faces)))
+    print('  result  = %s' % ('PASS' if ok2 else 'FAIL'))
+
+    return 0 if (ok and ok2) else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

@@ -1,4 +1,11 @@
-"""IP-FC-35: can the Assembly workbench be driven from `freecadcmd`, with no GUI?
+"""NOT SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): unlike this tier's other
+spikes, IP-FC-19 (the automated-assembly capability this feasibility check exists for) is still
+`blocked` in freecad_migration.md, not built -- so there is no production code to point to yet.
+Kept in place as the live evidence IP-FC-19's eventual implementation will need, not as a
+historical curiosity; do not add test coverage here until IP-FC-19 actually lands, at which
+point this spike is superseded the same way the other ten now are.
+
+IP-FC-35: can the Assembly workbench be driven from `freecadcmd`, with no GUI?
 
 IP-FC-19 wants assemblies built from parameters, solved, and then *checked* -- each solved
 placement asserted against the placement the parameters say it should have. That is only

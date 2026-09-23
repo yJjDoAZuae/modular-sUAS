@@ -1,4 +1,10 @@
-"""IP-FC-9: is Part::Fillet safe in a generated, re-parameterisable document?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): the topological-naming risk
+this spike found in Part::Fillet's edge indices is why fillets.py builds real tangency-
+constraint geometry instead (`_fillet_tangency_sketch()`), with real coverage in
+check_tangency.py -- kept in place rather than archived, for the historical links into it; do
+not add test coverage here.
+
+IP-FC-9: is Part::Fillet safe in a generated, re-parameterisable document?
 
 OQ-DES-B9 settles that the port uses real fillets. Part::Fillet is the obvious tool, but it
 stores its targets as EDGE INDICES -- and IP-FC-5 already measured the corner's face count

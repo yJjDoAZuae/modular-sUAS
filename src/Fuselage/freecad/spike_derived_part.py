@@ -1,4 +1,10 @@
-"""IP-FC-38: the derived-part workflow -- own the parameters, keep your own geometry.
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): the tagged-generator/stable-tip
+pattern this spike found safe is now corner_tree.py's `_owned`/`tag()`/`Part::Refine`-tip
+convention used throughout the freecad/ tier, demonstrated for real in check_tree.py's own
+"user bracket" section -- kept in place rather than archived, for the historical links into it;
+do not add test coverage here.
+
+IP-FC-38: the derived-part workflow -- own the parameters, keep your own geometry.
 
 The wanted workflow is a modified part that takes the generated part as its starting point,
 where the user can BOTH re-parameterise the original (a tolerance, a bolt diameter) AND add

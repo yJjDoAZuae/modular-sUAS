@@ -1,4 +1,10 @@
-"""IP-FC-38: what an App::Link to the generated file does and does not give you.
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's negative result
+(App::Link gives no control over the source's parameters) is the rejected alternative behind
+spike_derived_part.py's tagged-generator/stable-tip conclusion, now corner_tree.py's real
+convention -- kept in place rather than archived, for the historical links into it; do not add
+test coverage here.
+
+IP-FC-38: what an App::Link to the generated file does and does not give you.
 
 The link is the obvious reading of "use the generated part as a reference". It works for
 geometry reuse. It does not give the referencing document any control over the source's

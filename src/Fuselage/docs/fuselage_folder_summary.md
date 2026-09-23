@@ -349,8 +349,9 @@ IP-GEO-18.
 
 - [fuselage_splode.py](../tools/fuselage_splode.py) — picks four specific bulkhead variants
   plus a corner out of the flattened space by index, for building the exploded assembly view.
-- [test_fuse.py](../tools/test_fuse.py) — three-line scratch file that imports one SCAD
-  module. **Not a test suite**; do not treat it as coverage.
+- `test_fuse.py` — deleted 2026-09-22. It was a three-line scratch file that imported one
+  SCAD module and was never a test suite; real pytest coverage now lives under `tests/` at
+  the repo root (see [doc/implementation/test_coverage.md](../../../doc/implementation/test_coverage.md)).
 - [test_fuse.ipynb](../tools/test_fuse.ipynb) — interactive scratch notebook (1.5 MB with
   outputs; clear them before committing).
 - `tmp.py` — scratch, an older partial copy of `fuselage_variants.py`.

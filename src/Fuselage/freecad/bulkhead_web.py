@@ -128,6 +128,10 @@ def emit(doc, seed=None):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): `ok` was computed
+    correctly via `plane2d.report()` but never returned or turned into an exit code -- the
+    same silent-pass gap fixed elsewhere in this cluster.
+    """
     doc = App.newDocument('bulkhead_web')
     tip = emit(doc)
     print('PART:: 2D CSG tree -- bulkhead_web_inner_shape')
@@ -136,7 +140,10 @@ def main():
     ok = plane2d.report(doc, 'web_inner', tip.Shape, REF_AREA, 'oml_reach', EXPECT_BBOX)
     print('')
     print('  %s' % ('agrees' if ok else 'MISMATCH -- see checks above'))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

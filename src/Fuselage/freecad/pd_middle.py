@@ -21,7 +21,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from corner_common import Params, half_shape, is_entry_point, out_path
+from corner_common import Params, half_shape, is_entry_point, out_path, section
 
 V = App.Vector
 
@@ -123,6 +123,13 @@ def build_half(doc, p, z0, h):
 
 
 def main():
+    """Found while auditing IP-TEST-10 (doc/implementation/test_coverage.md): every number
+    below was printed with a delta but never compared to a tolerance, so this always exited 0
+    -- the same silent-pass gap fixed throughout the freecad/ tier. The hardcoded "Part::
+    full section = 4041.580837" literal is also replaced with a live call to
+    `corner_common.section()`, which computes exactly that (the full profile, mirror_xy() of
+    the half) rather than repeating a number nothing here re-derives.
+    """
     p = Params()
     z0 = 2 * p.bulkhead_thickness - p.eps
     h = p.unit_length / 2 - 2 * p.bulkhead_thickness + 2 * p.eps
@@ -132,6 +139,7 @@ def main():
     doc.recompute()
 
     ref_half = half_shape(p, z0, h)
+    ref_full = section(p, z0, h)
     got = body.Shape
 
     print('PARTDESIGN:: corner_middle, the octant before mirroring')
@@ -142,6 +150,9 @@ def main():
     print('  delta           = %+.6f' % (got.Volume - ref_half.Volume))
     print('  valid           = %s  solids=%d  faces=%d'
           % (got.isValid(), len(got.Solids), len(got.Faces)))
+    half_ok = (got.isValid() and len(got.Solids) == 1
+              and abs(got.Volume - ref_half.Volume) <= 1e-4 * ref_half.Volume)
+    print('  result          = %s' % ('PASS' if half_ok else 'FAIL'))
 
     # Now the mirror, across the diagonal plane whose normal is (1,-1,0) -- the same
     # plane mirror_xy() uses. PartDesign::Mirrored has two modes, and they mean different
@@ -165,6 +176,7 @@ def main():
     print('    TransformMode options: %s' % mirrored.getEnumerationsOfProperty(
         'TransformMode'))
 
+    matching_modes = []
     for mode in mirrored.getEnumerationsOfProperty('TransformMode'):
         mirrored.TransformMode = mode
         doc.recompute()
@@ -173,14 +185,29 @@ def main():
             print('    %-24s FAILED: %s' % (mode, mirrored.State))
             continue
         m = mirrored.Shape
-        print('    %-24s volume=%.6f valid=%s solids=%d'
-              % (mode, m.Volume, m.isValid(), len(m.Solids)))
-    print('    Part:: full section = 4041.580837')
+        matches = (m.isValid() and len(m.Solids) == 1
+                  and abs(m.Volume - ref_full.Volume) <= 1e-4 * ref_full.Volume)
+        if matches:
+            matching_modes.append(mode)
+        print('    %-24s volume=%.6f valid=%s solids=%d  %s'
+              % (mode, m.Volume, m.isValid(), len(m.Solids),
+                 'matches full section' if matches else ''))
+    print('    Part:: full section = %.6f' % ref_full.Volume)
+    # At least one TransformMode has to reproduce mirror_xy()'s semantics -- that is the
+    # question this script exists to answer -- though which one, and whether more than one
+    # does, is exactly the measurement, not assumed in advance.
+    mirror_ok = len(matching_modes) > 0
+    print('  matching TransformMode(s) = %s  %s'
+          % (matching_modes or 'none', 'PASS' if mirror_ok else 'FAIL'))
 
     out = out_path('pd_middle.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
 
+    return 0 if (half_ok and mirror_ok) else 1
+
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

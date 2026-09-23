@@ -1,4 +1,9 @@
-"""IP-FC-5 follow-up: Part:: as a *parametric document tree*, not a static shape.
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's conclusion is
+now the whole architecture of corner_tree.py (Part:: document-object CSG trees, expression-
+driven, editable after reload) -- kept in place rather than archived, for the historical links
+into it from doc/implementation/freecad_migration.md; do not add test coverage here.
+
+IP-FC-5 follow-up: Part:: as a *parametric document tree*, not a static shape.
 
 The first prototype used the Part module's Python API -- Part.makeCylinder and friends --
 which returns a TopoShape with no history. That satisfies the sweep and fails UC-2: opened

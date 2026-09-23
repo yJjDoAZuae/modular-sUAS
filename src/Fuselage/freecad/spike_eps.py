@@ -1,4 +1,9 @@
-"""IP-FC-50: does OCCT need `eps` at all, and where?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's A/B/C eps
+breakdown is now baked into corner_tree.py/bulkhead_cuts.py's own PARAMS comments and their
+`mask_eps = 0.0` decision -- kept in place rather than archived, for the historical links into
+it; do not add test coverage here.
+
+IP-FC-50: does OCCT need `eps` at all, and where?
 
 `eps` (0.01 mm, `geometry_eps()` in shape_modifier_utils.scad) is inherited from the OpenSCAD
 source, where it does three different jobs that the port had been carrying as one:

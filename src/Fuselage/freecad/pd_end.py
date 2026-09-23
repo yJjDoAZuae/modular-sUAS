@@ -98,6 +98,13 @@ def rotated(points, degrees):
 
 
 def main():
+    """Found while auditing IP-TEST-10 (doc/implementation/test_coverage.md): every number
+    below was printed with a delta but never compared to a tolerance, so this always exited 0
+    -- the same silent-pass gap fixed throughout the freecad/ tier. The full-revolution
+    Groove's own large delta is deliberately NOT part of the verdict: the module's own
+    docstring names measuring "how wrong the closest native feature is" as one of its three
+    purposes, so a big number there is the expected, documented result, not a failure.
+    """
     p = Params()
     h = p.bulkhead_thickness + p.eps
 
@@ -156,6 +163,7 @@ def main():
     boolean.Type = 'Cut'
     doc.recompute()
 
+    boolean_ok = False
     if 'Invalid' in boolean.State or 'Error' in boolean.State \
             or boolean.Shape.isNull():
         print('  PartDesign::Boolean FAILED: %s' % boolean.State)
@@ -166,11 +174,17 @@ def main():
               % (s.Volume, REF_VOL, d, 100 * d / REF_VOL))
         print('  valid           = %s  solids=%d faces=%d'
               % (s.isValid(), len(s.Solids), len(s.Faces)))
+        boolean_ok = s.isValid() and len(s.Solids) == 1 and abs(d) <= 1e-3 * REF_VOL
+    print('  result          = %s' % ('PASS' if boolean_ok else 'FAIL'))
 
     out = out_path('pd_end.FCStd')
     doc.saveAs(out)
     print('  saved %s' % os.path.basename(out))
 
+    return 0 if boolean_ok else 1
+
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

@@ -128,6 +128,11 @@ def emit(doc, seed=None):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): `ok` was computed
+    correctly via `plane2d.report()` but never returned or turned into an exit code, so this
+    always exited 0 regardless of a MISMATCH -- the same silent-pass gap fixed elsewhere in
+    this cluster.
+    """
     doc = App.newDocument('boom_web')
     tips = emit(doc)
 
@@ -143,7 +148,10 @@ def main():
     print('  spine vertices: %d (%s)'
           % (tips['centerline'].Shape.Wires[0].Edges.__len__(),
              'boom on the centreline' if _on_centreline(doc) else 'boom offset in y'))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

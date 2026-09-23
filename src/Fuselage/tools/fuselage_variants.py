@@ -2316,14 +2316,14 @@ def decode_bulkhead_type(bulkhead_type):
 
     elif bulkhead_type == BulkheadType.TAIL_BOOM:
 
-        is_bolt = False
+        is_end = False
         is_interconnect = False
         is_cowling = False
         is_boom = True
 
     else:
 
-        is_bolt = False
+        is_end = False
         is_interconnect = False
         is_cowling = False
         is_boom = False
