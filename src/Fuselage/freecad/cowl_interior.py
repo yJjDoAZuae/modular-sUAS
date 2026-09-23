@@ -498,6 +498,22 @@ def smoothed(wire, n, tol=REFIT_TOL):
 def eroded_body(wire, t, z, tol=REFIT_TOL):
     """The refit section, its face, and the face eroded by `t` -- refining until all three work.
 
+    **Superseded 2026-09-21 by the cell/arc method (`cell_boundary_planes`, `open_arc`,
+    `eroded_arc`) and not safe to call on a symmetry-cell section.** `cavity()` no longer calls
+    this: `wire` here is fit as one periodic B-spline through every point of the raw loop, which
+    is only correct for a genuinely closed, construction-boundary-free exterior. A cell's own
+    section (`half`/`octant`, `tip.Body`) is a closed loop only topologically -- part of it is
+    the cell's own straight construction edge -- and fitting a single periodic curve through
+    that is exactly the anti-pattern `cell_boundary_planes`'s own comment names: it cannot hold
+    the straight edge straight and the curved OML edge curved at the same point, so it rounds
+    the corner. `check_cowl_interior.rib_gap()` called this on cell input until that was found
+    to be the cause of a P3 failure on essentially every real station (0.016-0.026 mm, not
+    converging with more samples, because the corner it was rounding is a fixed feature of the
+    section rather than a sampling shortfall) -- fixed by moving `rib_gap()` to `open_arc` /
+    `eroded_arc`, the same route `cavity()` takes. Kept here, unused, only because it remains a
+    correct implementation of the different problem it was written for: a wire with no
+    construction boundary at all.
+
     **Uniform sampling, and a ladder rather than one attempt.** Measured 2026-09-02 on the nose
     at z = -29.79, a 355 mm section, every refit verified against the original wire:
 

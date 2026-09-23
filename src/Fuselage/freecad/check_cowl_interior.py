@@ -156,8 +156,38 @@ def rib_gap(body, notches, z, t, t_cut):
     than the cut is thick, and that is a property of the design rather than an error in it.
 
     Returns `(width, gap)` per notch, so the caller can report both.
+
+    **Eroded by `open_arc`/`eroded_arc`, the same route `cavity()` itself takes -- not
+    `ci.eroded_body()`.** `body` is the un-mirrored symmetry cell (`tip.Body`, "the same cell
+    before any notch reached it"), so its raw section at any `z` is a closed loop only in the
+    topological sense: part of it is the cell's own straight construction boundary, not OML.
+    `eroded_body()` (superseded 2026-09-21, when `cavity()` moved to the cell/arc method) fits
+    one periodic B-spline through the *whole* raw loop, straight edge included -- exactly the
+    anti-pattern `cell_boundary_planes`'s own comment names ("cannot hold a straight
+    construction edge straight and a curved OML edge curved at the same point, so it rounds the
+    corner"). That is what this function did until this fix, and it is why it raised P3 on
+    essentially every real station regardless of sample count: the corner it was rounding is a
+    real, fixed feature of the section, not a sampling shortfall, so no ladder rung converges on
+    it. Stripping the construction boundary first (`open_arc`) and refitting only the true arc
+    (`eroded_arc`) is what `cavity()` already does and never had this failure, so the eroded
+    interior here is closed the same way: the arc's own two ends, snapped exactly onto the
+    cell's plane(s) by `eroded_arc`, closed with a straight segment (one cell plane) or two
+    straight segments through the axis point (two cell planes, meeting only there) -- which is
+    the cell's own true pie-slice or "D" cross-section, not an approximation of it.
     """
-    _refit, face, _inner = ci.eroded_body(body.slice(App.Vector(0, 0, 1), z)[0], t, z)
+    planes = ci.cell_boundary_planes(body)
+    wires = ci._slice_wires(body, z)
+    if len(wires) != 1:
+        raise ci.PreconditionFailed(
+            'P2: the cell body sections into %d loops at z = %.4f, not one' % (len(wires), z))
+    arc, p_start, p_end, flip = ci.open_arc(wires[0], planes)
+    xy = ci.eroded_arc(arc, t, z, p_start, p_end, flip)
+    pts = [App.Vector(x, y, z) for x, y in xy]
+    if len(planes) == 1:
+        face = Part.Face(Part.makePolygon(pts + [pts[0]]))
+    else:
+        axis = App.Vector(0.0, 0.0, z)
+        face = Part.Face(Part.makePolygon(pts + [axis, pts[0]]))
     widths = []
     for tool in notches.Solids:
         want = in_plane_width(tool, t_cut)
@@ -279,7 +309,9 @@ def main():
         print('  P1 fires on a deliberately shallow section')
     try:
         mid = 0.5 * (lo + hi)
-        ci.eroded_body(body.slice(App.Vector(0, 0, 1), mid)[0], 1.0e4, mid)
+        planes = ci.cell_boundary_planes(body)
+        arc, p_start, p_end, flip = ci.open_arc(body.slice(App.Vector(0, 0, 1), mid)[0], planes)
+        ci.eroded_arc(arc, 1.0e4, mid, p_start, p_end, flip)
         print('  P2 did NOT fire on an erosion that annihilates the section  <-- FAIL')
         bad += 1
     except ci.PreconditionFailed:
