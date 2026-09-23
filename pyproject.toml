@@ -76,4 +76,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src/Fuselage/tools"]
-addopts = "-ra"
+# -p no:cacheprovider: the repo lives on a network share (\\mrhorse\Archive\...), and the
+# cache plugin's atomic write of .pytest_cache fails there (WinError 6/5), leaving an
+# orphaned pytest-cache-files-<random>/ directory at the repo root on every run that this
+# project has no way to clean up from the client side. Nothing here uses --lf/--ff/--cache-
+# clear, so there is no workflow cost to disabling it outright.
+addopts = "-ra -p no:cacheprovider"

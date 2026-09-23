@@ -1,4 +1,8 @@
-"""IP-FC-5: does PartDesign:: work at all under freecadcmd?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's feasibility
+result is now realized in pd_middle.py/pd_end.py's production PartDesign:: builds -- kept in
+place rather than archived, for the historical links into it; do not add test coverage here.
+
+IP-FC-5: does PartDesign:: work at all under freecadcmd?
 
 Before porting the corner a second time, establish that a Body, a sketch attached to an
 origin plane, a Pad, a Pocket, a Groove and a Mirrored transformation can all be created

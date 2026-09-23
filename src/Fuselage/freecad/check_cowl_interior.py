@@ -244,7 +244,18 @@ def main():
           '(t_cut = %.4f, so %.3f for a vertical cut):' % (2.0 * t, t_cut, t_cut + 2.0 * t))
     for i in range(3):
         z = lo + (hi - lo) * (i + 1) / 4.0
-        pairs = rib_gap(body, notches, z, t, t_cut)
+        # Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): an uncaught
+        # ci.PreconditionFailed here crashed the whole script before it ever printed a verdict
+        # -- and freecadcmd's own exit code is unreliable on an uncaught script exception (see
+        # doc/guidelines -- it prints "Exception while processing file" and still exits 0), so
+        # this read as a clean pass to any caller checking only the exit code. A real
+        # precondition failure on real geometry belongs in `bad`, not in an uncaught exception.
+        try:
+            pairs = rib_gap(body, notches, z, t, t_cut)
+        except ci.PreconditionFailed as exc:
+            print('    z %9.4f   PRECONDITION FAILED: %s' % (z, exc))
+            bad += 1
+            continue
         if not pairs:
             print('    z %9.4f   no notch cutting here' % z)
             continue

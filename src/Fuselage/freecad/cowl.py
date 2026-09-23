@@ -45,22 +45,20 @@ from corner_common import is_entry_point, prism
 # in two places, and the one that moved would win silently. `U` and `unit_width` are both
 # carried so a reader of a generated document can see the size it was built at.
 #
-# **The geometry built from these four tables does not read the rows through expressions.**
-# It is built from the seed and the sheet records it, where the corner and bulkhead sheets
-# actually drive their features. So a document built from `PARAMS_NOSE_TIP` here is
-# inspectable but not yet re-solvable by editing `U` -- that is IP-FC-12's remaining gap for
-# the nose tip specifically, and it is a genuine gap, not a simplification.
-#
-# **`PARAMS_NOSE_COWL`, `PARAMS_TAIL` and `PARAMS_NOSE_PLATE` below are dead code as of
-# 2026-09-21, kept only as the reference this module's own `main()` checks against and as
-# what the ported versions in `cowl_tree.py` were verified byte-for-byte-in-volume against.**
-# `nose_cowl`/`tail_cowl` moved to `cowl_tree.py`'s sheet-bound mechanism on 2026-09-01,
-# `nose_plate` on 2026-09-21 (`cowl_tree.PARAMS_NOSE_PLATE`/`cowl_tree.nose_plate`,
-# verified zero symmetric difference against this module's `nose_plate` at U=1 and U=4, and
-# verified to actually recompute in place when the sheet is edited, not merely to agree on a
-# fresh build). `cowl_nose_cowl.py`, `cowl_tail.py` and `cowl_nose_plate.py` all import
-# `cowl_tree` now, not this module. Only `nose_tip`/`PARAMS_NOSE_TIP` (`cowl_nose_tip.py`)
-# still builds through this module's baked path.
+# **All four tables below are dead code as of 2026-09-21.** They are kept only as the
+# reference this module's own `main()` checks against, and as what the ported versions in
+# `cowl_tree.py` were verified byte-for-byte-in-volume against -- nothing here is what a real
+# build actually runs any more. `nose_cowl`/`tail_cowl` moved to `cowl_tree.py`'s sheet-bound
+# mechanism on 2026-09-01; `nose_plate` and `nose_tip` followed on 2026-09-21, closing
+# IP-FC-12's "cowl documents are not yet parametric" gap for all four cowl kinds. Each move
+# was verified against this module's own version of the part: zero symmetric difference and
+# matching face count at two separate `U` values (not just the reference row), and a
+# built document's sheet edited in place and recomputed to confirm it actually tracks a
+# changed value rather than merely agreeing with a second independent build.
+# `cowl_nose_cowl.py`, `cowl_tail.py`, `cowl_nose_plate.py` and `cowl_nose_tip.py` all import
+# `cowl_tree` now, not this module. This module's own `emit_part()` mechanism has no more
+# callers among the four cowl kinds; it stays for now as the thing the reference checks build
+# against, not because anything still depends on it to produce a document.
 _OML = [('oml_scale_m_per_mm', 1e-3), ('oml_length_m', 0.05),
         ('oml_offset_x_m', 0.0), ('oml_reversed', 0.0)]
 _COMMON = [('U', 1.0), ('unit_width', 100.0), ('overhang_angle_from_bed', 35.0)]

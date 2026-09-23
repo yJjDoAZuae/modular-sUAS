@@ -21,7 +21,7 @@ reproducibility, and architecture. This document covers Python-specific conventi
 ```text
 uv sync                                    # reproduce the environment
 uv run python src/Fuselage/tools/<script>  # run a script
-uv run pytest                              # run tests
+uv run python -m pytest                    # run tests -- see the note below, never bare `uv run pytest`
 uv run ruff check .                        # lint
 uv run ruff format .                       # format
 uv run mypy src                            # type check
@@ -207,8 +207,13 @@ round-trips, and there is no serialization framework in this project.
 
 ## Testing (Python)
 
-Use **pytest**. See [general.md](general.md#testing-geometry-generators) for the geometry
-testing rules — they matter more than the mechanics below.
+Use **pytest**, for the tier of this codebase that pytest can actually reach: everything
+importable in the project venv, under `src/Fuselage/tools/`. FreeCAD-dependent code under
+`src/Fuselage/freecad/` is a separate tier, tested with `freecadcmd`-run `check_*.py`
+scripts instead, because `FreeCAD`/`Part` are not importable from the venv pytest runs in.
+See [general.md](general.md#two-test-tiers-because-two-python-interpreters-are-involved)
+for the full split and [general.md](general.md#testing-geometry-generators) for the
+geometry testing rules — they matter more than the mechanics below.
 
 ### Structure
 
@@ -248,8 +253,33 @@ class TestCornerGeometry:
 - Tests are independent; fixtures handle setup.
 - `pythonpath` is set in `pyproject.toml` so tests can import the generator modules.
 
-Note: `src/Fuselage/tools/test_fuse.py` is a three-line scratch file, not a test suite.
-Do not treat it as coverage.
+`src/Fuselage/tools/test_fuse.py` — a three-line scratch file that was never a test
+suite — was deleted 2026-09-22 when `tests/` was stood up for real ([IP-TEST-1](../implementation/test_coverage.md)).
+
+**Run tests as `uv run python -m pytest`, never bare `uv run pytest`, on this machine.**
+The bare form fails with `ImportError: ... numpy ... DLL load failed while importing
+_multiarray_umath: The parameter is incorrect`. Root cause, confirmed 2026-09-22: the venv
+lives on a network share (`\\mrhorse\Archive\...`), and `uv run pytest` executes the
+compiled console-script stub `.venv/Scripts/pytest.exe` directly. That stub resolves its
+own interpreter path in Windows' extended-length UNC form
+(`\\?\UNC\mrhorse\Archive\...\python.exe` — visible in the failing import's own
+self-report), and numpy's Windows DLL loader calls `os.add_dll_directory()` on its install
+path at import time, which Win32's `AddDllDirectory()` rejects for any path beginning with
+`\\?\` (`ERROR_INVALID_PARAMETER`, exactly the "parameter is incorrect" text). `uv run
+python -m pytest` invokes `python.exe` with `-m` instead of going through the compiled
+stub, never produces the `\\?\` form, and imports numpy cleanly. This is narrow to
+packages that register a DLL directory at import (numpy, and transitively pandas) —
+`uv run ruff` and `uv run mypy` are unaffected, so this is not a reason to avoid `uv run`
+for other console scripts, only for anything that imports numpy/pandas from this venv.
+
+A second, separate network-share issue: pytest's cache plugin cannot atomically write
+`.pytest_cache` here (`WinError 6`/`5`), and silently leaves an orphaned, undeletable
+`pytest-cache-files-<random>/` directory at the repo root on every run — deleting one fails
+client-side with "access is denied"/"the handle is invalid" via `rm`, PowerShell
+`Remove-Item -Force`, and `cmd rmdir`, consistent with a stuck server-side SMB lock rather
+than anything fixable here. `pyproject.toml`'s `addopts` disables the cache plugin
+(`-p no:cacheprovider`), so this no longer happens; nothing in this project's workflow uses
+`--lf`/`--ff`/`--cache-clear`, so there is no cost to that.
 
 ---
 

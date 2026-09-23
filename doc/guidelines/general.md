@@ -26,40 +26,101 @@ checked against this repository.
 
 ### Test-Driven Development (TDD)
 
-New functionality follows the **Red-Green-Refactor** cycle:
+New functionality, and every change to existing functionality, follows the
+**Red-Green-Refactor** cycle:
 
 1. **Red** — Write a failing test that defines the desired behavior.
 2. **Green** — Write the minimal code required to pass the test.
-3. **Refactor** — Clean up the implementation without changing behavior, keeping all tests green.
+3. **Refactor** — Clean up the implementation without changing behavior, keeping all tests
+   green.
 
 Rules:
 
-- No production code is written without a failing test that motivates it.
+- No production code is written or changed without a test that motivates it. There is no
+  exemption for code that was inherited rather than written here — see below.
 - Each test covers exactly one behavior or requirement.
 - Tests must be fast, isolated, repeatable, and self-validating.
 - Aim for a test pyramid: many unit tests, fewer geometry tests, few full-sweep tests.
+- **Verification that is not committed as a test is not verification.** A scratchpad
+  script, a one-off `freecadcmd` session, or a manual measurement establishes that a change
+  works once, on one machine, in one session. It proves nothing to the next person who
+  touches the code and nothing to anyone re-running the check later, because there is
+  nothing left to re-run. Before a change is considered done, whatever was done to confirm
+  it works is rewritten as a committed test in one of the two tiers below. This applies
+  equally to a human's verification and to Claude's — a change is not done because a
+  throwaway script printed the right numbers once.
 
-**Adoption-phase exception.** The inherited generator code has no test suite, and writing
-tests for it requires a way to generate a single part in isolation — which does not exist
-yet (`main()` runs the entire full-factorial sweep). Until that entry point exists, TDD
-applies to *new* code; retrofitting tests onto inherited code is tracked as roadmap Phase 1
-work, not treated as a precondition for every edit.
+**There is no adoption-phase exemption.** *Retracted 2026-09-22: this section previously
+exempted "inherited" code — copied in from another repository — from needing tests until a
+single-part entry point existed, and filed retrofitting as background roadmap work rather
+than a precondition for touching that code. In practice that exemption was used to make
+real functional changes to inherited geometry code (`cowl_tree.py`, `cowl.py`,
+`fuselage_variants.py`) across multiple sessions with no committed test at all — only ad
+hoc scratchpad scripts, discovered and rejected on 2026-09-22. Retrofitting a test onto
+inherited code before changing it **is** the Red step: write a test that pins the
+function's current, correct behavior, confirm it is Green against the unmodified code, and
+only then make the change. Where the single-part entry point a test needs does not exist
+yet, building it is the first Red/Green cycle, not a reason to skip the cycle. The backlog
+of inherited code that still has no test is tracked in
+[doc/implementation/test_coverage.md](../implementation/test_coverage.md).*
+
+### Two test tiers, because two Python interpreters are involved
+
+This project's code runs in two interpreters that cannot import each other's dependencies
+(`FreeCAD`/`Part` are not importable from the venv; `solid2` is not importable from
+`freecadcmd` — see the cross-environment note in [python.md](python.md)). The test
+strategy is split the same way, and neither tier is optional or lesser than the other:
+
+| Tier | Location | Runs under | Covers | Convention |
+| --- | --- | --- | --- | --- |
+| Unit / integration (pytest) | `tests/` | The project venv (`uv run pytest`) | Pure-Python logic and anything importable in the venv — parameter dataclasses, sweep logic, CSV/JSON handling, drawing-family lookups, comparison and measurement helpers under `src/Fuselage/tools/` | `test_<subject>_<condition>_<expected>` functions, `assert` / `pytest.approx`. See [python.md](python.md#testing-python). |
+| Integration (`freecadcmd`) | `src/Fuselage/freecad/check_*.py` | `freecadcmd` (FreeCAD's bundled interpreter) | FreeCAD document and geometry code: `cowl_tree.py`, `cowl.py`, `cowl_interior.py`, `corner_tree.py`, `oml_blank.py`, `bulkhead_*.py`, `boom_*.py`, `drawing*.py`, and everything else under `src/Fuselage/freecad/` | Standalone script, one `check_<subject>()` function per concern, printed pass/fail lines, a `bad` counter returned as the process exit code, guarded by `corner_common.is_entry_point(__name__)` — `freecadcmd` never triggers a bare `if __name__ == '__main__':` guard, so every check script uses that helper instead. |
+
+`pytest` cannot reach the `freecadcmd` tier at all — this is an environment limit, not a
+choice to defer. A FreeCAD geometry function's test *is* a `check_*.py` entry; it is never
+a TODO waiting on that function becoming importable under pytest, because it never will be.
+
+**A `sys.exit()` with buffered stdout loses the whole report under `freecadcmd`.** Found
+2026-09-22 writing `check_plane2d.py`: `if is_entry_point(__name__): sys.exit(main())`
+produced no output at all — not even a traceback — although `main()` genuinely ran and
+printed a full report (confirmed by importing the module and calling `.main()` directly from
+a throwaway wrapper, which showed the real output). `freecadcmd`'s embedding of Python does
+not flush stdout on the way out when the process exits via `SystemExit`. Always flush first:
+
+    if is_entry_point(__name__):
+        _code = main()
+        sys.stdout.flush()
+        sys.exit(_code)
+
+already the pattern in `check_derived_geometry.py` and several others — copy it rather than
+`sys.exit(main())` directly, which silently produces a check that looks like it printed
+nothing rather than one that failed.
+
+A script named `test_<module>.py` that is not a real pytest test file — that has no
+`test_*` functions and asserts nothing — is a naming-convention violation, not a
+placeholder. `src/Fuselage/tools/test_fuse.py` is exactly this: a three-line scratch import
+with a name that claims to be this project's test coverage for `fuselage_bulkhead.scad`
+and is not. See [doc/implementation/test_coverage.md](../implementation/test_coverage.md).
 
 ### Testing geometry generators
 
-Geometry code cannot be tested the way ordinary functions can. The rules that matter here:
+Applies to both tiers above:
 
-- **Assert on measured model properties**, never on byte-identical `.scad` or `.stl` output.
-  Generated output is not stable across library versions, floating-point rounding, or
-  facet-count settings. Assert on bounding box, overall dimensions, volume, triangle count
-  within a tolerance, and the presence or absence of a feature.
+- **Assert on measured model properties**, never on byte-identical `.scad`/`.stl` output or
+  FreeCAD document XML. Generated output is not stable across library versions,
+  floating-point rounding, or facet-count settings. Assert on bounding box, overall
+  dimensions, volume, triangle/face count within a tolerance, solid validity, and the
+  presence or absence of a feature.
 - **Never verify by running the full sweep.** It is expensive and it overwrites
   `variant_output/`. Tests operate on a single parameter combination.
-- **Pin the parameter combination** that exposed any bug you fix, as a regression test.
+- **Pin the parameter combination** that exposed any bug you fix, as a regression test, in
+  whichever tier the fixed code lives in.
 - Floating-point comparisons use an explicit tolerance appropriate to the geometry —
   an explicit tolerance meaningful at the scale of the feature being measured. At SI scale a
   part dimension is order 0.1 m and a print tolerance is order 1e-4 m, so a default relative
-  tolerance is usually wrong — state the absolute tolerance.
+  tolerance is usually wrong — state the absolute tolerance. A verification tolerance
+  measures agreement between two computations of the same geometry; it is not a
+  manufacturing fit, and must not be reused as one.
 
 ### Capability belongs in the durable code, not the throwaway tool
 
@@ -170,7 +231,8 @@ Clear, unambiguous naming is mandatory. Names must communicate intent without re
 | OpenSCAD modules and functions | `snake_case` | `fuselage_corner_geometry()` |
 | OpenSCAD file names | `snake_case.scad` | `shape_modifier_utils.scad` |
 | Parameter CSV columns | `snake_case`, `VID_` prefix for the variant ID | `VID_bulkhead_type`, `bulkhead_type_name` |
-| Test files | `test_<module>.py` | `test_fuselage_variants.py` |
+| Pytest test files (`tests/`, venv tier) | `test_<module>.py` | `test_fuselage_variants.py` |
+| `freecadcmd` check scripts (`src/Fuselage/freecad/`, FreeCAD tier) | `check_<subject>.py` | `check_cowl_interior.py` |
 
 ### Unit Encoding in Names
 
@@ -428,6 +490,11 @@ Python dependencies are managed with **uv** and declared in `pyproject.toml`. Se
 Review checklist:
 
 - [ ] Tests present and meaningful, asserting on measured properties rather than exact output
+- [ ] Every touched function has a committed test in the tier that can reach it — `tests/`
+      (pytest) if it is importable in the venv, `src/Fuselage/freecad/check_*.py`
+      (`freecadcmd`) if it touches FreeCAD — not only a scratchpad script used to check it
+      once
+- [ ] No production change rests on ad hoc/scratchpad verification as its only evidence
 - [ ] Naming follows standards
 - [ ] SI (m, s, kg, rad) used throughout internal code; imperial and millimeter values converted at the file interface only
 - [ ] Exported STL/3MF is in millimeters — verify by measuring, not by inspection

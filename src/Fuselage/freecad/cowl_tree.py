@@ -297,6 +297,61 @@ class _CowlShell(object):
         return None
 
 
+class _NoseFlange(object):
+    """The nose tip's own flange: the OML blank's silhouette at `-CutLen`, inset and extruded
+    down by `Height` (cowl.py's `nose_tip` docstring; OQ-DES-CW9/CW10 for why the inset is
+    an interference rather than a clearance).
+
+    Scripted for the reason `_CowlShell` is: `cowl._clean_offset` refits `makeOffset2D`'s raw
+    output as one periodic B-spline because it otherwise returns hundreds of near-zero-length
+    fragments that build valid but do not survive a save and reload (measured 2026-09-01, that
+    function's own docstring) -- a Python computation with no stock `Part::` equivalent, not
+    something an expression on a native feature could carry out.
+    """
+
+    def __init__(self, obj, base):
+        obj.addProperty('App::PropertyLink', 'Base', 'Flange',
+                        'The full OML blank (not the upper slice) -- sliced at -CutLen for '
+                        'its silhouette, the same section the source\'s projection() takes')
+        obj.addProperty('App::PropertyFloat', 'CutLen', 'Flange',
+                        'Where the slice is taken, in mm above the body -- already '
+                        'unit_width * the sheet\'s cut_len fraction, not the fraction itself')
+        obj.addProperty('App::PropertyFloat', 'Inset', 'Flange',
+                        'nose_flange_inset: wall thickness plus a fit (OQ-DES-CW9, OQ-DES-CW10)')
+        obj.addProperty('App::PropertyFloat', 'Height', 'Flange',
+                        'nose_flange_height: how far the flange extrudes downward')
+        obj.Base = base
+        obj.Proxy = self
+
+    def execute(self, obj):
+        import cowl
+        if obj.Base is None or not obj.Height:
+            return
+        wires = obj.Base.Shape.slice(App.Vector(0, 0, 1), -obj.CutLen)
+        if not wires:
+            return
+        face = Part.Face(max(wires, key=lambda w: Part.Face(w).Area))
+        outline = cowl._clean_offset(face, obj.Inset)
+        obj.Shape = Part.Face(outline).extrude(App.Vector(0, 0, -obj.Height))
+
+    def dumps(self):
+        return None
+
+    def loads(self, state):
+        return None
+
+
+def _nose_flange(doc, name, base, cut_len_expr, inset_expr, height_expr):
+    """One `_NoseFlange` node, wired the way `_shell` wires a `_CowlShell`."""
+    node = C._owned(doc, 'Part::FeaturePython', name)
+    if getattr(node, 'Proxy', None) is None:
+        _NoseFlange(node, base)
+    node.setExpression('CutLen', cut_len_expr)
+    node.setExpression('Inset', inset_expr)
+    node.setExpression('Height', height_expr)
+    return node
+
+
 def _shell(doc, name, cell_cut, body, notches, mirrors):
     """One `_CowlShell`, wired to the cell-local pieces the print representation's own
     construction already built -- never to `tip` itself.
@@ -776,6 +831,49 @@ def tail_cowl(doc):
     return _mirror_union(doc, 'TailCowl', cut, (0, -1, 0))
 
 
+def nose_tip(doc):
+    """`nose()` -- the cowl's forward closure, a separate printed part.
+
+    Ported 2026-09-21 from `cowl.py`'s baked `nose_tip()` -- the last piece of IP-FC-12's
+    "cowl documents are not yet parametric" gap (`nose_plate` below was the other half). The
+    upper slice and the boolean tree are the same mask and the same `_ShapeBoolean` mechanism
+    `nose_cowl` uses; only the flange keeps a scripted node (`_NoseFlange`), because refitting
+    its offset curve is a Python computation with no stock equivalent, the same reason
+    `_CowlShell` stays scripted.
+
+    **`cut_len` and `plate_diam` are fractions of `unit_width` here, unlike in `cowl.py`'s
+    version.** Reusing `upper_mask()` -- built for `nose_cowl`, which needs the fraction so a
+    document tracks `U` by editing one cell rather than by rebuilding at another size --
+    means this sheet has to hold `cut_len` the same way. `cowl_parameters()`'s `nose_nose`
+    export was changed to match (`fuselage_variants.py`, 2026-09-21): both are now divided by
+    `unit_width` on the way out, the same as `nose_cowl`'s own `cut_len`, and multiplied back
+    out wherever this function needs the absolute millimetre value. `nose_flange_height`,
+    `nose_flange_inset`, `plate_thickness` and `plate_tol` are unaffected -- none of them come
+    from the JSON shape file scaled by `unit_width` in the first place (see
+    `cowl_parameters()`'s own comment for what each actually is).
+    """
+    body = blank(doc, 'Blank', 'vsp_nose')
+    upper = _common(doc, 'Upper', body, upper_mask(doc, 'UpperMask'))
+
+    cut_len_mm = '(%sunit_width * %scut_len)' % (P, P)
+    flange = _nose_flange(doc, 'Flange', body, cut_len_mm,
+                         '%snose_flange_inset' % P, '%snose_flange_height' % P)
+    fused = _shape_bool(doc, 'Fused', 'fuse', upper, [flange])
+
+    plate_r = '(%sunit_width * %splate_diam / 2 + %splate_tol)' % (P, P, P)
+    bore_h = '(3 * (%s + %snose_flange_height))' % (cut_len_mm, P)
+    bore = C._cyl(doc, 'Bore', plate_r, bore_h,
+                 '(-1.5 * (%s + %snose_flange_height))' % (cut_len_mm, P))
+    bored = _shape_bool(doc, 'Bored', 'cut', fused, [bore])
+
+    eps = '0.01'
+    seat_h = '(%s - %splate_thickness + %snose_flange_height + %s)' % (cut_len_mm, P, P, eps)
+    seat_r1 = '(%s + %s / tan(%soverhang_angle_from_bed))' % (plate_r, seat_h, P)
+    seat = C._cone(doc, 'Seat', seat_r1, plate_r, seat_h,
+                  '(-%s - %snose_flange_height - %s)' % (cut_len_mm, P, eps))
+    return _shape_bool(doc, 'NoseTip', 'cut', bored, [seat])
+
+
 def nose_plate(doc):
     """The disc that closes the nose, with its own printed flange.
 
@@ -882,6 +980,17 @@ PARAMS_TAIL = [
      ('oml_offset_x_m', -0.25), ('oml_reversed', 1.0)]
 
 
+#: `nose_tip` shares the nose cowl's OML and its `cut_len`, so it takes the same fraction
+#: convention `PARAMS_NOSE_COWL` does for both (`nose_tip`'s own docstring has the reasoning
+#: for why that had to change from `cowl.py`'s absolute original). Everything else on this
+#: sheet is already absolute -- see `nose_tip`'s docstring for which and why.
+PARAMS_NOSE_TIP = [
+    ('U', 1.0), ('unit_width', '=U * 100'), ('overhang_angle_from_bed', 35.0),
+    ('cut_len', 0.06),
+    ('nose_flange_height', 1.0), ('nose_flange_inset', 0.5),
+    ('plate_diam', 0.6), ('plate_thickness', 0.8), ('plate_tol', 0.1),
+] + _OML_ROWS
+
 #: `nose_plate` shares none of `PARAMS_NOSE_COWL`/`PARAMS_TAIL`'s rows and needs no OML: it
 #: never touches the imported blank at all. Every value is already absolute millimetres (see
 #: `nose_plate`'s own docstring), so unlike the two sheets above there is no `unit_width` row
@@ -919,6 +1028,7 @@ PARAMS_NOSE_COWL = _as_cells(PARAMS_NOSE_COWL)
 PARAMS_TAIL = _as_cells(PARAMS_TAIL)
 PARAMS_NOSE_COWL_SHELL = _as_cells(PARAMS_NOSE_COWL_SHELL)
 PARAMS_TAIL_SHELL = _as_cells(PARAMS_TAIL_SHELL)
+PARAMS_NOSE_TIP = _as_cells(PARAMS_NOSE_TIP)
 PARAMS_NOSE_PLATE = _as_cells(PARAMS_NOSE_PLATE)
 
 

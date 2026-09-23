@@ -201,7 +201,7 @@ def volume_offset(a: dict, b: dict, u: float | None = None) -> float | None:
     if a is None or b is None:
         return None
     area = a.get("area")
-    if not area:
+    if not area or "area" not in b:
         return None
     scale = 100.0 * (u if u else 1.0)
     return abs(a["volume"] - b["volume"]) / (area * scale)

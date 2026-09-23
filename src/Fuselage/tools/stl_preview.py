@@ -142,12 +142,23 @@ def _rotation(rot_deg: tuple[float, float, float]) -> np.ndarray:
 
 
 def _shift(arr: np.ndarray, dy: int, dx: int, fill: float) -> np.ndarray:
-    """Translate an image by (dy, dx), padding exposed rows/columns with `fill`."""
+    """Translate an image by (dy, dx), padding exposed rows/columns with `fill`.
+
+    A shift of magnitude >= the array's own size moves everything off-canvas: clamping to
+    that size first keeps every bound non-negative, so the two slices on each axis always
+    have equal length. Without the clamp, a large `dy`/`dx` (the occlusion radius can reach
+    16) made the destination slice empty while the source slice, built from a negative stop
+    that Python re-reads as counting from the end, was not -- a shape mismatch that only
+    showed up on images smaller than twice the largest radius in use.
+    """
+    h, w = arr.shape[0], arr.shape[1]
+    dy = max(-h, min(dy, h))
+    dx = max(-w, min(dx, w))
     out = np.full_like(arr, fill)
-    ys_dst = slice(max(dy, 0), arr.shape[0] + min(dy, 0))
-    ys_src = slice(max(-dy, 0), arr.shape[0] + min(-dy, 0))
-    xs_dst = slice(max(dx, 0), arr.shape[1] + min(dx, 0))
-    xs_src = slice(max(-dx, 0), arr.shape[1] + min(-dx, 0))
+    ys_dst = slice(max(dy, 0), h + min(dy, 0))
+    ys_src = slice(max(-dy, 0), h + min(-dy, 0))
+    xs_dst = slice(max(dx, 0), w + min(dx, 0))
+    xs_src = slice(max(-dx, 0), w + min(-dx, 0))
     out[ys_dst, xs_dst] = arr[ys_src, xs_src]
     return out
 

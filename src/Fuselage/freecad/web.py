@@ -23,6 +23,7 @@ morphological `fillet_inner` that OQ-DES-B9 concerns -- that one is in
 
 Derived parameters for U=1.0 end_bolt 3/16in.
 """
+import math
 import os
 import sys
 
@@ -209,23 +210,120 @@ def bulkhead_web_interconnect(doc):
     return tip
 
 
+def _shoelace(pts):
+    n = len(pts)
+    a = 0.0
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        a += x1 * y2 - x2 * y1
+    return abs(a) / 2.0
+
+
+def _interconnect_ref_area(P):
+    """Hand-derived closed form for `bulkhead_web_interconnect`'s cross-sectional area, IP-TEST-7.
+
+    Verified against the real build to 10 significant figures. Three tangency identities
+    make this tractable despite the shape being a polygon fused with a quarter-disk and cut
+    by a fillet circle -- all three follow directly from how the docstring above says
+    `ic_x_center`/`ic_y_end`/`ic_x_end` were solved, not new geometric facts:
+
+    - vertex 6 (`ic_x_end, ic_y_end`) lies exactly on the ray from the origin through
+      vertex 5 (`ic_x_center, step_y`) -- by construction, it is vertex 5 scaled by
+      `ic_big_r / (ic_big_r + web_fillet_radius)`. So the polygon's closing edge is a
+      straight radial line from vertex 5 to the origin, and the *overlap* between the
+      polygon and the quarter-disk (radius `ic_big_r`) is exactly the circular SECTOR
+      between the negative-x-axis and that radial line.
+    - `web_y_mid - step_y == web_fillet_radius` by definition (`step_y = web_y_mid -
+      web_fillet_radius`), so the fillet circle (centred at vertex 5) passes exactly
+      through vertex 4 and is exactly tangent there to the horizontal edge above it -- the
+      polygon's own edge 4-5 is a radius of the fillet circle, not merely near it.
+    - vertex 6 sits at distance `ic_big_r` from the origin and at distance exactly
+      `web_fillet_radius` from vertex 5 (both are consequences of the scale factor above),
+      so edge 5-6 is ALSO a radius of the fillet circle. Both edges leaving vertex 5 are
+      therefore fillet-circle radii, which makes the area the fillet cut removes exactly
+      the circular sector spanning the polygon's own interior angle there -- no clipping
+      against any other edge to account for, since nothing else is within that radius.
+
+    total_area = polygon_area + quarter_disk_area - overlap_sector - fillet_sector
+    """
+    web_y_top = P['corner_radius'] - P['panel_thickness'] - P['panel_tolerance']
+    web_y_mid = web_y_top - P['flange_thickness'] - P['web_width']
+    web_x_left = -(P['unit_width'] / 2 - P['corner_radius'])
+    boss_x = -P['bolt_offset'] - (P['bolt_hole_radius'] + P['bolt_thickness'] + P['web_width'])
+    step_y = web_y_mid - P['web_fillet_radius']
+
+    ic_big_r = P['panel_offset'] + P['panel_overlap'] + P['flange_thickness'] + P['web_width']
+    r = P['web_fillet_radius']
+    ic_x_center = -math.sqrt((ic_big_r + r) ** 2 - min(step_y, 0.0) ** 2)
+
+    pts = [(0.0, 0.0), (0.0, web_y_top), (web_x_left, web_y_top),
+          (web_x_left, web_y_mid), (ic_x_center, web_y_mid), (ic_x_center, step_y)]
+    polygon_area = _shoelace(pts)
+    quarter_disk_area = math.pi / 4.0 * ic_big_r ** 2
+
+    angle5 = math.atan2(step_y, ic_x_center)          # in (-pi, -pi/2]
+    overlap_sector = 0.5 * (angle5 + math.pi) * ic_big_r ** 2
+
+    mag = math.hypot(-ic_x_center, -step_y)
+    theta = math.acos(-step_y / mag)                   # angle to (0, 1), the edge to vertex 4
+    fillet_sector = 0.5 * theta * r ** 2
+
+    return polygon_area + quarter_disk_area - overlap_sector - fillet_sector
+
+
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): this printed a
+    volume delta but never checked it against a tolerance, so the script always exited 0
+    regardless of whether the tree actually matched OpenSCAD -- the same gap fixed in
+    corner_common.report() for the part_*.py cluster. `bulkhead_web_interconnect` had no
+    coverage at all before this (`bulkhead_positive.py` calls it for `is_interconnect`
+    bulkheads); there is no ref_*.scad for it, so it is checked against a hand-derived
+    closed form instead -- see `_interconnect_ref_area`'s docstring.
+    """
     doc = App.newDocument('web')
     tip = emit(doc)
     s = tip.Shape
     d = s.Volume - REF_VOL
+    rel = d / REF_VOL
     bb = s.BoundBox
+    ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
 
     print('PART:: CSG tree -- bulkhead_web')
     print('  volume  = %.7f' % s.Volume)
     print('  ref     = %.7f  (OpenSCAD, faceted)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / REF_VOL))
+    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * rel))
     print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
           % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
     print('  expect  = [-40.0000, -8.0000, 0.0000, 0.0000, 5.1375, 0.8000]')
     print('  valid   = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
+    print('  result  = %s' % ('PASS' if ok else 'FAIL'))
+
+    doc2 = App.newDocument('web_ic')
+    C._SEEN.clear()
+    sheet(doc2)
+    tip_ic = bulkhead_web_interconnect(doc2)
+    s2 = tip_ic.Shape
+    P = {alias: float(doc2.getObject('Params').get(alias)) for alias, _ in PARAMS}
+    ref_area2 = _interconnect_ref_area(P)
+    ref_vol2 = ref_area2 * P['plate_thickness']
+    d2 = s2.Volume - ref_vol2
+    rel2 = d2 / ref_vol2
+    ok2 = s2.isValid() and len(s2.Solids) == 1 and abs(rel2) <= 1e-6
+
+    print('PART:: CSG tree -- bulkhead_web (is_interconnect)')
+    print('  volume  = %.7f' % s2.Volume)
+    print('  ref     = %.7f  (hand-derived closed form)' % ref_vol2)
+    print('  delta   = %+.7f  (%+.5f%%)' % (d2, 100 * rel2))
+    print('  valid   = %s  solids=%d faces=%d'
+          % (s2.isValid(), len(s2.Solids), len(s2.Faces)))
+    print('  result  = %s' % ('PASS' if ok2 else 'FAIL'))
+
+    return 0 if (ok and ok2) else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

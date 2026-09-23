@@ -304,7 +304,33 @@ def main():
     if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-2:
         fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    return 1 if fail else 0
+    ok = not fail
+
+    # is_cowling and is_interconnect had no direct coverage at all before this -- cuts()
+    # only ran at the default (False, False) above. bulkhead_section.py exercises both
+    # through the assembled section, but honestly documents (its own main(), the "no
+    # octant-only reference" lines) that it does not check their volume/bbox either, only
+    # valid/solids=1 -- so this is genuinely uncovered, not merely indirectly covered
+    # elsewhere. Structural only, same reasoning as bulkhead_positive.py's equivalent
+    # addition: no independent reference exists for either combination in isolation.
+    print('')
+    print('  structural checks on the other two type branches (is_cowling, is_interconnect '
+          'never both hold):')
+    for label, kwargs in (('is_cowling', {'is_cowling': True}),
+                          ('is_interconnect', {'is_interconnect': True})):
+        doc2 = App.newDocument('bulkhead_cuts_' + label.split('_')[-1])
+        C._SEEN.clear()
+        sheet(doc2)
+        node2 = cuts(doc2, **kwargs)
+        s2 = node2.Shape
+        branch_ok = s2.isValid() and len(s2.Solids) == 1 and s2.Volume > 0.0
+        print('    %-18s volume=%.4f valid=%s solids=%d  %s'
+              % (label, s2.Volume, s2.isValid(), len(s2.Solids),
+                 'ok' if branch_ok else 'FAIL'))
+        ok = ok and branch_ok
+        App.closeDocument(doc2.Name)
+
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):

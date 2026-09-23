@@ -840,6 +840,11 @@ def emit(doc):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): `checks` was
+    computed correctly per tip but never aggregated into a return value or exit code, and
+    there was no flush-before-`sys.exit()` guard at all -- the same silent-pass gap fixed
+    elsewhere in this tier.
+    """
     doc = App.newDocument('fillets')
     tips = emit(doc)
 
@@ -857,6 +862,7 @@ def main():
         print('  %-20s %14s %14.6f %12s %9s  omitted -- %s'
               % (name, 'not built', REFS[name], '', '',
                  'the web does not reach the flange face at these parameters'))
+    ok = True
     for tip in tips:
         ref = REFS[tip.Name]
         s = tip.Shape
@@ -868,13 +874,19 @@ def main():
             checks.append('solids=%d' % len(s.Solids))
         if abs(d) / ref > 1e-3:
             checks.append('VOLUME')
+        if checks:
+            ok = False
         print('  %-20s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
               % (tip.Name, s.Volume, ref, d, 100 * d / ref,
                  ' '.join(checks) if checks else 'ok'))
         bb = s.BoundBox
         print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
               % ('', bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+    print('  %s' % ('ok' if ok else 'FAIL -- see checks above'))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

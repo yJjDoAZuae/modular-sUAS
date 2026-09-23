@@ -25,12 +25,17 @@ def build(p):
 def main():
     App.newDocument('part_middle')
     shape = build(Params())
-    report('corner_middle', shape, REF_VOL)
+    ok = report('corner_middle', shape, REF_VOL)
 
     out = out_path('part_middle.step')
     shape.exportStep(out)
     print('  wrote   %s' % os.path.basename(out))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    # The flush is not decoration: under `freecadcmd` a `sys.exit` with buffered stdout loses
+    # the whole report, so the run looks like it printed nothing rather than like it failed.
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

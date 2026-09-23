@@ -1,4 +1,9 @@
-"""IP-FC-38 follow-up: how does a hand edit interact with a generated Part:: CSG tree?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): the derived-part workflow this
+spike found safe is now demonstrated for real in check_tree.py's own "user bracket" section
+(tagged nodes, a stable Part::Refine tip) -- kept in place rather than archived, for the
+historical links into it; do not add test coverage here.
+
+IP-FC-38 follow-up: how does a hand edit interact with a generated Part:: CSG tree?
 
 Three separate questions, each measured rather than assumed:
 

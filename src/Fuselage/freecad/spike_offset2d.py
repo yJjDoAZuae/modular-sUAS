@@ -1,4 +1,9 @@
-"""IP-FC-9: does Part::Offset2D reproduce OpenSCAD's offset(r=) and fillet_inner()?
+"""SUPERSEDED (IP-TEST-9, doc/implementation/test_coverage.md): this spike's semantics finding
+is now plane2d.py's production offset()/fillet_inner()/fillet_outer(), with real hand-verified
+coverage in check_plane2d.py -- kept in place rather than archived, for the historical links
+into it; do not add test coverage here.
+
+IP-FC-9: does Part::Offset2D reproduce OpenSCAD's offset(r=) and fillet_inner()?
 
 The bulkhead's web is built with `offset(r = -web_width)` and `fillet_inner(
 web_fillet_radius)`, and fillet_inner is itself:

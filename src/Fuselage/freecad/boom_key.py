@@ -176,33 +176,23 @@ def emit(doc, seed=None):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): this hand-rolled
+    its own fragmented/reach checks and printed a delta, but never compared the delta to a
+    tolerance and never turned any of it into a verdict or return value -- the same silent-pass
+    gap fixed elsewhere in this cluster (`corner_common.report()`, `flange_base.py`,
+    `flange_boss.py`, `web.py`). `plane2d.report()` already does exactly this (area delta,
+    FRAGMENTED, TRUNCATED and bbox checks, with a real tolerance) and is already the pattern
+    `boom_webs.py`/`boom_bulkhead.py` use, so this now calls it instead of reimplementing a
+    partial copy of it.
+    """
     doc = App.newDocument('boom_key')
     tip = emit(doc)
-    s = tip.Shape
-    got = plane2d.area(s)
-    d = got - REF_AREA
-    bb = s.BoundBox
-
-    print('PART:: 2D CSG tree -- boom_key_shape, real fillets')
-    print('  area    = %.7f' % got)
-    print('  ref     = %.7f  (OpenSCAD, faceted)' % REF_AREA)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF_AREA))
-    print('  bbox    = [%.4f, %.4f] x [%.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.XMax, bb.YMax))
-    print('  expect  = [%.4f, %.4f] x [%.4f, %.4f]' % EXPECT_BBOX)
-    print('  valid   = %s  faces=%d wires=%d' % (s.isValid(), len(s.Faces), len(s.Wires)))
-
-    # One face, or Part::Offset2D will offset the fragments separately -- see _union.
-    if len(s.Faces) != 1:
-        print('  FRAGMENTED -- %d faces where 1 is required; any offset downstream of this '
-              'is wrong by hundreds of percent' % len(s.Faces))
-
-    # And clear of the rectangle _union complements against, or the union truncated.
-    reach = float(doc.getObject('Params').get('key_reach'))
-    margin = min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
-    print('  reach   = %.4f, nearest approach to its edge %.4f  %s'
-          % (reach, margin, 'ok' if margin > 1e-6 else 'TRUNCATED'))
+    ok = plane2d.report(doc, 'boom_key_shape', tip.Shape, REF_AREA, 'key_reach', EXPECT_BBOX)
+    print('  %s' % ('ok' if ok else 'MISMATCH -- see checks above'))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

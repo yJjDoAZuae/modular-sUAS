@@ -199,6 +199,10 @@ def _check(label, shape, ref):
 
 
 def main():
+    """Found while auditing IP-TEST-7 (doc/implementation/test_coverage.md): `ok` was computed
+    correctly via `_check()`/`plane2d.report()` but never returned or turned into an exit code
+    -- the same silent-pass gap fixed elsewhere in this cluster.
+    """
     print('PART:: boom_bulkhead, at both boom types that reach this module')
     print('  %-22s %13s %13s %11s  %s'
           % ('boom type', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
@@ -214,7 +218,10 @@ def main():
         App.closeDocument(doc.Name)
     print('')
     print('  %s' % ('agrees' if ok else 'MISMATCH -- see checks above'))
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
-    main()
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

@@ -138,7 +138,34 @@ def main():
     if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
         fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    return 1 if fail else 0
+    ok = not fail
+
+    # is_cowling/is_interconnect/make_web=False had no coverage at all before this -- only
+    # the default combo above (all False/True) was ever built. The constituent pieces
+    # (flange_base_interconnect, flange_boss(make_web=False), ...) already have their own
+    # hand-verified closed-form checks in their own modules, so this is structural only:
+    # each combination the assembly logic actually branches on must still build to a valid,
+    # single, non-degenerate solid.
+    print('')
+    print('  structural checks on the other three assembly branches:')
+    for label, kwargs in (
+        ('is_cowling', {'is_cowling': True}),
+        ('is_interconnect', {'is_interconnect': True}),
+        ('make_web=False', {'make_web': False}),
+    ):
+        doc2 = App.newDocument('bulkhead_positive_' + label.split('=')[0])
+        C._SEEN.clear()
+        sheet(doc2)
+        tip2 = flange_positive(doc2, **kwargs)
+        s2 = tip2.Shape
+        branch_ok = s2.isValid() and len(s2.Solids) == 1 and s2.Volume > 0.0
+        print('    %-18s volume=%.4f valid=%s solids=%d  %s'
+              % (label, s2.Volume, s2.isValid(), len(s2.Solids),
+                 'ok' if branch_ok else 'FAIL'))
+        ok = ok and branch_ok
+        App.closeDocument(doc2.Name)
+
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):
