@@ -43,8 +43,12 @@ Usage, under freecadcmd, from the repository root:
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import FreeCAD as App
 import Part
+
+from corner_common import is_entry_point
 
 try:
     import Mesh
@@ -144,4 +148,13 @@ def main():
     return 0
 
 
-raise SystemExit(main())
+# Found while auditing IP-TEST-11 (doc/implementation/test_coverage.md): this used to run
+# main() unconditionally at module scope, with no is_entry_point guard at all -- not just
+# wrong under freecadcmd's __main__ hazard (see corner_common.is_entry_point's own docstring)
+# but wrong for a plain `import mesh_to_brep`, which crashed with "SystemExit: --doc is
+# required" before check_mesh_to_brep.py could ever reach tip_shape/deviation as library
+# functions. Fixed to the standard guard every other module in this tier uses.
+if is_entry_point(__name__):
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

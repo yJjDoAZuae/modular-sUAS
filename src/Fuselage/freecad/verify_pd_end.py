@@ -4,6 +4,8 @@ pd_end.py builds the body correctly but reports "The graph must be a DAG" and le
 Mirrored touched, so measurements taken during construction can be of a stale shape. The
 only measurement worth reporting is one taken from a reloaded document after a forced
 recompute -- which is also what the sweep would do, since it saves and reloads .FCStd.
+
+Requires pd_end.py to have been run first (it saves out_path('pd_end.FCStd')).
 """
 import os
 import sys
@@ -16,30 +18,49 @@ from corner_common import is_entry_point, out_path
 
 REF_VOL = 551.8157396
 PART_VOL = 551.827595                       # the Part:: port, same parameters
+TOL = 1e-3 * REF_VOL
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-doc = App.openDocument(out_path('pd_end.FCStd'))
-body = doc.getObject('Body')
 
-touched = [o.Name for o in doc.Objects if 'Touched' in o.State]
-print('  touched on load : %s' % (', '.join(touched) if touched else 'none'))
+def main():
+    """Found while auditing IP-TEST-11 (doc/implementation/test_coverage.md): this whole
+    script was bare top-level code with no main(), no is_entry_point guard, and no verdict
+    at all -- it always exited 0 regardless of whether the reload-and-recompute actually left
+    the body clean and valid, the exact "always exits 0" bug class check_end_bands.py and
+    check_regenerate.py had before their own IP-TEST-10 fixes.
+    """
+    doc = App.openDocument(out_path('pd_end.FCStd'))
+    body = doc.getObject('Body')
 
-for obj in doc.Objects:
-    obj.touch()
-doc.recompute(None, True, True)
+    touched = [o.Name for o in doc.Objects if 'Touched' in o.State]
+    print('  touched on load : %s' % (', '.join(touched) if touched else 'none'))
 
-still = [o.Name for o in doc.Objects if 'Touched' in o.State or 'Invalid' in o.State]
-print('  after recompute : %s' % (', '.join(still) if still else 'all clean'))
+    for obj in doc.Objects:
+        obj.touch()
+    doc.recompute(None, True, True)
 
-s = body.Shape
-d = s.Volume - REF_VOL
-print('  volume          = %.6f' % s.Volume)
-print('  OpenSCAD ref    = %.6f   (%+.6f, %+.4f%%)' % (REF_VOL, d, 100 * d / REF_VOL))
-print('  Part:: port     = %.6f   (%+.9f)' % (PART_VOL, s.Volume - PART_VOL))
-print('  valid           = %s  solids=%d faces=%d'
-      % (s.isValid(), len(s.Solids), len(s.Faces)))
+    still = [o.Name for o in doc.Objects if 'Touched' in o.State or 'Invalid' in o.State]
+    print('  after recompute : %s' % (', '.join(still) if still else 'all clean'))
 
-tree = [o.Name for o in body.Group]
-print('  feature tree    = %s' % ' -> '.join(tree))
-print('  tip             = %s' % body.Tip.Name)
+    s = body.Shape
+    d = s.Volume - REF_VOL
+    print('  volume          = %.6f' % s.Volume)
+    print('  OpenSCAD ref    = %.6f   (%+.6f, %+.4f%%)' % (REF_VOL, d, 100 * d / REF_VOL))
+    print('  Part:: port     = %.6f   (%+.9f)' % (PART_VOL, s.Volume - PART_VOL))
+    print('  valid           = %s  solids=%d faces=%d'
+          % (s.isValid(), len(s.Solids), len(s.Faces)))
+
+    tree = [o.Name for o in body.Group]
+    print('  feature tree    = %s' % ' -> '.join(tree))
+    print('  tip             = %s' % body.Tip.Name)
+
+    ok = (not still and s.isValid() and len(s.Solids) == 1 and abs(d) <= TOL)
+    print('  result          = %s' % ('PASS' if ok else 'FAIL'))
+    return 0 if ok else 1
+
+
+if is_entry_point(__name__):
+    _code = main()
+    sys.stdout.flush()
+    sys.exit(_code)

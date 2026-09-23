@@ -223,3 +223,26 @@ def test_capture_output_is_json_serializable(monkeypatch):
     monkeypatch.setattr(ps, 'SWEEPS', _ONE_SWEEP)
     captured = ps.capture(quiet=True)
     json.dumps(captured)   # must not raise
+
+
+def test_capture_and_compare_reproduce_ip_fc_2s_perturbed_constant_claim(monkeypatch):
+    """IP-FC-2 (freecad_migration.md) claims this pair was self-tested by perturbing a
+    single constant and observing that compare() named exactly the corner parts and exactly
+    the 'greeble.tolerance' field -- a one-time claim with no committed regression until now.
+    `GREEBLE_TOLERANCE_CORNER_MM` is assigned to every corner part's `c.greeble.tolerance` in
+    `derived_parameters()`'s corner branch (a bulkhead leaves it at its zero default), so
+    perturbing it should flip exactly the whole corner sweep and nothing else."""
+    monkeypatch.setattr(ps, 'SWEEPS', _ONE_SWEEP)
+    before = ps.capture(quiet=True)
+
+    monkeypatch.setattr(fv, 'GREEBLE_TOLERANCE_CORNER_MM', fv.GREEBLE_TOLERANCE_CORNER_MM + 1.0)
+    after = ps.capture(quiet=True)
+
+    assert set(before) == set(after)
+    problems = ps.compare(before, after)
+    assert problems == len(before)   # every corner part changed, none missing/new
+
+    for name, tree in before.items():
+        diffs = {k: v for k, v in ps._flatten('', tree, {}).items()
+                 if ps._flatten('', after[name], {}).get(k) != v}
+        assert set(diffs) == {'greeble.tolerance'}, (name, diffs)

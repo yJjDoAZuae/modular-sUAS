@@ -96,6 +96,21 @@ def test_export_writes_step_files_for_nose_and_tail(vsp, tmp_path, capsys):
     assert 'vsp_nose.step' in capsys.readouterr().out
 
 
+def test_export_step_surfaces_match_ip_fc_4s_bspline_count_and_carry_no_planar_faces(
+        vsp, tmp_path):
+    """IP-FC-4 (freecad_migration.md) claims the exported STEP surfaces are '8 and 12
+    BSplineSurface faces, zero planar' -- a specific geometric claim the size-only check
+    above never verified. STEP files are plain ASCII with one line per entity, so a
+    B_SPLINE_SURFACE_WITH_KNOTS/PLANE entity count is a direct read, not an inference."""
+    written = oe.export(vsp, tmp_path, fmt='step')
+    counts = {}
+    for p in written:
+        text = p.read_text()
+        assert '=PLANE(' not in text
+        counts[p.name] = text.count('=B_SPLINE_SURFACE_WITH_KNOTS(')
+    assert counts == {'vsp_nose.step': 8, 'vsp_tail.step': 12}
+
+
 def test_export_raises_when_a_named_geometry_is_missing_from_the_model(vsp, tmp_path, monkeypatch):
     monkeypatch.setattr(oe, 'EXPORTS', (('vsp_nose', ('NoSuchGeometry',)),))
     with pytest.raises(SystemExit, match='not found in'):
