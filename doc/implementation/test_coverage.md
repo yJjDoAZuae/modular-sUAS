@@ -1058,10 +1058,118 @@ disk and the shape is valid and single-solid. Verified load-bearing with a negat
 (forcing `export_deflection` to return a wrong constant, confirming the check's own assertions
 catch it and the script exits 1, not just report OK unconditionally).
 
-Remaining in this item: the systematic walk through the rest of the ~140 `IP-FC-*` rows. Given
-how large this triage pass's own error was, further grouping-by-module passes should be
-verified against `tests/*.py` and `src/Fuselage/freecad/check_*.py` file contents directly
-before treating any claimed gap as real -- existence of a same-named test file must be checked
-first, not inferred from a summary. Most efficiently continued by reading the rows whose
-subject module has no `check_*.py`/`test_*.py` file of the same or related name at all (a
-`find`/`ls` fact, checkable in one step) rather than re-deriving coverage claims narratively.
+**Follow-up sweep, 2026-09-23: every `src/Fuselage/freecad/*.py` module checked directly against
+the two real signals (`is_entry_point` self-check, `check_*.py`/`test_*.py` counterpart file),
+instead of trusting a narrative summary.** Confirmed the earlier "no check_<name>.py" list was
+mostly noise -- many geometry modules (`boom_bulkhead.py` and its cluster) are their own check
+via `main()`, and several FreeCAD-independent `freecad/` modules (`sheet_naming.py`) already had
+real pytest-tier coverage under a different name (IP-TEST-4). Five modules were genuinely
+uncovered and small enough to close in this pass:
+
+- **`measure.py`** (zero FreeCAD dependency by design, like `units.py` before it) had nothing.
+  Added `check_measure.py` (freecadcmd tier, matching the `units.py` precedent for directory-
+  scoped-by-convention rather than by dependency): binary STL, ASCII STL, and a mixed-winding
+  case for the `abs()` in `measure()`. Verified with a negative control.
+- **`variants.py`** had nothing, and a real bug surfaced once tested: `max_panel_thickness()`'s
+  own docstring claims to restate `fuselage_variants.py`'s real validity ceiling, but hardcoded
+  `greeble_thickness`/`greeble_nub_thickness` at a fixed 0.8 mm instead of the real formula's
+  `sqrt(U)` scaling (floored at 1.2 mm) -- wrong at every swept `U` by 0.8-1.8 mm, undetected
+  because nothing in the repository calls this function (confirmed by grep). Fixed to compute
+  the real formula and added `tests/test_variants.py`, which cross-checks it against
+  `fuselage_variants.py`'s actual constants at all eight swept `U` rather than against a second
+  hand-copy of the same number. A secondary, non-code finding fell out of the fix: `TABLE`'s own
+  `U=0.5` row (`panel_thickness=2.0`) sits above the *corrected* ceiling (1.55 mm) though it was
+  comfortably under the *wrong* one (2.35 mm) -- suggesting it was picked against the buggy
+  formula and never re-validated. Left as-is and documented in the test rather than changed:
+  `check_regenerate.py` already builds and reproduces this exact configuration successfully
+  against real geometry this session, `TABLE`'s stated purpose is reproducibility, not sweep-
+  legality, and changing the value would mean re-rendering a committed reference `.stl` -- a
+  geometry decision for Alex, not a test-coverage one.
+- **`part_kinds.py`** had `KINDS` existence/shape checked only as `freecad_render.py`'s own test
+  infrastructure (IP-TEST-6); `unbuilt_types()` and `geometry_roots()` had no assertions on
+  their actual logic at all. Added `tests/test_part_kinds.py`.
+- **`cowl_rim.py`** and `corner_tree.py` were checked and found to need no new work: both have
+  either a real `is_entry_point` self-check (`corner_tree.py`) or an explicit, sound in-code
+  rationale for having none (`cowl_rim.add()`'s own docstring: every alias its shapes read is
+  owned by another constituent, so a standalone build would just re-exercise the merge
+  `bulkhead_section.py` already does; the binding check is the assembled `bulkhead_full` at
+  `is_cowling`, already audited correct this session).
+
+733 tests pass across `tests/` (up from 722), all four new/fixed checks verified with real runs
+and negative controls, ruff-clean.
+
+**The three drawing-internals modules, done, 2026-09-23 -- and a second real, significant
+defect found and fixed along the way.** `drawing_standard.py` (1041 lines), `sheet_table.py`
+(644 lines) and `sheet_annotations.py` (1338 lines) all turned out to have zero FreeCAD import
+at module scope (confirmed: `uv run python -c "import ..."` succeeds for all three), so all
+three are testable from this tier -- contrary to the "large, separate undertaking, not
+pursued" assessment this Notes entry originally carried. Split by actual dependency, not by
+directory: the pure layout/formatting/bookkeeping functions get real pytest-tier tests
+(`test_drawing_standard.py`, `test_sheet_table.py`, `test_sheet_annotations.py`); the
+functions that need `fontTools` (present in FreeCAD's own Python, absent from this venv --
+`text_width_mm`, `verify_font`, `typo_ascender_units`, `column_width_mm`, and everything in
+`sheet_table.py` that measures real strings) get a freecadcmd-tier check instead
+(`check_drawing_standard.py`, `check_sheet_table.py`), run against the real installed osifont
+and the real committed template.
+
+**The real defect**: writing `test_drawing_standard.py` surfaced that `table_height_mm()` and
+`table_rows_available()` computed a value table's row pitch as `TABLE_ROW_PITCH_HEIGHTS *
+height` (3.50 mm at the table's default text height) -- the ISO 3098 baseline-spacing term
+alone -- while `sheet_table.py` (the actual renderer) spaces rows at `table_row_pitch_mm()`
+(4.57 mm at the same height, the larger of that term and the ruled-row clearance requirement
+`table_row_pitch_mm`'s own docstring derives). The two had silently disagreed since the ruled-
+row clearance term was added, under-counting every real table's depth by about 30%.
+`table_rows_available()`'s own docstring carried a whole historical "correction" built on the
+wrong formula (claiming 13 rows fit a band that only holds 10, and calling the original 10 a
+stale figure) -- itself wrong, now corrected in place with the real derivation, landing back on
+the original 10 for the original reason rather than the "stale pitch" reason the wrong
+correction gave it. **Verified safe before committing to the fix**: ran `check_table_width.py`,
+`check_dimension_placement.py` and `check_sheet_standard.py` for real before and after --
+`check_table_width.py`'s real per-family verdicts (driven by `sheet_table.layout()`, which was
+already correct) were unaffected, only its printed "rows available" figure changed from the
+wrong 13 to the correct 10; `check_dimension_placement.py`'s one real failure (the pre-existing
+117.5-vs-116.5mm drift) is unchanged; `check_sheet_standard.py` still passes, since the title
+block already dominated the band depth in both directions. A regression test now ties
+`table_height_mm`/`table_rows_available` to the real pitch so the two cannot silently disagree
+again. **Not yet re-checked**: whether IP-FC-128, which relied on "three spare rows" that no
+longer exist, needs revisiting -- flagged in the corrected docstring, not chased down here.
+
+845 tests pass across `tests/` with all three new files (`test_drawing_standard.py`,
+`test_sheet_table.py`, `test_sheet_annotations.py`) included, up from 733 before this pass, all
+new/fixed checks verified with real runs and negative controls.
+
+**`sheet_annotations.py`'s three per-kind builders** (`corner_annotations`,
+`bulkhead_annotations`, `boom_bulkhead_annotations`, ~150-270 lines each) were deliberately
+*not* audited formula-by-formula -- the same judgment call `cowl_tree.py`/`cowl_interior.py`
+got earlier in this item, *until Alex asked for the audit to be completed rather than scoped
+out* -- see below.
+
+**`sheet_annotations.py`'s three per-kind builders, completed 2026-09-23.** Read the whole file
+front to back (`corner_annotations`/`corner_construction`, `bulkhead_annotations`/
+`detail_radius`/`bulkhead_views`/`bulkhead_construction`, `boom_bulkhead_annotations`) and
+verified every concrete number a docstring cites as "measured on the built solid" or "verified
+against ... worked example" exactly against the real fixture that produces it, to the same
+1e-4 discipline as `corner_seat_span`'s check: `panel_extension` = 7.2625 mm, the bulkhead's
+R2.05/R3.25/R4.45/axis-at-40/bolt-axis-at-32 cluster, `enclosed_span` = 87.875 mm (design doc's
+own 43.9375 example doubled), `panel_span`'s 392.8500 mm2 worked check, `corner_seat_offset` =
+2.65 mm per axis / 1.8738 mm along the diagonal ("over root two", exactly as the docstring
+states it), the boom bulkhead's `enclosed_span` = 78.275 mm, and the `dual` boom type's mirrored
+collet at (-20, 20)/(20, 20) against the real `ref_boom_dual.params.json` fixture. Every
+conditional branch is exercised with a *real* fixture that actually takes it, not a synthetic
+stand-in: `has_greeble=False` via the real `is_cowling=1` fixture (`ref_cowling_bolt.
+params.json`), `has_bolt=False` via the real `is_interconnect=1` fixture (`ref_interconnect.
+params.json`), the `seated`/panel-branch split of `corner_seat_offset` via a constructed
+`panel_overlap` large enough to force the other branch (the same technique
+`check_geometry_branches.py` already uses for this exact class of `max()`), and `panelled`/
+`unpanelled` throughout. `bulkhead_construction`'s four-fold symmetry (8 center marks with
+`has_bolt`, 4 without; 4 diagonals; 4 panel rectangles) and `boom_bulkhead_construction`'s
+single real mirror (1 center line, not 4) are both checked structurally against the exact
+counts the module's own docstrings claim. **No defect found** in this module -- all 59
+assertions passed on the first real run, a genuine confirmation rather than an absence of
+looking, given how many independently-computed real numbers they check against.
+
+869 tests pass across `tests/` with the full audit (up from 845).
+
+Remaining in this item: the systematic walk through the rest of the ~140 `IP-FC-*` rows, most
+efficiently continued by reading the rows whose subject module has no `check_*.py`/`test_*.py`
+counterpart at all (now a fully checked, reliable list rather than an inferred one).
