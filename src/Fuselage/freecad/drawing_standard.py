@@ -616,9 +616,17 @@ def table_width_available_mm(view_width_mm):
 
 
 def table_height_mm(rows, text_height_mm=None):
-    """How deep a value table of `rows` printed rows is."""
-    height = TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
-    return rows * TABLE_ROW_PITCH_HEIGHTS * height
+    """How deep a value table of `rows` printed rows is.
+
+    **Corrected 2026-09-23** (IP-TEST-11): this used to compute `rows * TABLE_ROW_PITCH_HEIGHTS
+    * height` directly -- the ISO 3098 baseline-spacing term alone, 3.50 mm at the table's
+    default text height. `table_row_pitch_mm` is the actual per-row pitch `sheet_table.py`
+    draws at (4.57 mm at the same height, the larger of that term and the ruled-row clearance
+    requirement -- see its own docstring for why the second term binds). The two had silently
+    disagreed since the ruled-row clearance was added: this function, and `table_rows_available`
+    below, under-counted every table's real depth by about 30%.
+    """
+    return rows * table_row_pitch_mm(text_height_mm)
 
 
 def format_column(values, decimals=DECIMAL_PLACES):
@@ -757,18 +765,17 @@ def table_rows_available(text_height_mm=None):
     it gives **10**, because the band it sits in may only be as deep as the quarter
     of the frame the view does not get.
 
-    **It says 10 above and it returns 13, measured 2026-09-06, and the 10 is the stale
-    one.** The band budget is 46.80 mm and a row is `TABLE_ROW_PITCH_HEIGHTS *
-    TABLE_TEXT_HEIGHT_MM` = 3.50 mm, so 13 fit; the 10 dates from before the compaction
-    ladder took the pitch from 2.0 heights to 1.4 and was never brought forward with it. The
-    claim that an eleventh row takes the view to 73.3 % does not reproduce either: `best_view`
-    puts the table *beside* a title block 46.0 mm deep, so the band depth is set by the block
-    until the table passes it, and rows 11, 12 and 13 cost the view **nothing** -- it stays at
-    75.4 %. The 14th is the one that bites, at 73.8 %, which fails DRW-9.
-
-    So the sheet has **three spare rows**, not none. That matters because two work items were
-    filed treating this as a hard constraint, and a budget believed to be exhausted forecloses
-    designs that in fact fit -- see IP-FC-128.
+    **A "13, and the 10 is stale" correction stood here from 2026-09-06 to 2026-09-23, and it
+    was itself wrong -- corrected as part of IP-TEST-11.** It computed a row's depth as
+    `TABLE_ROW_PITCH_HEIGHTS * TABLE_TEXT_HEIGHT_MM` = 3.50 mm and divided that into the 46.80
+    mm band to get 13. That is only the ISO 3098 baseline-spacing term; `sheet_table.py` (the
+    actual renderer) spaces rows at `table_row_pitch_mm()`, 4.57 mm at the same height, because
+    a ruled row additionally needs its glyph box clear of the rule above and below -- see that
+    function's own docstring. At the real pitch the band holds `int(46.80 // 4.57)` = **10**
+    rows, the same number OQ-DES-D5 gave in the first place, for the reason it gave then rather
+    than the "stale 2.0-heights pitch" reason the wrong correction attributed it to. There are
+    no spare rows: the original 10 was right, and IP-FC-128 (which relied on "three spare
+    rows") should be re-checked against this.
 
     **Width, not depth, is where this sheet is actually tight**, and it is a cliff rather than
     a slope: the band placement needs `block + gutter + table` inside the frame, which leaves
@@ -776,7 +783,7 @@ def table_rows_available(text_height_mm=None):
     column and the view collapses from 75.4 % to **45.3 %**.
     """
     height = TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
-    return int(table_band_depth_mm() // (TABLE_ROW_PITCH_HEIGHTS * height))
+    return int(table_band_depth_mm() // table_row_pitch_mm(height))
 
 
 def read_template_rect(text, element_id):
