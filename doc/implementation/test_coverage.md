@@ -778,6 +778,28 @@ trivially passing. **No defect in the built part was ever found or claimed** -- 
 already passed cleanly throughout, and this was always a defect in one verification function's
 method, not in the geometry it was checking.
 
+**Retested across the whole domain that failed 100% before the fix, not only at the default
+`U`, per direct question.** `soak_cowl_shell.measure()` -- the same function IP-FC-117's soak
+used to find the original 28/28 P3 failure, calling the same now-fixed `check_cowl_interior.
+rib_gap()` -- was run once (no repeats; reproducibility noise is IP-FC-117's separate, already-
+answered question) at all eight `nose_size_variants.csv` `U` values, both shell kinds, 16
+builds total. **Rib gap: 16/16 clean**, every reading at floating-point noise (~1e-13 mm)
+against the 0.05 mm tolerance -- the fix holds across the full range, not just where it was
+first verified.
+
+**A separate, real, previously-unmeasured finding fell out of the same retest: wall thickness
+-- not rib gap -- goes out of tolerance at the high end of the swept range.** `worst_wall_error`
+(the same metric IP-TEST-11's 233-240/240 figures above are drawn from, at `U`=1 only) reads
+0.0531 mm over on `tail_shell` `U`=3.0, 0.1499 mm over (3x the 0.05 mm tolerance) on `tail_shell`
+`U`=4.0, and 0.0523 mm over on `nose_cowl_shell` `U`=4.0 -- growing with `U`, and clean at every
+lower `U` tried (0.5 through 2.5, both kinds). `rib_err` on these same three builds stayed at
+~1e-13 mm, so this is not a symptom of anything this item touched. No prior wall-thickness check
+in this repository had run at `U` above 1 before this retest, so this is new information, not a
+regression: whether it is real geometric wall thinning at scale, a measurement artefact of
+`wall_thickness`'s own method at larger absolute dimensions, or something else, is unmeasured.
+**Tracked as [IP-FC-143](freecad_migration.md), `todo`** -- what to do about it, if anything, is
+still open; only that it is a real, distinct finding worth someone looking at is settled.
+
 Cross-checked whether this same unguarded-`PreconditionFailed` bug exists anywhere else:
 grepped every call site in the tier. `build_part.py`'s `main()` already wraps it, with its own
 inline comment already documenting this exact `freecadcmd` exit-code hazard (added 2026-09-12,
