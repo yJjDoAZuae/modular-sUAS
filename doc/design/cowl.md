@@ -2824,7 +2824,40 @@ partition-slip measurement question, resolved) and
 This note records the decision; it is not the place to look for whether a given build currently
 passes.
 
-## See also
+### OQ-DES-CW21 — The finished wall reads thinner than tolerance near the tail's diagonal buttresses at large `U`
+
+**Resolved, 2026-09-25: alternative 2.** The cowl's interior wall (nominal `t` =
+`cowl_n_perimeters * extrusion_width`, 0.6 mm at the sheet's current values, held to an absolute
+0.05 mm tolerance — [cowl_interior_surface.md §5](
+cowl_interior_surface.md#5-the-refinement-criterion)) was found reading thinner than tolerance at
+the largest swept sizes: `tail_shell` `U` = 3.0 (0.053 mm thin) and `U` = 4.0 (0.150 mm thin), and
+`nose_cowl_shell` `U` = 4.0 (0.052 mm thin), all at stations inside the tail's shallow-angle
+(30°) diagonal buttress notches. Five direct measurements (full evidence and build-by-build
+numbers in [IP-FC-143](../implementation/freecad_migration.md)) ruled out every numerical-artefact
+candidate in turn — `RIB_CUT_FUZZ`, `RIB_FACETS`'s polygon approximation, a `_refine()` coverage
+gap in the pre-rib surface fit, and cross-mirror rib-tool overlap at the tail's seam (a different
+symptom on a different pair of tools, from the already-closed IP-FC-137) — and instead pinned the
+effect precisely: at every flagged station, the wall's own worst point sits at the diagonal
+buttress's own angular placement (`top_diag_angle` = 30°), where the smooth pre-rib surface
+already measures clean (within 0.001–0.038 mm of nominal) but the rib cut removes measurably more
+material than that offset predicts (0.015–0.053 mm short). **The mechanism is a real, bounded,
+deterministic consequence of the dilated rib tool's own geometry meeting the smooth interior
+surface at a shallow angle** — present, in miniature and under tolerance, at every `U` this
+construction has ever built, not a defect introduced at large sizes.
+
+Bounding `U` (alternative 1) was rejected outright on standing project policy: a `U`-range
+restriction is only acceptable for an actual geometric constraint, which can only occur at the
+minimum `U` (already verified feasible at `U` = 0.5); a defect that only crosses tolerance at the
+high end is a construction failure to fix, not grounds to shrink the part's declared valid domain.
+Scoping the tolerance (alternative 3) carries the same objection in its own drawback — exempting
+the symptom from the check is not fixing the failure either.
+
+**Chosen fix**: extend `cavity()`'s own convergence loop to measure the *finished*, rib-cut wall
+near a notch boundary — not only the smooth pre-rib surface it checks today — and refine against
+that measurement until it also converges inside tolerance, closing the coverage gap this item
+found. This is a real algorithm change to `cavity()`, not a constant retune, and is not yet
+designed or implemented; tracked through to completion in [IP-FC-143](
+../implementation/freecad_migration.md).
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

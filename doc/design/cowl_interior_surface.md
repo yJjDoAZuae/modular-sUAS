@@ -307,6 +307,36 @@ used an absolute 1e-9 mm³ volume tolerance on parts of very different sizes, wh
 a bulkhead, and it cost two silent forty-minute runs before the cause was found. The rule is
 that the tolerance is relative to *the thing being measured*. Here that thing is the wall.
 
+### A gap this criterion does not cover, and the fix decided for it
+
+**Steps 1-5 above run entirely before the rib cut.** They measure the fitted surface against the
+true per-layer erosion of `S` — §4.2's smooth interior, with no notch subtracted from it yet.
+`dilated_notches()`'s rib cut happens afterward, in `cavity()`, and nothing in this criterion or
+anywhere else in the construction re-measures the *finished*, rib-cut wall against τ.
+
+**That gap is real, not theoretical: found 2026-09-23, root-caused 2026-09-25
+([OQ-DES-CW21](cowl.md#open-questions), full evidence in
+[freecad_migration.md IP-FC-143](../implementation/freecad_migration.md)).** The finished wall
+reads thinner than τ at the tail's shallow-angle (30°) diagonal buttresses, growing with `U` from
+a few thousandths of a millimetre at `U` = 1 to 0.150 mm — three times τ — at `U` = 4, confirming
+what §10's `U` = 4 prediction below already expected of this construction. Five direct
+measurements ruled out every candidate that would have meant this criterion's own convergence was
+at fault (`RIB_CUT_FUZZ`, `RIB_FACETS`'s polygon approximation, a coverage gap in step 5's own
+bisection, cross-mirror rib overlap at the tail's seam) and instead found the smooth surface
+already clean at the exact point the finished wall reads thin — the rib cut itself removes
+measurably more material there than the smooth surface's own offset predicts. **This criterion is
+correct as far as it goes; it simply does not go far enough**, because a rib boundary at a
+shallow cut angle is a case §4.2's erosion identity does not by itself protect.
+
+**Decided, 2026-09-25: extend this criterion with a second pass evaluated after the rib cut, not
+work around the gap by bounding `U` or widening τ.** The termination structure is the same as
+steps 1-5 — measure the deviation, insert a station and recurse where it exceeds τ, stop when
+every interval passes — but run a second time against the *finished* solid's own wall thickness
+near each notch boundary, rather than against the pre-rib fitted surface. A build only converges
+once both passes are inside tolerance. **Not yet implemented** — this is a design decision, not a
+built change; [IP-FC-143](../implementation/freecad_migration.md) tracks it through to a working
+`cavity()`.
+
 ---
 
 ## 6. Verification
@@ -721,6 +751,26 @@ established, and each is a work item in
   would clear it, and what shape that falloff actually has with only two points on it, is
   untested. Either way, the ratio-to-curvature story is ruled out as stated, and no curvature
   has still ever been measured at any station.
+
+- **The `U` = 4 trouble the IP-FC-117 bullet above predicted arrived, and it is a gap in §5's
+  criterion, not in this section's own reasoning** (IP-FC-143, OQ-DES-CW21, 2026-09-23 through
+  2026-09-25). Run across the full swept range, both cowl kinds, the finished wall reads thinner
+  than τ at three of sixteen builds, all at the largest sizes tried: `tail_shell` `U` = 3.0 and
+  4.0, `nose_cowl_shell` `U` = 4.0 — worst 0.150 mm, three times τ, at `tail_shell` `U` = 4.0. The
+  same bias exists in miniature at every smaller `U` this construction has ever built, always at
+  the tail's shallow-angle (30°) diagonal buttresses, just too small to cross τ until now. Five
+  measurements pinned the mechanism precisely rather than leaving it a guess: the deviation is
+  absent from the pre-rib fitted surface at the exact point the finished wall later reads thin,
+  is not moved by `RIB_CUT_FUZZ` or by `RIB_FACETS`, and is not the cross-mirror rib overlap a
+  different symptom of IP-FC-137 found elsewhere in this same construction — it is a real,
+  bounded, deterministic consequence of the dilated rib tool meeting the fitted surface at a
+  shallow angle, the same kind of case §4.2's erosion identity was never asked to cover. **Decided
+  rather than worked around**: bounding `U` was rejected outright as a standing project policy (a
+  `U` limit is only for an actual geometric constraint, which can only occur at the minimum `U`,
+  and this project's floor there is already settled at IP-FC-137's `U` ≥ 0.8 above); widening τ
+  for these stations was rejected for contradicting this section's own reasoning for keeping τ
+  absolute. §5's new subsection records the fix decided instead: a second refinement pass,
+  evaluated after the rib cut, with the same termination structure as steps 1-5. Not yet built.
 
 ## See also
 
