@@ -795,10 +795,12 @@ first verified.
 lower `U` tried (0.5 through 2.5, both kinds). `rib_err` on these same three builds stayed at
 ~1e-13 mm, so this is not a symptom of anything this item touched. No prior wall-thickness check
 in this repository had run at `U` above 1 before this retest, so this is new information, not a
-regression: whether it is real geometric wall thinning at scale, a measurement artefact of
-`wall_thickness`'s own method at larger absolute dimensions, or something else, is unmeasured.
-**Tracked as [IP-FC-143](freecad_migration.md), `todo`** -- what to do about it, if anything, is
-still open; only that it is a real, distinct finding worth someone looking at is settled.
+regression. **Tracked as [IP-FC-143](freecad_migration.md), `active`** -- investigated further
+and confirmed a genuine, bounded geometric consequence of the rib-cut construction at the tail's
+shallow-angle diagonal buttresses, not a measurement artefact. [OQ-DES-CW21](
+../design/cowl.md#open-questions) resolved: `cavity()`'s convergence loop is to be extended with
+a second pass that checks the finished, rib-cut wall, not only the pre-rib smooth surface it
+checks today -- decided, not yet implemented.
 
 Cross-checked whether this same unguarded-`PreconditionFailed` bug exists anywhere else:
 grepped every call site in the tier. `build_part.py`'s `main()` already wraps it, with its own
