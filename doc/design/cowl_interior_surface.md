@@ -333,9 +333,167 @@ work around the gap by bounding `U` or widening τ.** The termination structure 
 steps 1-5 — measure the deviation, insert a station and recurse where it exceeds τ, stop when
 every interval passes — but run a second time against the *finished* solid's own wall thickness
 near each notch boundary, rather than against the pre-rib fitted surface. A build only converges
-once both passes are inside tolerance. **Not yet implemented** — this is a design decision, not a
-built change; [IP-FC-143](../implementation/freecad_migration.md) tracks it through to a working
-`cavity()`.
+once both passes are inside tolerance.
+
+**Correction, 2026-09-26: the second pass cannot run inside `cavity()` at all, and an initial
+implementation there was wrong for exactly that reason.** `cavity()` is only ever given `body` —
+`cowl_tree.pieces()`'s `cell_body`, the *un-notched* cell — because that is the correct, and only,
+reference for steps 1-5's own pre-rib fit. The finished wall's true exterior is not `body`; it is
+`notched` (`cell_cut`, "that same cell with its buttress tools already cut into it"), which
+`shell_solid()` alone holds, and only after computing `inside = cavity(...)`. A `cavity()`-internal
+attempt at this second pass measured the rib-cut cavity against `body`'s exterior — the only
+exterior it has ever had — and at a station where a buttress cut removes exterior material, that
+reference is measurably wrong: a direct check (`tail_shell`, `U` = 3.0, `z` = -217.727) found the
+real wall's exterior loop 0.56 mm from the true thin point, while `body`'s own exterior at the same
+(x, y) was 26.5 mm away, a different surface entirely. **The second pass belongs in
+`shell_solid()`, evaluated directly on `wall = notched.cut(inside)`** — both the exterior and the
+cavity boundary then come from the same finished, cell-sized solid, which is exactly what
+[§6](#6-verification)'s wall check already does on the whole part and what this function's own
+docstring already argues is strictly better done at cell size, before mirroring. Full evidence
+trail in [freecad_migration.md IP-FC-143](../implementation/freecad_migration.md).
+
+**Correction, 2026-09-26: not by cutting `notched` a second time.** Implemented instead by
+slicing `notched` directly at each candidate `z` and comparing that contour against the cavity's
+own boundary — the same "two already-sliced contours" pattern `outer_at` already uses against
+`body`, never a second, independent boolean between `notched` and the cavity. A second cut here
+would repeat the exact "two shapes each independently built, then a boolean between them" mistake
+`shell_solid`'s own docstring already recounts three instances of; `shell_solid`'s own
+`notched.cut(inside)` remains the one authoritative cut. This still needed `open_arc`'s stripped
+polyline discipline reproduced without `open_arc` itself — `notched`'s section does not always
+chain the way `body`'s does — and, once reproduced, built open rather than closed, since a closed
+polyline's wraparound chord across the excluded construction-plane strip cuts straight across the
+cell's full width and reads spuriously close to legitimate points nowhere near a real notch.
+Both are recorded in full in [freecad_migration.md IP-FC-143](../implementation/freecad_migration.md).
+
+**Correction, 2026-09-27, per [cowl.md OQ-DES-CW22](cowl.md#open-questions): the second pass does
+not re-scan the whole patch on every round.** Verified correct but measured unaffordable: re-checking
+every point across the full patch, every one of up to six rounds, cost 9.5 hours without finishing
+the `U` = 3.0 target once the pass actually needed multiple rounds to converge, rather than the
+zero-insertion pass every case tried before OQ-DES-CW21 happened to take. **Decided: round 0 still
+scans the whole patch, front-loaded with stations placed at the notch topology's own edges (already
+read for the edge-focused scan) rather than left to discover them one bisection at a time; round 1
+onward re-scans only a ±15-20 mm window around that round's own insertions**, a width measured
+directly from how far one properly-bisected insertion's effect on the finished wall actually
+reaches (decaying from -0.023 to -0.024 mm within a millimetre of the insertion to at most
+±0.0012 mm, 2.4 % of τ, beyond 20 mm), not assumed. **Implemented and verified 2026-09-27**: both
+`tail_shell` `U` = 1.0 (765 s, zero refinement rounds needed) and `U` = 3.0 (4,277 s, six rounds)
+now converge without raising `Unconverged`, a large improvement over the 9.5-hour build this
+replaced. Full numbers in [IP-FC-143](../implementation/freecad_migration.md).
+
+**A residual gap, found immediately on that same verification, is not this pass's convergence
+failing to run long enough — see [cowl.md OQ-DES-CW23](cowl.md#open-questions).** This pass's own
+comparison (`_finished_wall_gap`/`finished_outer_at`) measures distance between two independently-
+sliced contours -- the candidate surface's own slice and `notched`'s -- and never performs the real
+`notched.cut(inside)` boolean itself, by design (a second boolean here would repeat the "two shapes
+each independently built, then a boolean between them" mistake `shell_solid()`'s own docstring
+already records three instances of). That prediction does not always match what the real boolean
+produces: even a completely unconverged, round-0 candidate already shows the real, external
+`wall_thickness()` check reading 0.0534 mm thin at `tail_shell` `U` = 3.0's worst station, at the
+same time this pass's own distance-based check reports that station clear. **An initial hypothesis
+that the gap came from `FINISHED_PLANE_TOL`'s exclusion band hiding a defect near a cell-boundary
+plane was tested directly and refuted**: the real worst point there sits 78.688 mm from the tail's
+one cell-boundary plane, thirty times the 0.5 mm tolerance -- nowhere near it. The real, external
+check already catches this correctly; the gap is between what this pass converges to internally
+and what that check finds, not a gap in acceptance testing.
+
+**Characterized further, and a fix attempted directly, 2026-09-27 — see [cowl.md OQ-DES-CW23](cowl.md#open-questions)
+for the full evidence and recommendation.** The gap, measured across all 12 real acceptance
+stations on the same build, is signed both ways and present at every station (roughly ±0.01-0.04 mm),
+not a rare, isolated defect. Inserting a station at the exact point the real (not predicted)
+measurement says is worst — the most favorable case for closing the gap by refinement — moved the
+real thickness there by only 3 % of the deficit, against roughly fourteen times that effect on the
+*predicted* thickness for the same kind of insertion (the measurement behind this section's own
+windowed re-scan sizing above). Station insertion is a weak lever on the real result, which this
+pass has no other lever to pull; recommended there (not yet decided) to document this pass as a
+best-effort predictor and rely on the existing external check as authoritative, rather than pursue
+further refinement.
+
+**A separate, more serious finding, 2026-09-28 — see [cowl.md OQ-DES-CW24](cowl.md#open-questions).**
+Investigating whether the residual above reflects unreliable measurement, five independent fresh
+builds confirmed the real reading is exactly reproducible (0.546556 mm to six decimal places,
+every time). But nudging every point in one "row" -- `_fit()`'s term for the ring of sample points
+that defines the cross-section at one fixed `z`; the whole surface is a stack of these rings, one
+per station, fit together -- outward by a small (sub-0.1 mm), physically-plausible amount, applied
+at a notch-tool-edge station specifically, was found to flip `shell_solid()`'s real construction
+(`notched.cut(inside)` plus `mirror_across_cell`) between a normal result, an outright caught
+failure ("5 disconnected shells"), and a result two orders of magnitude larger and opposite in sign
+from the surrounding trend -- the last of which raises no exception at all. The same test on two
+ordinary (non-notch-edge) rings found only clean, linear sensitivity, with no failures. This is a
+construction-reliability question at notch-edge stations specifically, independent of which check
+reads the result, and does not change this section's own OQ-DES-CW23 recommendation -- the ring
+nearest OQ-DES-CW23's own target station tested clean.
+
+**[Every specific clearance number from here through this section's end is retracted, 2026-10-01 --
+see the correction note in cowl.md OQ-DES-CW24. A measurement bug (a `_Polyline` defaulting to
+`closed=True` across multiple disconnected wire loops) made clearance numbers against the fused rib
+tool unreliable; a corrected re-measurement is in progress. The qualitative conclusion that some
+stations are much thinner than others likely survives; the specific numbers do not.]**
+
+**Root cause confirmed and found to be live, not synthetic-only, 2026-09-28.** The fragile ring is
+exactly one rib tool's own `z`-minimum, in a region where four separate tools overlap across most
+of the tail's length -- the "rib crowding near a corner" mechanism IP-FC-137 raised as a hypothesis
+(H3) against synthetic geometry, now confirmed against the real construction. A direct,
+*unperturbed* survey of the real round-0 candidate's own clearance to the dilated tool set across
+that region found the minimum was 0.000759 mm -- under a micron, on the actual build this whole
+item has used throughout, not a deliberately perturbed one -- with ten of 96 sampled stations under
+0.01 mm. `RIB_CUT_FUZZ` snaps these into a clean cut indistinguishable from a comfortable one; the
+pipeline does not currently report the difference between a build that cleared by 0.6 mm and one
+that cleared by a fraction of a micron. See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the
+full evidence and a recommendation to pursue a build-time clearance-margin check.
+
+**The thinnest clearances are not concentrated at notch edges.** A follow-up check compared the
+survey's worst 15 stations against the same build's `feature_stations()` values (26 edges): only 2
+of the 15 fall within 1 mm of one, and the single worst station (0.000759 mm) sits 9.3 mm from the
+nearest edge. Sensitivity-to-perturbation and raw-clearance-minimum are two different questions with
+two different answers -- the first is concentrated at notch edges, the second is not -- and a
+build-time check needs to sample the whole rib-crowded region, not the edge stations alone. See
+[cowl.md OQ-DES-CW24](cowl.md#open-questions) for the resulting concrete check design (metric,
+domain, and a threshold candidate of 0.01 mm; sampling density and failure behavior still open).
+
+**A genuine free-parameter screen, 2026-09-30, corrected what "perturbation" had tested so far.**
+Everything above perturbed the already-fitted surface's own output points, not an actual free
+parameter -- a real but different question. Re-running the full, independent construction from
+scratch for 13 cases (eight real design parameters from `PARAMS_TAIL`, four algorithmic knobs: `TAU`
+and notch-edge seeding standoff) found no construction failure anywhere, unlike the row-nudge test --
+but at magnitudes (0.5 degrees, 0.5-1 mm) larger than the 0.6 mm wall itself, so this is not yet a
+like-for-like comparison against the row-nudge test's 0.01 mm failure threshold. `top1_angle` and
+`top_diag_angle` are real levers on the crowding (worsened the minimum 23-26%, and `top_diag_angle`
+also moved which station is worst); seeding standoff -- alternative 4's own idea -- was tested
+directly and did not help, finding a thinner minimum instead of a safer one.
+
+**A finer-magnitude follow-up, matching the row-nudge test's own ~0.01 mm/0.01 degree scale, found a
+second, more acute near-tangency.** Seven of eight finer dimensional cases changed nothing, but
+`top_diag_angle` at +0.01 degrees -- one-fiftieth the earlier test's size -- dropped the minimum
+clearance to 0.000009 mm, under `RIB_CUT_FUZZ` itself, at a station (`z` ~ -192) no other case in
+this item has flagged. `RIB_CUT_FUZZ` caught it (the cut still came back one valid solid), but this
+is a real, previously-unseen near-tangency, and the non-monotonic relationship to perturbation size
+(a 0.01 degree nudge lands on it; a 0.5 degree nudge in the same direction mostly moves past it) is
+consistent with the unperturbed design already sitting within a hundredth of a degree of it. This is
+a new, uncharacterized lead, not yet investigated to confirm whether `U` = 3.0 already approaches it
+unperturbed. See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full comparison table.
+
+**That lead was investigated, 2026-10-01, and found something broader.** A dense re-scan of the
+unperturbed baseline near `z` ~ -192 found the design does not sit close to that specific tangency --
+but a different one 14 mm away, `z` = -206.22, reads 15 nm, 1.5x `RIB_CUT_FUZZ`'s own threshold,
+missed entirely by every coarser survey this item had run. A full-tail follow-up then found this is
+not an isolated second point: **at least six distinct near-zero clearance points (27-285 nm) recur
+from `z` = -286 to `z` = -25**, several of them outside the one rib-crowded corner this section's
+root cause explains, and even a 0.05 mm fine pass understates some of them (the `z` ~ -206 feature
+needed 0.02 mm to find its true floor). A brute-force grid fine enough to find all of these reliably
+would cost on the order of 19 hours per build at the sampling rate measured here -- this is now a
+materially harder problem than "one crowded corner is thin," and the build-time check OQ-DES-CW24
+recommends needs an adaptive search, not a fixed grid.
+
+**Corrected, 2026-10-01: the `z` ~ -192/-206.22 near-tangency itself was a measurement bug, not a
+real feature -- but the broader picture survives at a less extreme scale.** A `_Polyline` defaulting
+to `closed=True` across multiple disconnected wire loops (the fused tool's slice has 6-57 separate
+loops, not one) manufactured phantom chords that read as meaningless near-zero distances. With that
+fixed, `z` ~ -206 does not rank among the whole tail's worst 15 points at all. The corrected survey
+found instead: **minimum clearance 0.000060 mm (60 nm, 6x `RIB_CUT_FUZZ`, not under it) at
+`z` = -134.498, with 15 genuine points from 60 nm to 4113 nm scattered from `z` = -268.85 to
+`z` = -14.45** -- still wider than the one corner this section's root cause explains, still
+under-resolved by any affordable fixed grid, and still ~19 hours to find by brute force (a timing
+fact the bug never affected). See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full detail.
 
 ---
 
@@ -770,7 +928,40 @@ established, and each is a work item in
   and this project's floor there is already settled at IP-FC-137's `U` ≥ 0.8 above); widening τ
   for these stations was rejected for contradicting this section's own reasoning for keeping τ
   absolute. §5's new subsection records the fix decided instead: a second refinement pass,
-  evaluated after the rib cut, with the same termination structure as steps 1-5. Not yet built.
+  evaluated after the rib cut, with the same termination structure as steps 1-5. **Correction,
+  2026-09-26: that pass has to run in `shell_solid()`, against `notched.cut(inside)`, not inside
+  `cavity()` against `body` — `cavity()` never holds `notched`, the post-buttress-cut cell whose
+  boundary is the finished wall's real exterior, only the un-notched cell steps 1-5 need.**
+  **Correction, 2026-09-27 (OQ-DES-CW22): re-scanning the whole patch every round of that pass
+  measured unaffordable (hours, not minutes) once real convergence was actually exercised — §5's
+  subsection now also records a windowed re-scan sized from a direct measurement, combined with
+  front-loading round 0 from the notch topology.** Built and verified 2026-09-27. **A residual gap
+  found on that same verification is tracked separately, not by this pass's convergence** — its
+  check predicts the finished wall by distance between two independently-sliced contours rather
+  than by the real boolean cut, and that prediction does not always match what the real cut
+  produces; see [cowl.md OQ-DES-CW23](cowl.md#open-questions). **A separate finding while
+  investigating it, 2026-09-28 (OQ-DES-CW24): the real construction itself (`notched.cut(inside)`
+  plus `mirror_across_cell`) is fragile at rib-crowded corners, confirmed live on the real,
+  unperturbed build (clearances under a micron found there directly, not only under deliberate
+  perturbation) rather than a synthetic-only concern** — a sub-0.1 mm difference in the candidate
+  surface there can flip the result between normal, a caught failure, and an unflagged result two
+  orders of magnitude off, and nothing in the pipeline today reports how close to that edge a
+  successful build actually was. A build-time clearance-margin check is recommended, sampled across
+  wherever the dilated rib tools' own `z`-spans overlap (not at notch edges alone -- the thinnest
+  points measured were mostly elsewhere) against a threshold candidate of 0.01 mm; its sampling
+  density and its behavior on violation are undesigned. **A genuine free-parameter screen,
+  2026-09-30 (as opposed to the output-point nudge above), found no construction failure across 13
+  cases perturbing real design parameters and algorithmic knobs, though at magnitudes larger than the
+  wall itself, and found that seeding standoff (one candidate fix) does not help -- it surfaces a
+  thinner minimum, not a safer one. A finer-magnitude follow-up at the row-nudge test's own ~0.01 mm
+  scale found a second, uncharacterized near-tangency (9 nm clearance from a 0.01-degree
+  `top_diag_angle` nudge, at a station no other test has flagged). **That specific lead was a
+  measurement bug (a `_Polyline` wrapping across multiple disconnected wire loops) -- corrected,
+  2026-10-01, the `z` ~ -192/-206 region does not rank among the whole tail's worst points at all.
+  The corrected, whole-tail picture is less extreme but still real: minimum clearance 60 nm (6x
+  `RIB_CUT_FUZZ`, not under it) at `z` = -134.498, with 15 genuine points (60 nm-4 um) scattered from
+  `z` = -268.85 to `z` = -14.45, still wider than the one corner this section's root cause explains,
+  and still ~19 hours to find by brute force.** See [cowl.md OQ-DES-CW24](cowl.md#open-questions).
 
 ## See also
 

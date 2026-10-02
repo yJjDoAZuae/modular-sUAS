@@ -205,6 +205,79 @@ RIB_RESIDUE = 1.0e-2
 #: cannot be mistaken for tolerating a real gap.
 RIB_CUT_FUZZ = 1.0e-5
 
+#: How many times `cavity` will re-cut the finished wall against section 5's second pass
+#: (IP-FC-143, OQ-DES-CW21) before giving up and raising `Unconverged`.
+#:
+#: **A round count, not a station count, because the expensive step it bounds is the cut, not
+#: the fit.** The smooth-surface pass already has its own station budget (`budget`, the
+#: parameter); this loop can insert well inside that budget and still be expensive, because
+#: every round re-runs the rib cut and its residue/connectivity checks -- the ~150-350 s step
+#: IP-FC-116 measured, not the cheaper surface fit.
+#:
+#: **The gap this pass exists for does not close quickly.** Tested directly before this was
+#: written (IP-FC-143, 2026-09-25): uniformly tightening `tau` 5x moved most flagged stations
+#: toward `t` but left the single worst one barely changed (+0.0012 mm of a 0.0531 mm deficit).
+#: A handful of rounds is enough to see whether targeted insertion is converging at all without
+#: paying for an open-ended retry loop on a build that will not close the gap regardless.
+POST_CUT_ROUNDS = 6
+
+#: How close (mm) a discretised section point may sit to a cell construction plane before
+#: section 5's second pass drops it, on both sides of every comparison it makes.
+#:
+#: **Shared by `_finished_wall_gap`'s own default and `cavity`'s `finished_outer_at`, and it
+#: must stay shared.** Both slice a cell-shaped solid and discretise the whole closed loop
+#: rather than `open_arc`'s stripped one -- `_finished_wall_gap` for the cavity's own boundary,
+#: `finished_outer_at` for the buttress-cut cell's exterior -- so the same zone has to be
+#: excluded from each side of the same comparison, or the surviving points on one side would be
+#: measured against a polyline whose closing chord, on the other side, still crosses it.
+FINISHED_PLANE_TOL = 0.5
+
+#: How far (mm) each side of a notch tool's own edge (ramp start/end, cut plane -- read via
+#: `feature_stations`) section 5's second pass samples extra finely, and how far apart (mm)
+#: those extra samples sit.
+#:
+#: **Additive, not a replacement for the uniform scan.** The uniform ~1 mm grid still runs
+#: everywhere, so a defect at some other, not-yet-seen location is still caught; this only adds
+#: density exactly where the mechanism this item's own investigation found (IP-FC-143) says the
+#: sharp local peak actually lives -- a notch tool's own boundary, not its interior. Measured
+#: 2026-09-25/26: even a 1 mm-spaced uniform scan alone landed 0.0453-0.0471 mm against the
+#: acceptance check's own 0.0531 mm at the one real flagged station measured this closely --
+#: consistently short by about the same amount a scan missing a sharp peak by a millimetre or
+#: two would be, not a difference in what is being measured (that question is settled: section 5
+#: now measures against `notched`'s real exterior, not `body`'s). Getting closer requires finer
+#: sampling exactly at the peak, not everywhere -- a uniform grid fine enough to guarantee that
+#: unaided (sub-millimetre, over a whole 300 mm patch) would multiply this pass's own cost by an
+#: order of magnitude for resolution almost none of the patch needs.
+#: **The edge, not the notch's interior.** `feature_stations` already returns exactly the
+#: axial positions a rib's own ramp starts, ends, or meets the cut plane -- the points a smooth
+#: fitted surface cannot help but approximate least well, the same reason `_patches` treats them
+#: as patch boundaries for the pre-cut fit. The window is centred on each one.
+#: **Coarsened, 2026-09-27 (OQ-DES-CW22), now that the fit itself is front-loaded with these same
+#: edges.** At 2.0/0.25 this scan alone measured 373-442 points a patch -- more than the rib cut
+#: it was meant to be cheap next to -- and that was before OQ-DES-CW22 found the *uniform* scan
+#: dominates the real cost anyway. Once `_refine`'s own seed already carries every notch edge
+#: (added the same day, above), the fitted surface is already well-resolved there before the
+#: first cut ever happens, so this scan's own job shrinks from "find the peak" to "confirm it",
+#: which does not need the same density.
+EDGE_SCAN_MARGIN = 1.0
+EDGE_SCAN_STEP = 0.5
+
+#: How far (mm) each side of an inserted station section 5's second pass re-scans on the round
+#: that follows, instead of the whole patch.
+#:
+#: **Measured, not assumed (OQ-DES-CW22, 2026-09-26).** One properly-bisected insertion's effect
+#: on the finished wall's own thickness, on `tail_shell` `U` = 1.0: -0.023 to -0.024 mm within a
+#: millimetre of it, -0.005 to -0.01 mm by 9 mm, under +-0.005 mm by 14 mm, and at most
+#: +-0.0012 mm (2.4% of `TAU`) anywhere past 20 mm -- consistent with numerical noise at that
+#: range, not a continuing effect. 20 mm keeps a margin over the 14-15 mm the effect actually
+#: reached in that measurement.
+#: **Why re-scanning at all is safe to skip beyond this window.** Patches are independent: a
+#: change to one patch's own fit and cut cannot move another patch's cavity boundary, since each
+#: contributes its own closed solid to the fuse and the fuse cannot alter geometry outside the
+#: piece that changed. Within one patch, the same locality this margin measures is what makes it
+#: safe to stop looking past it.
+POST_CUT_RESCAN_MARGIN = 20.0
+
 #: How many times finer the polyline a distance is *measured against* is than the sample set.
 #:
 #: **Three, not eight, because the sample set now carries the resolution.** When `CHECK_ARC`
@@ -1499,11 +1572,54 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
             rows.insert(i + 1 + offset, (z_m, fit_at(z_m)))
 
 
+def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHED_PLANE_TOL):
+    """Section 5's second pass (IP-FC-143, OQ-DES-CW21): how much *thinner* than `t` the
+    finished, rib-cut wall gets at `z`, measured directly against the cut solid instead of the
+    smooth pre-rib surface `_refine` checks above.
+
+    **The minimum distance, not the worst absolute deviation -- the same asymmetry
+    `check_cowl_interior.wall_thickness` already has, and for the same reason.** Wherever a rib
+    bridges, `solid` (the cavity) retreats well inward, and a point on that retreat legitimately
+    reads *farther* from the exterior than `t` -- that is the rib doing its job, not a defect.
+    Measured 2026-09-25: an early version of this function used the worst *absolute* deviation
+    and reported 5-9 mm 'gaps' at essentially every station inside every notch's z-span, because
+    it was scoring the rib's own retreat as a failure. Only a point that reads *closer* to the
+    exterior than `t` -- the wall thinner than it should be -- is the failure this pass exists
+    to catch, exactly as the finished-wall acceptance check itself already treats it.
+
+    **Whole loop, filtered, not `open_arc`.** `solid` here is the multi-patch fused-and-capped
+    cavity (the same topology `smooth` has, since cutting the rib tool leaves everything outside
+    its own footprint unchanged) -- and `open_arc`'s chain assembly is built for a single raw cut
+    body's section, not this shape's. Measured 2026-09-25: calling it here raises
+    `PreconditionFailed` (the section's arc edges do not chain into one open run) at the first
+    station tried, on a shape that plainly does have a well-formed interior boundary. The whole
+    closed loop is discretised instead, and points within `plane_tol` of a construction plane --
+    the straight edge `open_arc` would otherwise have stripped -- are dropped before measuring.
+    Confirmed against `distToShape` and raw coordinates on the same shape before being trusted
+    for this measurement.
+
+    Returns `None` when the section is not exactly one closed loop, or when every discretised
+    point falls within `plane_tol` of a construction plane. Both are rare and left unconverted
+    rather than raised: this is an additional safety measurement layered on top of section 5's
+    existing one, and a station it cannot evaluate is not evidence the wall there is wrong.
+    """
+    wires = [w for w in _slice_wires(solid, z) if w.isClosed()]
+    if len(wires) != 1:
+        return None
+    pts = wires[0].discretize(Number=n_check)
+    inner = [(p.x, p.y) for p in pts
+             if all(abs(p.x * n.x + p.y * n.y) > plane_tol for n in planes)]
+    if not inner:
+        return None
+    thinnest = float(np.min(outer_at(z).distances(inner)))
+    return max(0.0, t - thinnest)
+
+
 # --------------------------------------------------------------------------------
 # The wall
 # --------------------------------------------------------------------------------
 
-def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
+def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
     `body` is the un-mirrored symmetry cell before any notch reached it (`half` for the tail,
@@ -1513,6 +1629,22 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     in `cowl_tree`, `shell_solid`'s own first argument): that difference is the same set inside
     the body, and measured 2026-09-02 it costs 47 s a part to compute and leaves a 202-face
     solid that is slower to section than the tools are.
+
+    **`notched` is also taken directly, since 2026-09-26, for one purpose only: the finished
+    wall's true exterior for section 5's second pass, below.** `body`'s own exterior is correct
+    for the *first* pass -- the smooth surface must be a valid offset of the un-notched OML,
+    since no buttress cut exists yet when it is fitted -- but it is the wrong reference for the
+    *second*: wherever a buttress tool has already removed exterior material, `body`'s exterior
+    and the finished part's no longer agree. Found by direct measurement (IP-FC-143): at the
+    worst point of a real thin station, `body`'s own section was 26.5 mm from the point the real,
+    finished wall's exterior passed only 0.56 mm from -- two different surfaces, not a sampling
+    or tolerance difference. **Read by slicing `notched` directly, never by cutting it against
+    the cavity here.** A second, slightly different boolean between `notched` and this
+    function's own cavity would be exactly the "two shapes each independently ... then a
+    boolean between them" trap `shell_solid`'s own docstring already recounts three instances
+    of -- the one authoritative cut stays `shell_solid`'s `notched.cut(inside)`, and this
+    function only ever compares two already-sliced contours, the same way `outer_at` below
+    already does against `body`.
 
     **Every station's section is a cell, not a full loop, and it is treated as one.** `body` is
     a real solid with a flat construction face wherever it was cut to make the cell, so its
@@ -1531,6 +1663,24 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     ribs (the cell's own tools only) are then subtracted from the closed result as a solid.
     `dilated_notches` records what fitting a surface through the creased contour instead cost,
     and why the identity is evaluated in 3-D here rather than station by station in 2-D.
+
+    **Section 5 runs twice, against two different shapes (IP-FC-143, OQ-DES-CW21).** The first
+    pass, `_refine`, converges the smooth surface above against the true erosion before any rib
+    reaches it, seeded with every notch edge up front so its own bisection has less to find later
+    (OQ-DES-CW22) -- but that convergence is not sufficient on its own: the *finished*, rib-cut
+    wall can read thinner than `tau` at a station the smooth surface already passes, because the
+    rib cut removes measurably more material there than the smooth offset predicts, near the
+    shallow-angle end of this construction's notch angles. The second pass, after the rib cut
+    below, re-measures the finished wall on an independent grid -- a uniform pass everywhere plus
+    extra density around each notch edge (`EDGE_SCAN_MARGIN`/`EDGE_SCAN_STEP`), not merely
+    `_refine`'s own row midpoints, which a real build was found to miss the defect at entirely --
+    and, where a scanned point exceeds `tau`, inserts the midpoint of the two already-adjacent
+    rows that bracket it and re-cuts. Round 0 scans every patch in full; every round after only
+    re-scans a `POST_CUT_RESCAN_MARGIN` window around that round's own insertions, sized from a
+    direct measurement of how far one such insertion's effect actually reaches (OQ-DES-CW22) --
+    bounded by `POST_CUT_ROUNDS`, since evidence gathered before this was written shows the gap
+    does not always close quickly, and an unconverged build raises rather than ships a wall this
+    pass has already measured as thin.
     """
     planes = cell_boundary_planes(body)
     lo, hi = z_extent(body)
@@ -1539,6 +1689,7 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     arcs = {}
     outers = {}
     fits = {}
+    finished_outers = {}
 
     def key(z):
         return round(z / Z_TOL)
@@ -1575,12 +1726,110 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
         return fits[k]
 
     def outer_at(z):
-        """The exterior at `z` as a dense polyline: what the wall is measured out to."""
+        """The exterior at `z` as a dense polyline: what the wall is measured out to.
+
+        **`body`'s exterior, correct only before any buttress cut.** Section 5's first pass
+        uses this -- the smooth surface must offset the un-notched OML, since no cut exists yet
+        when it is fitted. `finished_outer_at` below is the post-cut equivalent, and the two
+        must never be swapped."""
         k = key(z)
         if k not in outers:
             arc, _p0, _p1, flip = body_arc(z)
             outers[k] = open_contour(arc, n_check, flip)[1]
         return outers[k]
+
+    def finished_outer_at(z):
+        """The *finished* exterior at `z`, from `notched`, not `body`: section 5's second pass.
+
+        **Sliced directly, never by cutting `notched` against this function's own cavity.**
+        Wherever a buttress tool has already removed exterior material, `body`'s exterior and
+        the real, finished part's diverge -- measured 26.5 mm apart at one real thin station's
+        worst point, against the 0.56 mm the finished wall's own exterior actually reads there
+        (IP-FC-143). A fresh boolean between `notched` and the cavity here would risk exactly
+        the "two independently-built shapes, then a boolean between them" mistake
+        `shell_solid`'s docstring already recounts three times; comparing two already-sliced
+        contours instead is the same safe pattern `outer_at` above already uses.
+
+        **Whole loop, filtered, not `open_arc` -- the same reason and the same fix
+        `_finished_wall_gap` already needed for `solid`'s own section.** Tried `open_arc` first
+        and it failed the same way: measured 2026-09-26, `_chain` raises `PreconditionFailed`
+        ("do not chain into one open run") at the very first station tried, on `tail_shell`
+        `U` = 1.0 -- a build with no buttress cut anywhere near a construction plane, so a
+        notched cell's section cannot be relied on to chain cleanly even where `body`'s always
+        did. The whole closed loop is discretised instead, with points near a construction plane
+        dropped exactly as `_finished_wall_gap` already drops them from `inner`.
+
+        **Built open (`closed=False`), never closed, and that is the whole fix.** A first version
+        of this passed the filtered points to `_Polyline` at its default `closed=True`, on the
+        reasoning that both sides of every comparison exclude the same zone so the closing chord
+        could never be nearest to a surviving point -- wrong, measured the same day: the tail's
+        one construction plane is the cell's flat diameter side, so the excluded strip spans the
+        section's full width (x = -50 to +50 at this build's scale), and the closing chord across
+        it is a near-straight line at `y` just above `FINISHED_PLANE_TOL` from one side to the
+        other -- which sits *close to*, not far from, a legitimate kept point anywhere along that
+        same flat side. Measured directly: this gave `_finished_wall_gap` a 'thinnest' of
+        0.006-0.09 mm (a 0.59-0.55 mm 'gap') at *every* station near the cell's open end on a
+        `U` = 1.0 build previously always clean, because the closing chord passed within a tenth
+        of a millimetre of real, legitimate interior points nowhere near any actual notch.
+        `outer_at` above never had this failure because `open_contour` already builds its
+        polyline `closed=False` -- the same discipline, applied here without `open_arc`'s own
+        chain-assembly step, which is what could not be reused in the first place.
+
+        **The filtered points are rotated to start inside the excluded run, not assumed to
+        already start there.** `wire.discretize` begins at whatever parameter OCC happens to
+        pick, so the excluded construction-plane strip can land split across the start and end of
+        the raw point list rather than as one contiguous block in the middle; naively slicing
+        would then treat it as if there were two separate exteriors. Rotating so index 0 is
+        inside the first excluded run makes everything after it, up to the next excluded run, the
+        one true open arc.
+
+        **May see more than one wire where `body_arc` only ever saw one.** A buttress slot can
+        make the cell's own exterior boundary trace in and back out around it without splitting
+        the wire, but is not guaranteed to -- so, unlike `body_arc`'s strict P2, the largest
+        enclosed area (by `_wire_area`, the same measure `check_cowl_interior.wall_thickness`
+        was corrected to sort by, IP-FC-143) is taken as the true exterior when there is more
+        than one. **A second, separate exclusion run is refused, not merged.** The tail's single
+        cell plane crosses the loop's boundary along one contiguous run; the nose's two planes
+        have never been exercised through this path, and a second run there would need
+        stitching into the comparison rather than being silently dropped."""
+        k = key(z)
+        if k not in finished_outers:
+            wires = [w for w in _slice_wires(notched, z) if w.isClosed()]
+            if not wires:
+                raise PreconditionFailed(
+                    'P2: the buttress-cut cell has no closed section at z = %.4f' % z)
+            wire = wires[0] if len(wires) == 1 else max(wires, key=lambda w: abs(_wire_area(w)))
+            pts = wire.discretize(Number=n_check)
+
+            def excluded(p):
+                return not all(abs(p.x * n.x + p.y * n.y) > FINISHED_PLANE_TOL for n in planes)
+
+            exc_idx = [i for i, p in enumerate(pts) if excluded(p)]
+            if not exc_idx:
+                raise PreconditionFailed(
+                    'P2: no construction-plane crossing found in the buttress-cut cell\'s '
+                    'section at z = %.4f' % z)
+            rotated = pts[exc_idx[0]:] + pts[:exc_idx[0]]
+            kept, runs = [], 0
+            prev_excluded = True
+            for p in rotated:
+                exc = excluded(p)
+                if not exc:
+                    kept.append((p.x, p.y))
+                    if prev_excluded:
+                        runs += 1
+                prev_excluded = exc
+            if not kept:
+                raise PreconditionFailed(
+                    'P2: every discretised point of the buttress-cut cell\'s section at '
+                    'z = %.4f falls within %.2f mm of a construction plane' % (z, FINISHED_PLANE_TOL))
+            if runs > 1:
+                raise PreconditionFailed(
+                    'P2: the buttress-cut cell\'s section at z = %.4f crosses a construction '
+                    'plane in %d separate places, not one -- only a single contiguous exterior '
+                    'run is handled here' % (z, runs))
+            finished_outers[k] = _Polyline(kept, closed=False)
+        return finished_outers[k]
 
     note('interior: z %.3f .. %.3f, %d fit points (%.3f mm apart), %d check points '
          '(%.3f mm apart), %d cell plane(s)'
@@ -1591,6 +1840,12 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     # brings its own edges. Splitting at every rib end is what made the tail 60 patches.
     features = feature_stations(body, z_lo, z_hi)
     patches = _patches(z_lo, z_hi, features)
+
+    # **The notches' own edges, this time -- for section 5's second-pass scan, not for
+    # patching.** The same function, called against the actual tools instead of `body`, reads
+    # off exactly where a rib's own ramp starts, ends, or meets the cut plane: the axial
+    # positions `EDGE_SCAN_MARGIN`/`EDGE_SCAN_STEP` sample finely around, below.
+    notch_edges = feature_stations(notches, z_lo, z_hi)
     if not patches:
         raise PreconditionFailed('the part is shorter than the %.2f mm interval floor'
                                  % MIN_INTERVAL)
@@ -1602,14 +1857,44 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     # and a number that is wrong in either direction fails silently: too small and the shell
     # stays open, too large and it welds across a gap that was real. The fuse needs no such
     # number.
-    pieces = []
-    stations = 0
-    chosen = []
-    worst_wall = 0.0
+    def assemble_patch(surf, rows, is_lo_end, is_hi_end):
+        """One patch's closed solid plus its outward end-overrun piece(s), from an already-fit
+        surface. Split out from the patch loop below so a post-cut re-fit (section 5, second
+        pass) can rebuild one patch without repeating `_refine`'s own convergence."""
+        u0, u1, _v0, _v1 = surf.bounds()
+        lids = [_lid(surf, u0, rows[0][0], planes), _lid(surf, u1, rows[-1][0], planes)]
+        sides = _side_caps(surf, planes)
+        main = Part.Solid(Part.Shell([surf.toShape()] + lids + sides))
+        extra = []
+        # **The two open ends are extended past the part, not stopped at it.** A station may
+        # not sit exactly on a planar end -- sectioning there returns the end face's boundary
+        # rather than the body's -- so the cavity stops `END_INSET` short at each end, and a
+        # cavity that stops short leaves a film of solid material closing the very opening the
+        # cowl is open at. It renders, it is valid, and it is a cowl with its ends skinned
+        # over. Extending the end caps outward removes it, and the extension falls outside the
+        # blank so it cuts nothing else.
+        if is_lo_end:
+            extra.append(lids[0].extrude(App.Vector(0, 0, -END_OVERRUN)))
+        if is_hi_end:
+            extra.append(lids[1].extrude(App.Vector(0, 0, END_OVERRUN)))
+        return main, extra
+
+    patch_entries = []
     started = time.time()
     for index, (p_lo, p_hi) in enumerate(patches):
         at = time.time()
         zs = _seed(p_lo, p_hi, p_lo <= z_lo, p_hi >= z_hi)
+        # **Front-loaded with the notch topology's own edges (OQ-DES-CW22).** Section 5's second
+        # pass used to discover every station it needed one bisection at a time, which is what
+        # made real convergence expensive (IP-FC-143): up to six rounds, each re-scanning the
+        # whole patch, to reach a station `_refine`'s own uniform seed was never going to suggest
+        # on its own. Seeding `_refine` with every notch edge inside this patch up front, before
+        # its own convergence ever runs, lets its existing bisection discipline (never an
+        # arbitrary station, only ever the exact midpoint of two already-adjacent rows) settle
+        # around them from the start -- this is not the "insert an arbitrary station into an
+        # already-converged fit" case measured catastrophic before this pass was written; it is a
+        # richer starting seed for a convergence that has not run yet.
+        zs = sorted(set(zs) | {e for e in notch_edges if p_lo < e < p_hi})
 
         # P1 over the patch, on the un-notched cell body, before anything is fitted. The two
         # contours being compared must be in the same order -- point i means the same place on
@@ -1623,24 +1908,17 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
             prev = (z, here)
 
         rows, surf, worst = _refine(fit_at, outer_at, zs, t, tau, budget, n_check)
-        stations += len(rows)
-        worst_wall = max(worst_wall, worst)
-        # **The positions, not only the count.** Two builds that both settle on 16 stations
-        # have not necessarily settled on the same 16, and the count is what the progress line
-        # reports -- so a refinement that lands somewhere else is invisible in the log while
-        # changing the surface, the cavity and the wall.
-        chosen.extend(z for z, _pts in rows)
-
         # Section 4.5: both cowls are open axially -- the tail at both ends, the nose body where
         # it is cut to the closure parts -- so a patch is closed by the two contours it already
         # has and there is no turnover to handle. The caps come from the fitted surface's own iso
         # curves rather than from the sample polygon, so the cap edge *is* the surface edge and
         # the piece closes without a tolerance argument. `_side_caps` closes the *other* pair of
         # free edges, along the cell's construction plane(s), which `_lid` does not reach.
-        u0, u1, _v0, _v1 = surf.bounds()
-        lids = [_lid(surf, u0, rows[0][0], planes), _lid(surf, u1, rows[-1][0], planes)]
-        sides = _side_caps(surf, planes)
-        pieces.append(Part.Solid(Part.Shell([surf.toShape()] + lids + sides)))
+        is_lo_end, is_hi_end = p_lo <= z_lo, p_hi >= z_hi
+        main, extra = assemble_patch(surf, rows, is_lo_end, is_hi_end)
+        patch_entries.append({'p_lo': p_lo, 'p_hi': p_hi, 'is_lo_end': is_lo_end,
+                              'is_hi_end': is_hi_end, 'rows': rows, 'main': main,
+                              'extra': extra})
 
         note('patch %d/%d  z %9.4f .. %9.4f (%6.3f mm)  %2d seeded -> %2d stations  '
              'worst wall %.4f  %5.1f s  [%.0f s total]'
@@ -1652,42 +1930,22 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
         # different wall while the progress line above reads identically.
         note('    at %s' % ' '.join('%.4f' % z for z, _pts in rows))
 
-        # **The two open ends are extended past the part, not stopped at it.** A station may
-        # not sit exactly on a planar end -- sectioning there returns the end face's boundary
-        # rather than the body's -- so the cavity stops `END_INSET` short at each end, and a
-        # cavity that stops short leaves a film of solid material closing the very opening the
-        # cowl is open at. It renders, it is valid, and it is a cowl with its ends skinned
-        # over. Extending the end caps outward removes it, and the extension falls outside the
-        # blank so it cuts nothing else.
-        if p_lo <= z_lo:
-            pieces.append(lids[0].extrude(App.Vector(0, 0, -END_OVERRUN)))
-        if p_hi >= z_hi:
-            pieces.append(lids[1].extrude(App.Vector(0, 0, END_OVERRUN)))
+    def fuse_smooth(entries):
+        pieces = []
+        for entry in entries:
+            pieces.append(entry['main'])
+            pieces.extend(entry['extra'])
+        note('fusing %d pieces' % len(pieces))
+        at = time.time()
+        fused = pieces[0]
+        for piece in pieces[1:]:
+            fused = fused.fuse(piece)
+        fused = fused.removeSplitter()
+        note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
+             % (len(fused.Solids), fused.isValid(), fused.Volume, time.time() - at))
+        return fused
 
-    note('fusing %d pieces' % len(pieces))
-    at = time.time()
-    smooth = pieces[0]
-    for piece in pieces[1:]:
-        smooth = smooth.fuse(piece)
-    smooth = smooth.removeSplitter()
-    if report is not None:
-        # **The shape as well as its measure, and deliberately.** IP-FC-115 compares two ways of
-        # assembling the same set -- cut the ribs out of this and cut the result out of the
-        # blank, or cut this out of the blank and fuse back the part the ribs occupy -- and the
-        # comparison only means anything if both are assembled from the *identical* operands.
-        # Handing the surface out here is what makes that one fit instead of two.
-        #
-        # **Production does pass a report, since 2026-09-11** -- `cowl_tree._CowlShell` wants
-        # `partition_slip` out of `shell_solid` for IP-FC-117's soak, and this is the channel
-        # that already existed for it. It was true until then that nothing in production
-        # passed one, and the note is kept rather than deleted because what it was guarding
-        # still holds: everything put in here is either already computed for the `note` below
-        # or a length, so a report costs a build nothing measurable, and it must stay that
-        # way. The shapes handed out are references, dropped when the caller's dict goes.
-        report.update(stations=chosen, smooth_volume=smooth.Volume,
-                      smooth_faces=len(smooth.Faces), smooth_shape=smooth)
-    note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
-         % (len(smooth.Solids), smooth.isValid(), smooth.Volume, time.time() - at))
+    smooth = fuse_smooth(patch_entries)
 
     # Section 4.2's right-hand term, applied here rather than fitted into the surface above.
     # **Fused into one tool, and the result verified against it.** Cutting with a list of
@@ -1716,46 +1974,237 @@ def cavity(body, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
     # the pristine interior. The harness that produced 202/256 was not this function and
     # evidently was not representative of it; kept as the reference for what to re-examine if
     # this is revisited, not as a result to trust unverified again.
+    #
+    # **Computed once, outside the post-cut refinement loop below.** The dilated tool depends
+    # only on `notches` and `t`, neither of which the loop below ever changes -- only the
+    # smooth surface it cuts does -- so re-dilating and re-fusing it on every round would repeat
+    # the single most expensive step in the whole build (IP-FC-116: ~72 s dilating, ~260 s
+    # fusing at `U` = 1, both growing with `U`) for no reason.
     ribs = dilated_notches(notches, t, report)
-    at = time.time()
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
-    solid = smooth.cut((tool,), RIB_CUT_FUZZ).removeSplitter()
 
-    # The ribs and the cavity must not intersect: that is what cutting them out means.
-    left = solid.common((tool,), RIB_CUT_FUZZ)
-    if left.Volume > RIB_RESIDUE:
-        note('    %.4f mm3 of rib survived the cut; taking it out again' % left.Volume)
-        solid = solid.cut((left,), RIB_CUT_FUZZ).removeSplitter()
-        left = solid.common((tool,), RIB_CUT_FUZZ)
-    if left.Volume > RIB_RESIDUE:
-        raise Unconverged(
-            '%.4f mm3 of dilated rib is still inside the cavity after the cut and one retry, '
-            'in %d piece(s). The cavity is therefore larger than the erosion allows and the '
-            'wall will be thin or missing wherever that rib should have been -- and since the '
-            'ribs are what bridge the buttress slots, the wall comes out in pieces. Nothing '
-            'downstream catches this: the cavity is a valid closed solid either way.'
-            % (left.Volume, len(left.Solids)))
-    if len(solid.Solids) != 1:
-        if report is not None:
-            report.update(disconnected_pieces=[(s.Volume, s.BoundBox) for s in solid.Solids],
-                          rib_tool=tool)
-        raise Unconverged(
-            '%d disconnected solids where the cavity should be one. There is no zero rib '
-            'residue reading that makes this acceptable: a rib is what bridges a buttress slot, '
-            'so a cavity split into pieces means a rib did not form a connection somewhere, not '
-            'that the geometry has a legitimate second piece. This is checked separately from '
-            'the residue above because a rib can be volumetrically fully removed and still fail '
-            'to bridge -- disconnection is a topology defect, not a volume one, and a disconnected '
-            'result is refused at any `U`, never accepted as one more shape mirroring has to '
-            'handle.' % len(solid.Solids))
+    def cut_and_check(smooth_shape):
+        """One rib cut plus its two existing identity checks (section 4.2's residue, and the
+        cavity's own connectivity), factored out so the post-cut refinement loop below can
+        redo just this step -- the expensive dilation above is not repeated."""
+        at = time.time()
+        cut = smooth_shape.cut((tool,), RIB_CUT_FUZZ).removeSplitter()
+        left = cut.common((tool,), RIB_CUT_FUZZ)
+        if left.Volume > RIB_RESIDUE:
+            note('    %.4f mm3 of rib survived the cut; taking it out again' % left.Volume)
+            cut = cut.cut((left,), RIB_CUT_FUZZ).removeSplitter()
+            left = cut.common((tool,), RIB_CUT_FUZZ)
+        if left.Volume > RIB_RESIDUE:
+            raise Unconverged(
+                '%.4f mm3 of dilated rib is still inside the cavity after the cut and one '
+                'retry, in %d piece(s). The cavity is therefore larger than the erosion allows '
+                'and the wall will be thin or missing wherever that rib should have been -- '
+                'and since the ribs are what bridge the buttress slots, the wall comes out in '
+                'pieces. Nothing downstream catches this: the cavity is a valid closed solid '
+                'either way.' % (left.Volume, len(left.Solids)))
+        if len(cut.Solids) != 1:
+            if report is not None:
+                report.update(disconnected_pieces=[(s.Volume, s.BoundBox) for s in cut.Solids],
+                              rib_tool=tool)
+            raise Unconverged(
+                '%d disconnected solids where the cavity should be one. There is no zero rib '
+                'residue reading that makes this acceptable: a rib is what bridges a buttress '
+                'slot, so a cavity split into pieces means a rib did not form a connection '
+                'somewhere, not that the geometry has a legitimate second piece. This is '
+                'checked separately from the residue above because a rib can be volumetrically '
+                'fully removed and still fail to bridge -- disconnection is a topology defect, '
+                'not a volume one, and a disconnected result is refused at any `U`, never '
+                'accepted as one more shape mirroring has to handle.' % len(cut.Solids))
+        note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
+        return cut, left.Volume
+
+    solid, rib_residue = cut_and_check(smooth)
+
+    # **Section 5's second pass: the finished, rib-cut wall, not only the smooth surface above.**
+    # Everything up to here converges the smooth interior against the true erosion (section 4.2)
+    # before any rib is cut into it -- proven correct by IP-FC-143's own investigation to be
+    # insufficient on its own: the finished wall can read thinner than `tau` at a station the
+    # smooth surface already passes cleanly, specifically near the tail's shallow-angle diagonal
+    # buttresses, because the rib cut removes measurably more material there than the smooth
+    # surface's own offset predicts -- a real, bounded property of the dilated rib tool meeting
+    # the fitted surface at a shallow angle, not a defect in the fit above.
+    #
+    # **Extends the existing bisection discipline; does not invent a new one.** Tested directly
+    # before this was written: forcing an extra station at an arbitrary `z` -- one that is not
+    # the exact midpoint of two already-adjacent rows -- made the finished wall dramatically
+    # *thinner* everywhere in the patch (0.10-0.35 mm worse at every flagged station, tail
+    # `U` = 3.0), not better. Only a station inserted the same way `_refine` already inserts one
+    # -- the exact midpoint of two rows that are already adjacent -- keeps the fit's own row
+    # spacing regular enough not to damage it. So this loop checks the same candidate points
+    # `_refine` would (every current midpoint, per patch), against a different measurement: the
+    # finished solid's own section, not the smooth surface's.
+    #
+    # **Bounded by round count as well as by station count.** Uniformly tightening `tau` 5x
+    # (IP-FC-143, 2026-09-25) moved most flagged stations toward `t`, but the single worst one
+    # barely moved (+0.0012 mm of a 0.0531 mm deficit) even at that much finer a grid -- so full
+    # convergence at the hardest station is not guaranteed cheaply, and `POST_CUT_ROUNDS` exists
+    # so a build that is not converging raises `Unconverged` (refusing to silently ship a wall
+    # this pass has caught) rather than repeating the single most expensive step in this
+    # function -- the cut, not the dilation, which is cached above -- an unbounded number of
+    # times.
+    # **Scanned on a grid independent of the smooth-fit rows, not just at their own midpoints.**
+    # Checking only the current rows' midpoints (as `_refine`'s own pre-cut pass does) missed the
+    # defect entirely, tested 2026-09-25: `tail_shell` `U` = 3.0's rows never happen to bracket
+    # z = -217.7270 at a midpoint, so a version of this loop that only checked existing midpoints
+    # converged after zero rounds while the acceptance check's own, differently-spaced 12-station
+    # grid still read that station 0.0531 mm thin. A failing scan point still only ever causes a
+    # midpoint insertion, never a station at the failing point itself -- test 2 in this item's
+    # own pre-implementation check showed exactly why that discipline matters -- it is looked up
+    # against the two already-adjacent rows that bracket it and *their* midpoint is what gets
+    # inserted, same as `_refine` would do if it had found the same interval wanting.
+    # **The scan grid itself, built once, not every round.** Each patch's outer bound (its
+    # first and last row) never moves once `_refine` has converged -- a round only ever inserts
+    # *interior* rows -- so the set of z's worth checking is round-invariant, even though which
+    # row-pair brackets each one is not. Uniform coverage stays everywhere a defect could in
+    # principle be found anywhere; the extra density around each notch edge targets exactly
+    # where this item's own investigation says the sharp local peak actually lives, and does not
+    # replace the uniform pass's own coverage of everywhere else.
+    round0_scan_by_patch = {}
+    for ei, entry in enumerate(patch_entries):
+        z0, z1 = entry['rows'][0][0], entry['rows'][-1][0]
+        # **1 mm apart, not tied to the row count.** A 76-point scan (4x this patch's own 19
+        # rows) missed the defect at `z` = -217.7270 by 2 mm and read 0.0430 mm there against
+        # the acceptance check's own 0.0531 mm at the exact station -- close enough that the
+        # cause was under-sampling a real, fairly sharp local peak, not a difference in what
+        # is being measured.
+        n_scan = max(min(int((z1 - z0) / 1.0), 500), 40)
+        zs = [z0 + (z1 - z0) * k / float(n_scan - 1) for k in range(n_scan)]
+        n_edge = 0
+        for edge in notch_edges:
+            if not (z0 < edge < z1):
+                continue
+            lo_m = max(z0, edge - EDGE_SCAN_MARGIN)
+            hi_m = min(z1, edge + EDGE_SCAN_MARGIN)
+            steps = max(int((hi_m - lo_m) / EDGE_SCAN_STEP), 2)
+            zs.extend(lo_m + (hi_m - lo_m) * m / float(steps) for m in range(steps + 1))
+            n_edge += steps + 1
+        round0_scan_by_patch[ei] = sorted(set(zs))
+        note('    patch %d/%d scan: %d uniform + %d edge-focused (%d notch edge(s)) -> %d points'
+             % (ei + 1, len(patch_entries), n_scan, n_edge, len(notch_edges),
+                len(round0_scan_by_patch[ei])))
+
+    # **Round 0 scans every patch in full; round 1 onward only re-scans a window around that
+    # round's own insertions (OQ-DES-CW22).** A patch with no entry in `current_scan` is not
+    # scanned at all that round -- correct, not just cheap, because patches are independent: a
+    # change to one patch's fit and cut cannot move another patch's cavity boundary (each
+    # contributes its own closed solid to the fuse, which cannot alter geometry outside the piece
+    # that changed), and within the *same* patch, `POST_CUT_RESCAN_MARGIN` is itself the measured
+    # distance beyond which one insertion's own effect is indistinguishable from noise.
+    current_scan = round0_scan_by_patch
+    worst_finished = 0.0
+    for round_ in range(POST_CUT_ROUNDS + 1):
+        insertions = {}                                   # (ei, i) -> worst gap seen in that interval
+        worst_finished = 0.0
+        for ei, entry in enumerate(patch_entries):
+            rows = entry['rows']
+            i = 0
+            for z in current_scan.get(ei, ()):
+                while i < len(rows) - 2 and rows[i + 1][0] <= z:
+                    i += 1
+                z_a, z_b = rows[i][0], rows[i + 1][0]
+                if z_b - z_a <= 2 * MIN_INTERVAL:
+                    continue
+                gap = _finished_wall_gap(solid, z, t, finished_outer_at, planes, n_check)
+                if gap is None:
+                    continue
+                worst_finished = max(worst_finished, gap)
+                if gap > tau:
+                    # **`slot`, not `key`.** `cavity()` already has a `key(z)` helper in this
+                    # same scope (the station-position cache above), and reusing that name for
+                    # this tuple silently shadowed it for the rest of the function's execution --
+                    # found 2026-09-26 when `finished_outer_at` (which calls `key(z)`) started
+                    # raising `TypeError: 'tuple' object is not callable` the first time this
+                    # branch ever actually ran, since every earlier test of this loop had zero
+                    # insertions and never reached this line.
+                    slot = (ei, i)
+                    insertions[slot] = max(insertions.get(slot, 0.0), gap)
+        if not insertions:
+            break
+        if round_ == POST_CUT_ROUNDS:
+            raise Unconverged(
+                'section 5\'s second pass wanted more stations after %d round(s) of re-cutting '
+                'the finished wall, worst measured gap %.4f mm against %.3f, in %d interval(s). '
+                'The smooth surface passes its own criterion already -- this is the rib cut '
+                'removing measurably more material than the smooth offset predicts, near a '
+                'shallow-angle notch boundary, and more stations have not closed it.'
+                % (POST_CUT_ROUNDS, worst_finished, tau, len(insertions)))
+        note('    post-cut refine: round %d, worst finished-wall gap %.4f mm over %.3f, '
+             'inserting %d station(s)' % (round_ + 1, worst_finished, tau, len(insertions)))
+        by_patch = {}
+        for (ei, i) in insertions:
+            by_patch.setdefault(ei, []).append(i)
+        next_scan = {}
+        for ei, indices in sorted(by_patch.items()):
+            entry = patch_entries[ei]
+            rows = entry['rows']
+            midpoints = [0.5 * (rows[i][0] + rows[i + 1][0]) for i in indices]
+            new_zs = sorted(set([z for z, _pts in rows] + midpoints))
+            if len(new_zs) > budget:
+                raise Unconverged(
+                    'section 5\'s second pass wanted more than %d stations in the patch z '
+                    '%.4f..%.4f, driven by the finished wall rather than the smooth surface.'
+                    % (budget, entry['p_lo'], entry['p_hi']))
+            new_rows = [(z, fit_at(z)) for z in new_zs]
+            surf2 = _fit(new_rows)
+            main2, extra2 = assemble_patch(surf2, new_rows, entry['is_lo_end'],
+                                           entry['is_hi_end'])
+            patch_entries[ei] = dict(entry, rows=new_rows, main=main2, extra=extra2)
+            z0p, z1p = new_rows[0][0], new_rows[-1][0]
+            window_zs = []
+            for mz in midpoints:
+                lo_w = max(z0p, mz - POST_CUT_RESCAN_MARGIN)
+                hi_w = min(z1p, mz + POST_CUT_RESCAN_MARGIN)
+                steps = max(int((hi_w - lo_w) / 1.0), 10)
+                window_zs.extend(lo_w + (hi_w - lo_w) * m / float(steps) for m in range(steps + 1))
+            next_scan[ei] = sorted(set(window_zs))
+        current_scan = next_scan
+        smooth = fuse_smooth(patch_entries)
+        solid, rib_residue = cut_and_check(smooth)
+
     if report is not None:
-        report.update(rib_residue=left.Volume, cavity_volume=solid.Volume,
+        # **The shape as well as its measure, and deliberately.** IP-FC-115 compares two ways of
+        # assembling the same set -- cut the ribs out of this and cut the result out of the
+        # blank, or cut this out of the blank and fuse back the part the ribs occupy -- and the
+        # comparison only means anything if both are assembled from the *identical* operands.
+        # Handing the surface out here is what makes that one fit instead of two.
+        #
+        # **Production does pass a report, since 2026-09-11** -- `cowl_tree._CowlShell` wants
+        # `partition_slip` out of `shell_solid` for IP-FC-117's soak, and this is the channel
+        # that already existed for it. It was true until then that nothing in production
+        # passed one, and the note is kept rather than deleted because what it was guarding
+        # still holds: everything put in here is either already computed for the `note` below
+        # or a length, so a report costs a build nothing measurable, and it must stay that
+        # way. The shapes handed out are references, dropped when the caller's dict goes.
+        report.update(smooth_volume=smooth.Volume, smooth_faces=len(smooth.Faces),
+                      smooth_shape=smooth)
+    if report is not None:
+        report.update(rib_residue=rib_residue, cavity_volume=solid.Volume,
                       cavity_faces=len(solid.Faces), rib_tool=tool)
-    note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
-    note('cavity closed: %d solids, valid=%s, %.4f mm3, worst wall error %.4f mm, '
+
+    # **`worst_wall` now reports the finished-wall criterion, not the smooth-surface one.**
+    # The smooth surface passing its own criterion no longer means the finished wall does --
+    # that gap is exactly what this section exists to close -- so the number worth reporting
+    # (and worth a future soak comparing against) is the one actually gating convergence here:
+    # `worst_finished` from the last, passing round of the loop above.
+    stations = sum(len(entry['rows']) for entry in patch_entries)
+    chosen = [z for entry in patch_entries for z, _pts in entry['rows']]
+    worst_wall = worst_finished
+    note('cavity closed: %d solids, valid=%s, %.4f mm3, worst finished wall error %.4f mm, '
          '%.0f s in all' % (len(solid.Solids), solid.isValid(), solid.Volume, worst_wall,
                             time.time() - started))
     if report is not None:
+        # **`station_positions`, not `stations`.** The count already has that name below, and an
+        # earlier version of this function set `stations` to this same list first and then
+        # overwrote it with the count a few lines later -- a real footgun, found 2026-09-24 when
+        # a diagnostic script trying to read the positions got the count instead and crashed on
+        # it. Given a distinct name here instead of fixed in place, since the count is what every
+        # existing caller and report field actually means by `stations`.
+        report.update(station_positions=chosen)
         report.update(patches=len(patches), stations=stations, features=len(features),
                       solids=len(solid.Solids), valid=solid.isValid(),
                       worst_wall=worst_wall, fit_points=n_fit, check_points=n_check)
@@ -2062,7 +2511,7 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     cannot change the result (`notched` has no material past its own cell boundary to begin with)
     but does stop the two operands from sharing an exact face at all.
     """
-    inside = cavity(body, notches, t, overhang_deg, tau=tau, report=report)
+    inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report)
     for plane in cell_boundary_planes(body):
         inside = _extend_across_cell(inside, plane)
     wall = notched.cut(inside)

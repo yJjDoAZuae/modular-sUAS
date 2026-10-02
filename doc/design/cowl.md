@@ -733,7 +733,10 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 ## Open questions
 
-*No open questions currently.*
+| ID | Question | Blocking |
+| --- | --- | --- |
+| OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
+| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has genuine near-zero clearance (60 nm-4 um, corrected after an earlier measurement bug) at 15+ points scattered across nearly the whole tail on a real, unperturbed build -- wider than the one rib-crowded corner originally found, and not reliably findable by a fixed-resolution grid; a build-time clearance-margin check is recommended but its domain, sampling strategy, and failure behavior are all undesigned | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -2852,12 +2855,563 @@ high end is a construction failure to fix, not grounds to shrink the part's decl
 Scoping the tolerance (alternative 3) carries the same objection in its own drawback — exempting
 the symptom from the check is not fixing the failure either.
 
-**Chosen fix**: extend `cavity()`'s own convergence loop to measure the *finished*, rib-cut wall
-near a notch boundary — not only the smooth pre-rib surface it checks today — and refine against
+**Chosen fix**: add a second convergence loop that measures the *finished*, rib-cut wall near a
+notch boundary — not only the smooth pre-rib surface `cavity()` checks today — and refine against
 that measurement until it also converges inside tolerance, closing the coverage gap this item
-found. This is a real algorithm change to `cavity()`, not a constant retune, and is not yet
-designed or implemented; tracked through to completion in [IP-FC-143](
-../implementation/freecad_migration.md).
+found. **Correction, 2026-09-26: this loop cannot live inside `cavity()` itself.** `cavity()` is
+only ever given the un-notched cell (`body`), the correct reference for the pre-rib fit, but not
+the finished wall's real exterior — that is the *notched* cell (`cowl_tree.pieces()`'s `cell_cut`),
+which only `shell_solid()` holds, and only once it has already cut the cavity out of it. The second
+loop belongs there, measured directly on `shell_solid()`'s own finished, cell-sized wall, not on a
+`body`-derived exterior reference `cavity()` has no way to keep current with the rib cut. This is a
+real algorithm change, not a constant retune, and is not yet designed or implemented; tracked
+through to completion in [IP-FC-143](../implementation/freecad_migration.md).
+
+### OQ-DES-CW22 — The post-cut refinement loop's per-round re-scan makes real convergence unaffordably slow
+
+**Resolved, 2026-09-27: alternatives 1 and 3, combined.** IP-FC-143's post-cut refinement pass
+(decided by [OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u))
+re-scans the entire patch on every one of up to six rounds, which was invisible while every case
+tested converged in round 0 but cost 9.5 hours without finishing once real convergence (`tail_shell`
+`U` = 1.0 and `U` = 3.0) was actually exercised. Round 1 onward will instead only re-check a
+±15–20 mm window around that round's own insertions — sized from a direct measurement of how far
+one properly-bisected insertion's effect on the finished wall actually reaches (decaying from
+−0.023 to −0.024 mm within a millimetre of the insertion to at most ±0.0012 mm, 2.4 % of τ, beyond
+20 mm) rather than assumed — combined with front-loading round 0 itself using the notch topology
+already read for the edge-focused scan, to insert as many of the likely-needed stations as
+possible before the bisection loop starts, trading a larger round-0 scan for fewer total rounds.
+
+**The combination was chosen over alternative 1 alone because the two are complementary, not
+redundant**: windowing (alternative 1) cuts the cost of whatever rounds still run; front-loading
+(alternative 3) aims to cut the number of rounds needed in the first place, and alternative 3's own
+listed drawback — guessing too few stations still falls back on the existing bisection loop, and
+that loop still needs to be cheap — is exactly what alternative 1 supplies. Alternative 2 (reduce
+`POST_CUT_ROUNDS`/density) and alternative 4 (defer the check out of the build) remain rejected for
+the reasons already recorded against them above.
+
+**Not yet implemented, and one open measurement remains from before this was decided**: alternative
+1's window was measured on a single station on `tail_shell` `U` = 1.0 only, not yet confirmed to
+generalise to a station near a patch boundary or to the nose's octant cell (two construction planes
+rather than one); alternative 3's own up-front prediction accuracy (how well notch-edge proximity
+alone predicts which stations end up needed) is likewise still unmeasured. Both remain open
+implementation questions for IP-FC-143 to resolve with evidence as it proceeds, not blocking
+conditions on starting the work.
+
+### OQ-DES-CW23 — `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled?
+
+`cavity()`'s second convergence pass ([OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u))
+measures the finished, rib-cut wall by slicing `notched` (the buttress-cut symmetry cell) at each
+candidate station and measuring the distance from that slice to the candidate interior surface's
+own slice at the same station — never by actually performing `shell_solid()`'s real boolean cut
+(`notched.cut(inside)`) and measuring the result. This was a deliberate choice: cutting a second,
+independent copy of the candidate every round repeats the "two shapes each independently built,
+then a boolean between them" mistake `shell_solid()`'s own docstring already records three
+instances of, and a NURBS-solid boolean at this scale is itself unreliable enough that the
+docstring documents two *differently shaped* results (23745.581 mm³ in one solid vs. 21995 mm³ in
+five) from two surfaces that both measured inside tolerance beforehand. Measuring by distance
+between two independently-sliced contours avoids paying that boolean, and its own cost, on every
+one of up to six rounds.
+
+**An initial hypothesis this session raised for why that distance-based prediction disagrees with
+the real, external `wall_thickness()` check was tested directly and refuted — recorded here so the
+same wrong turn is not repeated.** The hypothesis was that `finished_outer_at`'s exclusion of every
+point within `FINISHED_PLANE_TOL` (0.5 mm) of a cell-boundary/mirror plane — needed to strip the
+flat construction face the cell was cut from, or the check reads a spurious near-zero gap — was
+also discarding a real defect located near that same plane. Measured directly at `tail_shell`
+`U` = 3.0's worst station (`z` = -217.7270 mm): the real wall's own worst (thinnest) point, found by
+locating it explicitly on the finished, mirrored wall, sits at `x` = 134.319 mm, `y` = 78.688 mm —
+78.688 mm from the tail's one cell-boundary plane (`y` = 0), thirty times `FINISHED_PLANE_TOL`.
+No plausible tolerance shrink would ever have excluded or included a point that far away; the
+hypothesis is refuted by this measurement, not merely unconfirmed.
+
+**The real mechanism, established by the same round-0 measurement this refutation used:** even a
+completely unconverged, round-0 candidate (no post-cut refinement at all) already shows the
+discrepancy in full, at that same station. `cavity()`'s own internal, distance-based check on that
+candidate reads 0.5851 mm (comfortably clear of the 0.6 mm nominal, tolerance 0.05 mm), but
+replaying `shell_solid()`'s real downstream pipeline on the identical candidate (`_extend_across_cell`,
+`notched.cut(inside)`, `mirror_across_cell`) and measuring the actual result with the real, external
+`wall_thickness()` check reads 0.5466 mm — thin by 0.0534 mm, matching the 6-round converged build's
+own final external reading (0.0534 mm) almost exactly, and matching the very first historical
+reading (0.0531 mm) at the start of this whole investigation. Since the discrepancy is fully present
+before any convergence or re-scanning happens, [OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
+windowed re-scan does not explain it and cannot close it by tuning. The worst point's own location
+(`y` = 78.688 mm, on the same side of the cell as the un-mirrored original geometry, not the
+reflected copy) also makes the mirror step an unlikely contributor — the gap most plausibly comes
+from the `notched.cut(inside)` boolean itself producing a result that the distance-based prediction
+does not exactly match, consistent with the boolean-fidelity caveat `shell_solid()`'s own docstring
+already documents independently of this item.
+
+**Characterized further, 2026-09-27, across all 12 real acceptance-check stations on the same
+build.** Reusing the same round-0 candidate (paid once, then read at every station instead of
+just one), the prediction-vs-actual gap (external minus internal predicted thickness) at each of
+`tail_shell` `U` = 3.0's 12 stations: -0.0003, -0.0143, -0.0211, **-0.0385** (the station above),
++0.0079, -0.0056, -0.0019, +0.0116, +0.0328, +0.0020, +0.0084, +0.0013 mm. The gap is signed both
+ways, present at every station including the two nearest the patch's own ends, and does not track
+distance to the nearest notch edge (the worst negative case, -0.0385 mm, is 52.7 mm from any notch;
+the largest positive case, +0.0328 mm, is 1.9 mm from one). This is the signature of measurement
+noise between the two methods — present everywhere at a roughly ±0.01-0.04 mm scale — not a rare,
+isolated defect a smarter check could specifically target. A cheap attempt in the same session to
+proxy "how many stations are at risk" a different way, by counting near-cell-plane discretized
+points on `notched` vs. `body`, came back too coarse to trust regardless (278 of 300 `tail_shell`
+stations showed some difference, and the known station was not even the largest of them; the nose
+octant's two planes showed zero difference everywhere, more likely a script/geometry mismatch than
+a real absence of effect) and is superseded by the direct 12-station measurement above.
+
+**Alternative 3 was then tested directly, not just estimated.** One station was inserted at the
+exact bisected midpoint the existing algorithm would choose, but selected using the *real*
+boolean-cut measurement at the worst of the 12 stations (`z` = -217.7261) rather than the
+predictive one — the most favorable case for alternative 3, since the insertion is informed by the
+real defect rather than guessed. The real thickness there moved from 0.5466 mm to 0.5483 mm: an
+improvement of **+0.0017 mm**, still 0.0017 mm short of tolerance. For comparison, the same kind of
+bisected insertion was measured, for
+[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow),
+to move the *predicted* thickness by -0.023 to -0.024 mm at the same distance from the insertion —
+almost fourteen times larger. Station insertion is strongly coupled to what the distance-based
+prediction reports and only weakly coupled to what the real boolean cut actually produces, which is
+exactly why this item's own history shows the internal, predicted reading moving substantially
+(0.0083 mm at the old, wrong-reference implementation, to 0.0430 mm after six rounds against the
+right one) while the real, external reading barely moved at all across the entire investigation
+(0.0531 mm to 0.0534 mm). The real check itself cost 53-54 s per round in this test (`notched.cut`
+plus `mirror_across_cell`), on top of the round's existing 118-150 s refit-and-cut.
+
+**Alternatives:**
+
+1. **Document `cavity()`'s post-cut check as a best-effort predictor, not a guarantee, and rely on
+   the existing external `wall_thickness()` check as the authoritative gate.** The external check
+   already measures the real, finished, mirrored wall directly and has caught this exact defect
+   correctly since the start of the investigation; nothing about this residual makes it any less
+   authoritative. Benefit: no further engineering, no risk of a new bug, and matches what is already
+   true in practice today. Drawback: `cavity()` cannot guarantee production build success on its own
+   at a station like this one, meaning a build can still need a manual re-check or a parameter
+   adjustment after the fact at exactly the station this item's own effort was meant to catch
+   automatically.
+2. **Characterize the prediction-vs-actual gap further** — on `nose_cowl_shell`, at other `U`
+   values, and for whether it correlates with anything actionable (surface curvature, cut angle) —
+   before ruling out a targeted fix entirely. Benefit: broader evidence than the one build measured
+   so far. Drawback: each additional measurement costs roughly the same ~15 minutes the round-0
+   diagnostics used here did; largely superseded in urgency by the direct test below, which already
+   shows station insertion (the mechanism both 3 and 4 would use) is a weak lever on the real result.
+3. **Perform the real boolean cut (and mirror) inside the post-cut loop, guiding station insertion by
+   the real measurement instead of the prediction.** Tested directly above: one such insertion, at
+   the single most favorable station measured, closed only 3% of the needed 0.0534 mm deficit.
+   Drawback: at that rate, closing the gap this way would need on the order of dozens of rounds, at
+   roughly 45% more cost per round than today's already-expensive rib cut, for a station this item's
+   own broader survey shows is not exceptional — not a viable mechanism on the evidence gathered.
+4. **Tighten the candidate surface's own resolution generally** (more fit stations, tighter
+   `MIN_INTERVAL`), on the theory that a better-resolved candidate surface predicts closer to what
+   the real cut produces. Drawback: alternative 3's test used the same mechanism (station insertion)
+   this alternative would also rely on, and found it moves the real result by roughly 1/14th of what
+   it moves the prediction — the same weak coupling applies here, for the same reason, without a new
+   mechanism to expect a different outcome.
+
+**Recommendation: alternative 1.** The two measurements above are enough to decide, unlike before
+this correction: the gap is pervasive (present at every station, both directions, no correlation
+with anything the algorithm currently controls for) rather than a rare defect, and the one direct
+test of closing it by adding stations — the mechanism both alternatives 3 and 4 depend on, tested in
+its most favorable form — moved the real result by only 3% of what was needed, at real added cost
+per round. That is strong evidence against 3 and 4 being productive directions, not merely an
+absence of evidence for them. Alternative 2 (broader characterization on the nose or other `U`
+values) would refine the picture but is unlikely to change this conclusion, since the mechanism
+under test (station insertion) has already been shown weak on the one build measured. Alternative 1
+costs nothing further, matches what is already true in practice, and leaves the authoritative
+external check exactly where it already is: correctly catching this case.
+
+**Reinforced, 2026-09-28, by a reproducibility and sensitivity investigation run for [OQ-DES-CW24](#oq-des-cw24--shell_solids-boolean-and-mirror-construction-is-fragile-at-notch-tool-edge-stations).**
+Five independent, fresh builds of the identical round-0 candidate all read this station's real
+thickness as exactly 0.546556 mm to six decimal places — the residual here is fully reproducible,
+not measurement noise. A small, absolute perturbation applied 22 mm away (at an ordinary,
+non-notch-edge row) produced a clean, linear response with no instability at any tested magnitude
+— consistent with this recommendation's own premise, that the residual at this particular station
+is ordinary, bounded sensitivity rather than a symptom of a deeper construction problem. That
+deeper problem does exist, but specifically at notch-tool-edge stations, which this station is
+not — see OQ-DES-CW24.
+
+### OQ-DES-CW24 — `shell_solid()`'s boolean-and-mirror construction is fragile at notch-tool-edge stations
+
+`shell_solid()`'s one authoritative cut — `notched.cut(inside)`, followed by `mirror_across_cell`
+— is a boolean between two NURBS solids, already documented elsewhere in this codebase as an
+operation that is not fully reliable: two candidate interior surfaces that both individually
+measured inside tolerance have previously produced differently-shaped results from this same
+boolean (one a single 23745.581 mm³ solid, the other 21995 mm³ in five disconnected pieces).
+Investigating [OQ-DES-CW23](#oq-des-cw23--cavitys-post-cut-check-predicts-the-finished-walls-thickness-rather-than-measuring-the-real-cut-how-should-the-resulting-small-residual-gap-against-the-external-check-be-handled)'s
+own residual gap, this session located and precisely characterized where that unreliability
+actually lives, rather than leaving it as a documented but unlocalized risk.
+
+**Method.** The interior surface is built by `_fit()` from a stack of "rows" — one row is the ring
+of sample points measured all the way around the cross-section at one fixed `z`, and stacking every
+row's ring, one per station along the cowl, and fitting a B-spline through them produces the whole
+candidate surface. This build (`tail_shell` `U` = 3.0's round-0 candidate, after its own pre-cut
+convergence and one rib cut, before any post-cut refinement) has 35 rows. On three of them, every
+point in that one row's ring was nudged outward by the same small absolute radial distance — 0.001,
+0.003, 0.01, 0.03, and 0.1 mm, all genuinely small relative to the 0.6 mm wall and the 0.05 mm
+tolerance — the surface was re-fit, and the real thickness at a fixed station (`z` = -217.7261, the
+same one OQ-DES-CW23 investigates) was re-measured, using the identical extend-cut-mirror-measure
+sequence `shell_solid()` itself performs.
+
+**Two of the three rows behaved exactly as a converged, well-fit surface should.** At `z` =
+-239.9991 (22 mm from the measured station) and `z` = -142.5218 (75 mm away), every one of the
+five perturbation magnitudes produced a response in constant proportion to the perturbation size
+(e.g. the nearer row's output-to-input ratio was -0.133 at every single magnitude tested, from
+0.001 mm to 0.1 mm), with no failures anywhere in the range.
+
+**The third, at `z` = -283.9951 (66 mm from the measured station), did not.** A 0.001-0.003 mm
+perturbation gave a small, roughly proportional response (+0.0004 to +0.0012 mm), matching the
+other two rows' character. A 0.01 mm perturbation instead made `mirror_across_cell` raise
+`Unconverged` outright: "mirroring the cell result... produced 5 disconnected shells, not one." A
+0.03 mm perturbation raised no exception at all, but the reading it returned, -0.190851 mm, was two
+orders of magnitude larger than the 0.001-0.003 mm trend and of the opposite sign. A 0.1 mm
+perturbation failed again, worse (9 disconnected shells). None of this is a function of distance
+from the measured station alone — this row (66 mm away) is closer than the well-behaved row at
+142.5218 (75 mm away), yet only this one is fragile.
+
+**The fragile row is a notch-tool edge, exactly, not merely nearby one.** A follow-up check
+confirmed `z` = -283.9951 is one of 26 values `feature_stations(notches, z_lo, z_hi)` returns for
+this build — the points where a rib's dilated cutting tool's own ramp starts, ends, or crosses the
+cut plane — matching to the last printed digit. It is also one of the exact points
+[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
+own front-loaded seeding places a station at, by design, to help the pre-cut surface converge
+faster. Neither of the two well-behaved rows tested is a notch edge.
+
+**What this means.** At a notch-tool-edge station specifically, an imperceptible (well under
+0.1 mm) difference in the candidate interior surface's own fit — well within the range two
+independently-converged, equally legitimate candidate surfaces could plausibly differ by — can
+flip the outcome between a normal result, an outright build failure, and a result two orders of
+magnitude larger and opposite in sign from what the surrounding trend predicts. The first two
+outcomes are inconvenient but safe: `mirror_across_cell` and `notched.cut`'s own existing checks
+(disconnected-solid count, the partition-identity check in `shell_solid`) refuse to hand back a
+broken part rather than shipping one silently. **The third is not caught by anything currently in
+the pipeline** — a build can complete, pass every existing validity check, and still be reporting
+(or building) a station's geometry from deep inside this fragile zone with no indication that a
+slightly different but equally legitimate candidate surface would have given a wildly different
+answer.
+
+**This is a different question from OQ-DES-CW23's, and does not change that item's own
+recommendation.** OQ-DES-CW23 is about whether `cavity()`'s prediction matches a real, stable,
+well-defined thickness at an ordinary station; the row nearest its own target station tested clean
+and linear here, supporting that it does. This item is about whether the construction itself — the
+one authoritative cut, independent of which check reads it — is reliable at notch-edge stations
+specifically.
+
+**Root cause confirmed, 2026-09-28: rib crowding at a corner, matching IP-FC-137's own earlier H3
+hypothesis, now against real geometry rather than a synthetic test case.** The fragile row,
+`z` = -283.9951, is not merely near a notch edge — it is exactly `Top1Safe`'s own `z`-minimum, to
+the last printed digit. That same `z` also falls inside `Top2Safe`'s span (-294.0 to -9.0),
+`Diag11Safe`'s span (-315.0 to -165.0), and `Diag12Safe`'s span (-315.0 to -165.0) — four separate
+rib tools overlapping across most of the tail's length in the same region (`x` roughly -150 to
+-125), the tail's own crowded corner. Tracing where the 0.01 mm perturbation's un-cut residue
+(8968 mm³) actually sits confirmed this directly: its bounding box is `z` -296.2..-2.9 (nearly the
+whole 293 mm patch) but `x` -149.6..-124.6 -- a narrow band matching exactly where those four tools'
+territories overlap, not a region local to the perturbed row itself. Two rows tested elsewhere
+(neither a notch edge, neither in this crowded region) showed no such effect at any perturbation
+size.
+
+**[Retracted 2026-10-01 -- see the correction note before "Alternatives" below: the specific
+minimum-clearance figure in this paragraph came from a measurement bug and is not trustworthy as
+stated. The qualitative conclusion (some stations are much thinner than others) likely survives;
+the number does not.]**
+
+**A direct, unperturbed survey then answered the open question from this item's first version:
+this fragility is not synthetic-only.** Slicing the real, unperturbed round-0 candidate against
+the full dilated tool set at 96 stations across the crowded region (`z` -294.0 to -8.7, no
+perturbation at all) found the minimum surface-to-tool clearance was **0.000759 mm** — under a
+micron, in the build this entire investigation has been using as its own primary test case, not a
+deliberately constructed edge case. Ten of the 96 stations read under 0.01 mm; fifteen under
+0.014 mm; the median across the same region was a comfortable 0.077 mm, so this is a real minority
+of stations, not the whole region, but a nonzero and unremarkable-looking one: the baseline rib cut
+reports this as a perfectly clean `0.000000 mm³` residue, exactly like every other station,
+because `RIB_CUT_FUZZ` (`1.0e-5 mm`) is enough to snap a *positive* near-zero clearance into a
+clean cut. Nothing in the current pipeline distinguishes a station that cleared by 0.6 mm from one
+that cleared by 0.0008 mm — both report identically as success.
+
+**The thinnest clearances are not concentrated at notch edges — a separate check, needed before
+a build-time check could be designed soundly.** The fragile row this item root-caused, `z` =
+-283.9951, is exactly a `feature_stations()` edge, but that finding is about *sensitivity to
+perturbation*, not about where the raw clearance margin is thinnest in an unperturbed build; those
+are two different questions, and the second needed its own answer. Comparing the survey's worst 15
+stations against the same build's 26 `feature_stations(notches, z_lo, z_hi)` values (the points
+where a rib's dilated ramp starts, ends, or crosses the cut plane — the same list
+[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
+seeding targets) found only 2 of the 15 within 1 mm of an edge (`z` = -59.7373, 0.26 mm away; `z` =
+-164.8552, 0.19 mm away); the other 13, including the single worst station (`z` = -107.7912,
+0.000759 mm), sit 2 to 52 mm from the nearest one. A build-time check sampling only at feature
+stations would miss most of the region the survey actually found thin.
+
+**[Every specific clearance number in the three paragraphs below is also retracted -- see the
+correction note before "Alternatives." The constructions' validity results (solid count,
+`isValid()`) in the same paragraphs do not depend on the buggy metric and stand.]**
+
+**A genuine free-parameter screen, 2026-09-30, corrects what "perturbation" had actually tested so
+far.** Every sensitivity result above came from nudging the *already-fitted surface's own output
+points* after construction (`debug_sensitivity_map.py`'s `perturb_row_radially`), not from varying
+an actual free parameter and letting the whole construction reconverge independently -- a real but
+different question from the one "the construction should be resilient to perturbations of all
+parameters" was asking. `debug_param_screen.py` ran the full, independent round-0 construction from
+scratch (fit, dilate, cut; ~1150-1800 s each) for 13 cases: one small nudge to each of eight real
+design parameters from `PARAMS_TAIL` (`top1_angle`, `top2_angle`, `top_diag_angle` at +-0.5
+degrees; `top1_y`, `top2_y`, `top_diag_z_start` at +-1 mm equivalent; `top_diag_depth` at +-0.5 mm
+equivalent; `buttress_r_inset` at +-1 mm equivalent -- the parameters that place `Top1Safe`,
+`Top2Safe`, `Diag11Safe`, and `Diag12Safe` and set how far each tool's cut reaches), plus four
+algorithmic-knob cases (`TAU` at 0.04 and 0.06 against the base 0.05; front-loaded seeding offset
+from the exact notch edge, alternative 4's own idea, at 0.5 mm and 2.0 mm standoff), against a
+baseline of minimum clearance 0.001196 mm at `z` = -276.00 (a different grid than the corner survey
+above, so a different minimum -- itself a live demonstration of the sampling-density gap already
+recorded here).
+
+**No case produced a construction failure.** All 13 cuts stayed one valid solid -- a real contrast
+with the row-nudge test, which hit `Unconverged` and a sign-reversed, two-orders-of-magnitude swing
+at a 0.01 mm *output* perturbation. Nudging actual design or algorithm inputs by these magnitudes
+does not reproduce that failure mode. **But the magnitudes are not the same scale**: the wall itself
+is 0.6 mm (`extrusion_width`, absolute, not scaled by `U`), so a 1 mm dimensional nudge is larger
+than the wall, and two to four orders above `TAU`/`RIB_CUT_FUZZ`. This round shows the construction
+tolerates realistic-sized design changes; it is not yet an apples-to-apples comparison against the
+row-nudge test's 0.01 mm failure threshold, which would need a finer round (0.01-0.1 mm / 0.01-0.1
+degree equivalent) to test directly.
+
+**`top1_angle` and `top_diag_angle` are real levers on the crowding; `top_diag_angle` also moves
+*where* the worst station is** (from `z` = -276.00 to `z` = -198.00), not only how thin it gets --
+each worsened the minimum by 23-26%. `top2_y` and `top_diag_depth` produced bit-identical results to
+baseline at all 97 stations; `top2_y`'s null result was checked directly (comparing all 11
+individual rib-tool solids, not the whole compound) and confirmed real, not a silent override
+failure -- `Top2Safe` moved exactly 1 mm as instructed, but is never the locally closest tool at any
+sampled station, so its own position cannot appear in a minimum-distance-to-nearest-tool metric.
+`TAU` at +-20% changed nothing. **Seeding standoff (alternative 4) did not help -- if anything, it
+revealed a thinner minimum**: both standoff cases found a worse minimum than exact-edge seeding,
+though this is confounded with row count (61 rows against the baseline's 35, since standoff seeding
+adds a second station per edge instead of replacing the one at it). This reads as the standoff
+surfacing a true thin point the coarser grid missed, not standoff making the geometry worse -- either
+way it is evidence against alternative 4 as a fix.
+
+**A finer-magnitude round, 2026-09-30, repeated the same eight design parameters at ~0.01 mm /
+0.01 degree -- matching the row-nudge test's own failure scale directly -- and found a second,
+more acute near-tangency.** `debug_param_screen_fine.py` reused the established baseline (not
+rebuilt, on the strength of this session's own 5-way reproducibility finding) and ran 10 more full,
+independent builds. Seven of the eight finer dimensional cases changed essentially nothing (minimum
+clearance 0.001195-0.001196 mm, matching baseline, no failures). **`top_diag_angle` at +0.01
+degrees -- one-fiftieth the size of the +0.5 degree case above -- dropped the minimum clearance to
+0.000009 mm, under `RIB_CUT_FUZZ` itself, at `z` = -192.00: a station that appears in no other
+case's worst-list anywhere in this item.** The round-0 cut still came back one valid solid --
+`RIB_CUT_FUZZ` caught it, exactly the mechanism its own docstring describes -- but this is a real
+near-tangency, reached by a perturbation fifty times smaller than the one that found nothing
+alarming nearby (`top_diag_angle` +0.5 degrees found its worst point at a *different* station,
+`z` = -198.00, two orders of magnitude less thin at 0.000888 mm). The relationship is not
+monotonic: the tiny nudge landed almost exactly on a tangency the larger one mostly moved past,
+which is consistent with the unperturbed design (`top_diag_angle` = 30.00 degrees exactly) already
+sitting within a hundredth of a degree of a genuine tangency at `z` ~ -192, separate from the
+`z` = -276/-283.9951 crowding already characterized above. The baseline's own 101-station grid did
+not flag `z` ~ -192, most plausibly because 3 mm spacing is not fine enough to land on a dip this
+narrow, not because it is not there. **This is a new, uncharacterized lead, not yet investigated
+further**: whether the unperturbed design is already this close is unconfirmed (it would need a
+targeted scan of `top_diag_angle` in small steps bracketing 30.00-30.02 degrees, with dense slicing
+near `z` = -192, to pin down the true tangency angle and whether zero perturbation already
+approaches it).
+
+**The two finer seeding-standoff cases (0.01 mm, 0.1 mm) confirm the effect saturates immediately.**
+Both found minimum clearance ~0.000948-0.000950 mm, matching the earlier, much larger 0.5 mm/2.0 mm
+standoff cases almost exactly. The thinner minimum standoff seeding finds is therefore governed by
+the row count it adds (35 to 61 rows), not by how far the standoff is -- reinforcing that this is a
+resolution effect, not evidence that standoff itself changes the geometry's own margin, and further
+weakening alternative 4 (even an immaterial 0.01 mm standoff gives the same result as a much larger
+one).
+
+**A dedicated dense re-scan of the TRUE, unperturbed baseline around `z` ~ -192, 2026-10-01, found
+an even closer, different near-tangency nearby, then a full-tail survey showed this is widespread,
+not local to one corner.** `debug_z192_baseline_dense.py` rebuilt the exact baseline (no parameter
+changes at all) and sliced densely (0.02 mm steps) across `z` = -220 to -165 to settle whether the
+unperturbed design already approaches the `z` ~ -192 tangency the perturbation test found. It does
+not, exactly -- but a different, closer one sits a few millimetres away: minimum clearance
+**0.000015 mm (15 nm) at `z` = -206.22**, 1.5x `RIB_CUT_FUZZ`'s own `1e-5 mm` threshold, in the
+exact unperturbed, currently-shipping `U` = 3.0 build, missed by every previous survey's coarser
+grid (the 101-station survey's nearest sample, 3 mm away, read 0.002689 mm there -- 180x larger
+than the true value a few hundredths of a millimetre away).
+
+**`debug_full_tail_fine_survey.py` then asked whether `z` ~ -206 is unique, or whether hidden
+near-zero dips recur elsewhere.** Reusing the same baseline fit (no rebuild), a coarse pass (1.0 mm,
+290 points) across the *entire* tail found its own worst point already at 0.000027 mm (`z` =
+-110.37) without any fine refinement at all, then a bounded fine pass (0.05 mm, +-1 mm) around each
+of the worst 15 coarse points refined several further. **The true picture is at least six distinct
+near-zero clearance points, 27-285 nm, scattered from `z` = -286 to `z` = -25 -- across nearly the
+whole 291 mm interior length, not confined to the `Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe`
+corner this item has focused on so far**: `z` = -110.37 (27 nm), `z` = -206.24/-206.24 (35-46 nm, two
+coarse candidates refining to the same narrow feature), `z` = -246.87 (73 nm, where the coarse grid
+had read 2096 nm -- 30x larger), `z` = -63.31 (116 nm), and `z` = -146.79 (264 nm, where the coarse
+grid had read 2841 nm -- 11x larger). Even 0.05 mm resolution understates some of these: the
+`z` ~ -206 feature needed the dedicated 0.02 mm scan above to find its true 15 nm floor, not the 35
+nm this survey's coarser fine pass found, so several of the other five are plausibly deeper still
+than recorded here.
+
+**This means the mechanism is broader than "one crowded corner," and a brute-force fine-grid
+build-time check is not computationally viable at the resolution this would need.** Several of the
+new points (`z` = -110.37, -63.31, -25.08 is among the next-worst not listed above) are far outside
+the previously-identified corner's `x` roughly -150 to -125 band, so they are governed by some other
+tool or pair of tools not yet identified -- this item's "rib crowding at a corner" explanation covers
+the `z` = -276/-283.9951/-206 region but does not explain these. Separately, the timing data rules
+out the obvious fix of "just use a finer grid": 290 coarse points took 1337.7 s and each 41-point fine
+window took ~190 s, both roughly 4.5-5 s a sample: a 0.02 mm grid across the whole 291 mm interior
+(~14,500 samples) would cost on the order of 19 hours at that rate. Alternative 3's check design
+needs a method that finds a narrow near-zero dip without sampling at the resolution that would find
+it by brute force -- an adaptive or analytic approach, not a fixed fine grid, which the design sketch
+below did not yet anticipate.
+
+**CORRECTION, 2026-10-01: a measurement bug was found in the clearance metric itself, and the
+nanometre-scale numbers above (and the original corner-margin survey's 0.000759 mm) are retracted
+pending a corrected re-measurement.** Every `clearance_at()`/`clearance_vs()` helper used across this
+session's investigation (`debug_corner_margin_survey.py` onward, including every script in the two
+paragraphs just above) built a single `ci._Polyline` from *all* points of *all* wires in a tool's
+slice, flattened together: `ci._Polyline([(p.x, p.y) for w in tool_wires for p in
+w.discretize(Number=400)])`. `_Polyline` defaults to `closed=True`, which wraps the last point in
+the *entire flattened sequence* back to the first -- correct for one real closed loop, but when a
+tool's slice has more than one separate wire loop (confirmed directly, `debug_polyline_bug_check.py`:
+the fused 11-rib tool has 6 to 57 separate loops at every flagged `z`, not one), this silently
+manufactures a phantom chord connecting the end of one unrelated loop to the start of another. That
+chord can cut straight across the middle of the cross-section -- precisely where the candidate
+interior surface sits -- and read as an arbitrarily small "clearance" with no real geometric meaning
+at all, the same failure mode `_Polyline`'s own docstring already warns about for an open arc,
+reached here by a different path (multiple closed loops, not one open one). **What this retracts**:
+every specific minimum-clearance number reported against the fused (or any multi-loop) tool slice
+this session, including 0.000759 mm, 0.001196 mm, the `z` ~ -192 and `z` = -206.22 near-tangencies
+(9 nm, 15 nm), and the six-point full-tail list (27-285 nm) above. **What survives, because it did
+not depend on this metric**: the real `wall_thickness()`-based reproducibility (0.546556 mm, five
+independent builds) and sensitivity findings (`Unconverged`, the sign-reversed swing) earlier in this
+item, which measure the real, mirrored wall directly, never a tool's own slice; the free-parameter
+screen's construction-*validity* results (no failure across 21 cases), which came from a real boolean
+cut and `isValid()`, not this distance metric; and the tool-overlap/bounding-box facts (which named
+tools occupy which `z`/`x` span) identified by `tip.Notches`, unrelated to slice-distance measurement.
+A corrected re-measurement (one `_Polyline` per wire, minimum taken across wires separately, never
+flattened together) is in progress; this section will be updated with its result.
+
+**The corrected re-measurement landed, 2026-10-01, and resolves the open thread cleanly: the
+`z` ~ -192/-206.22 near-tangency was entirely a measurement artifact, not a real feature.**
+`debug_full_tail_fine_survey_FIXED.py` reran the identical two-stage survey (1.0 mm coarse across
+the whole tail, then 0.05 mm fine passes around the worst 15) with the corrected per-wire distance.
+With the bug fixed, the `z` ~ -206 region does not even appear in the worst 15 of 290 coarse points
+across the whole tail -- the entire "second near-tangency" lead from earlier today is retracted
+outright, not merely re-measured to a smaller number. **The real picture, corrected: minimum
+clearance 0.000060 mm (60 nm) at `z` = -134.498 -- 6x `RIB_CUT_FUZZ`'s own threshold, not under it --
+with 15 genuine points from 60 nm to 4113 nm scattered from `z` = -268.85 to `z` = -14.45.** Four of
+the previous (buggy) readings turn out to have been coincidentally correct anyway -- `z` = -146.79,
+-184.62, -240.80, and -246.82 read identically before and after the fix, a useful cross-check that
+the correction changes what should change and nothing else. The broader qualitative conclusions this
+item already drew survive independently of the bug: thin points really are scattered across nearly
+the whole tail, not confined to one corner (the corrected worst-15 still spans `z` = -268.85 to
+-14.45), and the brute-force timing conclusion is unaffected (it measures wall-clock cost, not
+clearance values) -- 290 coarse points took 1286.0 s and 15 fine windows took ~183 s each, so a
+0.02 mm grid across the whole tail would still cost on the order of 19 hours. **Not yet redone**:
+which tool(s) bind at each of the newly-corrected worst points (the earlier tool-identification work
+was run against the wrong, pre-correction point locations and should not be trusted for the new
+list, except at the four points that read identically).
+
+**Alternatives:**
+
+1. **Accept it as an already-caught, inherent property of notch-edge geometry.** Rely on the
+   existing `Unconverged` safety net for the outright-failure case, and document explicitly that a
+   successful build's reported thickness at or very near a notch edge carries materially more
+   uncertainty than elsewhere. Benefit: no further engineering. Drawback: the corner-margin survey
+   shows this is not a rare edge case reachable only by deliberate perturbation -- ten stations in a
+   single 285 mm span of one ordinary build already clear by under 0.01 mm, and the existing safety
+   net does not distinguish that from a comfortable clearance; it only fires once a clearance
+   actually goes negative, not while a build is silently succeeding by a fraction of a micron.
+2. **Investigate the geometric mechanism directly.** Substantially done for the `z` = -276/-283.9951
+   crowding: the mechanism there is rib crowding at the corner where `Top1Safe`, `Top2Safe`,
+   `Diag11Safe`, and `Diag12Safe` overlap, matching IP-FC-137's H3 hypothesis, now confirmed against
+   real geometry. **Shown to be incomplete by the full-tail fine survey**: at least six distinct
+   near-zero clearance points (27-285 nm) recur from `z` = -286 to `z` = -25, several of them (`z` =
+   -110.37, -63.31, for instance) well outside that corner's own `x` roughly -150 to -125 overlap
+   band, so "rib crowding at this one corner" cannot be the whole mechanism. Which tool or tool pair
+   governs each of the other points is not yet identified -- the same capture-only technique that
+   identified `Top1Safe` as the fragile row at `z` = -283.9951 would apply directly, just not yet run
+   per point. What remains open: the mechanism behind the other five points, whether the same pattern
+   recurs at other `U` values, and on `nose_cowl_shell`'s octant -- none of which has been checked.
+3. **Add a build-time check on the real, measured clearance margin itself**, now that the survey
+   above shows this is a concrete, checkable quantity, not only a discontinuous-jump heuristic to
+   detect after the fact. A concrete first design, informed by everything measured in this item:
+     - *Metric.* Minimum in-plane distance between the candidate interior surface's own slice and
+       the fully-dilated rib-tool-set's slice at a given `z` -- the same slice-and-compare the
+       corner-margin survey already used: no boolean, a few seconds a station.
+     - *Domain.* Not `feature_stations()` alone -- the check above shows the thinnest points are
+       usually well away from them. **Also not provably just "wherever more than one dilated tool's
+       own `z`-span overlaps" -- the full-tail fine survey found near-zero points (`z` = -110.37,
+       -63.31) outside the one corner's own overlap band, so a domain restricted to known-overlapping
+       tool spans would have missed them.** Until the mechanism behind those points is identified, the
+       only domain shown by evidence to catch everything found so far is the whole part.
+     - *Sampling density.* **Shown to be the harder problem than a tuning choice.** The full-tail
+       survey found its true floor needs 0.02 mm resolution in places (the `z` ~ -206 feature read
+       35-46 nm at 0.05 mm and 15 nm at 0.02 mm) and a brute-force grid at that resolution across the
+       whole tail (~14,500 samples) costs on the order of 19 hours at the ~4.5-5 s/sample measured
+       here -- not viable as a per-build check. A fixed grid at any affordable spacing (1 mm, even
+       0.5 mm) is evidenced to understate the true minimum by one to two orders of magnitude at
+       exactly the points that matter most. An adaptive scheme -- coarse pass, then refine only
+       where a candidate is flagged, as this investigation's own two-stage survey did -- is the
+       likely shape of a viable check, but was only exercised here as an investigation tool bounded to
+       15 candidates, not designed as a build-time check with its own stopping rule.
+     - *Threshold.* An order-of-magnitude candidate is 0.01 mm -- not an arbitrary round number, but
+       the exact size of the smallest perturbation that broke `mirror_across_cell` outright at
+       `z` = -283.9951 in this item's own sensitivity test, and three orders above `RIB_CUT_FUZZ`'s
+       `1e-5 mm`. It rests on perturbing a single one of the 35 rows (station rings) at a single `U`
+       value -- not yet cross-checked by perturbing a different row, or by repeating the test at a
+       different `U`.
+     - *Action on violation.* Undesigned, and the more consequential half of this alternative. A hard
+       build failure at this threshold would already reject at least 15 of the 290 coarse points the
+       corrected full-tail survey sampled on this real, currently-shipping `U` = 3.0 build (all 15
+       refined worst-candidates read under 0.01 mm; the true count among all 290 is unmeasured, since
+       only the worst 15 were refined) -- whether that is the right response, or whether
+       flagging-and-proceeding (surfacing the margin through `cavity()`'s existing `report` callback
+       without blocking) is more appropriate until it is known how often a thin margin actually
+       correlates with the wild-swing failure mode rather than sitting
+       comfortably close to it, is a decision, not a default.
+   Benefit: directly answers "did this build succeed comfortably or by a hair," which nothing today
+   reports. Drawback: the sampling density is now shown to be a harder, open design problem (brute
+   force is computationally infeasible at the resolution needed) rather than a tuning choice, the
+   domain cannot yet be restricted to a known-safe subset of the part, the action on violation is
+   still open, and the threshold is evidenced by a single fragile row.
+4. **Reconsider whether front-loaded seeding placing a station exactly at a notch edge (zero
+   offset) is itself what creates the near-degenerate condition.** A small standoff from the exact
+   edge might keep the resolution benefit OQ-DES-CW22's own front-loading was chosen for, while
+   avoiding the geometric degeneracy this item found sitting exactly at it. **Tested directly,
+   2026-09-30, and it did not help.** Seeding at 0.5 mm and 2.0 mm standoff from every notch edge
+   (instead of at it) both found a *smaller* minimum clearance than exact-edge seeding (0.000948 mm
+   and 0.001009 mm against the baseline's 0.001196 mm), not a larger, more comfortable one. The test
+   is confounded with row count (standoff seeding added a second station per edge rather than moving
+   the one already there, so the fit had 61 rows against the baseline's 35), so this is better read
+   as higher resolution surfacing a true thin point the coarser grid missed, not standoff actively
+   worsening the geometry -- but either reading is evidence against standoff as a fix, not for one.
+   Benefit: none demonstrated. Drawback: confirmed not to be sufficient alone, consistent with the
+   corner-margin survey's own finding that thin clearances span a broad region, not only exactly at
+   notch-edge stations.
+
+**Recommendation: pursue alternative 3, informed by alternative 2's mechanism, now known to be
+incomplete.** The premise that made alternative 1 sufficient on its own -- that this fragility might
+never be reached by a real, unperturbed build -- is refuted by direct measurement: it already is,
+on the exact build this investigation has used throughout, at multiple stations, silently. That
+does not mean alternative 1 is wrong forever, but it can no longer be chosen on the grounds that the
+risk is hypothetical. A build-time clearance-margin check is the most direct response to what was
+actually measured -- a concrete, cheap-to-compute number this item has shown discriminates a
+comfortable build from one sitting on the edge. Alternative 4 is no longer an open, bypassed
+question but a tested and refuted one (seeding standoff found a thinner minimum, not a safer one),
+which strengthens rather than merely sidesteps the case for alternative 3. A genuine free-parameter
+screen (eight design parameters, four algorithmic knobs, all at once-small magnitudes) also found no
+construction failure anywhere, which is reassuring about ordinary parameter variation but was run at
+magnitudes (0.5 degrees, 0.5-1 mm) larger than the 0.6 mm wall itself. A follow-up at the matching,
+finer scale (~0.01 mm/0.01 degree) found the comparison was not uniformly reassuring: a 0.01 degree
+`top_diag_angle` nudge found a 9 nm clearance at a station (`z` ~ -192) no other case had flagged,
+suggesting the unperturbed design may already sit close to a second, separate near-tangency. **That
+specific lead turned out to be a measurement bug, not a real feature** (see the correction note
+above) -- the corrected re-measurement does not place `z` ~ -192 or `z` ~ -206 among the whole
+tail's worst 15 points at all. But the corrected, whole-tail survey run to chase that lead down
+still found a real, if less extreme, version of the same broader picture: **minimum clearance
+0.000060 mm (60 nm, 6x `RIB_CUT_FUZZ`, not under it) at `z` = -134.498, with 15 genuine points from
+60 nm to 4113 nm scattered from `z` = -268.85 to `z` = -14.45** -- most of them outside the one
+corner this item's root cause explains. This remains a materially different problem than "one
+crowded corner is thin": it is widespread, under-resolved by every grid density tried so far
+including the ones alternative 3 assumed were adequate (the corrected survey still needed a 1.0 mm
+coarse pass plus a bounded 0.05 mm fine pass to find it), and the computational cost of finding it by
+brute force (~19 hours for a whole-tail nanometre-resolving grid, a timing fact unaffected by the
+bug) rules out the straightforward fix of just sampling finer. Alternative 3 remains the right
+direction -- nothing else proposed here addresses a problem this pervasive -- but its design
+sketch's domain and sampling-density assumptions are still shown to be insufficient, not merely
+unfinished, and need to be rebuilt around an adaptive, not fixed-grid, search. Recommending the
+direction only; the check's own design is further from finished than earlier updates treated it,
+and which tool(s) govern the corrected worst points (beyond the four that read identically before
+and after the fix) is unidentified.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full
