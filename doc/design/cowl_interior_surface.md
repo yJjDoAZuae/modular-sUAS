@@ -441,6 +441,15 @@ pipeline does not currently report the difference between a build that cleared b
 that cleared by a fraction of a micron. See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the
 full evidence and a recommendation to pursue a build-time clearance-margin check.
 
+**CORRECTION, 2026-10-02: "four separate tools overlap" above was a z-span check, not a measured
+distance, and named the wrong tools.** Direct per-tool clearance at this exact station found the
+real crowding is `Side1Safe`/`Side2Safe`/`Side3Safe` (0.164-0.232 mm, ratio 1.41x), not
+`Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe`, which only share this station's *z*-range without
+being close to the surface there. More consequentially, the clearance at this confirmed-fragile
+station is 0.164 mm -- comfortably large, not thin at all. The risk there is not thinness; it is
+multiple tools sitting comparably close to *each other*. See
+[cowl.md OQ-DES-CW24](cowl.md#open-questions) for the resulting two-metric check design.
+
 **The thinnest clearances are not concentrated at notch edges.** A follow-up check compared the
 survey's worst 15 stations against the same build's `feature_stations()` values (26 edges): only 2
 of the 15 fall within 1 mm of one, and the single worst station (0.000759 mm) sits 9.3 mm from the
@@ -518,8 +527,23 @@ under 0.01 mm -- where the `U` = 3.0 survey only ever established a lower bound.
 **Checked against `nose_cowl_shell`'s octant too: the pattern recurs there as well.** A comparably
 severe worst point (48 nm) at 3 of 40 coarse points (7.5%) under 0.01 mm -- a lower proportion than
 `tail_shell` at the same `U`, but the same order of magnitude at the extreme. This is a property of
-the construction method generally, not an artifact of one cowl kind or one `U`. See
-[cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full detail.
+the construction method generally, not an artifact of one cowl kind or one `U`.
+
+**Check design closed out, 2026-10-02.** A single absolute-clearance threshold cannot work: the one
+confirmed-fragile station's own clearance is 0.164 mm, comfortably above any thin-wall candidate
+threshold, so it would never be flagged by clearance alone. The design is two metrics -- nearest-tool
+clearance for thin-wall accuracy, and the ratio between the two nearest tools for crowding-driven
+fragility (1.41x at the one confirmed-dangerous station vs. 15x+ at every confirmed-safe single-rib
+point) -- computed by scanning the 11 named tools individually rather than fusing them first (~15%
+faster, and immune to the `_Polyline` bug). Action on violation follows the two confirmed mechanisms
+directly: block on the crowding ratio, flag-only on thinness alone.
+
+**The thin-wall threshold is set, 2026-10-02: 0.01 mm, not the coarser 0.1 mm print-accuracy figure
+first proposed.** That 0.1 mm is a positional tolerance (where a feature sits); wall thickness is a
+different quantity, and a single spiral-vase perimeter's thickness is exactly where a small absolute
+change can flip the slicer's decision to extrude it at all. Only the crowding-ratio cutoff (5x
+proposed, informed by 1.41x confirmed-dangerous and 15x+ confirmed-safe) remains a policy choice
+pending sign-off. See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full design.
 
 ---
 
@@ -996,8 +1020,15 @@ established, and each is a work item in
   second `U` (1.0): comparably severe (64 nm worst point) and more pervasive by measured proportion
   (22 of 96 coarse points, 22.9%, under 0.01 mm) -- not a `U` = 3.0 idiosyncrasy. Checked on
   `nose_cowl_shell`'s octant too: comparably severe (48 nm worst point), confirming this is a
-  property of the construction method generally.** See
-  [cowl.md OQ-DES-CW24](cowl.md#open-questions).
+  property of the construction method generally. **The check's design is closed out**: the
+  confirmed-fragile station's own clearance (0.164 mm) is too large for any absolute threshold to
+  catch, so the design uses two metrics -- thinness (nearest-tool clearance) and crowding (ratio
+  between the two nearest tools, 1.41x there vs. 15x+ at every confirmed-safe point) -- with action
+  on violation following the two confirmed mechanisms directly. The thinness threshold is set at
+  0.01 mm (a wall-thickness tolerance, not this project's 0.1 mm positional one -- a single
+  spiral-vase perimeter's thickness is exactly where a small absolute change can flip the slicer's
+  decision to extrude it); only the crowding-ratio cutoff (5x proposed) remains pending sign-off.**
+  See [cowl.md OQ-DES-CW24](cowl.md#open-questions).
 
 ## See also
 
