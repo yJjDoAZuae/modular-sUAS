@@ -493,7 +493,33 @@ found instead: **minimum clearance 0.000060 mm (60 nm, 6x `RIB_CUT_FUZZ`, not un
 `z` = -134.498, with 15 genuine points from 60 nm to 4113 nm scattered from `z` = -268.85 to
 `z` = -14.45** -- still wider than the one corner this section's root cause explains, still
 under-resolved by any affordable fixed grid, and still ~19 hours to find by brute force (a timing
-fact the bug never affected). See [cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full detail.
+fact the bug never affected).
+
+**Per-tool identification, 2026-10-02, reframes the mechanism: it is not crowding.** A single rib
+binds at every one of the 15 points, with the second-closest tool 15-1000x farther away -- no
+crowding present at 14 of the 15 (`Top1Safe` governs 4, `Side1Safe` 4, `Bot1Safe` 3, `Diag11Safe` 2,
+`Side2Safe` 1, `Side3Safe` 1). The `Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe` crowding this
+section's root cause describes is real and does cause genuine construction fragility at
+`z` = -283.9951 (confirmed via the real `wall_thickness()` check), but it does not explain why most
+individual ribs have their own near-tangency somewhere along their own run, independent of crowding.
+**Tested directly, 2026-10-02, and it does not carry the same risk.** The same row-nudge protocol
+that found the `z` = -283.9951 fragility, run at three single-tool points with a station forced
+exactly at each (confirmed exact match, since these dips are too narrow for the ordinary seed grid
+to land on): all three stayed one valid solid across the full 0.001-0.1 mm range, with clearance and
+the real, exported wall thickness changing smoothly and monotonically -- no `Unconverged`, no sign
+reversal. Crowding, not mere thinness, is the ingredient this item has shown causes the severe
+failure mode.
+
+**Checked against a second `U`, 2026-10-02: the pattern is not specific to `U` = 3.0.** The
+identical corrected survey at `U` = 1.0 found a comparably severe worst point (64 nm) and, having
+tallied all 96 coarse points this time, a directly measured proportion -- 22 of 96 (22.9%) read
+under 0.01 mm -- where the `U` = 3.0 survey only ever established a lower bound.
+
+**Checked against `nose_cowl_shell`'s octant too: the pattern recurs there as well.** A comparably
+severe worst point (48 nm) at 3 of 40 coarse points (7.5%) under 0.01 mm -- a lower proportion than
+`tail_shell` at the same `U`, but the same order of magnitude at the extreme. This is a property of
+the construction method generally, not an artifact of one cowl kind or one `U`. See
+[cowl.md OQ-DES-CW24](cowl.md#open-questions) for the full detail.
 
 ---
 
@@ -961,7 +987,17 @@ established, and each is a work item in
   The corrected, whole-tail picture is less extreme but still real: minimum clearance 60 nm (6x
   `RIB_CUT_FUZZ`, not under it) at `z` = -134.498, with 15 genuine points (60 nm-4 um) scattered from
   `z` = -268.85 to `z` = -14.45, still wider than the one corner this section's root cause explains,
-  and still ~19 hours to find by brute force.** See [cowl.md OQ-DES-CW24](cowl.md#open-questions).
+  and still ~19 hours to find by brute force. Per-tool identification then found a single rib binds
+  at every one of the 15 points (no crowding, unlike the confirmed `z` = -283.9951 failure), so the
+  crowding mechanism does not explain most of them. Tested directly: single-rib near-tangency does
+  not carry the same fragility -- the same row-nudge protocol, run at three single-tool points with
+  a station forced exactly at each, stayed stable (one valid solid, smooth clearance and thickness
+  change) across the full 0.001-0.1 mm range that broke the crowded case outright. Checked at a
+  second `U` (1.0): comparably severe (64 nm worst point) and more pervasive by measured proportion
+  (22 of 96 coarse points, 22.9%, under 0.01 mm) -- not a `U` = 3.0 idiosyncrasy. Checked on
+  `nose_cowl_shell`'s octant too: comparably severe (48 nm worst point), confirming this is a
+  property of the construction method generally.** See
+  [cowl.md OQ-DES-CW24](cowl.md#open-questions).
 
 ## See also
 

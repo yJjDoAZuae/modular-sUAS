@@ -736,7 +736,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | ID | Question | Blocking |
 | --- | --- | --- |
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
-| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has genuine near-zero clearance (60 nm-4 um, corrected after an earlier measurement bug) at 15+ points scattered across nearly the whole tail on a real, unperturbed build -- wider than the one rib-crowded corner originally found, and not reliably findable by a fixed-resolution grid; a build-time clearance-margin check is recommended but its domain, sampling strategy, and failure behavior are all undesigned | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
+| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has genuine near-zero clearance (tens of nm at the worst point) at many points scattered across most of the part's length -- confirmed on both cowl kinds and two `U` values, so not an idiosyncrasy of one geometry; tested directly, single-rib thinness (no crowding) is stable, not fragile, so only genuine multi-tool crowding (one confirmed station) carries the severe construction-failure risk; a build-time clearance-margin check is recommended but its domain, sampling strategy, and failure behavior are all undesigned | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -3295,10 +3295,87 @@ item already drew survive independently of the bug: thin points really are scatt
 the whole tail, not confined to one corner (the corrected worst-15 still spans `z` = -268.85 to
 -14.45), and the brute-force timing conclusion is unaffected (it measures wall-clock cost, not
 clearance values) -- 290 coarse points took 1286.0 s and 15 fine windows took ~183 s each, so a
-0.02 mm grid across the whole tail would still cost on the order of 19 hours. **Not yet redone**:
-which tool(s) bind at each of the newly-corrected worst points (the earlier tool-identification work
-was run against the wrong, pre-correction point locations and should not be trusted for the new
-list, except at the four points that read identically).
+0.02 mm grid across the whole tail would still cost on the order of 19 hours.
+
+**Per-tool identification, 2026-10-02, reframes the mechanism: this is not crowding.**
+`debug_which_tool_binding_v2.py` first confirmed the per-tool measurement itself is safe from the
+`_Polyline` bug (`debug_per_tool_wire_count.py`: no individual tool's own slice has more than one
+wire loop at any of the 15 corrected points, unlike the fused 11-tool compound), then found which
+single tool binds at each:
+
+| `z` | binding tool | single-tool reading | fused (corrected) reading |
+| --- | --- | --- | --- |
+| -134.498 | `Bot1Safe` | 38 nm | 60 nm |
+| -180.652 | `Top1Safe` | 43 nm | 67 nm |
+| -268.845 | `Side1Safe` | 94 nm | 87 nm |
+| -116.388 | `Top1Safe` | 251 nm | 230 nm |
+| -157.525 | `Side3Safe` | 234 nm | 234 nm |
+| -146.792 | `Bot1Safe` | 286 nm | 264 nm |
+| -223.695 | `Bot1Safe` | 303 nm | 309 nm |
+| -14.448 | `Top1Safe` | 361 nm | 318 nm |
+| -85.335 | `Top1Safe` | 669 nm | 672 nm |
+| -240.802 | `Side1Safe` | 746 nm | 775 nm |
+| -184.615 | `Diag11Safe` | 1245 nm | 1289 nm |
+| -246.822 | `Side2Safe` | 2129 nm | 2096 nm |
+| -255.402 | `Side1Safe` | 2202 nm | 2229 nm |
+| -164.498 | `Side1Safe` | 2933 nm | 2890 nm |
+| -198.662 | `Diag11Safe` | 3536 nm | 4113 nm |
+
+The single-tool and fused-compound readings match closely at every point (within ~30%, usually much
+closer) -- strong independent cross-validation that the corrected metric is now trustworthy, on top
+of the four points that already read identically before and after the fix. **At every one of the 15
+points, the second-closest tool is 15-1000x farther away than the binding one** -- none of them show
+two tools in close mutual proximity. This is a materially different picture from the `Top1Safe`/
+`Top2Safe`/`Diag11Safe`/`Diag12Safe` crowding this item root-caused at `z` = -283.9951: that finding
+was a real, *construction-fragility* mechanism (confirmed via the real `wall_thickness()` check:
+perturbing the fitted surface there caused `Unconverged` and a sign-reversed swing), and crowding --
+multiple tools present at the same station -- was central to it. These 15 points show something else:
+most individual ribs (`Top1Safe` governs 4, `Side1Safe` 4, `Bot1Safe` 3, `Diag11Safe` 2, `Side2Safe`
+1, `Side3Safe` 1; `Top2Safe`, `Bot2Safe`, `Diag12Safe`, `Diag21Safe`, and `Diag22Safe` govern none)
+appear to have their own near-tangency to the interior surface somewhere along their own run,
+independent of any other rib being nearby.
+
+**Tested directly, 2026-10-02, and it does not.** The same row-nudge sensitivity protocol that found
+the `z` = -283.9951 fragility (`debug_single_rib_fragility.py`) was run at three single-tool points --
+`z` = -134.498 (`Bot1Safe`), `z` = -180.652 (`Top1Safe`), and `z` = -246.822 (`Side2Safe`, a
+moderately-thin control) -- with a station forced exactly at each `z` (confirmed by an exact 0.00000
+mm match; the ordinary seed grid does not land on dips this narrow) so the perturbation and the
+measurement are both at the true near-tangency point, not nearby. At all three, across the full
+0.001-0.1 mm perturbation range: the round-0 cut stayed one valid solid throughout, the real,
+exported `wall_thickness()` decreased smoothly and monotonically (0.58-0.59 mm down to ~0.50 mm,
+exactly as a larger surface perturbation removing more material should), and clearance changed
+smoothly with no sign reversal and no `Unconverged` at any magnitude -- a clean, stable contrast with
+the crowded case's outright failure at 0.01 mm and sign-reversed swing at 0.03 mm. One row
+(`Side2Safe`) showed a small non-monotonic dip in clearance (481 to 430 to 329 to 25 nm before rising
+again as the perturbation grew), moving closer to the tangency before moving away, but even at its
+closest point the clearance stayed positive and the construction stayed valid. **Crowding --
+multiple tools present at the same station -- appears to be the necessary ingredient for the severe
+failure mode, not mere thinness.** This is new, direct evidence that a build-time check could
+reasonably treat "thin but single-rib" and "crowded" as different severities, though that is a design
+choice, not yet made.
+
+**Generality checked against a second `U`, 2026-10-02: the pattern is not specific to `U` = 3.0.**
+The identical corrected two-stage survey, run at `U` = 1.0 (28 rows, `z` range -100 to 0, a much
+shorter interior than `U` = 3.0's ~300 mm), found a comparably severe worst point -- **0.000064 mm
+(64 nm) at `z` = -38.934** -- and, because this run tallied all 96 coarse points rather than only
+the worst 15, a directly measured proportion: **22 of 96 coarse points (22.9%) read under 0.01 mm**,
+an actual fraction where the `U` = 3.0 survey only ever established a lower bound (15 of 290 from
+the refined worst-candidates; the true count among all 290 was never tallied). This is evidence
+against treating the pattern as a `U` = 3.0 idiosyncrasy: it recurs, comparably severe or worse by
+this proportion, at a second, substantially different `U`. Not yet checked at this point: whether the
+proportion continues to grow as `U` shrinks further (IP-FC-137's own `U` floor work found
+wall-thickness margin tightens at low `U`, which would be a consistent explanation if so).
+
+**Checked against `nose_cowl_shell`'s octant, 2026-10-02: the pattern recurs there too.** The identical
+corrected survey, run on `nose_cowl_shell` at `U` = 1.0 (a much shorter part: 10 rows, `z` range -50
+to -6, converged in 14.8 s against the tail's 500+ s), found a comparably severe worst point --
+**0.000048 mm (48 nm) at `z` = -27.738** -- with 3 of 40 coarse points (7.5%) under 0.01 mm, a lower
+proportion than `tail_shell` at `U` = 1.0 (22.9%) but the same order of magnitude at the extreme.
+**The pattern is not specific to `tail_shell`, nor to one `U` value**: both cowl kinds, at both `U`
+values tested, show a comparably severe (tens-of-nanometres) near-zero clearance point somewhere
+along their own length, on the real, unperturbed, currently-shipping geometry. This completes the
+generality checks this item had flagged as open; what remains unmeasured is whether the proportion
+(not just the worst-case severity) continues to grow as `U` shrinks further.
 
 **Alternatives:**
 
@@ -3310,17 +3387,20 @@ list, except at the four points that read identically).
    single 285 mm span of one ordinary build already clear by under 0.01 mm, and the existing safety
    net does not distinguish that from a comfortable clearance; it only fires once a clearance
    actually goes negative, not while a build is silently succeeding by a fraction of a micron.
-2. **Investigate the geometric mechanism directly.** Substantially done for the `z` = -276/-283.9951
-   crowding: the mechanism there is rib crowding at the corner where `Top1Safe`, `Top2Safe`,
-   `Diag11Safe`, and `Diag12Safe` overlap, matching IP-FC-137's H3 hypothesis, now confirmed against
-   real geometry. **Shown to be incomplete by the full-tail fine survey**: at least six distinct
-   near-zero clearance points (27-285 nm) recur from `z` = -286 to `z` = -25, several of them (`z` =
-   -110.37, -63.31, for instance) well outside that corner's own `x` roughly -150 to -125 overlap
-   band, so "rib crowding at this one corner" cannot be the whole mechanism. Which tool or tool pair
-   governs each of the other points is not yet identified -- the same capture-only technique that
-   identified `Top1Safe` as the fragile row at `z` = -283.9951 would apply directly, just not yet run
-   per point. What remains open: the mechanism behind the other five points, whether the same pattern
-   recurs at other `U` values, and on `nose_cowl_shell`'s octant -- none of which has been checked.
+2. **Investigate the geometric mechanism directly.** Done for the `z` = -283.9951 construction
+   failure specifically: the mechanism there is rib crowding at the corner where `Top1Safe`,
+   `Top2Safe`, `Diag11Safe`, and `Diag12Safe` overlap, matching IP-FC-137's H3 hypothesis, confirmed
+   against real geometry, and confirmed to cause real construction fragility (`Unconverged`, a
+   sign-reversed swing) via the real `wall_thickness()` check. **Shown to be the wrong mechanism for
+   most of the corrected full-tail survey's 15 points**: per-tool identification
+   (`debug_which_tool_binding_v2.py`) found a single rib binds at every one of them, with the
+   second-closest tool 15-1000x farther away -- no crowding present at 14 of the 15 (`Top1Safe` at 4,
+   `Side1Safe` at 4, `Bot1Safe` at 3, `Diag11Safe` at 2, `Side2Safe` at 1, `Side3Safe` at 1). "Rib
+   crowding at a corner" explains the one construction-fragility failure this item confirmed; it does
+   not explain why most individual ribs have their own near-tangency somewhere along their own run.
+   What remains open: whether a single rib's own near-tangency (without crowding) carries the same
+   construction-fragility risk as the crowded case, whether the same pattern recurs at other `U`
+   values, and on `nose_cowl_shell`'s octant -- none of which has been checked.
 3. **Add a build-time check on the real, measured clearance margin itself**, now that the survey
    above shows this is a concrete, checkable quantity, not only a discontinuous-jump heuristic to
    detect after the fact. A concrete first design, informed by everything measured in this item:
@@ -3355,9 +3435,12 @@ list, except at the four points that read identically).
        refined worst-candidates read under 0.01 mm; the true count among all 290 is unmeasured, since
        only the worst 15 were refined) -- whether that is the right response, or whether
        flagging-and-proceeding (surfacing the margin through `cavity()`'s existing `report` callback
-       without blocking) is more appropriate until it is known how often a thin margin actually
-       correlates with the wild-swing failure mode rather than sitting
-       comfortably close to it, is a decision, not a default.
+       without blocking) is more appropriate, is a decision, not a default. **Now informed by direct
+       evidence, not just absence of it**: a single-rib near-tangency (no crowding) was tested and
+       found stable under the same perturbation range that broke the crowded case outright, so a
+       single-severity threshold may be overcautious -- flagging a thin single-rib margin and gating
+       a crowded one differently is a credible alternative to one threshold for both, though still a
+       choice to make, not a conclusion this item draws on its own.
    Benefit: directly answers "did this build succeed comfortably or by a hair," which nothing today
    reports. Drawback: the sampling density is now shown to be a harder, open design problem (brute
    force is computationally infeasible at the resolution needed) rather than a tuning choice, the
@@ -3409,9 +3492,21 @@ bug) rules out the straightforward fix of just sampling finer. Alternative 3 rem
 direction -- nothing else proposed here addresses a problem this pervasive -- but its design
 sketch's domain and sampling-density assumptions are still shown to be insufficient, not merely
 unfinished, and need to be rebuilt around an adaptive, not fixed-grid, search. Recommending the
-direction only; the check's own design is further from finished than earlier updates treated it,
-and which tool(s) govern the corrected worst points (beyond the four that read identically before
-and after the fix) is unidentified.
+direction only; the check's own design is further from finished than earlier updates treated it.
+Which tool governs each corrected worst point is now identified (mostly `Top1Safe`, `Side1Safe`, and
+`Bot1Safe`, each on its own, not crowded), and a direct test (three points, the same row-nudge
+protocol, stations forced exactly at each) found single-rib near-tangency does not reproduce the
+crowded case's fragility -- smooth, stable behavior at every magnitude up to 0.1 mm, no `Unconverged`,
+no sign reversal. This narrows what alternative 3's check needs to treat as severe: a thin margin at
+a single, uncrowded rib is evidenced to be a thin-wall accuracy concern, not a construction-robustness
+one, while crowding (multiple tools at the same station) remains the one mechanism shown to cause
+outright failure. Whether the check should therefore have two severities (flag thin-single-rib,
+gate crowded) rather than one threshold for everything is a design choice this recommendation
+surfaces but does not make. **Generality is now checked and closed out**: the same pattern (a
+comparably severe, tens-of-nanometres worst point somewhere along the part's length) recurs at a
+second `U` value and on `nose_cowl_shell`'s octant, so this is a property of the construction
+method generally, not an artifact of one cowl kind or one `U`. Alternative 3's check, whatever its
+final design, needs to apply broadly -- not as a targeted fix for one geometry.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full
