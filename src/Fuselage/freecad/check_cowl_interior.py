@@ -66,7 +66,17 @@ def wall_thickness(wall, z, expect, tol):
         loops = [w for w in solid.slice(App.Vector(0, 0, 1), z) if w.isClosed()]
         if not loops:
             continue
-        loops.sort(key=lambda w: w.Length, reverse=True)
+        # **Sorted by enclosed area, not by perimeter length.** Length only tracks which loop is
+        # outer while both are convex-ish; once a rib cut makes the inner loop trace in and back
+        # out around the notch (this function's own docstring above), that detour can add more
+        # perimeter than the smooth outer loop has, without the inner loop enclosing anywhere
+        # near as much area. Found 2026-09-25 (IP-FC-143): at `tail_shell` `U` = 3.0,
+        # `z` = -217.7270, the two loops' lengths differ by under 0.25% (1601.84 vs 1598.18 mm)
+        # -- close enough that which one length calls "outer" is not reliable -- while their
+        # enclosed areas are not remotely close, since one is the true exterior and the other is
+        # the cavity retreating deep inward around a rib. Area tracks "which region is bigger"
+        # directly, however convoluted either loop's own path is.
+        loops.sort(key=lambda w: abs(ci._wire_area(w)), reverse=True)
         if len(loops) >= 2:
             outer = ci._Polyline(
                 [(p.x, p.y) for p in loops[0].discretize(Number=8 * AROUND)])
