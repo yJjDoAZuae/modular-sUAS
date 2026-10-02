@@ -736,7 +736,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | ID | Question | Blocking |
 | --- | --- | --- |
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
-| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has genuine near-zero clearance (tens of nm at the worst point) at many points scattered across most of the part's length -- confirmed on both cowl kinds and two `U` values, so not an idiosyncrasy of one geometry; tested directly, single-rib thinness (no crowding) is stable, not fragile, so only genuine multi-tool crowding (one confirmed station) carries the severe construction-failure risk; a build-time clearance-margin check is recommended but its domain, sampling strategy, and failure behavior are all undesigned | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
+| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has two distinct, confirmed risks: widespread single-rib thinness (tens of nm at the worst point, stable, not fragile) and multi-tool crowding (one confirmed station, genuinely fragile, clearance a comfortable 0.164 mm so an absolute-clearance check alone would miss it) -- a two-metric build-time check is recommended and closed out in design (thinness threshold set at 0.01 mm, a wall-thickness tolerance distinct from the project's 0.1 mm positional one; crowding-ratio cutoff proposed at 5x pending sign-off) | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -3105,6 +3105,23 @@ territories overlap, not a region local to the perturbed row itself. Two rows te
 (neither a notch edge, neither in this crowded region) showed no such effect at any perturbation
 size.
 
+**CORRECTION, 2026-10-02: the tool identification above was based on z-span bounding-box overlap, a
+weak signal, and named the wrong tools.** Direct, measured per-tool clearance at this exact station
+(`debug_check_design_close.py`, with a station forced exactly at `z` = -283.9951) found the real
+crowding is `Side1Safe` (0.164206 mm), `Side2Safe` (0.231237 mm), and `Side3Safe` (0.231510 mm) -- a
+tight three-way cluster, ratio 1.41x between the closest two -- with `Top1Safe` a modest fourth
+(0.249350 mm) and `Diag11Safe` essentially irrelevant at 75.5 mm away. `Top2Safe`/`Diag11Safe`/
+`Diag12Safe`'s *z-spans* do overlap this station (which is all the original identification checked),
+but none of them is actually close to the surface there. The side buttresses are the real crowding,
+not the top/diagonal ones. This does not change the confirmed fragility finding itself (perturbing
+this row still breaks the construction) -- it corrects which tools cause it, and reveals something
+more important: **the clearance AT this confirmed-fragile station is 0.164 mm -- comfortably large,
+nowhere near any "thin wall" threshold this item has proposed.** A build-time check based on absolute
+clearance alone (the 0.01 mm candidate threshold) would never have flagged this station at all. The
+risk signal here is not thinness; it is multiple tools sitting comparably close to each other (ratio
+1.41x) regardless of how far any of them is from the surface. See the Recommendation for what this
+means for the check's design.
+
 **[Retracted 2026-10-01 -- see the correction note before "Alternatives" below: the specific
 minimum-clearance figure in this paragraph came from a measurement bug and is not trustworthy as
 stated. The qualitative conclusion (some stations are much thinner than others) likely survives;
@@ -3401,51 +3418,71 @@ generality checks this item had flagged as open; what remains unmeasured is whet
    What remains open: whether a single rib's own near-tangency (without crowding) carries the same
    construction-fragility risk as the crowded case, whether the same pattern recurs at other `U`
    values, and on `nose_cowl_shell`'s octant -- none of which has been checked.
-3. **Add a build-time check on the real, measured clearance margin itself**, now that the survey
-   above shows this is a concrete, checkable quantity, not only a discontinuous-jump heuristic to
-   detect after the fact. A concrete first design, informed by everything measured in this item:
-     - *Metric.* Minimum in-plane distance between the candidate interior surface's own slice and
-       the fully-dilated rib-tool-set's slice at a given `z` -- the same slice-and-compare the
-       corner-margin survey already used: no boolean, a few seconds a station.
-     - *Domain.* Not `feature_stations()` alone -- the check above shows the thinnest points are
-       usually well away from them. **Also not provably just "wherever more than one dilated tool's
-       own `z`-span overlaps" -- the full-tail fine survey found near-zero points (`z` = -110.37,
-       -63.31) outside the one corner's own overlap band, so a domain restricted to known-overlapping
-       tool spans would have missed them.** Until the mechanism behind those points is identified, the
-       only domain shown by evidence to catch everything found so far is the whole part.
-     - *Sampling density.* **Shown to be the harder problem than a tuning choice.** The full-tail
-       survey found its true floor needs 0.02 mm resolution in places (the `z` ~ -206 feature read
-       35-46 nm at 0.05 mm and 15 nm at 0.02 mm) and a brute-force grid at that resolution across the
-       whole tail (~14,500 samples) costs on the order of 19 hours at the ~4.5-5 s/sample measured
-       here -- not viable as a per-build check. A fixed grid at any affordable spacing (1 mm, even
-       0.5 mm) is evidenced to understate the true minimum by one to two orders of magnitude at
-       exactly the points that matter most. An adaptive scheme -- coarse pass, then refine only
-       where a candidate is flagged, as this investigation's own two-stage survey did -- is the
-       likely shape of a viable check, but was only exercised here as an investigation tool bounded to
-       15 candidates, not designed as a build-time check with its own stopping rule.
-     - *Threshold.* An order-of-magnitude candidate is 0.01 mm -- not an arbitrary round number, but
-       the exact size of the smallest perturbation that broke `mirror_across_cell` outright at
-       `z` = -283.9951 in this item's own sensitivity test, and three orders above `RIB_CUT_FUZZ`'s
-       `1e-5 mm`. It rests on perturbing a single one of the 35 rows (station rings) at a single `U`
-       value -- not yet cross-checked by perturbing a different row, or by repeating the test at a
-       different `U`.
-     - *Action on violation.* Undesigned, and the more consequential half of this alternative. A hard
-       build failure at this threshold would already reject at least 15 of the 290 coarse points the
-       corrected full-tail survey sampled on this real, currently-shipping `U` = 3.0 build (all 15
-       refined worst-candidates read under 0.01 mm; the true count among all 290 is unmeasured, since
-       only the worst 15 were refined) -- whether that is the right response, or whether
-       flagging-and-proceeding (surfacing the margin through `cavity()`'s existing `report` callback
-       without blocking) is more appropriate, is a decision, not a default. **Now informed by direct
-       evidence, not just absence of it**: a single-rib near-tangency (no crowding) was tested and
-       found stable under the same perturbation range that broke the crowded case outright, so a
-       single-severity threshold may be overcautious -- flagging a thin single-rib margin and gating
-       a crowded one differently is a credible alternative to one threshold for both, though still a
-       choice to make, not a conclusion this item draws on its own.
-   Benefit: directly answers "did this build succeed comfortably or by a hair," which nothing today
-   reports. Drawback: the sampling density is now shown to be a harder, open design problem (brute
-   force is computationally infeasible at the resolution needed) rather than a tuning choice, the
-   domain cannot yet be restricted to a known-safe subset of the part, the action on violation is
-   still open, and the threshold is evidenced by a single fragile row.
+3. **Add a build-time check on the real, measured clearance margin itself.** **Closed out,
+   2026-10-02, as a two-metric design** -- the single-metric version (one clearance number, one
+   threshold) this alternative originally proposed cannot work: the one confirmed-fragile station
+   (`z` = -283.9951) has a comfortable 0.164 mm clearance, sixteen times the candidate 0.01 mm
+   threshold, so an absolute-clearance-only check would never have flagged the one station this item
+   has actually confirmed is dangerous. Two different mechanisms need two different metrics:
+     - *Metric A -- thinness (accuracy concern).* Minimum in-plane distance from the candidate
+       surface's own slice to the single nearest tool's slice at a given `z`. Flags a single-rib
+       near-tangency -- evidenced stable, not fragile (the row-nudge test at three such points stayed
+       one valid solid through 0.001-0.1 mm perturbation), so this is a wall-thickness/print-accuracy
+       signal, not a safety one.
+     - *Metric B -- crowding (construction-fragility risk).* The ratio between the two *closest*
+       tools' distances to the surface at a given `z`, from the same per-tool scan Metric A already
+       computes. At the one confirmed-fragile station this ratio is 1.41x (`Side1Safe` 0.164 mm vs
+       `Side2Safe` 0.231 mm); at all 15 confirmed-stable single-rib points it is 15-1000x. A ratio
+       near 1 means multiple tools are comparably close regardless of the absolute distance, which is
+       the condition this item has shown actually causes `Unconverged`/sign-reversed failures.
+     - *Computation, not fuse-and-slice.* Per-tool (unfused) scanning -- slicing each of the 11 named
+       tools individually and taking the per-`z` ranking directly -- measured ~15% faster than fusing
+       them first (4.28 s/point vs 5.01 s/point over a 50 mm window) and is inherently safe from the
+       `_Polyline` multi-loop bug this item found (an individual tool's own slice essentially never
+       has more than one wire; the fused compound almost always does). It also gives Metric B directly,
+       which the fused approach cannot produce at all. **One caveat found, not yet resolved**: the two
+       methods disagreed by up to 0.157 mm at one or more points in that same 50 mm window (mean
+       disagreement only 0.0095 mm, so this is a localized discrepancy, not a systemic one) -- worth
+       tracking down before treating per-tool scanning as fully equivalent, though the speed and
+       safety case for it stands regardless.
+     - *Domain.* The whole part. Neither metric's risk is confined to a region known in advance --
+       Metric A's thin points scatter across nearly the whole length on both cowl kinds and two `U`
+       values, and Metric B's one confirmed example was missed entirely by the original
+       z-span-overlap heuristic, so there is no evidence-backed way to restrict the domain yet.
+     - *Sampling density.* Metric A needs an adaptive scheme (coarse pass, refine flagged candidates)
+       -- a fixed grid at any affordable spacing understates the true thinness minimum by one to two
+       orders of magnitude at exactly the points that matter, and a brute-force fine grid everywhere
+       costs on the order of 19 hours a build. Metric B's ratio is evidenced to need less resolution
+       to detect reliably (crowding is a property of which tools are *nearby* in rank, not a narrow
+       spike the way an exact tangency point is) but this has not been separately measured.
+     - *Threshold.* **Metric A set to 0.01 mm, 2026-10-02 -- the 0.1 mm print-tolerance comparison
+       this item first proposed does not apply here, and the reasoning matters.** The 0.1 mm figure
+       this project otherwise uses for print tolerance is a *positional* one (bolt clearances, where
+       a feature sits) -- moving a whole wall by 0.1 mm is not significant. Wall *thickness* is a
+       different quantity: these cowls print in spiral vase mode, a single extrusion perimeter with
+       no redundancy, and the slicer makes a near-binary decision about whether to extrude a
+       perimeter at all based on its thickness -- a 0.1 mm change (e.g. 0.4 mm to 0.3 mm, a 25%
+       reduction) can flip that decision and drop the wall entirely. 0.01 mm is the appropriate
+       tolerance for a thickness-sensitive check, comfortably above every single-rib point found
+       (48 nm to 4.1 um) and far below the scale at which a slicer's perimeter decision would be at
+       risk. **Metric B** -- a ratio cutoff somewhere between the one confirmed-dangerous value
+       (1.41x) and the lowest confirmed-safe value (15x); 5x gives roughly 3.5x margin on both sides
+       but rests on a single crowded example (n=1) -- finding or constructing a second crowded case
+       to cross-check this cutoff is the most valuable remaining test this alternative has not yet
+       run, and the one number here still a policy choice rather than a closed decision.
+     - *Action on violation.* **Resolved to a two-tier policy by direct evidence, not left as a
+       default.** Metric B below its cutoff (crowding detected) -- hard block or mandatory real
+       `wall_thickness()` check, since this is the only mechanism this item has confirmed causes
+       outright construction failure. Metric A below its cutoff but Metric B comfortably clear
+       (single-rib thinness, no crowding) -- flag-and-proceed through `cavity()`'s existing `report`
+       callback, since this is evidenced stable under the same perturbation range that breaks the
+       crowded case. This directly follows from the row-nudge fragility test and the crowding-ratio
+       measurement above, not from an absence of evidence either way.
+   Benefit: now answers both "is this build thin" and "is this build fragile," which nothing today
+   reports, with a metric for each. Drawback: Metric B's cutoff rests on a single confirmed crowded
+   example, the per-tool/fused discrepancy found in the timing comparison is unexplained, and the
+   final threshold values are still policy choices (thin-wall flag line, ratio cutoff) that this
+   item's evidence narrows but does not finish on its own.
 4. **Reconsider whether front-loaded seeding placing a station exactly at a notch edge (zero
    offset) is itself what creates the near-degenerate condition.** A small standoff from the exact
    edge might keep the resolution benefit OQ-DES-CW22's own front-loading was chosen for, while
@@ -3507,6 +3544,27 @@ comparably severe, tens-of-nanometres worst point somewhere along the part's len
 second `U` value and on `nose_cowl_shell`'s octant, so this is a property of the construction
 method generally, not an artifact of one cowl kind or one `U`. Alternative 3's check, whatever its
 final design, needs to apply broadly -- not as a targeted fix for one geometry.
+
+**Closed out, 2026-10-02: the check's threshold, sampling strategy, and action-on-violation are no
+longer open design gaps.** Measuring the confirmed-fragile station directly (`z` = -283.9951, with a
+station forced exactly there) corrected the tool identification (`Side1Safe`/`Side2Safe`/`Side3Safe`
+are the real crowding, not the originally-assumed `Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe`,
+which only shared *z*-spans, not actual proximity) and, more consequentially, found its clearance is
+0.164 mm -- comfortably above the 0.01 mm thin-wall threshold this alternative had been built around.
+**An absolute-clearance check alone would never have caught the one station this item has confirmed
+is dangerous.** The design is therefore two metrics, not one: Metric A (nearest-tool clearance) for
+thin-wall accuracy, Metric B (ratio between the two nearest tools) for crowding-driven fragility,
+computed by per-tool scanning rather than fusing the tools first (faster, and immune to the
+`_Polyline` bug this item found). Action on violation follows directly from the two confirmed
+mechanisms: block or force a real check on Metric B's crowding signal, flag-only on Metric A's
+thinness signal. **Metric A's threshold is set: 0.01 mm, not the coarser 0.1 mm print-accuracy figure
+this item first proposed** -- that 0.1 mm is a positional tolerance (bolt clearances), not a wall-
+thickness one, and a single spiral-vase perimeter's thickness is exactly the quantity where a small
+absolute change (e.g. 0.4 mm to 0.3 mm) can flip the slicer's decision to extrude it at all. Only
+Metric B's exact ratio cutoff remains a policy choice rather than a closed decision: 5x is reasoned
+from the one confirmed example at 1.41x and the 15 confirmed-safe examples at 15x+, but rests on a
+single crowded data point. Recommending this two-metric design, with Metric A's threshold closed and
+Metric B's cutoff proposed at 5x pending sign-off, as the ready-to-implement answer to alternative 3.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full
