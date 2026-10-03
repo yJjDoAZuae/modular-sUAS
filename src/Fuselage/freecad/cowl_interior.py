@@ -365,6 +365,27 @@ SLOPE_SLACK = 0.5
 #: point observed and is what makes the pruning safe rather than merely fast.
 ANGLE_WINDOW = 25
 
+#: Metric A's thin-wall flag threshold (mm), `clearance_margin_scan`'s own criterion
+#: (OQ-DES-CW24, cowl.md) -- **not** the project's usual 0.1 mm print-accuracy figure.
+#:
+#: That 0.1 mm is a *positional* tolerance -- where a bolt-clearance feature sits -- and does
+#: not apply here. Wall *thickness* is a different quantity: these cowls print in spiral vase
+#: mode, a single extrusion perimeter with no redundancy, and the slicer makes a near-binary
+#: decision whether to extrude a perimeter at all based on its thickness. A 0.1 mm change (e.g.
+#: 0.4 mm to 0.3 mm, a 25% reduction) can flip that decision and drop the wall entirely, so
+#: 0.1 mm is too coarse a flag line for this check. 0.01 mm sits comfortably above every
+#: confirmed single-rib near-tangency this item measured (48 nm to 4.1 um across both cowl
+#: kinds and two `U` values) and far below the scale at which a slicer's own perimeter decision
+#: is at risk.
+#:
+#: **Flag-only, never a gate.** A single rib's own near-tangency to the surface, without a
+#: second tool nearby, was tested directly (`debug_single_rib_fragility.py`, three points, the
+#: full 0.001-0.1 mm perturbation range) and stayed one valid solid throughout, with no
+#: `Unconverged` and no sign reversal -- evidenced stable, unlike the one confirmed crowded
+#: station (see Metric B, `clearance_margin_scan`'s own docstring). Only crowding -- two tools
+#: comparably close at once -- is evidenced to cause the construction itself to fail.
+CLEARANCE_MARGIN_MM = 0.01
+
 
 # **Do not test a section for emptiness with `Face.Area`.** A planar face built on a single
 # closed periodic B-spline -- which is exactly what `smoothed()` produces and what every
@@ -516,6 +537,39 @@ def hausdorff(a_samples, a_dense, b_samples, b_dense):
     """
     return max(float(b_dense.distances(a_samples).max()),
                float(a_dense.distances(b_samples).max()))
+
+
+def _min_wire_distance(wires_a, wires_b):
+    """Minimum in-plane distance between two sets of wires at the same station, each wire's
+    own closed loop measured separately.
+
+    **Never flatten more than one wire into one `_Polyline` call.** `_Polyline` defaults to
+    `closed=True`, wrapping the last point of its own argument back to the first -- correct for
+    one real closed loop, but when the points of two or more separate wires are concatenated
+    first, that wraparound manufactures a phantom chord connecting the end of one loop to the
+    start of an unrelated one. That chord can cut straight across the middle of a cross-section
+    and read as an arbitrarily small "distance" with no geometric meaning at all -- found
+    investigating OQ-DES-CW24 (cowl.md): a fused multi-rib tool's own slice has 6 to 57 separate
+    wire loops at a typical station, not one, and every clearance figure measured against it
+    this way was retracted and re-measured once this was found. Each wire here closes correctly
+    on its own, and only the per-wire minimum is finally reduced.
+    """
+    if not wires_a or not wires_b:
+        return None
+    a_pts = []
+    for w in wires_a:
+        a_pts.extend((p.x, p.y) for p in w.discretize(Number=200))
+    if not a_pts:
+        return None
+    best = None
+    for w in wires_b:
+        pts = [(p.x, p.y) for p in w.discretize(Number=400)]
+        if len(pts) < 2:
+            continue
+        d = float(min(_Polyline(pts).distances(a_pts)))
+        if best is None or d < best:
+            best = d
+    return best
 
 
 # --------------------------------------------------------------------------------
@@ -1065,6 +1119,103 @@ def dilated_notches(notches, t, report=None):
          'from the layer plane' % (len(grown), t, RIB_FACETS,
                                    min(angles) if angles else float('nan')))
     return grown
+
+
+def tool_clearance_ranked(surf_shape, tool_shapes, z):
+    """OQ-DES-CW24's raw per-tool measurement at one station: the in-plane clearance from the
+    candidate interior surface's own slice to each individual dilated rib tool's own slice,
+    ranked nearest first.
+
+    **Per-tool, not fused first.** Slicing each tool individually and ranking the results
+    measured ~15% faster than fusing them into one tool before slicing (4.28 s/point against
+    5.01 s/point over a 50 mm window, `debug_check_design_close.py`) and is inherently safe from
+    the multi-loop hazard `_min_wire_distance` guards against: an individual tool's own slice
+    essentially never has more than one wire loop, where the fused compound almost always does.
+    It is also what Metric B needs directly -- the ranked list's own second entry -- which a
+    fused slice cannot produce at all.
+
+    Returns a list of `(index, distance)` into `tool_shapes`, sorted nearest first. A tool with
+    no section at `z` is simply absent from the list, not reported at distance zero.
+    """
+    s_wires = [w for w in _slice_wires(surf_shape, z) if w]
+    if not s_wires:
+        return []
+    out = []
+    for i, shape in enumerate(tool_shapes):
+        tool_wires = [w for w in _slice_wires(shape, z) if w]
+        d = _min_wire_distance(s_wires, tool_wires)
+        if d is not None:
+            out.append((i, d))
+    out.sort(key=lambda id_: id_[1])
+    return out
+
+
+def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
+                           coarse_step=1.0, refine_window=1.0, refine_step=0.05, n_worst=15):
+    """OQ-DES-CW24's two-metric scan of a candidate interior surface against the individual rib
+    tools that will be cut into it: Metric A (the nearest tool's own clearance -- a thin-wall
+    accuracy signal) and Metric B (the ratio between the two nearest tools' clearances -- a
+    crowding-driven construction-fragility signal), adaptively sampled.
+
+    **Two mechanisms, confirmed distinct, not one.** The one confirmed construction-fragility
+    failure this item found (`z` = -283.9951: `Unconverged`, then a sign-reversed swing, under a
+    0.01-0.03 mm row-nudge perturbation) sits at a comfortable 0.164 mm clearance -- sixteen
+    times `CLEARANCE_MARGIN_MM` -- so Metric A alone would never have flagged it. What it does
+    have is a second tool almost as close (ratio 1.41x). Fifteen single-rib near-tangency points
+    (clearance 48 nm to 4.1 um, Metric A's own concern) were tested the same way and stayed
+    stable at every perturbation up to 0.1 mm, with a second tool 15-1000x farther away at every
+    one. Crowding, not raw thinness, is what the evidence ties to the severe failure mode.
+
+    **Two stages, not one fixed grid.** A `coarse_step` pass finds candidate thin points, then a
+    `refine_step` pass re-scans a `refine_window` around each of the worst `n_worst` coarse
+    points. A fixed grid at any affordable spacing was measured to understate the true thinness
+    minimum by one to two orders of magnitude at exactly the points that matter
+    (`debug_full_tail_fine_survey_FIXED.py`: a 1 mm coarse grid read 180x high at one station a
+    0.02 mm scan found), and a uniformly fine grid everywhere costs on the order of 19 hours for
+    one whole-tail build -- not viable as a per-build check.
+
+    Returns the refined worst points as a list of `(z, metric_a, metric_b)`, nearest-clearance
+    first. `metric_b` is `None` wherever fewer than two tools have a section at that station, or
+    the nearest one reads exactly zero.
+
+    **Metric B's own cutoff is not applied here, and that is deliberate.** OQ-DES-CW24 (cowl.md)
+    leaves the ratio that counts as "crowded" an open policy choice -- 5x is reasoned from the
+    one confirmed-dangerous example (1.41x) and fifteen confirmed-safe examples (15x+), but
+    rests on a single crowded data point and is recorded as pending sign-off, not a closed
+    decision. This function reports the ratio; it does not decide what to do about it.
+    """
+    def sample(z):
+        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z)
+        if not ranked:
+            return None
+        metric_a = ranked[0][1]
+        metric_b = (ranked[1][1] / metric_a) if len(ranked) >= 2 and metric_a > 0.0 else None
+        return metric_a, metric_b
+
+    n_coarse = max(int((z_hi - z_lo) / coarse_step), 1)
+    coarse = []
+    for k in range(n_coarse + 1):
+        z = z_lo + (z_hi - z_lo) * k / float(n_coarse)
+        got = sample(z)
+        if got is not None:
+            coarse.append((z, got[0], got[1]))
+    coarse.sort(key=lambda row: row[1])
+
+    results = []
+    for z_center, _a, _b in coarse[:n_worst]:
+        fine_lo = max(z_lo, z_center - refine_window)
+        fine_hi = min(z_hi, z_center + refine_window)
+        n_fine = max(int((fine_hi - fine_lo) / refine_step), 1)
+        best = None
+        for k in range(n_fine + 1):
+            z = fine_lo + (fine_hi - fine_lo) * k / float(n_fine)
+            got = sample(z)
+            if got is not None and (best is None or got[0] < best[1]):
+                best = (z, got[0], got[1])
+        if best is not None:
+            results.append(best)
+    results.sort(key=lambda row: row[1])
+    return results
 
 
 def _one_region(shape, z, fuzz):
@@ -1619,7 +1770,8 @@ def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHE
 # The wall
 # --------------------------------------------------------------------------------
 
-def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None):
+def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None,
+           clearance_check=False):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
     `body` is the un-mirrored symmetry cell before any notch reached it (`half` for the tail,
@@ -1681,6 +1833,15 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     bounded by `POST_CUT_ROUNDS`, since evidence gathered before this was written shows the gap
     does not always close quickly, and an unconverged build raises rather than ships a wall this
     pass has already measured as thin.
+
+    **`clearance_check`, opt-in, off by default (OQ-DES-CW24).** Runs `clearance_margin_scan`
+    against the converged smooth surface and the individual dilated ribs once the cut above has
+    succeeded, and reports Metric A's flagged stations (and Metric B's ratio alongside them,
+    informational only) through `report`, the same callback `disconnected_pieces` and
+    `smooth_shape` already use. Never raises and never changes `solid` -- flag-only, per the
+    design's own action-on-violation for Metric A, and Metric B's crowding-ratio cutoff is not
+    enforced at all yet, since that number is still an open policy choice. Left off by default
+    because the scan itself costs on the order of an hour on top of an ordinary build.
     """
     planes = cell_boundary_planes(body)
     lo, hi = z_extent(body)
@@ -2166,6 +2327,26 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         smooth = fuse_smooth(patch_entries)
         solid, rib_residue = cut_and_check(smooth)
 
+    # **OQ-DES-CW24's clearance-margin scan, opt-in and off by default.** `ribs` (the unfused,
+    # per-tool dilation list, computed once above) is exactly what Metric B needs and the fused
+    # `tool` cannot give: which *second* tool is nearest, not only the nearest overall. Run
+    # after the post-cut loop above has already converged, against the final `smooth` -- the
+    # same candidate surface section 5 itself just finished checking -- so this never measures
+    # a surface the rest of `cavity` has already moved past.
+    if clearance_check:
+        margin = clearance_margin_scan(smooth, ribs, z_lo, z_hi)
+        thin = [(z, a, b) for z, a, b in margin if a < CLEARANCE_MARGIN_MM]
+        if thin:
+            note('    clearance margin: %d station(s) under the %.3f mm thin-wall flag '
+                 '(worst %.6f mm at z = %.4f, flag-only)'
+                 % (len(thin), CLEARANCE_MARGIN_MM, thin[0][1], thin[0][0]))
+        else:
+            note('    clearance margin: no station under the %.3f mm thin-wall flag '
+                 '(worst found %.6f mm)' % (CLEARANCE_MARGIN_MM, margin[0][1] if margin else
+                                            float('nan')))
+        if report is not None:
+            report.update(clearance_margin=margin, thin_wall_flags=thin)
+
     if report is not None:
         # **The shape as well as its measure, and deliberately.** IP-FC-115 compares two ways of
         # assembling the same set -- cut the ribs out of this and cut the result out of the
@@ -2455,7 +2636,8 @@ def mirror_across_cell(cell_result, normal):
     return solid
 
 
-def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None):
+def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None,
+                 clearance_check=False):
     """The wall: `notched` with its cavity removed, mirrored out to the whole part.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
@@ -2511,7 +2693,8 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     cannot change the result (`notched` has no material past its own cell boundary to begin with)
     but does stop the two operands from sharing an exact face at all.
     """
-    inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report)
+    inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report,
+                     clearance_check=clearance_check)
     for plane in cell_boundary_planes(body):
         inside = _extend_across_cell(inside, plane)
     wall = notched.cut(inside)
