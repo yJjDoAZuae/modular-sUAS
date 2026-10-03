@@ -233,6 +233,38 @@ def _add_slip(obj):
                         'first caller that needed it outside the pass/fail guard.')
 
 
+def _add_clearance_props(obj):
+    """`ClearanceCheck`/`ThinWallFlags`/`WorstClearanceMargin`, added where missing -- the same
+    reason and the same defensive call-it-from-`execute`-too pattern `_add_slip` uses, since a
+    document saved before this property existed never runs `__init__` again on load.
+
+    **`ClearanceCheck` is an input, off by default.** It switches on OQ-DES-CW24's
+    `cowl_interior.clearance_margin_scan` for this build. Off by default because the scan costs
+    on the order of an hour on top of an ordinary build (cowl.md) -- never run through the
+    normal build path, only by a caller that sets it and recomputes deliberately.
+
+    **`ThinWallFlags`/`WorstClearanceMargin` are its output**, mirroring how `PartitionSlip`
+    already surfaces a `shell_solid` report value as a document property: how many stations the
+    scan found under `cowl_interior.CLEARANCE_MARGIN_MM` (Metric A, flag-only), and the single
+    worst clearance found. Both read 0 / 0.0 when `ClearanceCheck` is off. Metric B's own
+    crowding ratio is not stored here -- its cutoff is an open policy choice (OQ-DES-CW24), not
+    a closed decision a document property should imply is enforced.
+    """
+    if not hasattr(obj, 'ClearanceCheck'):
+        obj.addProperty('App::PropertyBool', 'ClearanceCheck', 'Shell',
+                        'Opt-in: run OQ-DES-CW24\'s thin-wall clearance-margin scan during '
+                        'this build. Off by default -- costs on the order of an hour on top '
+                        'of an ordinary build.')
+    if not hasattr(obj, 'ThinWallFlags'):
+        obj.addProperty('App::PropertyInteger', 'ThinWallFlags', 'Shell',
+                        'How many stations the clearance-margin scan found under '
+                        'cowl_interior.CLEARANCE_MARGIN_MM. 0 if ClearanceCheck was off.')
+    if not hasattr(obj, 'WorstClearanceMargin'):
+        obj.addProperty('App::PropertyFloat', 'WorstClearanceMargin', 'Shell',
+                        'The single worst (smallest) nearest-tool clearance the scan found, '
+                        'in mm. 0.0 if ClearanceCheck was off.')
+
+
 class _CowlShell(object):
     """IP-FC-17: the notched blank with its interior cavity removed.
 
@@ -267,12 +299,14 @@ class _CowlShell(object):
         obj.addProperty('App::PropertyFloat', 'Overhang', 'Shell',
                         'overhang_angle_from_bed, which P1 is asserted against')
         _add_slip(obj)
+        _add_clearance_props(obj)
         obj.Proxy = self
 
     def execute(self, obj):
         import cowl_interior
         if obj.Base is None or obj.Body is None or not obj.Notches or not obj.Inset:
             return
+        _add_clearance_props(obj)
         report = {}
         # cowl_interior_surface.md section 4.5: the notches are the cell's own tools, never
         # mirrored, and `Body` is the un-notched cell -- `cowl_interior.cavity` fits and cuts
@@ -286,9 +320,12 @@ class _CowlShell(object):
         mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in obj.Mirrors]
         obj.Shape = cowl_interior.shell_solid(
             obj.Base.Shape, obj.Body.Shape, notches, obj.Inset, obj.Overhang, mirrors,
-            report=report)
+            report=report, clearance_check=obj.ClearanceCheck)
         _add_slip(obj)
         obj.PartitionSlip = report.get('partition_slip', 0.0)
+        thin = report.get('thin_wall_flags', [])
+        obj.ThinWallFlags = len(thin)
+        obj.WorstClearanceMargin = thin[0][1] if thin else 0.0
 
     def dumps(self):
         return None

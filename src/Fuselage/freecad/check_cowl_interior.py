@@ -2,6 +2,10 @@
 
     freecadcmd check_cowl_interior.py --pass --kind=tail_shell
 
+Add --clearance-check to also run OQ-DES-CW24's thin-wall clearance-margin scan (Metric A,
+flag-only -- never fails the build, and costs on the order of an hour on top of the ordinary
+build above). Off by default; see cowl_interior.clearance_margin_scan.
+
 **The wall and rib checks are the load-bearing ones.** Volume agreement says two solids enclose
 the same space; it does not say the wall is where it should be, and a wall in the wrong place
 with a compensating error elsewhere passes on volume alone.
@@ -224,6 +228,12 @@ def rib_gap(body, notches, z, t, t_cut):
 
 def main():
     kind = _opt('kind', 'tail_shell')
+    # **Opt-in, off by default (OQ-DES-CW24).** `cowl_interior.clearance_margin_scan` costs on
+    # the order of an hour on top of an ordinary build, so it is never run unless asked for --
+    # `--clearance-check` forces a second recompute with `tip.ClearanceCheck` set, which only
+    # re-executes `_CowlShell` (the one object whose input property changed), not the build
+    # upstream of it.
+    clearance_check = '--clearance-check' in sys.argv
     builder = {'tail_shell': cowl_tree.tail_shell,
                'nose_cowl_shell': cowl_tree.nose_cowl_shell}[kind]
     params = {'tail_shell': cowl_tree.PARAMS_TAIL_SHELL,
@@ -231,6 +241,8 @@ def main():
 
     doc = App.newDocument('check')
     tip = cowl_tree.emit(doc, None, params, builder)
+    if clearance_check:
+        tip.ClearanceCheck = True
     doc.recompute()
 
     wall = tip.Shape
@@ -333,6 +345,14 @@ def main():
         bad += 1
     except ci.PreconditionFailed:
         print('  P4 fires on a notch lying in the layer plane')
+
+    # -- the clearance margin (OQ-DES-CW24), opt-in only
+    if clearance_check:
+        print('  clearance margin (Metric A, OQ-DES-CW24): %d station(s) under %.3f mm, '
+              'worst %.6f mm -- flag-only, does not fail the build'
+              % (tip.ThinWallFlags, ci.CLEARANCE_MARGIN_MM, tip.WorstClearanceMargin))
+        print('    Metric B\'s crowding-ratio cutoff is not enforced here, pending sign-off '
+              '(OQ-DES-CW24, cowl.md)')
 
     print('%s: %s' % (kind, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
     sys.stdout.flush()

@@ -736,7 +736,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | ID | Question | Blocking |
 | --- | --- | --- |
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
-| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has two distinct, confirmed risks: widespread single-rib thinness (tens of nm at the worst point, stable, not fragile) and multi-tool crowding (one confirmed station, genuinely fragile, clearance a comfortable 0.164 mm so an absolute-clearance check alone would miss it) -- a two-metric build-time check is recommended and closed out in design (thinness threshold set at 0.01 mm, a wall-thickness tolerance distinct from the project's 0.1 mm positional one; crowding-ratio cutoff proposed at 5x pending sign-off) | Not blocking (existing checks catch the outright-failure case; the silent wild-swing case is unflagged but not yet observed outside a deliberate perturbation) |
+| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has two distinct, confirmed risks: widespread single-rib thinness (tens of nm at the worst point, stable, not fragile; Metric A, 0.01 mm, implemented and shipping, flag-only) and multi-tool crowding (two confirmed-fragile stations now, genuinely fragile both in outright failure mode and in silently invalid results; Metric B's ratio tested by dose-response and found not reproducible or thresholdable -- no single cutoff separates the fragile stations from the confirmed-stable ones, and the fragile stations' own exact failure mode varies build to build) | Not blocking (existing checks catch the outright-failure case; the silent wild-swing/invalid case is unflagged and has now been observed twice outside deliberate perturbation testing, not zero times) |
 
 ### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
 
@@ -3565,6 +3565,55 @@ Metric B's exact ratio cutoff remains a policy choice rather than a closed decis
 from the one confirmed example at 1.41x and the 15 confirmed-safe examples at 15x+, but rests on a
 single crowded data point. Recommending this two-metric design, with Metric A's threshold closed and
 Metric B's cutoff proposed at 5x pending sign-off, as the ready-to-implement answer to alternative 3.
+
+**Metric A implemented, 2026-10-02, continuing until blocked on Metric B's own open cutoff.**
+`cowl_interior.clearance_margin_scan`/`tool_clearance_ranked` and the `CLEARANCE_MARGIN_MM` = 0.01 mm
+constant are now in [cowl_interior.py](../../src/Fuselage/freecad/cowl_interior.py), wired into
+`cavity()`/`shell_solid()` as an opt-in `clearance_check` parameter (off by default -- the scan
+costs on the order of an hour on a full tail build) and reachable through `cowl_tree._CowlShell`'s
+new `ClearanceCheck` document property and `check_cowl_interior.py --clearance-check`. Verified
+against real geometry: the default (off) path is an exact no-op, and the opt-in scan found 15
+stations under 0.01 mm on `nose_cowl_shell` (worst 0.081 um), flag-only, without affecting the
+build's `OK` result. **Metric B is computed and reported but not enforced anywhere** -- its ratio
+cutoff is still the open decision above, not a number this implementation has any basis to pick on
+its own. Full account in
+[freecad_migration.md IP-FC-143](../implementation/freecad_migration.md#work-items).
+
+**Metric B's ratio cutoff, tested directly by quantitative dose-response, is not derivable --
+not because the gap lacked data, but because the ratio itself is not a sound quantity to
+threshold.** Per direct instruction to derive the value from test results rather than split the
+gap by eye, this session found real stations at 1.49x, 1.94x, 3.73x and 6.09x between the one
+confirmed-dangerous example (1.41x) and the confirmed-safe examples (15x+), and ran the same
+row-nudge fragility protocol on each. All four were stable (smooth, linear, constant-gain
+response -- the same signature every other confirmed-safe point has shown). A fifth point, `z` =
+-294.1530 (also a notch-tool edge, 10 mm from the original), was **not**: it failed
+`Unconverged` at every tested magnitude (0.01, 0.03, 0.1 mm), worse than the original
+1.41x case, which still succeeded (with a sign-reversed swing) at 0.03 mm. **Its own measured
+ratio, however, did not reproduce.** Three independent builds of the identical code and
+parameters read that station's second-nearest tool as Diag12Safe (ratio 9.262x) once and
+Side2Safe (ratio 3.236x) twice -- the fragility reproduced in all three, but which tool counts
+as "second-nearest," and therefore the ratio itself, did not. Retesting the original
+`z` = -283.9951 point on the same third build found it still broken, but through a **third,
+different failure signature** each time it has now been tested: `Unconverged` with a
+sign-reversed swing (original finding), then `ValueError: Null shape` and a differently-worded
+`Unconverged` (this session), the 0.1 mm case this time returning a silently invalid
+(`isValid()` = `False`) 132 mm "thickness" with no exception raised at all. **This matches the
+project's own documented kernel-reproducibility floor** (recompute is not bit-reproducible; a
+fresh build is) -- newly shown here to bite the crowding *ranking* itself at a near-degenerate
+configuration, not only raw numeric noise in an otherwise-stable reading. No single ratio cutoff
+can be sound against this evidence: a cutoff tight enough to catch a 9.262x reading of the
+fragile station would also need to be at or above the confirmed-stable 6.088x point, and a
+cutoff that spares 6.088x would miss the fragile station on the build that reads it as 9.262x.
+**Recommendation: do not close Metric B with a ratio cutoff.** The evidence supports treating
+"more than one tool present within some generous, conservative band" as grounds to force the
+real `wall_thickness()` check unconditionally, rather than searching for a precise numeric line
+the measurement itself cannot hold still long enough to be thresholded against. A different
+candidate signal -- how many tools sit within a tight band of the minimum, not just the ratio
+between the top two -- is suggested by the one clean contrast available (the fragile
+`z` = -283.9951 has four tools within 1.52x of each other; the confirmed-stable `z` = -273.8499
+also has four tools, but spread to 6.22x) but is not confirmed by a controlled test and does not
+obviously explain `z` = -294.1530 (where only two tools were ever found close). Untested, and
+the next concrete step if this direction is pursued.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full
