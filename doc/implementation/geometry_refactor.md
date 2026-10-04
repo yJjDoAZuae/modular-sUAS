@@ -818,7 +818,7 @@ one of these.
 *No open questions — all three are resolved, and each note stays in numerical position
 with its original analysis retained below the resolution.*
 
-### ~~OQ-GEO-1 — Is grouping worth its cost for every group?~~ — RESOLVED 2026-08-06
+### OQ-GEO-1 — Is grouping worth its cost for every group? — RESOLVED 2026-08-06
 
 **Chosen: alternative 4 — drop the grouping entirely and revert the greeble pilot.**
 IP-GEO-10 is superseded; IP-GEO-16 and IP-GEO-17 replace it.
@@ -943,7 +943,7 @@ reasoning. Those were either Python-side (surviving), or small, verified, and ai
 making the current path safe to *operate* through Phases 1 and 2 — which is a different
 justification from making it nicer to read.
 
-### ~~OQ-GEO-2 — How are the GUI driver files verified?~~ — RESOLVED 2026-08-06
+### OQ-GEO-2 — How are the GUI driver files verified? — RESOLVED 2026-08-06
 
 **Chosen: alternative 1 — render each driver and treat failure *or warning* as an
 error.** Built as [`verify_drivers.py`](../../src/Fuselage/tools/verify_drivers.py),
@@ -1037,7 +1037,7 @@ The question therefore stands on its own merits and remains open.
 signature of exactly the `undef` breakage this refactor risks. Alternative 2 can follow
 if it proves insufficient.
 
-### ~~OQ-GEO-3 — What enforces the cross-language field order?~~ — RESOLVED 2026-08-06
+### OQ-GEO-3 — What enforces the cross-language field order? — RESOLVED 2026-08-06
 
 **Chosen: alternative 1, strengthened — document on both sides, *and test both sides*.**
 Alternative 1 as originally written was "accept it, documented as a contract in both

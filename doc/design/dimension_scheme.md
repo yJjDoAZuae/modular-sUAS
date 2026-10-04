@@ -650,7 +650,7 @@ belong in its interface-conventions section, and what stays here is the drawing-
 | --- | --- | --- |
 
 
-### ~~OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants?~~ — DECIDED 2026-08-22: factor the table by axis, and add a second product
+### OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants? — DECIDED 2026-08-22: factor the table by axis, and add a second product
 
 **Chosen: alternative 2, plus alternative 5 as a companion rather than a competitor.**
 
@@ -738,7 +738,7 @@ actually has.
 
 *Implementation: IP-FC-21 (family drawings), IP-FC-84 (single-variant sets).*
 
-### ~~OQ-DES-D2 — How does a dimension state a joint, when the reader is integrating rather than inspecting?~~ — DECIDED 2026-08-22: the dimension is the feature as built, and a callout beside it names the hardware
+### OQ-DES-D2 — How does a dimension state a joint, when the reader is integrating rather than inspecting? — DECIDED 2026-08-22: the dimension is the feature as built, and a callout beside it names the hardware
 
 **Chosen: alternative 3.** A dimension gives the feature the way the part actually is, and the
 callout beside it says what the feature is for:
@@ -783,7 +783,7 @@ and a reader has no way to notice the bolt will not pass.
 which annotates the corner's mid-bay section four ways from geometry traced off the built
 solid. Implementation: IP-FC-21.*
 
-### ~~OQ-DES-D3 — The drawing's rule for what to dimension can only see parts that are in the model~~ — DECIDED 2026-08-22: the aperture is a dimension and goes on the drawings; volume goes in a data block
+### OQ-DES-D3 — The drawing's rule for what to dimension can only see parts that are in the model — DECIDED 2026-08-22: the aperture is a dimension and goes on the drawings; volume goes in a data block
 
 **The aperture span is a dimension, and it is worth having on the drawings.** It is not a
 special case needing a new kind of annotation: it is the distance between two real, parallel,
@@ -837,7 +837,7 @@ with every size axis, so they become two more columns in the factored tables —
 
 *Implementation: IP-FC-21.*
 
-### ~~OQ-DES-D4 — Panels are to get their own OML allocation, and nothing in the model owns one~~ — DECIDED 2026-08-22: the panel OML becomes a part
+### OQ-DES-D4 — Panels are to get their own OML allocation, and nothing in the model owns one — DECIDED 2026-08-22: the panel OML becomes a part
 
 **Chosen: the allocated envelope itself becomes a part, and panel designs are then made to fit
 within it.** That is not one of the four alternatives as filed — those offered a derivation, a
@@ -889,7 +889,7 @@ envelope, which is set by the corner.
 
 *Implementation: IP-FC-85 for the OML part, IP-FC-22 for the assembly drawings it appears on.*
 
-### ~~OQ-DES-D5 — How is the value table laid out, when the view must have three quarters of the frame?~~ — DECIDED 2026-08-22: compact the table, and draw our own title block
+### OQ-DES-D5 — How is the value table laid out, when the view must have three quarters of the frame? — DECIDED 2026-08-22: compact the table, and draw our own title block
 
 **Chosen: alternative 2.** The value table is compacted and its blocks packed abreast, and the
 sheet gets a title block of this project's own rather than the stock ASME one.
@@ -976,7 +976,7 @@ has more room than the version that broke it. The band holds **13 rows, not 10**
 
 *Implementation: IP-FC-21 for the compaction, IP-FC-86 for the title block and template.*
 
-### ~~OQ-DES-D6 — The completeness test asks what a mapping carries, not what the geometry consumes~~ — DECIDED 2026-08-28: name the type in the register, and state joint 3 on the bulkhead
+### OQ-DES-D6 — The completeness test asks what a mapping carries, not what the geometry consumes — DECIDED 2026-08-28: name the type in the register, and state joint 3 on the bulkhead
 
 **Resolution note.** Both alternatives 2 and 3 were taken, and they are not competing: the one
 error message covered two different problems.
@@ -1056,7 +1056,7 @@ as well as the adjustment is a question this resolution does not settle.
 `freecad/sheet_annotations.corner_seat_span`, read from both sides; the reachability record is
 `freecad/check_unread_rows.py` (IP-FC-56).*
 
-### ~~OQ-DES-D7 — Some register rows give the whole size of a fit, others only the clearance gap, and one check reads them all the same way~~ — DECIDED 2026-08-30: write the whole size in every row, then make the expressions executable
+### OQ-DES-D7 — Some register rows give the whole size of a fit, others only the clearance gap, and one check reads them all the same way — DECIDED 2026-08-30: write the whole size in every row, then make the expressions executable
 
 **Resolution note.** Alternatives **1 and 5**, in that order, as recommended — 5 is not an
 alternative to 1 but the thing 1 unlocks.
@@ -1147,7 +1147,7 @@ that is a separate decision rather than a consequence of this one.
 *Implementation: `tools/drawing_families.read_register` and `check_register`, and section 2's
 register table. Tracked as IP-FC-107 (alternative 1) and IP-FC-108 (alternative 5).*
 
-### ~~OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance~~ — DECIDED 2026-08-28: the register is corrected; the part is right
+### OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance — DECIDED 2026-08-28: the register is corrected; the part is right
 
 **Resolution note.** Determined by [OQ-DES-D9](#open-questions) rather than decided separately:
 section 2 is an analysis of the implementation, so where it and a part disagree the part is
@@ -1172,7 +1172,7 @@ against the derivation rather than against the part.
 *Implementation: section 2's register table. No code depends on the difference — both forms name
 the same parameters, which is why section 3's completeness test could never have caught it.*
 
-### ~~OQ-DES-D9 — Is section 2 the interface design, or an analysis of the implementation?~~ — DECIDED 2026-08-28: it is analysis, and the derivation it is not is now tracked work
+### OQ-DES-D9 — Is section 2 the interface design, or an analysis of the implementation? — DECIDED 2026-08-28: it is analysis, and the derivation it is not is now tracked work
 
 **Resolution note.** Section 2 **is** an analysis of the implementation as written, and section
 1 now says so instead of claiming to be a reading of `design_constants.json`. Measured
@@ -1215,7 +1215,7 @@ section 2 is does not remove the loop; it stops the loop being read as evidence 
 *Implementation: IP-FC-87 for the derivation; section 1 carries the statement of what section 2
 is.*
 
-### ~~OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart~~ — DECIDED 2026-09-09: alternative 2, split into two columns
+### OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart — DECIDED 2026-09-09: alternative 2, split into two columns
 
 **Resolution note.** **Alternative 2.** Section 2's register now carries *Clearance on* (which
 part's geometry the gap is cut out of) and *Stated by* (every drawing section 3's completeness
@@ -1254,7 +1254,7 @@ adopted, not before.
 [`tools/drawing_families.py`](../../src/Fuselage/tools/drawing_families.py) — the register now
 parses six columns and a *Stated by* cell may name more than one part.*
 
-### ~~OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is~~ — DECIDED 2026-09-09: alternative 1, dimension the exposed width
+### OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is — DECIDED 2026-09-09: alternative 1, dimension the exposed width
 
 **Resolution note.** **Alternative 1.** Each bulkhead sheet gains a dimension across the panel
 seating face's actual exposed span — `unit_width − 2·(corner_radius + panel_offset) −
@@ -1282,7 +1282,7 @@ rule to apply, not a further decision.
 bulkhead quantities and dimensions (done, `panel_span`) — unblocks
 [IP-FC-109](../implementation/freecad_migration.md).*
 
-### ~~OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint~~ — DECIDED 2026-09-06: a row applies to the families that have its joint
+### OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint — DECIDED 2026-09-06: a row applies to the families that have its joint
 
 **Resolution note.** **Alternative 1**, let a register row be restricted by feature rather than
 only by type — **described as alternative 3**, which is the same mechanism arriving as a
@@ -1327,7 +1327,7 @@ register table.*
 
 ---
 
-### ~~OQ-DES-D13 — Nine dimensions can be governed by either of two requirements, and the drawing says which for none of them~~ — DECIDED 2026-09-06: a `GOVERNED BY` column in the value table
+### OQ-DES-D13 — Nine dimensions can be governed by either of two requirements, and the drawing says which for none of them — DECIDED 2026-09-06: a `GOVERNED BY` column in the value table
 
 **Resolution note.** **Alternative 1**, one extra column in the value table carrying the
 requirement id that produced each variant's value, **with alternative 3's marker held as the
@@ -1389,7 +1389,7 @@ beside a title block deeper than it is; **width** is where this sheet is tight.
 *Implementation: [IP-FC-99](../implementation/freecad_migration.md) step three.*
 
 
-### OQ-DES-D14 — DES-9's own evidence is a quantity no drawing shows
+### OQ-DES-D14 — DES-9's own evidence is a quantity no drawing shows — RESOLVED 2026-09-06
 
 **Resolved 2026-09-06: alternative 1, as recommended.** DES-9 reaches *shown values* only,
 so `flat_offset` is out of scope for the `GOVERNED BY` note: it is not a dimension any sheet
@@ -1405,7 +1405,7 @@ cover the case it was drafted from, and 24 corner sheets stay silent about a rea
 difference. The evidence that would reopen it is a reviewer being misled by one of those 24
 sheets. That evidence has not been sought.
 
-### OQ-DES-D15 — The value table does not fit the layout OQ-DES-D5 chose
+### OQ-DES-D15 — The value table does not fit the layout OQ-DES-D5 chose — RESOLVED 2026-09-07
 
 **Resolved 2026-09-07: alternative 5, reduce the table lettering, decided by the user on
 review.** The sheets are drawn on ANSI A, in OQ-DES-D5's band layout, and what gives is the
@@ -1446,7 +1446,7 @@ its five leader notes need more at **any** scale, since note text does not shrin
 part) nor as rows (57.7 mm of height, same result). At 239.5 × 141.2 both place, and every
 bulkhead family sheet now carries a plan and a `DETAIL A`.
 
-### ~~OQ-DES-D16 — A leader can cross a witness line, and nothing checks for it~~ — DECIDED 2026-09-07: alternative 4, a one-bend router
+### OQ-DES-D16 — A leader can cross a witness line, and nothing checks for it — DECIDED 2026-09-07: alternative 4, a one-bend router
 
 **Chosen: alternative 4**, over alternative 3's recommendation. `dimension_placement._route_leaders`
 runs once every dimension on a view has been placed (so every witness line exists), finds the
@@ -1472,7 +1472,7 @@ cannot reach a new way to fail a sheet that never needed reaching for. A leader 
 crosses a witness line after this is exactly as visible, or invisible, as it was before
 OQ-DES-D16 was filed — the router is strictly additive, not a new constraint.
 
-### ~~OQ-DES-D17 — A dimension can inherit an unrelated note's whole band~~ — DECIDED 2026-09-07: alternative 3, tried and measured not to reach the case it was filed on
+### OQ-DES-D17 — A dimension can inherit an unrelated note's whole band — DECIDED 2026-09-07: alternative 3, tried and measured not to reach the case it was filed on
 
 **Chosen: alternative 3.** `_attempt` now builds both of section 5.3 item 5's balancings for
 an axis group of two or more — the ranked assignment and its mirror — scores each by

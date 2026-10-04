@@ -528,7 +528,7 @@ expressions become executable and are checked against the parts. **OQ-DES-DB7** 
 it asked whether `longeron_chamfer` should be renamed because it chamfers nothing, and it does
 chamfer something.
 
-### ~~OQ-DES-SR1 — Two printability requirements have nothing above the joint~~ — DECIDED 2026-08-30: two requirements, DES-13 and DES-14, kept separate
+### OQ-DES-SR1 — Two printability requirements have nothing above the joint — DECIDED 2026-08-30: two requirements, DES-13 and DES-14, kept separate
 
 **Resolution note.** Alternative 2: one requirement for orientation, one for support.
 
@@ -570,7 +570,7 @@ rather than decomposed directly — and AR-MOD-2, AR-MOD-3, AR-MOD-6 and AR-MOD-
 *Implementation: `requirements.py` gains DES-13 and DES-14 and re-cites INT-9; section 4 gains
 two rows and two notes; IP-FC-95 is the overhang checker DES-14 needs.*
 
-### ~~OQ-DES-SR2 — Three requirements are verified by nothing~~ — DECIDED 2026-08-30: build all three, ordered by dependency
+### OQ-DES-SR2 — Three requirements are verified by nothing — DECIDED 2026-08-30: build all three, ordered by dependency
 
 **Resolution note.** Alternative 1: all three checks are to be built. The ordering is set by
 dependency rather than by cost, and only one dependency edge exists.
@@ -609,7 +609,7 @@ written. The distinction this document drew a day earlier — between *"we do no
 verify this"* and *"nobody has written it yet"* — has collapsed in the useful direction, since
 the first category is now empty.
 
-### ~~OQ-DES-SR3 — Interchange and re-ordering are delivered but not required~~ — DECIDED 2026-08-30: DES-15, scoped to the mating features only
+### OQ-DES-SR3 — Interchange and re-ordering are delivered but not required — DECIDED 2026-08-30: DES-15, scoped to the mating features only
 
 **Resolution note.** Alternative 1, with a correction to the requirement this document drafted.
 
