@@ -447,17 +447,17 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 
 | ID | Status | Question |
 | --- | --- | --- |
-| B1 | ~~resolved~~ 2026-08-06 | What sets `greeble_opening_angle = 35°`? |
-| B2 | ~~resolved~~ 2026-08-06 | Is the interconnect's cut dimensioned or fitted? |
+| B1 | resolved 2026-08-06 | What sets `greeble_opening_angle = 35°`? |
+| B2 | resolved 2026-08-06 | Is the interconnect's cut dimensioned or fitted? |
 | B3 | **open** — intent unrecoverable | Should the web be a variant rather than a flag? |
-| B4 | ~~resolved~~ 2026-08-06 | Have large-`U` bulkheads been printed? |
-| B5 | ~~resolved~~ 2026-08-06 — not a defect | Should insert depth be a validity check? |
-| B6 | ~~resolved~~ 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
-| B7 | ~~resolved~~ 2026-08-06 | Does one snap angle work at the *small* end? |
+| B4 | resolved 2026-08-06 | Have large-`U` bulkheads been printed? |
+| B5 | resolved 2026-08-06 — not a defect | Should insert depth be a validity check? |
+| B6 | resolved 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
+| B7 | resolved 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
-| B12 | ~~resolved~~ 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
-| B13 | ~~resolved~~ 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
-| B14 | ~~resolved~~ 2026-08-16 — implemented | Nothing keeps the bolt-flange fillet center off the bolt axis |
+| B12 | resolved 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
+| B13 | resolved 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
+| B14 | resolved 2026-08-16 — implemented | Nothing keeps the bolt-flange fillet center off the bolt axis |
 
 **Two open: B3 and B8.** Both need a decision rather than an answer — B3's original intent is
 not recoverable, and B8 is a forward-looking structural choice that gets more expensive the
@@ -494,13 +494,13 @@ and U=4.
 Resolved entries keep their full text below, in numerical position, with the reasoning
 that produced the answer.
 
-**~~OQ-DES-B1 — What sets `greeble_opening_angle = 35°`?~~ — RESOLVED 2026-08-06.**
+**OQ-DES-B1 — What sets `greeble_opening_angle = 35°`? — RESOLVED 2026-08-06.**
 It was **arrived at experimentally**, and what it does is let the longeron snap
 into the greeble's centre hole. See [the longeron snap](#the-longeron-snaps-into-the-greeble)
 above, which is written from that answer. It is a tuned value, not a derived one: do not
 replace it with a formula.
 
-**~~OQ-DES-B2 — Is the interconnect's relief cut dimensioned or fitted?~~ — RESOLVED
+**OQ-DES-B2 — Is the interconnect's relief cut dimensioned or fitted? — RESOLVED
 2026-08-06.** It is neither a relief nor a clearance: it is a **mass
 reduction**. The interconnect's flange is only full `2·bt` depth at the corners, where
 the longerons and the bolted joints put the load, and is narrowed to `1·bt` along the
@@ -575,7 +575,7 @@ honest at negligible cost. Promoting it to a variant is a real capability, but i
 motivated by a mass or stiffness requirement rather than by the observation that the flag
 exists.
 
-**~~OQ-DES-B4 — Have large-`U` bulkheads been printed?~~ — RESOLVED 2026-08-06.**
+**OQ-DES-B4 — Have large-`U` bulkheads been printed? — RESOLVED 2026-08-06.**
 Yes. **A U=4 bulkhead section has been printed and assembled** with 16 mm
 longerons and a corner section. Both snap fits work: the longeron snaps into the greeble,
 and the corner snaps onto it.
@@ -590,7 +590,7 @@ hardware at both extremes — which is as much as two prints can establish, and 
 the rest of this document rests on. Everything else here is geometry that renders rather
 than hardware that fits.
 
-**~~OQ-DES-B5 — Should insert depth be a validity check?~~ — RESOLVED 2026-08-06. No.**
+**OQ-DES-B5 — Should insert depth be a validity check? — RESOLVED 2026-08-06. No.**
 The question was based on a wrong assumption of mine: that the insert has to be contained
 within the bulkhead's thickness. It does not. **It is set from the interior side and may
 stand proud of that face** — the interior is free space, so the surplus goes where nothing
@@ -604,7 +604,7 @@ I had recorded this as the one question describing a part that could not be asse
 That was wrong, and there is now no such question here — everything else in this list is
 a decision that was not written down rather than something broken.
 
-**~~OQ-DES-B6 — `greeble_tolerance` is a dead parameter on the bulkhead side.~~ —
+**OQ-DES-B6 — `greeble_tolerance` is a dead parameter on the bulkhead side. —
 RESOLVED 2026-08-06.** It was threaded positionally through `bulkhead_section_full` →
 `_octant` → `bulkhead_section`, and then discarded: `greeble_tolerance_local = 0` is what
 reached `corner_end()`. The value the sweep passed (`GREEBLE_TOLERANCE_BULKHEAD_MM`,
@@ -627,7 +627,7 @@ Removed from three SCAD signatures and four call sites, from both GUI drivers, f
 `bulkhead_render()`, and from the Python constants. `bulkhead_section()` now passes a
 literal `0` to `corner_end()` with the invariant stated beside it.
 
-**~~OQ-DES-B7 — Does one snap angle work at the *small* end?~~ — RESOLVED 2026-08-06.**
+**OQ-DES-B7 — Does one snap angle work at the *small* end? — RESOLVED 2026-08-06.**
 Yes. **A U=0.5 part has been printed and the tolerances work.** With B4's U=4 result,
 that is both ends of the swept range validated in hardware.
 
@@ -687,7 +687,7 @@ not happen is landing-gear bulkheads being designed as though they were peers of
 that is a design error the enum would quietly encourage, and it is not fixed by renaming
 anything later.
 
-### ~~OQ-DES-B9 — Is the morphological fillet the authority, or is a true fillet?~~ — DECIDED 2026-08-08: true fillets
+### OQ-DES-B9 — Is the morphological fillet the authority, or is a true fillet? — DECIDED 2026-08-08: true fillets
 
 **Decision.** The FreeCAD version uses **real fillets that make proper use of FreeCAD's
 capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
@@ -804,7 +804,7 @@ exactly the region where the two measurements diverged.
    it, so this means writing the offset chain by hand. *(⚠️ Both clauses of that last
    sentence are false, established 2026-08-10 — `Part::Offset2D` does it to 0.00456%, as a
    chain of four document objects with no hand-written geometry.)*
-   *Prerequisites:* ~~establishing why the dilations differ, which is not yet known~~ — none;
+   *Prerequisites:* establishing why the dilations differ, which is not yet known — none;
    the dilations do not differ.
 
 3. **Treat the current profile as incidental** and choose the radius afresh in the port.
@@ -821,7 +821,7 @@ geometry here is sometimes arrived at by experiment rather than derivation — t
 opening angle was exactly that. So whether the web profile was tuned needs answering before
 the change, not after.
 
-### ~~OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order~~ — FIXED 2026-08-08
+### OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order — FIXED 2026-08-08
 
 **Decision.** The matching names are the correct interface association; the old alignment was
 the accident. The call is corrected to
@@ -948,7 +948,7 @@ kept, and that is a judgement about a flown part rather than about the code.
 **Porting in the meantime follows alternative 3**, so the port continues and matches the
 existing reference; switching later is a change to two constants.
 
-### ~~OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built?~~ — DECIDED 2026-08-10: split by intent
+### OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built? — DECIDED 2026-08-10: split by intent
 
 **Decision. Alternative 3.** True fillets on the key, and the morphological offset chain for
 the more complex remainder of the bulkhead.
@@ -1014,7 +1014,7 @@ offset chain](../implementation/freecad_migration.md), and the two constructions
 against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
 which keeps the morphological form solely as the thing being compared to.
 
-### ~~OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib~~ — DECIDED AND FIXED 2026-08-11: fix the authority
+### OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib — DECIDED AND FIXED 2026-08-11: fix the authority
 
 **Decision. Alternative 1.** `corner_end` gains an explicit overshoot argument, defaulting to
 zero, which extends the extrusion only. `bulkhead_thickness` goes back to meaning the
@@ -1080,7 +1080,7 @@ is the stronger evidence, because a regenerated reference can always be made to 
 whatever the code now does. The assembled part lost exactly eight times the octant's change,
 so the eight-way tiling was not disturbed.
 
-### ~~OQ-DES-B13 — The outer-face cleanup tool sets a material face from `geometry_eps`~~ — DECIDED 2026-08-14: fix the corner's extension, then delete the `eps`
+### OQ-DES-B13 — The outer-face cleanup tool sets a material face from `geometry_eps` — DECIDED 2026-08-14: fix the corner's extension, then delete the `eps`
 
 **Decision.** Two changes, in this order, both implemented 2026-08-14:
 

@@ -413,10 +413,28 @@ $$\frac{\mathrm{d}\zeta}{\mathrm{d}r} = \tan\phi
 \quad\Longrightarrow\quad
 \text{the chamfer makes angle } \phi \text{ with the radial direction.}$$
 
-At $\phi = 35°$ that is an unsupported face 55° from the build axis if the part is printed
-along $+z$ — steeper than the usual 45° self-supporting limit. Either the print orientation
-is not along $z$, or these chamfers are not intended as printability relief.
-[OQ-DES-CW2](#open-questions).
+At $\phi = 35°$ the chamfer face sits 55° from the build axis and **35° above the bed**. With the
+build direction known to be axial (§7), that is the whole meaning of `cone_angle` — the overhang
+angle measured from the bed — and the value is a deliberately aggressive one that modern printers
+hold in PLA, not a violated 45° limit. §7.1 supplied the missing half and settled
+[OQ-DES-CW2](#open-questions); this paragraph previously left it open as "either the print
+orientation is not along $z$, or these chamfers are not printability relief", which §7.1 answers.
+
+**The purpose of the chamfer follows from that.** It is what takes the cut from full depth back
+out to the outer surface at each end of the slot, so the slot ends in a 35° ramp the printer can
+bridge rather than in a vertical wall it cannot.
+
+**Confirmed against the built solid.** Read off the real `Top2Safe` tool's own vertices at
+`U` = 3.0: reach 150 mm — the outer surface, at zero cut depth — at $\zeta$ = -294.0000, and reach
+135 mm — the cut floor — at $\zeta$ = -283.4969. That is $\rho$ = 15.0 mm radially against
+$\rho\tan\phi$ = 10.5031 mm axially, giving $\tan\phi$ = 0.70021 and $\phi$ = **35.00°**, matching
+the profile algebra above exactly.
+
+![The ramp at the end of Top2Safe, square on the mirror plane](img/cowl_rib_cut/cw24_ramp_detail.png)
+
+*`Top2Safe`'s slot (blue) in the real blank (grey), square on the `y` = 0 mirror plane at the
+$\zeta$ = -294 end. $r$ runs across, $\zeta$ up; white is outside the part, and the vertical edge
+at the left is the part's own outer surface.*
 
 ### 4.2 `cone_angle` appears twice, with reciprocal meanings
 
@@ -456,6 +474,11 @@ parameter tree and then never used, because the SCAD uses literals:
 | top diagonal | ±30, at two stations | $\Delta\zeta = W\sin 30° $ apart |
 
 The nose cowl uses exactly one side buttress at 0°, cut into the octant before tiling.
+
+That pattern, rendered in place on the real `tail_shell` blank at `U` = 3.0 — each coloured volume
+is one named tool intersected with the blank, so what is drawn is the material that tool removes:
+
+![The eleven buttress slots rendered in place in the real blank](img/cowl_rib_cut/cw24_where_ribs.png)
 
 **Every literal in that table is either an angle or a fraction of `W = unit_width`**, so the
 buttress pattern already scales with the cowl, which is what was intended
@@ -503,12 +526,25 @@ scale, consistent with the greeble tolerance and `longeron_tolerance` elsewhere.
 what produces the buttress, through slicing. The printed rib is far thicker than the cut,
 because the slicer walls both faces of it:
 
-$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}} + t_{\text{cut}}$$
+$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}}
+                 + \frac{t_{\text{cut}}}{\sin\theta}$$
 
-In spiral vase mode, which is the mode these cowls are printed in, `n_perimeters = 1`, so a
-0.05 mm parameter yields a **0.85 mm** rib at `extrusion_width = 0.4` and 1.25 mm at the
-sweep's 0.6. Resolved 2026-08-09, [OQ-DES-CW3](#open-questions) and
-[OQ-DES-CW6](#open-questions).
+where $\theta$ is the angle between the cut plane and the layer plane. In spiral vase mode, which
+is the mode these cowls are printed in, `n_perimeters = 1`, so at the sweep's
+`extrusion_width = 0.6` and `cut_thickness = 0.1` a **vertical** cut ($\theta = 90°$) gives
+$2(0.6)(1) + 0.1 = $ **1.3 mm**, and the tail's 30° diagonals give $1.2 + 0.1/\sin 30° =$
+**1.4 mm**. This is the expectation `check_cowl_interior.py`'s rib-gap check asserts against the
+real geometry, and it passes at 1.3000 mm exactly on both cowl kinds.
+
+**The $\sin\theta$ term is not optional.** Writing a flat 1.3 mm into the expectation reports
+correct geometry as an error at every inclined buttress, which it did —
+[OQ-DES-CW19](#open-questions), resolved 2026-09-04. The $2 w n_p$ term is the slicer walling
+*both* faces of the cut, which is why the printed rib is far thicker than the cut that produces
+it.
+
+Resolved 2026-08-09, [OQ-DES-CW3](#open-questions) and [OQ-DES-CW6](#open-questions); the
+numbers above are stated at the current `cut_thickness` = 0.1 mm, after IP-FC-43 folded the
+factor of two into the parameter value.
 
 ---
 
@@ -552,13 +588,21 @@ depends on nothing, and it is on the critical path for four use cases.
 > ported nose and tail cowls agree with their references to **−0.0000%** each. That is what
 > establishes the port; the volume difference above is a change of input, not an error.
 
-### 6.2 The cowl has no interior surface
+### 6.2 The interior surface: why it is needed, and what it must be
 
-The cowl today is a **solid blank with channels cut into it**. It has no wall — the printed
-part gets its interior from the slicer, as a zero-infill operation with a perimeter count,
-and **for cowls printed in spiral vase mode that count is one**. That is sufficient for
-printing and insufficient for everything else: an open or solid blob has no meaningful mass,
-no wall to analyse, and cannot be assembled.
+**Status: built.** This section states the requirement and the constraints on it; the interior
+surface itself is now constructed by `cowl_interior.cavity()`/`shell_solid()`, and
+[cowl_interior_surface.md](cowl_interior_surface.md) is the authoritative description of the
+algorithm, its preconditions, its refinement criterion and its verification. `tail_shell` and
+`nose_cowl_shell` build and pass the external wall-thickness and rib-gap checks. What follows is
+why the surface has to exist and what shape it has to be — not a description of missing work.
+
+**The vase-mode representation is unchanged, and that is deliberate.** The cowl *as printed* is
+still a **solid blank with channels cut into it**: it has no modelled wall, and the printed part
+gets its interior from the slicer as a zero-infill operation with a perimeter count, which for
+spiral vase mode is one. That is sufficient for printing and insufficient for everything else —
+an open or solid blob has no meaningful mass, no wall to analyze, and cannot be assembled. The two
+representations coexist on purpose; §6.4 is why they cannot be merged.
 
 > **Constraint on everything in this section.** Cowls are printable in **spiral vase mode**,
 > and that capability is to be kept ([OQ-DES-CW6](#open-questions)). Vase mode requires one
@@ -736,9 +780,9 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | ID | Question | Blocking |
 | --- | --- | --- |
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
-| OQ-DES-CW24 | `shell_solid()`'s boolean-and-mirror construction has two distinct, confirmed risks: widespread single-rib thinness (tens of nm at the worst point, stable, not fragile; Metric A, 0.01 mm, implemented and shipping, flag-only) and multi-tool crowding (two confirmed-fragile stations now, genuinely fragile both in outright failure mode and in silently invalid results; Metric B's ratio tested by dose-response and found not reproducible or thresholdable -- no single cutoff separates the fragile stations from the confirmed-stable ones, and the fragile stations' own exact failure mode varies build to build) | Not blocking (existing checks catch the outright-failure case; the silent wild-swing/invalid case is unflagged and has now been observed twice outside deliberate perturbation testing, not zero times) |
+| OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; nobody has measured which face the minimum lands on, so whether the number means anything — and whether the metric should be kept at all — is undecided | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
 
-### ~~OQ-DES-CW1 — Unit suffixes on the OML fields~~ — RESOLVED 2026-08-09
+### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
 **Problem.** The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
 parameters control that import: `oml_scale_m_per_mm`, `oml_length_m` and `oml_offset_x_m`. All three are
@@ -810,7 +854,7 @@ would report DIFF by construction — the case `verify_sweep_change.py` exists f
 the real sweeps and compared the resulting solids: nose cowl, tail, and non-cowl parts as
 controls, all identical.
 
-### ~~OQ-DES-CW2 — What `cone_angle` measures~~ — RESOLVED 2026-08-09
+### OQ-DES-CW2 — What `cone_angle` measures — RESOLVED 2026-08-09
 
 **`cone_angle` is the overhang angle for printing, measured from the print bed. Both call
 sites are correct, and the apparent inconsistency was an artefact of how this document posed
@@ -878,7 +922,7 @@ material-dependent process limit rather than a shape parameter.
   additionally carry per-feature overrides, and on what rule, is left open here; the cowl
   needs one value and this question is about the cowl.
 
-### ~~OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance?~~ — RESOLVED 2026-08-09
+### OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance? — RESOLVED 2026-08-09
 
 **Neither, and the question was posed on a false dichotomy.** `buttress.thickness` is the
 thickness of **the cut into the OML that produces the buttress through slicing**. It is not
@@ -935,7 +979,7 @@ the generator as it stands. That matters directly to OQ-DES-CW6 — a nominal ri
 modelled without it — and it is the same class of gap as the OML/`.vsp3` link that OQ-DES-CW7
 closed: a value the geometry depends on, held outside the system that depends on it.
 
-### ~~OQ-DES-CW4 — Should buttress placement become parametric?~~ — RESOLVED 2026-08-09
+### OQ-DES-CW4 — Should buttress placement become parametric? — RESOLVED 2026-08-09
 
 **Problem.** `tail_cowl_half()` hard-codes every buttress angle and offset as a literal:
 side buttresses at 5°, 12.5° and 20°, top and bottom at 15° and 0°, diagonals at ±30°, with
@@ -1011,7 +1055,7 @@ is and is not being asked to do:
   placements is exactly the representation such an algorithm would eventually *write into*,
   so building the list now is a step towards it rather than a detour around it.
 
-### ~~OQ-DES-CW5 — Elliptical or rounded-rectangle sections?~~ — RESOLVED 2026-08-07
+### OQ-DES-CW5 — Elliptical or rounded-rectangle sections? — RESOLVED 2026-08-07
 
 **Rounded rectangles**, on 10 of the 16 stations — including every station where a cowl
 meets structure. The question was posed on a misreading of the `.vsp3` (see §1.1), and the
@@ -1023,7 +1067,7 @@ the same shape derived from the same number, so they cannot drift — the same c
 guarantee the greeble gets from being cut with `corner_end()`. A port that re-derives the
 cowl section independently of `unit_width` would silently break it.
 
-### ~~OQ-DES-CW6 — Representing the slicer-generated rib in a solid model~~ — RESOLVED 2026-08-09
+### OQ-DES-CW6 — Representing the slicer-generated rib in a solid model — RESOLVED 2026-08-09
 
 **Problem.** The cowl's stiffening ribs do not exist in the CAD model. §4 establishes the
 mechanism: a buttress cuts a groove into the **outer** surface, and the slicer — walking a
@@ -1069,7 +1113,7 @@ choice is whether it does so explicitly or by a number written into the geometry
    robust to profile changes.
    *Drawbacks:* the model is then neither the CAD intent nor the printed reality; the
    discrepancy has to be stated wherever the model is used.
-   *Prerequisites:* ~~a decision on what nominal thickness represents~~ — supplied by
+   *Prerequisites:* a decision on what nominal thickness represents — supplied by
    OQ-DES-CW3: `2·w·n_perimeters + t_cut`. Still needs `n_perimeters` adopted as a parameter,
    and a rule for the rib's depth.
 
@@ -1144,7 +1188,7 @@ project (IP-FC-42), and the rib's *depth* into the interior — how far the cont
 a notch before turning back — does not follow from the cut width. Neither blocks the port;
 both want one sliced cowl inspected in the slicer's preview to settle by observation.
 
-### ~~OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step~~ — RESOLVED 2026-08-08
+### OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step — RESOLVED 2026-08-08
 
 **Problem.** The cowl's outer surface is defined in
 [`cad/modular_sUAS_nose_tail.vsp3`](../../src/Fuselage/cad/modular_sUAS_nose_tail.vsp3) and
@@ -1214,7 +1258,7 @@ Two properties of the check worth keeping:
 import STEP and the OpenSCAD path still consumes it. The meshes disappear at IP-FC-34, when
 that path is retired — not before.
 
-### ~~OQ-DES-CW8 — The factor of two in the buttress extrude~~ — RESOLVED 2026-08-18
+### OQ-DES-CW8 — The factor of two in the buttress extrude — RESOLVED 2026-08-18
 
 *Raised and resolved 2026-08-18, split out of [OQ-DES-CW3](#open-questions), which flagged the
 discrepancy rather than settling it.*
@@ -1272,7 +1316,7 @@ remaining gap — the hand drivers, which no other tool renders — and passed w
 warning being the only signal a missed rename gives, since a bare identifier with no matching
 variable evaluates to `undef` rather than failing.
 
-### ~~OQ-DES-CW9 — Where does `n_perimeters` belong, and what is it for a part that is not vase-printed?~~ — DECIDED 2026-08-18: a per-part `slicing` group
+### OQ-DES-CW9 — Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? — DECIDED 2026-08-18: a per-part `slicing` group
 
 **The problem.** `n_perimeters` sets how many loops a slicer walks around a contour, and this
 project's geometry depends on it in three places. It could not go into `PrinterSettings`, which
@@ -1346,7 +1390,7 @@ a cowl entry because the cowl's count has consumers; other kinds get entries whe
 
 *Implementation: IP-FC-42.*
 
-### ~~OQ-DES-CW10 — Is the nose cowl's base offset a function of the nozzle?~~ — RESOLVED 2026-08-21: yes, and the built value is correct
+### OQ-DES-CW10 — Is the nose cowl's base offset a function of the nozzle? — RESOLVED 2026-08-21: yes, and the built value is correct
 
 **Answer: yes.** The nose shape seats on top of the cowl's perimeter shell and is bonded
 there — the same kind of lap joint the cowl makes when it slides onto the cowling bulkhead's
@@ -1382,7 +1426,7 @@ easy to make again.
 
 *Implementation: IP-FC-42, complete — no re-render, no baseline departure.*
 
-### ~~OQ-DES-CW11 — Which group does the overhang angle belong in?~~ — RESOLVED 2026-08-21: `slicing`
+### OQ-DES-CW11 — Which group does the overhang angle belong in? — RESOLVED 2026-08-21: `slicing`
 
 **Decision: alternative 2, the `slicing` group.** Choosing an overhang angle is a slicing
 concern. It is not a property of the machine, so `printer` was wrong for it — that group's
@@ -1432,7 +1476,7 @@ the renamed signatures.
 
 *Implementation: IP-FC-28, complete.*
 
-### ~~OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot~~ — RESOLVED 2026-09-09: alternative 1, adopted, with alternative 2 also built
+### OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot — RESOLVED 2026-09-09: alternative 1, adopted, with alternative 2 also built
 
 **Both recommended alternatives are in the codebase, not just the recommendation.** Alternative
 1 — tessellated volume in place of `Shape.Volume` — is what every cowl comparison in IP-FC-12
@@ -1455,7 +1499,7 @@ absorb `Shape.Volume`'s error is loose enough to miss a real defect.
 *Implementation: [`freecad/mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) (surface
 distance) and the tessellated-volume checks throughout [IP-FC-12](../implementation/freecad_migration.md), [IP-FC-13](../implementation/freecad_migration.md) and [IP-FC-33](../implementation/freecad_migration.md).*
 
-### ~~OQ-DES-CW13 — Where the tail's folded aft closure gets fixed~~ — RESOLVED: alternative 1, as recommended and already implemented; alternative 2's provoking feature is now identified and confirmed
+### OQ-DES-CW13 — Where the tail's folded aft closure gets fixed — RESOLVED: alternative 1, as recommended and already implemented; alternative 2's provoking feature is now identified and confirmed
 
 **Alternative 2 update (2026-09-09).** The provoking feature this alternative's own prerequisite asked for has been found and confirmed causally, not just correlated. `Tail`'s `XSecSurf` has 4 stations: `XS_POINT`, `XS_ROUNDED_RECTANGLE`, `XS_ROUNDED_RECTANGLE`, `XS_POINT` -- the aft closure sits at the last, a point. Surveying every station's skinning-continuity group (OpenVSP container `SkinXSec`, holding `AllSym`/`TBSym`/`RLSym` and the four sides' tangent angle and strength) across **both** `Nose` and `Tail` finds exactly one asymmetric station in either component: **`Tail` station 2**, the rounded-rectangle immediately before the aft point --
 
@@ -1564,7 +1608,7 @@ verify a model change against — which there is not today. Alternative 3 should
 on even if it happens to be true, because it makes a part's correctness depend on a trim
 length that nothing checks.
 
-### ~~OQ-DES-CW14 — Should the buttress positions be editable values?~~ — WITHDRAWN 2026-08-31
+### OQ-DES-CW14 — Should the buttress positions be editable values? — WITHDRAWN 2026-08-31
 
 **Withdrawn: already decided, and the framing was wrong.**
 [OQ-DES-CW4](#open-questions) resolved this on 2026-08-09 — *"the full fix wants a list of
@@ -1582,7 +1626,7 @@ reconsiders them.
 *Implementation: the eleven tail placements and the nose's one become sheet rows under
 IP-FC-12, per CW4.*
 
-### ~~OQ-DES-CW15 — How much of a cowl document should survive changing the outer shape?~~ — WITHDRAWN 2026-08-31
+### OQ-DES-CW15 — How much of a cowl document should survive changing the outer shape? — WITHDRAWN 2026-08-31
 
 **Withdrawn: speculative.** It asked what a cowl document should do if the aircraft's outer
 shape were replaced. No such shape exists or is planned; the question invented a scenario and
@@ -1595,7 +1639,7 @@ OML provenance record ([OQ-DES-CW7](#open-questions)) already exists to make tha
 visible, and it is the point at which a real question could be asked with a real case behind
 it.
 
-### ~~OQ-DES-CW16 — Should the cowl construction move off scripted booleans, onto stock objects plus `BooleanFuzzy = 0` (alternative 6), so a `.FCStd` re-solves in stock FreeCAD?~~ — RESOLVED: alternative 7 adopted
+### OQ-DES-CW16 — Should the cowl construction move off scripted booleans, onto stock objects plus `BooleanFuzzy = 0` (alternative 6), so a `.FCStd` re-solves in stock FreeCAD? — RESOLVED: alternative 7 adopted
 
 **Resolution note (2026-09-21).** Alternative 7 is adopted, in the path-registration form
 described in that alternative's 2026-09-21 revisions below — not a vendored copy of
@@ -2150,7 +2194,7 @@ adopting it on convenience grounds trades a correct part for a convenient toolch
 wrong way round, and the measurements throughout this item show the failure is not simply a
 matter of the slot being too narrow.
 
-### ~~OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1~~ — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
+### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1 — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
 
 **Resolution note (2026-09-09).** The measured cure below — the blank reparameterised to C1,
 subdivided at every third knot into 129 faces, and the eleven tail tools cut individually
@@ -2588,7 +2632,7 @@ default. Alternative 5 should not be adopted: it trades the printed part for a c
 toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
 closed — the section is C1-but-not-C2 by design and no free re-parameterisation preserves that.
 
-### ~~OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`?~~ — RESOLVED: alternative 2 adopted
+### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`? — RESOLVED: alternative 2 adopted
 
 **Resolution note (2026-09-21).** Alternative 2 — all four values stay in the per-`U` table
 and scale with `U`, as the current derivation already does. The reasoning: `plate_thickness`,
@@ -2729,7 +2773,7 @@ Whichever is chosen, the sweep and the archive must be brought back into agreeme
 present the committed reference geometry cannot be used to check the nose plate or the nose tip
 at any `U` except 1.
 
-### ~~OQ-DES-CW19 — The rib at an inclined buttress cut is thicker than the rib everywhere else~~ — RESOLVED 2026-09-04
+### OQ-DES-CW19 — The rib at an inclined buttress cut is thicker than the rib everywhere else — RESOLVED 2026-09-04
 
 **Alternative 1**, and for a better reason than the one recommended. The recommendation rested
 on the cost of re-rendering the tail. The actual reason is that the two terms are measured in
@@ -2774,7 +2818,7 @@ and a shallower layer plane simply cuts it wider. It does mean a shape parameter
 structural dimension with no note anywhere that it does, which is the same class of unenforced
 coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
 
-### ~~OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced?~~ — RESOLVED 2026-09-20
+### OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced? — RESOLVED 2026-09-20
 
 **Resolution: every cowl is built as one symmetry cell — the `y >= 0` half for the tail, one
 octant for the nose — with every operation (the mask, the interior surface fit, the notch cuts,
@@ -2827,7 +2871,7 @@ partition-slip measurement question, resolved) and
 This note records the decision; it is not the place to look for whether a given build currently
 passes.
 
-### OQ-DES-CW21 — The finished wall reads thinner than tolerance near the tail's diagonal buttresses at large `U`
+### OQ-DES-CW21 — The finished wall reads thinner than tolerance near the tail's diagonal buttresses at large `U` — RESOLVED 2026-09-25
 
 **Resolved, 2026-09-25: alternative 2.** The cowl's interior wall (nominal `t` =
 `cowl_n_perimeters * extrusion_width`, 0.6 mm at the sheet's current values, held to an absolute
@@ -2867,10 +2911,10 @@ loop belongs there, measured directly on `shell_solid()`'s own finished, cell-si
 real algorithm change, not a constant retune, and is not yet designed or implemented; tracked
 through to completion in [IP-FC-143](../implementation/freecad_migration.md).
 
-### OQ-DES-CW22 — The post-cut refinement loop's per-round re-scan makes real convergence unaffordably slow
+### OQ-DES-CW22 — The post-cut refinement loop's per-round re-scan makes real convergence unaffordably slow — RESOLVED 2026-09-27
 
 **Resolved, 2026-09-27: alternatives 1 and 3, combined.** IP-FC-143's post-cut refinement pass
-(decided by [OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u))
+(decided by [OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u--resolved-2026-09-25))
 re-scans the entire patch on every one of up to six rounds, which was invisible while every case
 tested converged in round 0 but cost 9.5 hours without finishing once real convergence (`tail_shell`
 `U` = 1.0 and `U` = 3.0) was actually exercised. Round 1 onward will instead only re-check a
@@ -2899,7 +2943,7 @@ conditions on starting the work.
 
 ### OQ-DES-CW23 — `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled?
 
-`cavity()`'s second convergence pass ([OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u))
+`cavity()`'s second convergence pass ([OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u--resolved-2026-09-25))
 measures the finished, rib-cut wall by slicing `notched` (the buttress-cut symmetry cell) at each
 candidate station and measuring the distance from that slice to the candidate interior surface's
 own slice at the same station — never by actually performing `shell_solid()`'s real boolean cut
@@ -2933,7 +2977,7 @@ replaying `shell_solid()`'s real downstream pipeline on the identical candidate 
 `wall_thickness()` check reads 0.5466 mm — thin by 0.0534 mm, matching the 6-round converged build's
 own final external reading (0.0534 mm) almost exactly, and matching the very first historical
 reading (0.0531 mm) at the start of this whole investigation. Since the discrepancy is fully present
-before any convergence or re-scanning happens, [OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
+before any convergence or re-scanning happens, [OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow--resolved-2026-09-27)'s
 windowed re-scan does not explain it and cannot close it by tuning. The worst point's own location
 (`y` = 78.688 mm, on the same side of the cell as the un-mirrored original geometry, not the
 reflected copy) also makes the mirror step an unlikely contributor — the gap most plausibly comes
@@ -2964,7 +3008,7 @@ predictive one — the most favorable case for alternative 3, since the insertio
 real defect rather than guessed. The real thickness there moved from 0.5466 mm to 0.5483 mm: an
 improvement of **+0.0017 mm**, still 0.0017 mm short of tolerance. For comparison, the same kind of
 bisected insertion was measured, for
-[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow),
+[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow--resolved-2026-09-27),
 to move the *predicted* thickness by -0.023 to -0.024 mm at the same distance from the insertion —
 almost fourteen times larger. Station insertion is strongly coupled to what the distance-based
 prediction reports and only weakly coupled to what the real boolean cut actually produces, which is
@@ -3016,7 +3060,7 @@ under test (station insertion) has already been shown weak on the one build meas
 costs nothing further, matches what is already true in practice, and leaves the authoritative
 external check exactly where it already is: correctly catching this case.
 
-**Reinforced, 2026-09-28, by a reproducibility and sensitivity investigation run for [OQ-DES-CW24](#oq-des-cw24--shell_solids-boolean-and-mirror-construction-is-fragile-at-notch-tool-edge-stations).**
+**Reinforced, 2026-09-28, by a reproducibility and sensitivity investigation run for [OQ-DES-CW24](#oq-des-cw24--shell_solids-cut-can-sever-the-cell-wall-and-neither-metric-built-to-predict-it-does-so--resolved-2026-10-04).**
 Five independent, fresh builds of the identical round-0 candidate all read this station's real
 thickness as exactly 0.546556 mm to six decimal places — the residual here is fully reproducible,
 not measurement noise. A small, absolute perturbation applied 22 mm away (at an ordinary,
@@ -3026,594 +3070,121 @@ is ordinary, bounded sensitivity rather than a symptom of a deeper construction 
 deeper problem does exist, but specifically at notch-tool-edge stations, which this station is
 not — see OQ-DES-CW24.
 
-### OQ-DES-CW24 — `shell_solid()`'s boolean-and-mirror construction is fragile at notch-tool-edge stations
+### OQ-DES-CW24 — `shell_solid()`'s cut can sever the cell wall, and neither metric built to predict it does so — RESOLVED 2026-10-04
 
-`shell_solid()`'s one authoritative cut — `notched.cut(inside)`, followed by `mirror_across_cell`
-— is a boolean between two NURBS solids, already documented elsewhere in this codebase as an
-operation that is not fully reliable: two candidate interior surfaces that both individually
-measured inside tolerance have previously produced differently-shaped results from this same
-boolean (one a single 23745.581 mm³ solid, the other 21995 mm³ in five disconnected pieces).
-Investigating [OQ-DES-CW23](#oq-des-cw23--cavitys-post-cut-check-predicts-the-finished-walls-thickness-rather-than-measuring-the-real-cut-how-should-the-resulting-small-residual-gap-against-the-external-check-be-handled)'s
-own residual gap, this session located and precisely characterized where that unreliability
-actually lives, rather than leaving it as a documented but unlocalized risk.
+**Closed as recommended: alternatives 2 and 3 adopted now, alternative 4 scheduled behind them,
+alternative 1 not adopted on its own.**
 
-**Method.** The interior surface is built by `_fit()` from a stack of "rows" — one row is the ring
-of sample points measured all the way around the cross-section at one fixed `z`, and stacking every
-row's ring, one per station along the cowl, and fitting a B-spline through them produces the whole
-candidate surface. This build (`tail_shell` `U` = 3.0's round-0 candidate, after its own pre-cut
-convergence and one rib cut, before any post-cut refinement) has 35 rows. On three of them, every
-point in that one row's ring was nudged outward by the same small absolute radial distance — 0.001,
-0.003, 0.01, 0.03, and 0.1 mm, all genuinely small relative to the 0.6 mm wall and the 0.05 mm
-tolerance — the surface was re-fit, and the real thickness at a fixed station (`z` = -217.7261, the
-same one OQ-DES-CW23 investigates) was re-measured, using the identical extend-cut-mirror-measure
-sequence `shell_solid()` itself performs.
+**2 — the fit's station seeding is fixed.** `MIN_INTERVAL` is tied to `t` rather than fixed at
+0.20 mm; the per-patch union of seed stations and notch edges gains the separation filter it has
+never had; and the "do not subdivide a short interval" guard is separated from the "do not measure
+it" behaviour the same condition currently produces. Rationale: this is the only change backed by a
+controlled before/after test, it costs no accuracy (worst wall error 0.0496 mm either way, 30 rows
+against 36, 416.9 s against 539.8 s), and it has a mechanism behind it rather than a correlation —
+a displacement δ at a station whose neighbour is `h` away enters the C² system as δ/h, which is 11
+at the real `h` = 0.0009 mm. Design:
+[cowl_interior_surface.md §4.1 and §5](cowl_interior_surface.md). Work item: IP-FC-144.
 
-**Two of the three rows behaved exactly as a converged, well-fit surface should.** At `z` =
--239.9991 (22 mm from the measured station) and `z` = -142.5218 (75 mm away), every one of the
-five perturbation magnitudes produced a response in constant proportion to the perturbation size
-(e.g. the nearer row's output-to-input ratio was -0.133 at every single magnitude tested, from
-0.001 mm to 0.1 mm), with no failures anywhere in the range.
+**3 — Metric B is retired; Metric A is re-scoped.** Metric B compares each tool's distance to the
+*surface* and never the tools' positions, so it cannot represent crowding at all: at the station
+the crowding argument was built on, the three tools it ranks as crowded have their nearest points
+87.7-176.9 mm apart on a 300 mm part, and the real dilated tools' largest pairwise overlap is 0.59 %
+of the smaller tool against the ~40 % that produced IP-FC-137's synthetic pathology. It is removed
+rather than given a cutoff, because no cutoff on a quantity with no geometric meaning is sound.
+Metric A stays opt-in and flag-only at 0.01 mm as a rib-cut clearance diagnostic, with its
+wall-thickness description withdrawn — it spans a factor of 2.5 where the real wall spans 4.9 %, and
+the orderings disagree. Work item: IP-FC-147.
 
-**The third, at `z` = -283.9951 (66 mm from the measured station), did not.** A 0.001-0.003 mm
-perturbation gave a small, roughly proportional response (+0.0004 to +0.0012 mm), matching the
-other two rows' character. A 0.01 mm perturbation instead made `mirror_across_cell` raise
-`Unconverged` outright: "mirroring the cell result... produced 5 disconnected shells, not one." A
-0.03 mm perturbation raised no exception at all, but the reading it returned, -0.190851 mm, was two
-orders of magnitude larger than the 0.001-0.003 mm trend and of the opposite sign. A 0.1 mm
-perturbation failed again, worse (9 disconnected shells). None of this is a function of distance
-from the measured station alone — this row (66 mm away) is closer than the well-behaved row at
-142.5218 (75 mm away), yet only this one is fragile.
+**4 — the remaining mechanism is to be characterized before any further check is designed.**
+`z` = -294.1530 is still unexplained. This item proposed three predictors — absolute clearance,
+crowding ratio, row spacing — and testing refuted all three, which is why no fourth is to be
+designed before the mechanism is known. Work item: IP-FC-146.
 
-**The fragile row is a notch-tool edge, exactly, not merely nearby one.** A follow-up check
-confirmed `z` = -283.9951 is one of 26 values `feature_stations(notches, z_lo, z_hi)` returns for
-this build — the points where a rib's dilated cutting tool's own ramp starts, ends, or crosses the
-cut plane — matching to the last printed digit. It is also one of the exact points
-[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
-own front-loaded seeding places a station at, by design, to help the pre-cut surface converge
-faster. Neither of the two well-behaved rows tested is a notch edge.
+**1 was not adopted on its own** because the 0.03 mm sign-reversed "silent result" from an earlier
+round has never been retested, and it is the only claim of a failure the existing checks would not
+catch. Reproducing or withdrawing it is IP-FC-145.
 
-**What this means.** At a notch-tool-edge station specifically, an imperceptible (well under
-0.1 mm) difference in the candidate interior surface's own fit — well within the range two
-independently-converged, equally legitimate candidate surfaces could plausibly differ by — can
-flip the outcome between a normal result, an outright build failure, and a result two orders of
-magnitude larger and opposite in sign from what the surrounding trend predicts. The first two
-outcomes are inconvenient but safe: `mirror_across_cell` and `notched.cut`'s own existing checks
-(disconnected-solid count, the partition-identity check in `shell_solid`) refuse to hand back a
-broken part rather than shipping one silently. **The third is not caught by anything currently in
-the pipeline** — a build can complete, pass every existing validity check, and still be reporting
-(or building) a station's geometry from deep inside this fragile zone with no indication that a
-slightly different but equally legitimate candidate surface would have given a wildly different
-answer.
+**Caveats attached to this closure.**
 
-**This is a different question from OQ-DES-CW23's, and does not change that item's own
-recommendation.** OQ-DES-CW23 is about whether `cavity()`'s prediction matches a real, stable,
-well-defined thickness at an ordinary station; the row nearest its own target station tested clean
-and linear here, supporting that it does. This item is about whether the construction itself — the
-one authoritative cut, independent of which check reads it — is reliable at notch-edge stations
-specifically.
+- Both reproduced failures *are* caught by `shell_solid()`'s existing solid-count and partition
+  checks, and no variation of a real design parameter has ever produced one. This closure assumes
+  that remains true; it is not a finding that the construction is robust.
+- Whether the row-nudge probe corresponds to anything a real build can do is **not established**
+  ([cowl_interior_surface.md §6.2](cowl_interior_surface.md)). If it does not, the severity of this
+  whole item drops substantially.
+- Metric A's final disposition is not settled here. It depends on a measurement not yet taken, and
+  is [OQ-DES-CW25](#open-questions).
 
-**Root cause confirmed, 2026-09-28: rib crowding at a corner, matching IP-FC-137's own earlier H3
-hypothesis, now against real geometry rather than a synthetic test case.** The fragile row,
-`z` = -283.9951, is not merely near a notch edge — it is exactly `Top1Safe`'s own `z`-minimum, to
-the last printed digit. That same `z` also falls inside `Top2Safe`'s span (-294.0 to -9.0),
-`Diag11Safe`'s span (-315.0 to -165.0), and `Diag12Safe`'s span (-315.0 to -165.0) — four separate
-rib tools overlapping across most of the tail's length in the same region (`x` roughly -150 to
--125), the tail's own crowded corner. Tracing where the 0.01 mm perturbation's un-cut residue
-(8968 mm³) actually sits confirmed this directly: its bounding box is `z` -296.2..-2.9 (nearly the
-whole 293 mm patch) but `x` -149.6..-124.6 -- a narrow band matching exactly where those four tools'
-territories overlap, not a region local to the perturbed row itself. Two rows tested elsewhere
-(neither a notch edge, neither in this crowded region) showed no such effect at any perturbation
-size.
+**Where this item's design content now lives.** It had been carrying construction and verification
+design inline, which is not where authoritative design belongs:
+[§4.1](cowl_interior_surface.md) station spacing and the floor;
+[§4.4](cowl_interior_surface.md) the continuity the fit imposes as built, and what displacing one
+row actually does; [§5](cowl_interior_surface.md) the refinement blind spot;
+[§6](cowl_interior_surface.md) the construction-integrity checks;
+[§6.1](cowl_interior_surface.md) measurement cautions;
+[§6.2](cowl_interior_surface.md) the row-nudge probe and its validity domain;
+[§7](cowl_interior_surface.md) the failure itself, with the rendered evidence.
 
-**CORRECTION, 2026-10-02: the tool identification above was based on z-span bounding-box overlap, a
-weak signal, and named the wrong tools.** Direct, measured per-tool clearance at this exact station
-(`debug_check_design_close.py`, with a station forced exactly at `z` = -283.9951) found the real
-crowding is `Side1Safe` (0.164206 mm), `Side2Safe` (0.231237 mm), and `Side3Safe` (0.231510 mm) -- a
-tight three-way cluster, ratio 1.41x between the closest two -- with `Top1Safe` a modest fourth
-(0.249350 mm) and `Diag11Safe` essentially irrelevant at 75.5 mm away. `Top2Safe`/`Diag11Safe`/
-`Diag12Safe`'s *z-spans* do overlap this station (which is all the original identification checked),
-but none of them is actually close to the surface there. The side buttresses are the real crowding,
-not the top/diagonal ones. This does not change the confirmed fragility finding itself (perturbing
-this row still breaks the construction) -- it corrects which tools cause it, and reveals something
-more important: **the clearance AT this confirmed-fragile station is 0.164 mm -- comfortably large,
-nowhere near any "thin wall" threshold this item has proposed.** A build-time check based on absolute
-clearance alone (the 0.01 mm candidate threshold) would never have flagged this station at all. The
-risk signal here is not thinness; it is multiple tools sitting comparably close to each other (ratio
-1.41x) regardless of how far any of them is from the surface. See the Recommendation for what this
-means for the check's design.
+### OQ-DES-CW25 — Does Metric A measure the face that bounds the wall, and should it be kept at all?
 
-**[Retracted 2026-10-01 -- see the correction note before "Alternatives" below: the specific
-minimum-clearance figure in this paragraph came from a measurement bug and is not trustworthy as
-stated. The qualitative conclusion (some stations are much thinner than others) likely survives;
-the number does not.]**
+**Problem.** `cowl_interior.clearance_margin_scan` reports **Metric A**: the smallest in-plane
+distance, at a sampled axial station, between the fitted interior surface's cross-section and the
+cross-section of the nearest buttress cutting tool. `CLEARANCE_MARGIN_MM` = 0.01 mm is the value it
+is compared against. It ships opt-in (`clearance_check`, off by default, roughly an hour added to a
+build) and flag-only: it reports, and never fails a build.
 
-**A direct, unperturbed survey then answered the open question from this item's first version:
-this fragility is not synthetic-only.** Slicing the real, unperturbed round-0 candidate against
-the full dilated tool set at 96 stations across the crowded region (`z` -294.0 to -8.7, no
-perturbation at all) found the minimum surface-to-tool clearance was **0.000759 mm** — under a
-micron, in the build this entire investigation has been using as its own primary test case, not a
-deliberately constructed edge case. Ten of the 96 stations read under 0.01 mm; fifteen under
-0.014 mm; the median across the same region was a comfortable 0.077 mm, so this is a real minority
-of stations, not the whole region, but a nonzero and unremarkable-looking one: the baseline rib cut
-reports this as a perfectly clean `0.000000 mm³` residue, exactly like every other station,
-because `RIB_CUT_FUZZ` (`1.0e-5 mm`) is enough to snap a *positive* near-zero clearance into a
-clean cut. Nothing in the current pipeline distinguishes a station that cleared by 0.6 mm from one
-that cleared by 0.0008 mm — both report identically as success.
+[OQ-DES-CW24](#open-questions) retired its companion Metric B outright, and withdrew Metric A's
+description as a wall-thickness and print-accuracy signal. Across four stations measured both ways,
+Metric A spans a factor of 2.5 (0.085222 to 0.213606 mm) while the real `wall_thickness()` spans
+4.9 % (0.562703 to 0.589999 mm), and the two orderings disagree — the station with the largest
+Metric A has neither the largest nor the smallest real wall. What Metric A still plausibly measures
+is rib-cut clearance: how close the interior surface comes to a cutting tool.
 
-**The thinnest clearances are not concentrated at notch edges — a separate check, needed before
-a build-time check could be designed soundly.** The fragile row this item root-caused, `z` =
--283.9951, is exactly a `feature_stations()` edge, but that finding is about *sensitivity to
-perturbation*, not about where the raw clearance margin is thinnest in an unperturbed build; those
-are two different questions, and the second needed its own answer. Comparing the survey's worst 15
-stations against the same build's 26 `feature_stations(notches, z_lo, z_hi)` values (the points
-where a rib's dilated ramp starts, ends, or crosses the cut plane — the same list
-[OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow)'s
-seeding targets) found only 2 of the 15 within 1 mm of an edge (`z` = -59.7373, 0.26 mm away; `z` =
--164.8552, 0.19 mm away); the other 13, including the single worst station (`z` = -107.7912,
-0.000759 mm), sit 2 to 52 mm from the nearest one. A build-time check sampling only at feature
-stations would miss most of the region the survey actually found thin.
+**What is not known, and is the whole question.** A buttress tool is a prism, and only one of its
+faces — the cut floor — bounds the finished wall. Its flanks bound nothing; the wall continues past
+them. Metric A takes the minimum distance to the *whole* tool section, so it cannot distinguish the
+two, and **nobody has measured which face the minimum actually lands on.** If it lands on the cut
+floor, the number says something about the wall and is worth keeping. If it lands on a flank, it is
+a distance to a surface that bounds nothing — which would also explain why it does not co-vary with
+the real wall thickness.
 
-**[Every specific clearance number in the three paragraphs below is also retracted -- see the
-correction note before "Alternatives." The constructions' validity results (solid count,
-`isValid()`) in the same paragraphs do not depend on the buggy metric and stand.]**
-
-**A genuine free-parameter screen, 2026-09-30, corrects what "perturbation" had actually tested so
-far.** Every sensitivity result above came from nudging the *already-fitted surface's own output
-points* after construction (`debug_sensitivity_map.py`'s `perturb_row_radially`), not from varying
-an actual free parameter and letting the whole construction reconverge independently -- a real but
-different question from the one "the construction should be resilient to perturbations of all
-parameters" was asking. `debug_param_screen.py` ran the full, independent round-0 construction from
-scratch (fit, dilate, cut; ~1150-1800 s each) for 13 cases: one small nudge to each of eight real
-design parameters from `PARAMS_TAIL` (`top1_angle`, `top2_angle`, `top_diag_angle` at +-0.5
-degrees; `top1_y`, `top2_y`, `top_diag_z_start` at +-1 mm equivalent; `top_diag_depth` at +-0.5 mm
-equivalent; `buttress_r_inset` at +-1 mm equivalent -- the parameters that place `Top1Safe`,
-`Top2Safe`, `Diag11Safe`, and `Diag12Safe` and set how far each tool's cut reaches), plus four
-algorithmic-knob cases (`TAU` at 0.04 and 0.06 against the base 0.05; front-loaded seeding offset
-from the exact notch edge, alternative 4's own idea, at 0.5 mm and 2.0 mm standoff), against a
-baseline of minimum clearance 0.001196 mm at `z` = -276.00 (a different grid than the corner survey
-above, so a different minimum -- itself a live demonstration of the sampling-density gap already
-recorded here).
-
-**No case produced a construction failure.** All 13 cuts stayed one valid solid -- a real contrast
-with the row-nudge test, which hit `Unconverged` and a sign-reversed, two-orders-of-magnitude swing
-at a 0.01 mm *output* perturbation. Nudging actual design or algorithm inputs by these magnitudes
-does not reproduce that failure mode. **But the magnitudes are not the same scale**: the wall itself
-is 0.6 mm (`extrusion_width`, absolute, not scaled by `U`), so a 1 mm dimensional nudge is larger
-than the wall, and two to four orders above `TAU`/`RIB_CUT_FUZZ`. This round shows the construction
-tolerates realistic-sized design changes; it is not yet an apples-to-apples comparison against the
-row-nudge test's 0.01 mm failure threshold, which would need a finer round (0.01-0.1 mm / 0.01-0.1
-degree equivalent) to test directly.
-
-**`top1_angle` and `top_diag_angle` are real levers on the crowding; `top_diag_angle` also moves
-*where* the worst station is** (from `z` = -276.00 to `z` = -198.00), not only how thin it gets --
-each worsened the minimum by 23-26%. `top2_y` and `top_diag_depth` produced bit-identical results to
-baseline at all 97 stations; `top2_y`'s null result was checked directly (comparing all 11
-individual rib-tool solids, not the whole compound) and confirmed real, not a silent override
-failure -- `Top2Safe` moved exactly 1 mm as instructed, but is never the locally closest tool at any
-sampled station, so its own position cannot appear in a minimum-distance-to-nearest-tool metric.
-`TAU` at +-20% changed nothing. **Seeding standoff (alternative 4) did not help -- if anything, it
-revealed a thinner minimum**: both standoff cases found a worse minimum than exact-edge seeding,
-though this is confounded with row count (61 rows against the baseline's 35, since standoff seeding
-adds a second station per edge instead of replacing the one at it). This reads as the standoff
-surfacing a true thin point the coarser grid missed, not standoff making the geometry worse -- either
-way it is evidence against alternative 4 as a fix.
-
-**A finer-magnitude round, 2026-09-30, repeated the same eight design parameters at ~0.01 mm /
-0.01 degree -- matching the row-nudge test's own failure scale directly -- and found a second,
-more acute near-tangency.** `debug_param_screen_fine.py` reused the established baseline (not
-rebuilt, on the strength of this session's own 5-way reproducibility finding) and ran 10 more full,
-independent builds. Seven of the eight finer dimensional cases changed essentially nothing (minimum
-clearance 0.001195-0.001196 mm, matching baseline, no failures). **`top_diag_angle` at +0.01
-degrees -- one-fiftieth the size of the +0.5 degree case above -- dropped the minimum clearance to
-0.000009 mm, under `RIB_CUT_FUZZ` itself, at `z` = -192.00: a station that appears in no other
-case's worst-list anywhere in this item.** The round-0 cut still came back one valid solid --
-`RIB_CUT_FUZZ` caught it, exactly the mechanism its own docstring describes -- but this is a real
-near-tangency, reached by a perturbation fifty times smaller than the one that found nothing
-alarming nearby (`top_diag_angle` +0.5 degrees found its worst point at a *different* station,
-`z` = -198.00, two orders of magnitude less thin at 0.000888 mm). The relationship is not
-monotonic: the tiny nudge landed almost exactly on a tangency the larger one mostly moved past,
-which is consistent with the unperturbed design (`top_diag_angle` = 30.00 degrees exactly) already
-sitting within a hundredth of a degree of a genuine tangency at `z` ~ -192, separate from the
-`z` = -276/-283.9951 crowding already characterized above. The baseline's own 101-station grid did
-not flag `z` ~ -192, most plausibly because 3 mm spacing is not fine enough to land on a dip this
-narrow, not because it is not there. **This is a new, uncharacterized lead, not yet investigated
-further**: whether the unperturbed design is already this close is unconfirmed (it would need a
-targeted scan of `top_diag_angle` in small steps bracketing 30.00-30.02 degrees, with dense slicing
-near `z` = -192, to pin down the true tangency angle and whether zero perturbation already
-approaches it).
-
-**The two finer seeding-standoff cases (0.01 mm, 0.1 mm) confirm the effect saturates immediately.**
-Both found minimum clearance ~0.000948-0.000950 mm, matching the earlier, much larger 0.5 mm/2.0 mm
-standoff cases almost exactly. The thinner minimum standoff seeding finds is therefore governed by
-the row count it adds (35 to 61 rows), not by how far the standoff is -- reinforcing that this is a
-resolution effect, not evidence that standoff itself changes the geometry's own margin, and further
-weakening alternative 4 (even an immaterial 0.01 mm standoff gives the same result as a much larger
-one).
-
-**A dedicated dense re-scan of the TRUE, unperturbed baseline around `z` ~ -192, 2026-10-01, found
-an even closer, different near-tangency nearby, then a full-tail survey showed this is widespread,
-not local to one corner.** `debug_z192_baseline_dense.py` rebuilt the exact baseline (no parameter
-changes at all) and sliced densely (0.02 mm steps) across `z` = -220 to -165 to settle whether the
-unperturbed design already approaches the `z` ~ -192 tangency the perturbation test found. It does
-not, exactly -- but a different, closer one sits a few millimetres away: minimum clearance
-**0.000015 mm (15 nm) at `z` = -206.22**, 1.5x `RIB_CUT_FUZZ`'s own `1e-5 mm` threshold, in the
-exact unperturbed, currently-shipping `U` = 3.0 build, missed by every previous survey's coarser
-grid (the 101-station survey's nearest sample, 3 mm away, read 0.002689 mm there -- 180x larger
-than the true value a few hundredths of a millimetre away).
-
-**`debug_full_tail_fine_survey.py` then asked whether `z` ~ -206 is unique, or whether hidden
-near-zero dips recur elsewhere.** Reusing the same baseline fit (no rebuild), a coarse pass (1.0 mm,
-290 points) across the *entire* tail found its own worst point already at 0.000027 mm (`z` =
--110.37) without any fine refinement at all, then a bounded fine pass (0.05 mm, +-1 mm) around each
-of the worst 15 coarse points refined several further. **The true picture is at least six distinct
-near-zero clearance points, 27-285 nm, scattered from `z` = -286 to `z` = -25 -- across nearly the
-whole 291 mm interior length, not confined to the `Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe`
-corner this item has focused on so far**: `z` = -110.37 (27 nm), `z` = -206.24/-206.24 (35-46 nm, two
-coarse candidates refining to the same narrow feature), `z` = -246.87 (73 nm, where the coarse grid
-had read 2096 nm -- 30x larger), `z` = -63.31 (116 nm), and `z` = -146.79 (264 nm, where the coarse
-grid had read 2841 nm -- 11x larger). Even 0.05 mm resolution understates some of these: the
-`z` ~ -206 feature needed the dedicated 0.02 mm scan above to find its true 15 nm floor, not the 35
-nm this survey's coarser fine pass found, so several of the other five are plausibly deeper still
-than recorded here.
-
-**This means the mechanism is broader than "one crowded corner," and a brute-force fine-grid
-build-time check is not computationally viable at the resolution this would need.** Several of the
-new points (`z` = -110.37, -63.31, -25.08 is among the next-worst not listed above) are far outside
-the previously-identified corner's `x` roughly -150 to -125 band, so they are governed by some other
-tool or pair of tools not yet identified -- this item's "rib crowding at a corner" explanation covers
-the `z` = -276/-283.9951/-206 region but does not explain these. Separately, the timing data rules
-out the obvious fix of "just use a finer grid": 290 coarse points took 1337.7 s and each 41-point fine
-window took ~190 s, both roughly 4.5-5 s a sample: a 0.02 mm grid across the whole 291 mm interior
-(~14,500 samples) would cost on the order of 19 hours at that rate. Alternative 3's check design
-needs a method that finds a narrow near-zero dip without sampling at the resolution that would find
-it by brute force -- an adaptive or analytic approach, not a fixed fine grid, which the design sketch
-below did not yet anticipate.
-
-**CORRECTION, 2026-10-01: a measurement bug was found in the clearance metric itself, and the
-nanometre-scale numbers above (and the original corner-margin survey's 0.000759 mm) are retracted
-pending a corrected re-measurement.** Every `clearance_at()`/`clearance_vs()` helper used across this
-session's investigation (`debug_corner_margin_survey.py` onward, including every script in the two
-paragraphs just above) built a single `ci._Polyline` from *all* points of *all* wires in a tool's
-slice, flattened together: `ci._Polyline([(p.x, p.y) for w in tool_wires for p in
-w.discretize(Number=400)])`. `_Polyline` defaults to `closed=True`, which wraps the last point in
-the *entire flattened sequence* back to the first -- correct for one real closed loop, but when a
-tool's slice has more than one separate wire loop (confirmed directly, `debug_polyline_bug_check.py`:
-the fused 11-rib tool has 6 to 57 separate loops at every flagged `z`, not one), this silently
-manufactures a phantom chord connecting the end of one unrelated loop to the start of another. That
-chord can cut straight across the middle of the cross-section -- precisely where the candidate
-interior surface sits -- and read as an arbitrarily small "clearance" with no real geometric meaning
-at all, the same failure mode `_Polyline`'s own docstring already warns about for an open arc,
-reached here by a different path (multiple closed loops, not one open one). **What this retracts**:
-every specific minimum-clearance number reported against the fused (or any multi-loop) tool slice
-this session, including 0.000759 mm, 0.001196 mm, the `z` ~ -192 and `z` = -206.22 near-tangencies
-(9 nm, 15 nm), and the six-point full-tail list (27-285 nm) above. **What survives, because it did
-not depend on this metric**: the real `wall_thickness()`-based reproducibility (0.546556 mm, five
-independent builds) and sensitivity findings (`Unconverged`, the sign-reversed swing) earlier in this
-item, which measure the real, mirrored wall directly, never a tool's own slice; the free-parameter
-screen's construction-*validity* results (no failure across 21 cases), which came from a real boolean
-cut and `isValid()`, not this distance metric; and the tool-overlap/bounding-box facts (which named
-tools occupy which `z`/`x` span) identified by `tip.Notches`, unrelated to slice-distance measurement.
-A corrected re-measurement (one `_Polyline` per wire, minimum taken across wires separately, never
-flattened together) is in progress; this section will be updated with its result.
-
-**The corrected re-measurement landed, 2026-10-01, and resolves the open thread cleanly: the
-`z` ~ -192/-206.22 near-tangency was entirely a measurement artifact, not a real feature.**
-`debug_full_tail_fine_survey_FIXED.py` reran the identical two-stage survey (1.0 mm coarse across
-the whole tail, then 0.05 mm fine passes around the worst 15) with the corrected per-wire distance.
-With the bug fixed, the `z` ~ -206 region does not even appear in the worst 15 of 290 coarse points
-across the whole tail -- the entire "second near-tangency" lead from earlier today is retracted
-outright, not merely re-measured to a smaller number. **The real picture, corrected: minimum
-clearance 0.000060 mm (60 nm) at `z` = -134.498 -- 6x `RIB_CUT_FUZZ`'s own threshold, not under it --
-with 15 genuine points from 60 nm to 4113 nm scattered from `z` = -268.85 to `z` = -14.45.** Four of
-the previous (buggy) readings turn out to have been coincidentally correct anyway -- `z` = -146.79,
--184.62, -240.80, and -246.82 read identically before and after the fix, a useful cross-check that
-the correction changes what should change and nothing else. The broader qualitative conclusions this
-item already drew survive independently of the bug: thin points really are scattered across nearly
-the whole tail, not confined to one corner (the corrected worst-15 still spans `z` = -268.85 to
--14.45), and the brute-force timing conclusion is unaffected (it measures wall-clock cost, not
-clearance values) -- 290 coarse points took 1286.0 s and 15 fine windows took ~183 s each, so a
-0.02 mm grid across the whole tail would still cost on the order of 19 hours.
-
-**Per-tool identification, 2026-10-02, reframes the mechanism: this is not crowding.**
-`debug_which_tool_binding_v2.py` first confirmed the per-tool measurement itself is safe from the
-`_Polyline` bug (`debug_per_tool_wire_count.py`: no individual tool's own slice has more than one
-wire loop at any of the 15 corrected points, unlike the fused 11-tool compound), then found which
-single tool binds at each:
-
-| `z` | binding tool | single-tool reading | fused (corrected) reading |
-| --- | --- | --- | --- |
-| -134.498 | `Bot1Safe` | 38 nm | 60 nm |
-| -180.652 | `Top1Safe` | 43 nm | 67 nm |
-| -268.845 | `Side1Safe` | 94 nm | 87 nm |
-| -116.388 | `Top1Safe` | 251 nm | 230 nm |
-| -157.525 | `Side3Safe` | 234 nm | 234 nm |
-| -146.792 | `Bot1Safe` | 286 nm | 264 nm |
-| -223.695 | `Bot1Safe` | 303 nm | 309 nm |
-| -14.448 | `Top1Safe` | 361 nm | 318 nm |
-| -85.335 | `Top1Safe` | 669 nm | 672 nm |
-| -240.802 | `Side1Safe` | 746 nm | 775 nm |
-| -184.615 | `Diag11Safe` | 1245 nm | 1289 nm |
-| -246.822 | `Side2Safe` | 2129 nm | 2096 nm |
-| -255.402 | `Side1Safe` | 2202 nm | 2229 nm |
-| -164.498 | `Side1Safe` | 2933 nm | 2890 nm |
-| -198.662 | `Diag11Safe` | 3536 nm | 4113 nm |
-
-The single-tool and fused-compound readings match closely at every point (within ~30%, usually much
-closer) -- strong independent cross-validation that the corrected metric is now trustworthy, on top
-of the four points that already read identically before and after the fix. **At every one of the 15
-points, the second-closest tool is 15-1000x farther away than the binding one** -- none of them show
-two tools in close mutual proximity. This is a materially different picture from the `Top1Safe`/
-`Top2Safe`/`Diag11Safe`/`Diag12Safe` crowding this item root-caused at `z` = -283.9951: that finding
-was a real, *construction-fragility* mechanism (confirmed via the real `wall_thickness()` check:
-perturbing the fitted surface there caused `Unconverged` and a sign-reversed swing), and crowding --
-multiple tools present at the same station -- was central to it. These 15 points show something else:
-most individual ribs (`Top1Safe` governs 4, `Side1Safe` 4, `Bot1Safe` 3, `Diag11Safe` 2, `Side2Safe`
-1, `Side3Safe` 1; `Top2Safe`, `Bot2Safe`, `Diag12Safe`, `Diag21Safe`, and `Diag22Safe` govern none)
-appear to have their own near-tangency to the interior surface somewhere along their own run,
-independent of any other rib being nearby.
-
-**Tested directly, 2026-10-02, and it does not.** The same row-nudge sensitivity protocol that found
-the `z` = -283.9951 fragility (`debug_single_rib_fragility.py`) was run at three single-tool points --
-`z` = -134.498 (`Bot1Safe`), `z` = -180.652 (`Top1Safe`), and `z` = -246.822 (`Side2Safe`, a
-moderately-thin control) -- with a station forced exactly at each `z` (confirmed by an exact 0.00000
-mm match; the ordinary seed grid does not land on dips this narrow) so the perturbation and the
-measurement are both at the true near-tangency point, not nearby. At all three, across the full
-0.001-0.1 mm perturbation range: the round-0 cut stayed one valid solid throughout, the real,
-exported `wall_thickness()` decreased smoothly and monotonically (0.58-0.59 mm down to ~0.50 mm,
-exactly as a larger surface perturbation removing more material should), and clearance changed
-smoothly with no sign reversal and no `Unconverged` at any magnitude -- a clean, stable contrast with
-the crowded case's outright failure at 0.01 mm and sign-reversed swing at 0.03 mm. One row
-(`Side2Safe`) showed a small non-monotonic dip in clearance (481 to 430 to 329 to 25 nm before rising
-again as the perturbation grew), moving closer to the tangency before moving away, but even at its
-closest point the clearance stayed positive and the construction stayed valid. **Crowding --
-multiple tools present at the same station -- appears to be the necessary ingredient for the severe
-failure mode, not mere thinness.** This is new, direct evidence that a build-time check could
-reasonably treat "thin but single-rib" and "crowded" as different severities, though that is a design
-choice, not yet made.
-
-**Generality checked against a second `U`, 2026-10-02: the pattern is not specific to `U` = 3.0.**
-The identical corrected two-stage survey, run at `U` = 1.0 (28 rows, `z` range -100 to 0, a much
-shorter interior than `U` = 3.0's ~300 mm), found a comparably severe worst point -- **0.000064 mm
-(64 nm) at `z` = -38.934** -- and, because this run tallied all 96 coarse points rather than only
-the worst 15, a directly measured proportion: **22 of 96 coarse points (22.9%) read under 0.01 mm**,
-an actual fraction where the `U` = 3.0 survey only ever established a lower bound (15 of 290 from
-the refined worst-candidates; the true count among all 290 was never tallied). This is evidence
-against treating the pattern as a `U` = 3.0 idiosyncrasy: it recurs, comparably severe or worse by
-this proportion, at a second, substantially different `U`. Not yet checked at this point: whether the
-proportion continues to grow as `U` shrinks further (IP-FC-137's own `U` floor work found
-wall-thickness margin tightens at low `U`, which would be a consistent explanation if so).
-
-**Checked against `nose_cowl_shell`'s octant, 2026-10-02: the pattern recurs there too.** The identical
-corrected survey, run on `nose_cowl_shell` at `U` = 1.0 (a much shorter part: 10 rows, `z` range -50
-to -6, converged in 14.8 s against the tail's 500+ s), found a comparably severe worst point --
-**0.000048 mm (48 nm) at `z` = -27.738** -- with 3 of 40 coarse points (7.5%) under 0.01 mm, a lower
-proportion than `tail_shell` at `U` = 1.0 (22.9%) but the same order of magnitude at the extreme.
-**The pattern is not specific to `tail_shell`, nor to one `U` value**: both cowl kinds, at both `U`
-values tested, show a comparably severe (tens-of-nanometres) near-zero clearance point somewhere
-along their own length, on the real, unperturbed, currently-shipping geometry. This completes the
-generality checks this item had flagged as open; what remains unmeasured is whether the proportion
-(not just the worst-case severity) continues to grow as `U` shrinks further.
+The measurement is cheap relative to the scan that already exists: at each flagged station, record
+which face of the tool section carries the minimum and classify it. The stations to check are
+already known, from the corrected per-wire survey — 15 points from 60 nm to 4.1 µm, worst at
+`z` = -134.498, recurring at a second `U` and on `nose_cowl_shell`'s own octant.
 
 **Alternatives:**
 
-1. **Accept it as an already-caught, inherent property of notch-edge geometry.** Rely on the
-   existing `Unconverged` safety net for the outright-failure case, and document explicitly that a
-   successful build's reported thickness at or very near a notch edge carries materially more
-   uncertainty than elsewhere. Benefit: no further engineering. Drawback: the corner-margin survey
-   shows this is not a rare edge case reachable only by deliberate perturbation -- ten stations in a
-   single 285 mm span of one ordinary build already clear by under 0.01 mm, and the existing safety
-   net does not distinguish that from a comfortable clearance; it only fires once a clearance
-   actually goes negative, not while a build is silently succeeding by a fraction of a micron.
-2. **Investigate the geometric mechanism directly.** Done for the `z` = -283.9951 construction
-   failure specifically: the mechanism there is rib crowding at the corner where `Top1Safe`,
-   `Top2Safe`, `Diag11Safe`, and `Diag12Safe` overlap, matching IP-FC-137's H3 hypothesis, confirmed
-   against real geometry, and confirmed to cause real construction fragility (`Unconverged`, a
-   sign-reversed swing) via the real `wall_thickness()` check. **Shown to be the wrong mechanism for
-   most of the corrected full-tail survey's 15 points**: per-tool identification
-   (`debug_which_tool_binding_v2.py`) found a single rib binds at every one of them, with the
-   second-closest tool 15-1000x farther away -- no crowding present at 14 of the 15 (`Top1Safe` at 4,
-   `Side1Safe` at 4, `Bot1Safe` at 3, `Diag11Safe` at 2, `Side2Safe` at 1, `Side3Safe` at 1). "Rib
-   crowding at a corner" explains the one construction-fragility failure this item confirmed; it does
-   not explain why most individual ribs have their own near-tangency somewhere along their own run.
-   What remains open: whether a single rib's own near-tangency (without crowding) carries the same
-   construction-fragility risk as the crowded case, whether the same pattern recurs at other `U`
-   values, and on `nose_cowl_shell`'s octant -- none of which has been checked.
-3. **Add a build-time check on the real, measured clearance margin itself.** **Closed out,
-   2026-10-02, as a two-metric design** -- the single-metric version (one clearance number, one
-   threshold) this alternative originally proposed cannot work: the one confirmed-fragile station
-   (`z` = -283.9951) has a comfortable 0.164 mm clearance, sixteen times the candidate 0.01 mm
-   threshold, so an absolute-clearance-only check would never have flagged the one station this item
-   has actually confirmed is dangerous. Two different mechanisms need two different metrics:
-     - *Metric A -- thinness (accuracy concern).* Minimum in-plane distance from the candidate
-       surface's own slice to the single nearest tool's slice at a given `z`. Flags a single-rib
-       near-tangency -- evidenced stable, not fragile (the row-nudge test at three such points stayed
-       one valid solid through 0.001-0.1 mm perturbation), so this is a wall-thickness/print-accuracy
-       signal, not a safety one.
-     - *Metric B -- crowding (construction-fragility risk).* The ratio between the two *closest*
-       tools' distances to the surface at a given `z`, from the same per-tool scan Metric A already
-       computes. At the one confirmed-fragile station this ratio is 1.41x (`Side1Safe` 0.164 mm vs
-       `Side2Safe` 0.231 mm); at all 15 confirmed-stable single-rib points it is 15-1000x. A ratio
-       near 1 means multiple tools are comparably close regardless of the absolute distance, which is
-       the condition this item has shown actually causes `Unconverged`/sign-reversed failures.
-     - *Computation, not fuse-and-slice.* Per-tool (unfused) scanning -- slicing each of the 11 named
-       tools individually and taking the per-`z` ranking directly -- measured ~15% faster than fusing
-       them first (4.28 s/point vs 5.01 s/point over a 50 mm window) and is inherently safe from the
-       `_Polyline` multi-loop bug this item found (an individual tool's own slice essentially never
-       has more than one wire; the fused compound almost always does). It also gives Metric B directly,
-       which the fused approach cannot produce at all. **One caveat found, not yet resolved**: the two
-       methods disagreed by up to 0.157 mm at one or more points in that same 50 mm window (mean
-       disagreement only 0.0095 mm, so this is a localized discrepancy, not a systemic one) -- worth
-       tracking down before treating per-tool scanning as fully equivalent, though the speed and
-       safety case for it stands regardless.
-     - *Domain.* The whole part. Neither metric's risk is confined to a region known in advance --
-       Metric A's thin points scatter across nearly the whole length on both cowl kinds and two `U`
-       values, and Metric B's one confirmed example was missed entirely by the original
-       z-span-overlap heuristic, so there is no evidence-backed way to restrict the domain yet.
-     - *Sampling density.* Metric A needs an adaptive scheme (coarse pass, refine flagged candidates)
-       -- a fixed grid at any affordable spacing understates the true thinness minimum by one to two
-       orders of magnitude at exactly the points that matter, and a brute-force fine grid everywhere
-       costs on the order of 19 hours a build. Metric B's ratio is evidenced to need less resolution
-       to detect reliably (crowding is a property of which tools are *nearby* in rank, not a narrow
-       spike the way an exact tangency point is) but this has not been separately measured.
-     - *Threshold.* **Metric A set to 0.01 mm, 2026-10-02 -- the 0.1 mm print-tolerance comparison
-       this item first proposed does not apply here, and the reasoning matters.** The 0.1 mm figure
-       this project otherwise uses for print tolerance is a *positional* one (bolt clearances, where
-       a feature sits) -- moving a whole wall by 0.1 mm is not significant. Wall *thickness* is a
-       different quantity: these cowls print in spiral vase mode, a single extrusion perimeter with
-       no redundancy, and the slicer makes a near-binary decision about whether to extrude a
-       perimeter at all based on its thickness -- a 0.1 mm change (e.g. 0.4 mm to 0.3 mm, a 25%
-       reduction) can flip that decision and drop the wall entirely. 0.01 mm is the appropriate
-       tolerance for a thickness-sensitive check, comfortably above every single-rib point found
-       (48 nm to 4.1 um) and far below the scale at which a slicer's perimeter decision would be at
-       risk. **Metric B** -- a ratio cutoff somewhere between the one confirmed-dangerous value
-       (1.41x) and the lowest confirmed-safe value (15x); 5x gives roughly 3.5x margin on both sides
-       but rests on a single crowded example (n=1) -- finding or constructing a second crowded case
-       to cross-check this cutoff is the most valuable remaining test this alternative has not yet
-       run, and the one number here still a policy choice rather than a closed decision.
-     - *Action on violation.* **Resolved to a two-tier policy by direct evidence, not left as a
-       default.** Metric B below its cutoff (crowding detected) -- hard block or mandatory real
-       `wall_thickness()` check, since this is the only mechanism this item has confirmed causes
-       outright construction failure. Metric A below its cutoff but Metric B comfortably clear
-       (single-rib thinness, no crowding) -- flag-and-proceed through `cavity()`'s existing `report`
-       callback, since this is evidenced stable under the same perturbation range that breaks the
-       crowded case. This directly follows from the row-nudge fragility test and the crowding-ratio
-       measurement above, not from an absence of evidence either way.
-   Benefit: now answers both "is this build thin" and "is this build fragile," which nothing today
-   reports, with a metric for each. Drawback: Metric B's cutoff rests on a single confirmed crowded
-   example, the per-tool/fused discrepancy found in the timing comparison is unexplained, and the
-   final threshold values are still policy choices (thin-wall flag line, ratio cutoff) that this
-   item's evidence narrows but does not finish on its own.
-4. **Reconsider whether front-loaded seeding placing a station exactly at a notch edge (zero
-   offset) is itself what creates the near-degenerate condition.** A small standoff from the exact
-   edge might keep the resolution benefit OQ-DES-CW22's own front-loading was chosen for, while
-   avoiding the geometric degeneracy this item found sitting exactly at it. **Tested directly,
-   2026-09-30, and it did not help.** Seeding at 0.5 mm and 2.0 mm standoff from every notch edge
-   (instead of at it) both found a *smaller* minimum clearance than exact-edge seeding (0.000948 mm
-   and 0.001009 mm against the baseline's 0.001196 mm), not a larger, more comfortable one. The test
-   is confounded with row count (standoff seeding added a second station per edge rather than moving
-   the one already there, so the fit had 61 rows against the baseline's 35), so this is better read
-   as higher resolution surfacing a true thin point the coarser grid missed, not standoff actively
-   worsening the geometry -- but either reading is evidence against standoff as a fix, not for one.
-   Benefit: none demonstrated. Drawback: confirmed not to be sufficient alone, consistent with the
-   corner-margin survey's own finding that thin clearances span a broad region, not only exactly at
-   notch-edge stations.
+1. **Measure the floor-versus-flank question, then decide.** Instrument the existing scan to report
+   which tool face carries each minimum, run it on the stations already known to be thin, and
+   decide on the result. *Benefits:* the only option that answers the question rather than assuming
+   an answer; cheap, because both the scan and the station list already exist. *Drawbacks:* leaves
+   Metric A shipping under a withdrawn description until the measurement is done. *Prerequisites:*
+   none.
+2. **Keep Metric A as-is, re-described as a rib-cut clearance diagnostic.** Change only the
+   docstrings — already done — and stop there. *Benefits:* no further work; the metric is flag-only
+   and cannot fail a build, so a number nobody can interpret is harmless in itself. *Drawbacks:*
+   ships a reported number with no established meaning, which is exactly how Metric B survived as
+   long as it did. *Prerequisites:* none.
+3. **Retire Metric A as well, and remove the `clearance_check` path.** *Benefits:* removes roughly
+   an hour of optional build cost and a diagnostic with no demonstrated meaning, and leaves one
+   fewer number to misread. *Drawbacks:* discards the only in-plane clearance instrumentation that
+   exists; the corrected survey's thin points are real measurements even if what they bound is
+   unverified. *Prerequisites:* confirming nothing downstream consumes `ThinWallFlags` or
+   `WorstClearanceMargin`.
+4. **Replace it with a direct measurement of the finished wall at the same stations.** Instead of an
+   in-plane distance to a tool, measure `wall_thickness()` on the cut result at every station the
+   clearance scan would have flagged. *Benefits:* measures the quantity actually cared about, with
+   no interpretation step between the number and its meaning. *Drawbacks:* materially more
+   expensive, because it needs the real cut rather than a section of the candidate surface, and it
+   duplicates what the external check already does. *Prerequisites:* a cost measurement against the
+   existing scan.
 
-**Recommendation: pursue alternative 3, informed by alternative 2's mechanism, now known to be
-incomplete.** The premise that made alternative 1 sufficient on its own -- that this fragility might
-never be reached by a real, unperturbed build -- is refuted by direct measurement: it already is,
-on the exact build this investigation has used throughout, at multiple stations, silently. That
-does not mean alternative 1 is wrong forever, but it can no longer be chosen on the grounds that the
-risk is hypothetical. A build-time clearance-margin check is the most direct response to what was
-actually measured -- a concrete, cheap-to-compute number this item has shown discriminates a
-comfortable build from one sitting on the edge. Alternative 4 is no longer an open, bypassed
-question but a tested and refuted one (seeding standoff found a thinner minimum, not a safer one),
-which strengthens rather than merely sidesteps the case for alternative 3. A genuine free-parameter
-screen (eight design parameters, four algorithmic knobs, all at once-small magnitudes) also found no
-construction failure anywhere, which is reassuring about ordinary parameter variation but was run at
-magnitudes (0.5 degrees, 0.5-1 mm) larger than the 0.6 mm wall itself. A follow-up at the matching,
-finer scale (~0.01 mm/0.01 degree) found the comparison was not uniformly reassuring: a 0.01 degree
-`top_diag_angle` nudge found a 9 nm clearance at a station (`z` ~ -192) no other case had flagged,
-suggesting the unperturbed design may already sit close to a second, separate near-tangency. **That
-specific lead turned out to be a measurement bug, not a real feature** (see the correction note
-above) -- the corrected re-measurement does not place `z` ~ -192 or `z` ~ -206 among the whole
-tail's worst 15 points at all. But the corrected, whole-tail survey run to chase that lead down
-still found a real, if less extreme, version of the same broader picture: **minimum clearance
-0.000060 mm (60 nm, 6x `RIB_CUT_FUZZ`, not under it) at `z` = -134.498, with 15 genuine points from
-60 nm to 4113 nm scattered from `z` = -268.85 to `z` = -14.45** -- most of them outside the one
-corner this item's root cause explains. This remains a materially different problem than "one
-crowded corner is thin": it is widespread, under-resolved by every grid density tried so far
-including the ones alternative 3 assumed were adequate (the corrected survey still needed a 1.0 mm
-coarse pass plus a bounded 0.05 mm fine pass to find it), and the computational cost of finding it by
-brute force (~19 hours for a whole-tail nanometre-resolving grid, a timing fact unaffected by the
-bug) rules out the straightforward fix of just sampling finer. Alternative 3 remains the right
-direction -- nothing else proposed here addresses a problem this pervasive -- but its design
-sketch's domain and sampling-density assumptions are still shown to be insufficient, not merely
-unfinished, and need to be rebuilt around an adaptive, not fixed-grid, search. Recommending the
-direction only; the check's own design is further from finished than earlier updates treated it.
-Which tool governs each corrected worst point is now identified (mostly `Top1Safe`, `Side1Safe`, and
-`Bot1Safe`, each on its own, not crowded), and a direct test (three points, the same row-nudge
-protocol, stations forced exactly at each) found single-rib near-tangency does not reproduce the
-crowded case's fragility -- smooth, stable behavior at every magnitude up to 0.1 mm, no `Unconverged`,
-no sign reversal. This narrows what alternative 3's check needs to treat as severe: a thin margin at
-a single, uncrowded rib is evidenced to be a thin-wall accuracy concern, not a construction-robustness
-one, while crowding (multiple tools at the same station) remains the one mechanism shown to cause
-outright failure. Whether the check should therefore have two severities (flag thin-single-rib,
-gate crowded) rather than one threshold for everything is a design choice this recommendation
-surfaces but does not make. **Generality is now checked and closed out**: the same pattern (a
-comparably severe, tens-of-nanometres worst point somewhere along the part's length) recurs at a
-second `U` value and on `nose_cowl_shell`'s octant, so this is a property of the construction
-method generally, not an artifact of one cowl kind or one `U`. Alternative 3's check, whatever its
-final design, needs to apply broadly -- not as a targeted fix for one geometry.
-
-**Closed out, 2026-10-02: the check's threshold, sampling strategy, and action-on-violation are no
-longer open design gaps.** Measuring the confirmed-fragile station directly (`z` = -283.9951, with a
-station forced exactly there) corrected the tool identification (`Side1Safe`/`Side2Safe`/`Side3Safe`
-are the real crowding, not the originally-assumed `Top1Safe`/`Top2Safe`/`Diag11Safe`/`Diag12Safe`,
-which only shared *z*-spans, not actual proximity) and, more consequentially, found its clearance is
-0.164 mm -- comfortably above the 0.01 mm thin-wall threshold this alternative had been built around.
-**An absolute-clearance check alone would never have caught the one station this item has confirmed
-is dangerous.** The design is therefore two metrics, not one: Metric A (nearest-tool clearance) for
-thin-wall accuracy, Metric B (ratio between the two nearest tools) for crowding-driven fragility,
-computed by per-tool scanning rather than fusing the tools first (faster, and immune to the
-`_Polyline` bug this item found). Action on violation follows directly from the two confirmed
-mechanisms: block or force a real check on Metric B's crowding signal, flag-only on Metric A's
-thinness signal. **Metric A's threshold is set: 0.01 mm, not the coarser 0.1 mm print-accuracy figure
-this item first proposed** -- that 0.1 mm is a positional tolerance (bolt clearances), not a wall-
-thickness one, and a single spiral-vase perimeter's thickness is exactly the quantity where a small
-absolute change (e.g. 0.4 mm to 0.3 mm) can flip the slicer's decision to extrude it at all. Only
-Metric B's exact ratio cutoff remains a policy choice rather than a closed decision: 5x is reasoned
-from the one confirmed example at 1.41x and the 15 confirmed-safe examples at 15x+, but rests on a
-single crowded data point. Recommending this two-metric design, with Metric A's threshold closed and
-Metric B's cutoff proposed at 5x pending sign-off, as the ready-to-implement answer to alternative 3.
-
-**Metric A implemented, 2026-10-02, continuing until blocked on Metric B's own open cutoff.**
-`cowl_interior.clearance_margin_scan`/`tool_clearance_ranked` and the `CLEARANCE_MARGIN_MM` = 0.01 mm
-constant are now in [cowl_interior.py](../../src/Fuselage/freecad/cowl_interior.py), wired into
-`cavity()`/`shell_solid()` as an opt-in `clearance_check` parameter (off by default -- the scan
-costs on the order of an hour on a full tail build) and reachable through `cowl_tree._CowlShell`'s
-new `ClearanceCheck` document property and `check_cowl_interior.py --clearance-check`. Verified
-against real geometry: the default (off) path is an exact no-op, and the opt-in scan found 15
-stations under 0.01 mm on `nose_cowl_shell` (worst 0.081 um), flag-only, without affecting the
-build's `OK` result. **Metric B is computed and reported but not enforced anywhere** -- its ratio
-cutoff is still the open decision above, not a number this implementation has any basis to pick on
-its own. Full account in
-[freecad_migration.md IP-FC-143](../implementation/freecad_migration.md#work-items).
-
-**Metric B's ratio cutoff, tested directly by quantitative dose-response, is not derivable --
-not because the gap lacked data, but because the ratio itself is not a sound quantity to
-threshold.** Per direct instruction to derive the value from test results rather than split the
-gap by eye, this session found real stations at 1.49x, 1.94x, 3.73x and 6.09x between the one
-confirmed-dangerous example (1.41x) and the confirmed-safe examples (15x+), and ran the same
-row-nudge fragility protocol on each. All four were stable (smooth, linear, constant-gain
-response -- the same signature every other confirmed-safe point has shown). A fifth point, `z` =
--294.1530 (also a notch-tool edge, 10 mm from the original), was **not**: it failed
-`Unconverged` at every tested magnitude (0.01, 0.03, 0.1 mm), worse than the original
-1.41x case, which still succeeded (with a sign-reversed swing) at 0.03 mm. **Its own measured
-ratio, however, did not reproduce.** Three independent builds of the identical code and
-parameters read that station's second-nearest tool as Diag12Safe (ratio 9.262x) once and
-Side2Safe (ratio 3.236x) twice -- the fragility reproduced in all three, but which tool counts
-as "second-nearest," and therefore the ratio itself, did not. Retesting the original
-`z` = -283.9951 point on the same third build found it still broken, but through a **third,
-different failure signature** each time it has now been tested: `Unconverged` with a
-sign-reversed swing (original finding), then `ValueError: Null shape` and a differently-worded
-`Unconverged` (this session), the 0.1 mm case this time returning a silently invalid
-(`isValid()` = `False`) 132 mm "thickness" with no exception raised at all. **This matches the
-project's own documented kernel-reproducibility floor** (recompute is not bit-reproducible; a
-fresh build is) -- newly shown here to bite the crowding *ranking* itself at a near-degenerate
-configuration, not only raw numeric noise in an otherwise-stable reading. No single ratio cutoff
-can be sound against this evidence: a cutoff tight enough to catch a 9.262x reading of the
-fragile station would also need to be at or above the confirmed-stable 6.088x point, and a
-cutoff that spares 6.088x would miss the fragile station on the build that reads it as 9.262x.
-**Recommendation: do not close Metric B with a ratio cutoff.** The evidence supports treating
-"more than one tool present within some generous, conservative band" as grounds to force the
-real `wall_thickness()` check unconditionally, rather than searching for a precise numeric line
-the measurement itself cannot hold still long enough to be thresholded against. A different
-candidate signal -- how many tools sit within a tight band of the minimum, not just the ratio
-between the top two -- is suggested by the one clean contrast available (the fragile
-`z` = -283.9951 has four tools within 1.52x of each other; the confirmed-stable `z` = -273.8499
-also has four tools, but spread to 6.22x) but is not confirmed by a controlled test and does not
-obviously explain `z` = -294.1530 (where only two tools were ever found close). Untested, and
-the next concrete step if this direction is pursued.
+**Recommendation: alternative 1.** The question is one cheap measurement on instrumentation that
+already exists, and alternatives 2, 3 and 4 are all decisions that should be made *after* it rather
+than instead of it. Keeping or retiring a diagnostic whose meaning has never been checked is the
+mistake that let Metric B stand as long as it did, and this item should not repeat it one metric to
+the left. Work item: IP-FC-148.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

@@ -79,9 +79,15 @@ import Part
 #: to the exterior -- so the criterion and the acceptance test are the same measurement.
 TAU = 0.05
 
-#: The floor on interval length. **Reaching it is a failure to report, not a result to
-#: accept** -- section 5 -- because it means the fitted surface does not represent the erosion
-#: there and nothing downstream would know.
+#: The hard floor on interval length, below which `_refine` will not subdivide. **Reaching it is
+#: a failure to report, not a result to accept** -- section 5 -- because it means the fitted
+#: surface does not represent the erosion there and nothing downstream would know. Since
+#: IP-FC-144 both refinement passes *measure* such an interval and report it, where they
+#: previously skipped it before measuring; only the subdivision is refused.
+#:
+#: **This is not the station-seeding floor.** That one is tied to the wall thickness -- see
+#: `station_floor()` -- because two stations closer together than the wall they are building
+#: make the axial pole track near-degenerate (OQ-DES-CW24, cowl_interior_surface.md section 4.1).
 MIN_INTERVAL = 0.20
 
 #: Circumferential spacing, in millimetres, for the grid the surface is **fitted through**,
@@ -378,12 +384,31 @@ ANGLE_WINDOW = 25
 #: kinds and two `U` values) and far below the scale at which a slicer's own perimeter decision
 #: is at risk.
 #:
-#: **Flag-only, never a gate.** A single rib's own near-tangency to the surface, without a
-#: second tool nearby, was tested directly (`debug_single_rib_fragility.py`, three points, the
-#: full 0.001-0.1 mm perturbation range) and stayed one valid solid throughout, with no
-#: `Unconverged` and no sign reversal -- evidenced stable, unlike the one confirmed crowded
-#: station (see Metric B, `clearance_margin_scan`'s own docstring). Only crowding -- two tools
-#: comparably close at once -- is evidenced to cause the construction itself to fail.
+#: **Flag-only, never a gate.** A single rib's own near-tangency to the surface was tested
+#: directly (`debug_single_rib_fragility.py`, three points, the full 0.001-0.1 mm perturbation
+#: range) and stayed one valid solid throughout, with no `Unconverged` and no sign reversal.
+#:
+#: **What this distance physically bounds is not established, 2026-10-03.** It is an in-plane
+#: distance from the candidate surface's slice to a tool's slice, and nothing checks whether the
+#: minimum lies on the tool's *cut floor* -- the face that actually limits the finished wall --
+#: or on a flank, which limits nothing. Measured against the real `wall_thickness()` at four
+#: stations, this number varied by a factor of 2.5 (0.085222 to 0.213606 mm) while the real wall
+#: varied by 4.9% (0.562703 to 0.589999 mm), and the two orderings disagree. Treat it as a
+#: rib-cut clearance diagnostic, not as a wall-thickness measurement, until that is resolved.
+#:
+#: **It does not predict construction failure, and was never meant to.** An earlier version of
+#: this note said crowding -- two tools comparably close at once -- is what causes the
+#: construction to fail. That attribution is withdrawn (OQ-DES-CW24, 2026-10-03): it rested on a
+#: companion ratio, "Metric B", which compared distances to the *surface* and never the tools to
+#: each other; it was removed outright on 2026-10-04 (IP-FC-147). At `z` = -60.0000 on
+#: `tail_shell` `U` = 3.0 this metric reads 0.097097 mm -- comfortably passing, as did the ratio
+#: at 5.950x -- and a 0.01 mm row displacement there still severs the wall. `shell_solid()`'s own
+#: solid-count and partition checks catch that; this constant does not and should not be expected
+#: to.
+#:
+#: **Whether this metric is kept at all is OQ-DES-CW25**, which turns on a measurement nobody has
+#: taken: only a tool's cut floor bounds the wall, its flanks bound nothing, and the minimum here
+#: is taken against the whole tool section without distinguishing them.
 CLEARANCE_MARGIN_MM = 0.01
 
 
@@ -1152,19 +1177,28 @@ def tool_clearance_ranked(surf_shape, tool_shapes, z):
 
 def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
                            coarse_step=1.0, refine_window=1.0, refine_step=0.05, n_worst=15):
-    """OQ-DES-CW24's two-metric scan of a candidate interior surface against the individual rib
-    tools that will be cut into it: Metric A (the nearest tool's own clearance -- a thin-wall
-    accuracy signal) and Metric B (the ratio between the two nearest tools' clearances -- a
-    crowding-driven construction-fragility signal), adaptively sampled.
+    """OQ-DES-CW24's scan of a candidate interior surface against the individual rib tools that
+    will be cut into it: Metric A (the nearest tool's own clearance) and Metric B (the ratio
+    between the two nearest tools' clearances), adaptively sampled.
 
-    **Two mechanisms, confirmed distinct, not one.** The one confirmed construction-fragility
-    failure this item found (`z` = -283.9951: `Unconverged`, then a sign-reversed swing, under a
-    0.01-0.03 mm row-nudge perturbation) sits at a comfortable 0.164 mm clearance -- sixteen
-    times `CLEARANCE_MARGIN_MM` -- so Metric A alone would never have flagged it. What it does
-    have is a second tool almost as close (ratio 1.41x). Fifteen single-rib near-tangency points
-    (clearance 48 nm to 4.1 um, Metric A's own concern) were tested the same way and stayed
-    stable at every perturbation up to 0.1 mm, with a second tool 15-1000x farther away at every
-    one. Crowding, not raw thinness, is what the evidence ties to the severe failure mode.
+    **Metric B does not measure crowding, and should be retired rather than given a cutoff
+    (OQ-DES-CW24, re-review 2026-10-03).** It compares how far each tool is from the *surface*
+    and never compares the tools to each other, so two tools on opposite sides of the part score
+    as maximally crowded whenever their clearances happen to be similar. At `z` = -283.9951 on
+    `tail_shell` `U` = 3.0 -- the station the whole crowding argument was derived from -- the
+    three tools it ranks as crowded have their own nearest points 87.7, 89.2 and 176.9 mm apart
+    on a 300 mm part. Measured directly, the real dilated tool set's largest pairwise *overlap*
+    is 0.59% of the smaller tool, against the ~40% that produced the pathological topology in
+    IP-FC-137's synthetic test, so the mechanism this metric was built to detect is not present
+    in the real part at that magnitude. The earlier claim here -- "crowding, not raw thinness, is
+    what the evidence ties to the severe failure mode" -- is withdrawn.
+
+    **Neither metric predicts the construction failure.** At `z` = -60.0000 Metric A reads
+    0.097097 mm and Metric B reads 5.950x, both comfortably passing, and a 0.01 mm row
+    displacement there severs the wall into two solids with a 99.3% partition slip. What catches
+    that is `shell_solid()`'s own solid-count and partition checks, not this scan. Metric A's own
+    standing is narrower than it was: see `CLEARANCE_MARGIN_MM` for what its distance is and is
+    not known to bound.
 
     **Two stages, not one fixed grid.** A `coarse_step` pass finds candidate thin points, then a
     `refine_step` pass re-scans a `refine_window` around each of the worst `n_worst` coarse
@@ -1174,23 +1208,26 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
     0.02 mm scan found), and a uniformly fine grid everywhere costs on the order of 19 hours for
     one whole-tail build -- not viable as a per-build check.
 
-    Returns the refined worst points as a list of `(z, metric_a, metric_b)`, nearest-clearance
-    first. `metric_b` is `None` wherever fewer than two tools have a section at that station, or
-    the nearest one reads exactly zero.
+    Returns the refined worst points as a list of `(z, metric_a)`, nearest-clearance first.
 
-    **Metric B's own cutoff is not applied here, and that is deliberate.** OQ-DES-CW24 (cowl.md)
-    leaves the ratio that counts as "crowded" an open policy choice -- 5x is reasoned from the
-    one confirmed-dangerous example (1.41x) and fifteen confirmed-safe examples (15x+), but
-    rests on a single crowded data point and is recorded as pending sign-off, not a closed
-    decision. This function reports the ratio; it does not decide what to do about it.
+    **Metric B was removed here, 2026-10-04** (IP-FC-147, OQ-DES-CW24 alternative 3). It was a
+    ratio between the two nearest tools' distances to the *interior surface*, reported alongside
+    Metric A under the name "crowding". It never compared the tools to one another, so two tools
+    on opposite sides of the part scored as maximally crowded whenever their clearances happened
+    to be similar: at the station the whole crowding argument was built on, the three tools it
+    ranked as crowded had their nearest points 87.7-176.9 mm apart on a 300 mm part, and the real
+    dilated tools' largest pairwise overlap is 0.59% of the smaller tool. It was removed rather
+    than given a cutoff because no cutoff on a quantity with no geometric meaning is sound --
+    this was never the threshold problem it was described as. Its non-reproducibility between
+    identical builds followed from the same defect rather than being separate evidence.
+
+    This function reports; it does not gate.
     """
     def sample(z):
         ranked = tool_clearance_ranked(surf_shape, tool_shapes, z)
         if not ranked:
             return None
-        metric_a = ranked[0][1]
-        metric_b = (ranked[1][1] / metric_a) if len(ranked) >= 2 and metric_a > 0.0 else None
-        return metric_a, metric_b
+        return ranked[0][1]
 
     n_coarse = max(int((z_hi - z_lo) / coarse_step), 1)
     coarse = []
@@ -1198,11 +1235,11 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
         z = z_lo + (z_hi - z_lo) * k / float(n_coarse)
         got = sample(z)
         if got is not None:
-            coarse.append((z, got[0], got[1]))
+            coarse.append((z, got))
     coarse.sort(key=lambda row: row[1])
 
     results = []
-    for z_center, _a, _b in coarse[:n_worst]:
+    for z_center, _a in coarse[:n_worst]:
         fine_lo = max(z_lo, z_center - refine_window)
         fine_hi = min(z_hi, z_center + refine_window)
         n_fine = max(int((fine_hi - fine_lo) / refine_step), 1)
@@ -1210,8 +1247,8 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
         for k in range(n_fine + 1):
             z = fine_lo + (fine_hi - fine_lo) * k / float(n_fine)
             got = sample(z)
-            if got is not None and (best is None or got[0] < best[1]):
-                best = (z, got[0], got[1])
+            if got is not None and (best is None or got < best[1]):
+                best = (z, got)
         if best is not None:
             results.append(best)
     results.sort(key=lambda row: row[1])
@@ -1549,6 +1586,48 @@ def _seed(z_lo, z_hi, inset_lo, inset_hi):
     return zs
 
 
+def station_floor(t):
+    """Section 4.1: the minimum separation two fit stations may have.
+
+    **Tied to the wall, not to a fixed number** (IP-FC-144, OQ-DES-CW24 alternative 2). Two
+    stations closer together than the wall they are building carry very nearly the same eroded
+    contour, so the fit is asked to interpolate a near-duplicate and the axial pole track through
+    them is near-degenerate. `MIN_INTERVAL` remains a hard geometric floor underneath, for a wall
+    thinner than it.
+    """
+    return max(t, MIN_INTERVAL)
+
+
+def _thin_stations(zs, floor):
+    """Drop stations that sit closer than `floor` to the one before them.
+
+    **This is the filter the per-patch union never had.** `feature_stations()` already
+    deduplicates its own output, and `_patches()` already refuses a patch shorter than
+    `MIN_INTERVAL`, but the uniform seed stations and the notch edges are independent sets:
+    neither contains a close pair on its own, and their union can. That is how the real
+    `tail_shell` fit at `U` = 3.0 reached a station pair 0.0009 mm apart -- 670 times finer than
+    the wall -- from two individually legitimate stations.
+
+    **Both end stations are preserved exactly.** A patch boundary is a station the patches on
+    both sides must sample at the same `z`, or their two approximations of it are separated by
+    this filter rather than meeting (see `_seed`'s own note on `END_INSET`). The last station is
+    therefore restored even when the greedy pass would have dropped it, displacing its neighbour
+    instead.
+    """
+    if len(zs) < 2:
+        return list(zs)
+    out = [zs[0]]
+    for z in zs[1:]:
+        if z - out[-1] >= floor:
+            out.append(z)
+    if out[-1] != zs[-1]:
+        # keep the end; drop whatever the greedy pass kept too close in front of it
+        while len(out) > 1 and zs[-1] - out[-1] < floor:
+            out.pop()
+        out.append(zs[-1])
+    return out
+
+
 # --------------------------------------------------------------------------------
 # The fit
 # --------------------------------------------------------------------------------
@@ -1680,10 +1759,17 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
         worst = 0.0
         unsliceable = 0
         shapes = []
+        at_floor = 0
+        worst_at_floor = 0.0
         for i in range(len(rows) - 1):
             z_a, z_b = rows[i][0], rows[i + 1][0]
-            if z_b - z_a <= 2 * MIN_INTERVAL:
-                continue
+            # **Measuring an interval and subdividing it are separate decisions** (IP-FC-144,
+            # OQ-DES-CW24). A short interval must not be split -- bisecting it drives the fit
+            # further into the near-degenerate condition it is already in -- but it must still
+            # be measured, or the worst-conditioned interval in the patch is the one place no
+            # number is ever taken. This guard used to `continue` before measuring, which is
+            # how a near-duplicate pair could sit in the station set unmeasured at every stage.
+            divisible = (z_b - z_a) > 2 * MIN_INTERVAL
             z_m = 0.5 * (z_a + z_b)
             # **An insertion has two possible causes and they are not the same failure.**
             # Either the wall is measurably wrong -- which more stations fix -- or the surface
@@ -1696,13 +1782,27 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
             if len(cut) != 1:
                 unsliceable += 1
                 shapes.append('%d wire(s), %d open' % (len(sliced), len(cut)))
-                wanted.append((i, z_m))
+                if divisible:
+                    wanted.append((i, z_m))
+                else:
+                    at_floor += 1
                 continue
             here, _dense = open_contour(cut[0], n_check)
             gap = float(np.abs(outer_at(z_m).distances(here) - t).max())
             worst = max(worst, gap)
             if gap > tau:
-                wanted.append((i, z_m))
+                if divisible:
+                    wanted.append((i, z_m))
+                else:
+                    # Section 5: reaching the floor is a failure to *report*, not a result to
+                    # accept. It is reported rather than raised because promoting it to a
+                    # refusal is a separate decision nobody has made.
+                    at_floor += 1
+                    worst_at_floor = max(worst_at_floor, gap)
+        if at_floor:
+            note('    %d interval(s) at the %.3f mm subdivision floor could not be split; '
+                 'worst wall error measured across them %.4f mm against %.3f'
+                 % (at_floor, 2 * MIN_INTERVAL, worst_at_floor, tau))
         if not wanted:
             return rows, surf, worst
         note('    refining: %d stations -> %d, worst wall error %.4f mm over %.3f%s'
@@ -1836,12 +1936,15 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 
     **`clearance_check`, opt-in, off by default (OQ-DES-CW24).** Runs `clearance_margin_scan`
     against the converged smooth surface and the individual dilated ribs once the cut above has
-    succeeded, and reports Metric A's flagged stations (and Metric B's ratio alongside them,
-    informational only) through `report`, the same callback `disconnected_pieces` and
-    `smooth_shape` already use. Never raises and never changes `solid` -- flag-only, per the
-    design's own action-on-violation for Metric A, and Metric B's crowding-ratio cutoff is not
-    enforced at all yet, since that number is still an open policy choice. Left off by default
-    because the scan itself costs on the order of an hour on top of an ordinary build.
+    succeeded, and reports Metric A's flagged stations through `report`, the same callback
+    `disconnected_pieces` and `smooth_shape` already use. Never raises and never changes `solid`:
+    flag-only. The companion ratio once reported beside it, "Metric B", was removed on 2026-10-04
+    (IP-FC-147) because it did not measure crowding -- see `clearance_margin_scan`. Metric A
+    survives as a rib-cut clearance diagnostic only; its description as a wall-thickness signal is
+    withdrawn, and whether it is kept at all is OQ-DES-CW25, which turns on a floor-versus-flank
+    measurement nobody has taken. **This is not a construction-failure check** -- the checks that
+    catch a severed wall are `shell_solid()`'s own solid-count and partition tests. Left off by
+    default because the scan itself costs on the order of an hour on top of an ordinary build.
     """
     planes = cell_boundary_planes(body)
     lo, hi = z_extent(body)
@@ -2056,6 +2159,16 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # already-converged fit" case measured catastrophic before this pass was written; it is a
         # richer starting seed for a convergence that has not run yet.
         zs = sorted(set(zs) | {e for e in notch_edges if p_lo < e < p_hi})
+        # **The union is where a near-duplicate pair gets in** (IP-FC-144, OQ-DES-CW24
+        # alternative 2). The seed stations and the notch edges are filtered against
+        # themselves but never against each other, so two individually legitimate stations
+        # can land arbitrarily close. Measured: this costs no accuracy -- same worst wall
+        # error, 0.0496 mm, at 30 rows instead of 36 and 416.9 s instead of 539.8 s.
+        kept = _thin_stations(zs, station_floor(t))
+        if len(kept) != len(zs):
+            note('    patch %d: %d stations -> %d on the %.3f mm floor'
+                 % (index, len(zs), len(kept), station_floor(t)))
+        zs = kept
 
         # P1 over the patch, on the un-notched cell body, before anything is fitted. The two
         # contours being compared must be in the same order -- point i means the same place on
@@ -2268,13 +2381,21 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 while i < len(rows) - 2 and rows[i + 1][0] <= z:
                     i += 1
                 z_a, z_b = rows[i][0], rows[i + 1][0]
-                if z_b - z_a <= 2 * MIN_INTERVAL:
-                    continue
+                # **Measure first, decide about splitting second** (IP-FC-144, OQ-DES-CW24).
+                # This guard used to skip before `_finished_wall_gap` was ever called, so the
+                # *finished* wall was never measured across a short interval and
+                # `worst_finished` could not include it -- the same blind spot `_refine` had,
+                # one pass later and on the real cut rather than the smooth surface.
+                divisible = (z_b - z_a) > 2 * MIN_INTERVAL
                 gap = _finished_wall_gap(solid, z, t, finished_outer_at, planes, n_check)
                 if gap is None:
                     continue
                 worst_finished = max(worst_finished, gap)
-                if gap > tau:
+                if gap > tau and not divisible:
+                    note('    patch %d: finished wall %.4f mm over %.3f at z = %.4f, in an '
+                         'interval at the %.3f mm subdivision floor; reported, not split'
+                         % (ei, gap, tau, z, 2 * MIN_INTERVAL))
+                if gap > tau and divisible:
                     # **`slot`, not `key`.** `cavity()` already has a `key(z)` helper in this
                     # same scope (the station-position cache above), and reusing that name for
                     # this tuple silently shadowed it for the rest of the function's execution --
@@ -2335,7 +2456,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # a surface the rest of `cavity` has already moved past.
     if clearance_check:
         margin = clearance_margin_scan(smooth, ribs, z_lo, z_hi)
-        thin = [(z, a, b) for z, a, b in margin if a < CLEARANCE_MARGIN_MM]
+        thin = [(z, a) for z, a in margin if a < CLEARANCE_MARGIN_MM]
         if thin:
             note('    clearance margin: %d station(s) under the %.3f mm thin-wall flag '
                  '(worst %.6f mm at z = %.4f, flag-only)'

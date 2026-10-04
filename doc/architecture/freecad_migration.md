@@ -735,27 +735,27 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 
 | ID | Status | Question |
 | --- | --- | --- |
-| ARCH-1 | ~~decided~~ 2026-08-07 | `Part::` or `PartDesign::`? — build both, then choose (IP-FC-5) |
-| ARCH-2 | ~~decided~~ 2026-08-07 | What replaces the exact verification tier? — do both, plus every method that works |
-| ARCH-3 | ~~withdrawn~~ 2026-08-07 | Not an open question — a measurement. See IP-FC-1 |
-| ARCH-4 | ~~decided~~ 2026-08-07 | Retire it after IP-FC-13; FreeCAD becomes the definition of correctness |
-| ARCH-5 | ~~decided~~ 2026-08-07 | Adaptive curvature-aware slice-and-fit; G1 threshold, G2 objective; never ruled |
-| ARCH-6 | ~~decided~~ 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
-| ARCH-7 | ~~decided~~ 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
-| ARCH-8 | ~~withdrawn~~ 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
-| ARCH-9 | ~~resolved~~ 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
-| ARCH-10 | ~~withdrawn~~ 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
-| ARCH-11 | ~~decided~~ 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
-| ARCH-12 | ~~decided~~ 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
-| ARCH-13 | ~~decided~~ 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
-| ARCH-14 | ~~decided~~ 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
-| ARCH-15 | ~~decided~~ 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
-| ARCH-16 | ~~decided~~ 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
-| ARCH-17 | ~~resolved~~ 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
-| ARCH-18 | ~~withdrawn~~ 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
+| ARCH-1 | decided 2026-08-07 | `Part::` or `PartDesign::`? — build both, then choose (IP-FC-5) |
+| ARCH-2 | decided 2026-08-07 | What replaces the exact verification tier? — do both, plus every method that works |
+| ARCH-3 | withdrawn 2026-08-07 | Not an open question — a measurement. See IP-FC-1 |
+| ARCH-4 | decided 2026-08-07 | Retire it after IP-FC-13; FreeCAD becomes the definition of correctness |
+| ARCH-5 | decided 2026-08-07 | Adaptive curvature-aware slice-and-fit; G1 threshold, G2 objective; never ruled |
+| ARCH-6 | decided 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
+| ARCH-7 | decided 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
+| ARCH-8 | withdrawn 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
+| ARCH-9 | resolved 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
+| ARCH-10 | withdrawn 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
+| ARCH-11 | decided 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
+| ARCH-12 | decided 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
+| ARCH-13 | decided 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
+| ARCH-14 | decided 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
+| ARCH-15 | decided 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
+| ARCH-16 | decided 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
+| ARCH-17 | resolved 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
+| ARCH-18 | withdrawn 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
 | ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
 
-### ~~OQ-ARCH-1 — `Part::` or `PartDesign::`?~~ — DECIDED 2026-08-07: build both
+### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
 The roadmap calls this the decision that shapes the whole phase. The geometry today is
 CSG: unions and differences of primitives and extrusions, with masks trimming an octant and
@@ -825,7 +825,7 @@ prototypes nobody chooses between:
 
 Until IP-FC-5 reports, no other part is ported. That is the point of the deferral.
 
-### ~~OQ-ARCH-2 — What replaces the exact verification tier?~~ — DECIDED 2026-08-07: do both, and more
+### OQ-ARCH-2 — What replaces the exact verification tier? — DECIDED 2026-08-07: do both, and more
 
 `scad_snapshot.py` is exact, runs in seconds, and disappears with the generated `.scad`.
 
@@ -892,7 +892,7 @@ the codebase is least trustworthy — a newly ported geometry engine with no tra
 Several partial checks is the right response, even though it is more work than the
 arrangement it replaces.
 
-### ~~OQ-ARCH-3 — Is subprocess-per-part viable?~~ — WITHDRAWN 2026-08-07: not an open question
+### OQ-ARCH-3 — Is subprocess-per-part viable? — WITHDRAWN 2026-08-07: not an open question
 
 **This was miscategorized.** An open question is a decision requiring judgment between
 alternatives whose merits cannot be settled by looking. This is a **measurement** — take the
@@ -915,7 +915,7 @@ was not a question: *"we do not know X"* is not sufficient grounds for an OQ. Th
 whether knowing X requires a **decision** or merely an **observation**. If an afternoon of
 measurement settles it, it is a work item.
 
-### ~~OQ-ARCH-4 — What becomes of the OpenSCAD implementation?~~ — DECIDED 2026-08-07: retire it
+### OQ-ARCH-4 — What becomes of the OpenSCAD implementation? — DECIDED 2026-08-07: retire it
 
 The roadmap says do not delete it before the FreeCAD path is proven across the full
 parameter range, which settles the near term but not the end state.
@@ -985,7 +985,7 @@ Tracked as IP-FC-34.
 
 ---
 
-### ~~OQ-ARCH-5 — How is the cowl interior surface generated?~~ — DECIDED 2026-08-07: adaptive slice-and-fit
+### OQ-ARCH-5 — How is the cowl interior surface generated? — DECIDED 2026-08-07: adaptive slice-and-fit
 
 Required by UC-4. The interior must be a per-layer 2D inset matching slicer behavior, not
 a perpendicular shell offset — see the use-case section for why the two differ and why the
@@ -1039,7 +1039,7 @@ near-horizontal surfaces where a horizontal inset leaves none.
    assembly clearance.
    *Drawbacks:* diverges from the printed part in a way that matters for UC-8; interacts
    with OQ-DES-CW6, where the ribs have the same problem.
-   *Prerequisites:* ~~agreement on what the model is *for*~~ — settled by OQ-DES-CW6
+   *Prerequisites:* agreement on what the model is *for* — settled by OQ-DES-CW6
    (2026-08-09): the solid model is for everything except printing, and the print keeps its
    own representation.
 
@@ -1047,8 +1047,8 @@ near-horizontal surfaces where a horizontal inset leaves none.
 horizontal insets, matching the slicer — while avoiding a per-layer loft that no downstream
 consumer needs at full resolution. Alternative 3 is the tempting one and should be
 resisted: a normal offset is the exact error mode this use case was raised to prevent.
-~~The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
-decision as the top-and-bottom-solid-layers rule a slicer applies.~~ **Not so, and settled
+The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
+decision as the top-and-bottom-solid-layers rule a slicer applies. **Not so, and settled
 2026-08-21 by [OQ-ARCH-17](#open-questions):** the cowl is printed as perimeters only, with no
 top or bottom solid layers to be the equivalent of, and its design avoids near-horizontal
 geometry rather than accommodating it. No rule is needed under any of these alternatives.
@@ -1093,8 +1093,8 @@ between the fitted surface and the true per-layer offset falls below tolerance. 
 spacing a derived quantity rather than a tuning knob, and gives the algorithm document a
 convergence criterion to state.
 
-~~The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
-layers — remains the main undecided item inside IP-FC-16.~~ **Settled 2026-08-21 by
+The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
+layers — remains the main undecided item inside IP-FC-16. **Settled 2026-08-21 by
 [OQ-ARCH-17](#open-questions): there is no such rule, because the design has no
 near-horizontal geometry and the cowl has no top or bottom skin.** It had stood here as the
 main undecided item since 2026-08-07 without ever being filed as a question, so it blocked
@@ -1112,7 +1112,7 @@ is the *design*, and the thing to guard is that the two paths stay separate. Sec
 interior's fidelity requirements above are unchanged but their justification narrows — they
 matter because analysis and assembly need them, not because a printer will follow them.
 
-### ~~OQ-ARCH-6 — How are assembly joints defined and stored?~~ — DECIDED 2026-08-07: Assembly joints
+### OQ-ARCH-6 — How are assembly joints defined and stored? — DECIDED 2026-08-07: Assembly joints
 
 Required by UC-4: fuselage unit, nose, tail, and full fuselage assemblies with real joints.
 
@@ -1185,7 +1185,7 @@ benefit of downstream consumers. They are not a substitute for the parametric co
 that makes the parts fit in the first place, and nothing here should be read as license to
 let the two representations diverge.
 
-### ~~OQ-ARCH-7 — What decides which dimensions a generated drawing carries?~~ — DECIDED 2026-08-07
+### OQ-ARCH-7 — What decides which dimensions a generated drawing carries? — DECIDED 2026-08-07
 
 Required by UC-7. Projecting a view is the easy part; TechDraw does it from any shape.
 The hard part is *which* dimensions to place, and that is a question about design intent,
@@ -1288,7 +1288,7 @@ line — so **completeness becomes affordable in a way it is not on a one-off dr
 4. How topological references survive a parameter change. This is the same edge-naming
    stability question IP-FC-5's two prototypes will answer, so it need not be solved twice.
 
-### ~~OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material?~~ — WITHDRAWN 2026-08-07: not an open question
+### OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material? — WITHDRAWN 2026-08-07: not an open question
 
 **Miscategorized, in the same way as [OQ-ARCH-3](#open-questions).** The question was
 "does a permissively-licensed tool exist for bead-level FDM analysis" — and I said in the
@@ -1315,7 +1315,7 @@ had the same shape: *"we do not know the value of X"*, where X is discoverable b
 The test that separates them is whether resolution requires a **judgment** or an
 **observation**. Recorded here because it is a cheap mistake to repeat.
 
-### ~~OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern?~~ — RESOLVED 2026-08-07
+### OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern? — RESOLVED 2026-08-07
 
 **Read from the installed copy:** `C:\Program Files\OpenVSP-3.50.5-win64\LICENSE` —
 **NASA Open Source Agreement version 1.3** (3.47.0 is also installed, same terms).
@@ -1368,7 +1368,7 @@ under a license the table does not mention. Suggested wording: *acceptable as a 
 tool or an imported module; obligations attach only on redistribution; note the §4.B
 indemnity.*
 
-### ~~OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big?~~ — WITHDRAWN 2026-08-09: not an open question
+### OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big? — WITHDRAWN 2026-08-09: not an open question
 
 **Miscategorized, in the same way as [OQ-ARCH-3](#open-questions) and
 [OQ-ARCH-8](#open-questions), and for a more interesting reason than either.** Those two were
@@ -1401,7 +1401,7 @@ debated. The question that should have been asked first is not "how big" but "at
 them still holds; what this adds is that it has to be applied to the premise as well as to
 the question.
 
-### ~~OQ-ARCH-10 (as originally posed)~~ — retained for the alternatives, none of which was needed
+### OQ-ARCH-10 (as originally posed) — retained for the alternatives, none of which was needed
 
 `geometry_eps()` is `0.01` mm, a constant of the OpenSCAD source, carried into the port
 verbatim. Two jobs rest on it: making cuts overshoot the material they pass through, and
@@ -1466,7 +1466,7 @@ premise — which is exactly why it is worth being able to recognise this shape 
 
 ---
 
-### ~~OQ-ARCH-11 — Should geometric relationships be expressed as constraints, or stay solved into coordinates?~~ — DECIDED 2026-08-15: constraints, staged toward `PartDesign::`
+### OQ-ARCH-11 — Should geometric relationships be expressed as constraints, or stay solved into coordinates? — DECIDED 2026-08-15: constraints, staged toward `PartDesign::`
 
 A part in this port is a CSG tree of primitives whose positions and sizes are bound by
 expression to a spreadsheet. One built frame bulkhead is 158 objects:
@@ -1632,7 +1632,7 @@ measures first.
 
 ---
 
-### ~~OQ-ARCH-12 — What carries the interface verification tier above 100 mm?~~ — DECIDED 2026-08-16: scale `BBOX_TOL` with `U`, and let the limit expire with the OpenSCAD sweep
+### OQ-ARCH-12 — What carries the interface verification tier above 100 mm? — DECIDED 2026-08-16: scale `BBOX_TOL` with `U`, and let the limit expire with the OpenSCAD sweep
 
 **Resolution.** **Alternative 2** for the mechanism — `BBOX_TOL` becomes `5e-4 mm × U`, floored
 at its historical value for `U` < 1 — together with **Alternative 4** for the disposition: the
@@ -1822,7 +1822,7 @@ document carries doubles and is not involved.
    greppable, which has been useful in diagnosis — including this one, where reading the vertex
    line directly is what identified the cause; float32 is still not exact, so the limit is pushed
    out by four orders rather than removed in principle.
-   *Prerequisites:* ~~confirm this OpenSCAD build's binary STL writer is float32~~ — **done, see
+   *Prerequisites:* confirm this OpenSCAD build's binary STL writer is float32 — **done, see
    above.** Remaining: the render command is `solid2`'s `openscad_stl_command` template, used at
    one call site in `fuselage_variants.py`, so the change is that template plus a full corpus
    re-render and comparison to confirm no verdict changes.
@@ -1917,7 +1917,7 @@ That is the one real cost, and it is the question this alternative turns on.
 
 ---
 
-### ~~OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature?~~ — DECIDED 2026-08-16: yes, but with the `PartDesign` move; leave it alone until then
+### OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature? — DECIDED 2026-08-16: yes, but with the `PartDesign` move; leave it alone until then
 
 **Resolution.** **Alternative 1 now, alternative 3 later**, as recommended. The two-prism
 construction stays for the present and `fillets.py` records beside it that the shape is a
@@ -2126,7 +2126,7 @@ by `chamfer_analysis/measure_chamfer_context.py`; re-run that if the geometry mo
 
 ---
 
-### ~~OQ-ARCH-14 — Do the last two fillets need converting, by the test just adopted?~~ — DECIDED 2026-08-17: convert all four, into one sketch carrying only the fillets active for that variant
+### OQ-ARCH-14 — Do the last two fillets need converting, by the test just adopted? — DECIDED 2026-08-17: convert all four, into one sketch carrying only the fillets active for that variant
 
 **Alternative 1, with an addition that changes what the work is.** All four rounded corners are
 converted. Rather than four sketches whose inactive elements are overlaid on variants that do
@@ -2479,7 +2479,7 @@ moves.
 
 ---
 
-### ~~OQ-ARCH-15 — What is the reference corpus a reference *to*, and what keeps it current?~~ — DECIDED 2026-08-18: freeze the baseline, reason about the deltas
+### OQ-ARCH-15 — What is the reference corpus a reference *to*, and what keeps it current? — DECIDED 2026-08-18: freeze the baseline, reason about the deltas
 
 **The problem.** `verify_sweep_change.py` compares a freshly built sample against
 `variant_output_baseline` (rendered 2026-08-02) and, run at HEAD on 2026-08-18 with no local
@@ -2549,7 +2549,7 @@ gate on drift, which is now the ledger's job, but to state what the frozen basel
 
 *Recorded as IP-FC-80 (inventory and ledger) and IP-FC-81 (baseline manifest).*
 
-### ~~OQ-ARCH-16 — Is `same_geometry` the right test for "the same solid"?~~ — DECIDED 2026-08-18: fix the tolerances, and add a sampled surface distance
+### OQ-ARCH-16 — Is `same_geometry` the right test for "the same solid"? — DECIDED 2026-08-18: fix the tolerances, and add a sampled surface distance
 
 **The problem.** Every geometric comparison routes through `mesh_stats.same_geometry`, which
 requires exact triangle-count equality, an **absolute** 1e-6 mm³ volume tolerance, and exact
@@ -2660,7 +2660,7 @@ unchanged; only the order of the two tiers changed.
 
 *Recorded as IP-FC-82 (tolerances) and IP-FC-83 (sampled surface distance).*
 
-### ~~OQ-ARCH-17 — What supplies material where a horizontal inset leaves none?~~ — RESOLVED 2026-08-21: nothing, because the design has no such region
+### OQ-ARCH-17 — What supplies material where a horizontal inset leaves none? — RESOLVED 2026-08-21: nothing, because the design has no such region
 
 **Answer: the rule is not needed.** Not deferred — not needed. The question assumed the cowl
 has near-horizontal surfaces that a horizontal inset would fail to give material to, and that
@@ -2726,7 +2726,7 @@ is one of the few places a violation would actually surface.
 
 *Implementation: IP-FC-16, unblocked.*
 
-### ~~OQ-ARCH-18 — What measures a dimension's annotation extent, when nothing headless renders it?~~ — WITHDRAWN 2026-08-22: filed on strings the drawing does not carry
+### OQ-ARCH-18 — What measures a dimension's annotation extent, when nothing headless renders it? — WITHDRAWN 2026-08-22: filed on strings the drawing does not carry
 
 **The question was posed against per-variant value text, and this project decided in 2026-08-07
 not to put value text on the view.** OQ-ARCH-7's decision is a **family drawing** — *"lettered
@@ -2782,7 +2782,7 @@ on a premise nobody verified — is worth being able to point at twice.
 
 *Implementation: IP-FC-21, unblocked.*
 
-### ~~OQ-ARCH-19 — What reproducibility is required of a generated solid?~~ — DECIDED 2026-09-06
+### OQ-ARCH-19 — What reproducibility is required of a generated solid? — DECIDED 2026-09-06
 
 **Two thresholds, and a screen that cannot give a false negative.**
 
@@ -2861,7 +2861,7 @@ corners moving the same way — is IP-FC-117's soak, which has not run. And a sa
 lower bound that cannot be made an upper one by sampling harder; the surface-distance threshold
 inherits that limit.
 
-### ~~OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area?~~ — DECIDED 2026-09-06
+### OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area? — DECIDED 2026-09-06
 
 **To surface area and part scale: the criterion is `|Va − Vb| / (A · 100U)`, dimensionless.**
 Alternative 1. Dividing by area turns the number into the surface offset the error physically is;

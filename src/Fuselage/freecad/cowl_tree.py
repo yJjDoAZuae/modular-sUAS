@@ -246,9 +246,14 @@ def _add_clearance_props(obj):
     **`ThinWallFlags`/`WorstClearanceMargin` are its output**, mirroring how `PartitionSlip`
     already surfaces a `shell_solid` report value as a document property: how many stations the
     scan found under `cowl_interior.CLEARANCE_MARGIN_MM` (Metric A, flag-only), and the single
-    worst clearance found. Both read 0 / 0.0 when `ClearanceCheck` is off. Metric B's own
-    crowding ratio is not stored here -- its cutoff is an open policy choice (OQ-DES-CW24), not
-    a closed decision a document property should imply is enforced.
+    worst clearance found. Both read 0 / 0.0 when `ClearanceCheck` is off. The companion ratio
+    once reported beside Metric A, "Metric B", was never stored here and no longer exists at all:
+    it did not measure the tool-to-tool crowding its name claimed, and was removed on 2026-10-04
+    (IP-FC-147, OQ-DES-CW24 alternative 3).
+
+    **Neither property is a construction-failure indicator.** A build that severs its cell wall is
+    caught by `cowl_interior.shell_solid`'s own solid-count and partition checks, which raise; a
+    station flagged here is a clearance diagnostic and nothing more.
     """
     if not hasattr(obj, 'ClearanceCheck'):
         obj.addProperty('App::PropertyBool', 'ClearanceCheck', 'Shell',

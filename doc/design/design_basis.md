@@ -950,7 +950,7 @@ than the feature they act on. The panel slot is the one that is not.
 Everything here is a place where the implementation is correct, self-consistent, and rests on
 something nobody wrote down.
 
-1. **~~Four of the seven clearances carry no argument.~~ Answered 2026-08-29: they are
+1. **Four of the seven clearances carry no argument. Answered 2026-08-29: they are
    *measured*.** `longeron_tolerance` 0.05, `greeble_tolerance` 0.05, `panel_tolerance` 0.1 and
    `boom_tolerance` 0.2 were **arrived at through fit checks during prototype testing**. That is
    a real reason and it is now on record. What it does not give is a rule: nothing here
@@ -958,7 +958,7 @@ something nobody wrote down.
    four times `longeron_tolerance` is an outcome of two separate fit checks rather than a ratio
    anybody chose. [OQ-DES-DB3](#open-questions) is closed.
 
-2. **~~`bulkhead_thickness` and `bulkhead_bolt_diameter` are tabulated with no rule.~~
+2. **`bulkhead_thickness` and `bulkhead_bolt_diameter` are tabulated with no rule.
    Answered 2026-08-29: the table *is* the design.** They are design choices made on a tradeoff
    of several factors and objectives, and they trace to no formula and to no higher requirement.
    Eight rows each; airframe size is a **discrete series of eight**, and adding a ninth means
@@ -968,7 +968,7 @@ something nobody wrote down.
    greeble nub's height — and they are derived *from the table*, which is a legitimate thing to
    derive from.
 
-3. **~~`longeron_chamfer` is not a chamfer.~~ Withdrawn 2026-08-30: it is one, it is correctly
+3. **`longeron_chamfer` is not a chamfer. Withdrawn 2026-08-30: it is one, it is correctly
    named, and the name was the only part of it this document read correctly.** The corner snaps
    onto the longeron: it wraps 270° of the bore and opens through a mouth narrower than the rod,
    2.8991 mm clear against 4 mm at 1U. The mouth's two walls stand at 45° to the direction the
@@ -997,7 +997,7 @@ something nobody wrote down.
    FreeCAD reference first built it unconditionally and that assembling `bulkhead_section`
    caught it: 5.87 mm³ standing in the first quadrant that the real module does not have.
 
-4. **~~`panel_offset`'s upper clamp is unexercised and is not a bound.~~ Answered 2026-08-29:
+4. **`panel_offset`'s upper clamp is unexercised and is not a bound. Answered 2026-08-29:
    it is a guard, and the ordering is deliberate.** The `min` against `√2 · corner_radius` was
    written as a guard against an excessively large panel offset, and **applying the quantum after
    it was intentional** — so the value that leaves the expression is always on the 0.25 mm grid.
@@ -1194,7 +1194,7 @@ flange wall, the boom key (item 8); why `panel_overlap` should be one panel thic
 why the longeron flange is built only on cowling bulkheads and on one face (item 3); and
 **DES-5's allocation** (item 5), which is the one with the most weight on it.
 
-### ~~OQ-DES-DB1 — `panel_offset`'s upper clamp never binds, and is not a bound~~ — DECIDED 2026-08-29: it is a guard, kept as it is, and the ordering is deliberate
+### OQ-DES-DB1 — `panel_offset`'s upper clamp never binds, and is not a bound — DECIDED 2026-08-29: it is a guard, kept as it is, and the ordering is deliberate
 
 **Resolution note.** Alternative 3: keep it as written and mark it a guard.
 
@@ -1227,7 +1227,7 @@ refusal is the right conversation to have then, with a real case to look at.
 *Implementation: no code change. The comment in `check_derivation.py`'s `_panel_offset` and in
 `fuselage_variants.py` records the reason and the deliberate ordering.*
 
-### ~~OQ-DES-DB2 — Two of the airframe's dimensions are tables, not rules~~ — DECIDED 2026-08-29: the table is the design
+### OQ-DES-DB2 — Two of the airframe's dimensions are tables, not rules — DECIDED 2026-08-29: the table is the design
 
 **Resolution note.** Alternative 1: declare the table the design.
 
@@ -1264,7 +1264,7 @@ selected per step. [Section 8](#8-what-could-not-be-derived) item 2 records it t
 *Implementation: no code change. `check_derivation.py`'s `GIVENS` entries for
 `bulkhead.thickness` and `bolt.diameter` carry the reason.*
 
-### ~~OQ-DES-DB3 — May an inferred reason be adopted as intent?~~ — DECIDED 2026-08-30: ask, one case at a time; between askings an inference stays flagged
+### OQ-DES-DB3 — May an inferred reason be adopted as intent? — DECIDED 2026-08-30: ask, one case at a time; between askings an inference stays flagged
 
 **Resolution note.** Alternative 4, with alternative 1 as the standing rule.
 
@@ -1312,7 +1312,7 @@ marked *inferred* until it is asked, not until it is argued.
 *Implementation: no code change. [Section 1](#how-to-read-the-source-labels)'s label table now
 states that an inference is never promoted, and names the two things that can replace it.*
 
-### ~~OQ-DES-DB4 — Where the architecture/design boundary falls~~ — DECIDED 2026-08-29: the test came from DB5, and all three proposed additions are adopted
+### OQ-DES-DB4 — Where the architecture/design boundary falls — DECIDED 2026-08-29: the test came from DB5, and all three proposed additions are adopted
 
 **Resolution note.** Answered in two parts on the same day.
 
@@ -1362,7 +1362,7 @@ clearance goes wholly on the printed side rather than being split.
 Construction group, and a section on the cross-section trade; `tools/check_derivation.py` gains
 the three ids and re-cites DES-1, DES-5 and DES-6.*
 
-### ~~OQ-DES-DB5 — Section 2 duplicates a requirements set that already exists~~ — DECIDED 2026-08-29: adopt the architectural requirements into the repository
+### OQ-DES-DB5 — Section 2 duplicates a requirements set that already exists — DECIDED 2026-08-29: adopt the architectural requirements into the repository
 
 **Resolution note.** Alternative 1 in substance, with a correction to its premise that changes
 what the answer means.
@@ -1417,7 +1417,7 @@ out to be *better* supported than the reason it gave for it, by AR-MOD-4.
 `SYSTEM`, with `cites` optional. Those tables moved again later the same day, to
 [`tools/requirements.py`](../../src/Fuselage/tools/requirements.py) -- see IP-FC-91.*
 
-### ~~OQ-DES-DB6 — This document is named for a job it now only half does~~ — DECIDED 2026-08-29: rename to `design_basis.md`, and strip the restatements
+### OQ-DES-DB6 — This document is named for a job it now only half does — DECIDED 2026-08-29: rename to `design_basis.md`, and strip the restatements
 
 **Resolution note.** Alternative 1, as recommended.
 

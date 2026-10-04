@@ -358,18 +358,18 @@ recorded — [OQ-DES-C4](#open-questions).
 
 | ID | Status | Question |
 | --- | --- | --- |
-| C1 | ~~resolved~~ 2026-08-06 | Are `greeble_thickness` and `greeble_nub_thickness` meant to be independent? |
-| C2 | ~~resolved~~ 2026-08-06 | What is the greeble actually toleranced for? |
-| C3 | ~~resolved~~ 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
-| C4 | ~~answered~~ 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
-| C5 | ~~resolved~~ 2026-08-14 | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
+| C1 | resolved 2026-08-06 | Are `greeble_thickness` and `greeble_nub_thickness` meant to be independent? |
+| C2 | resolved 2026-08-06 | What is the greeble actually toleranced for? |
+| C3 | resolved 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
+| C4 | answered 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
+| C5 | resolved 2026-08-14 | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
 
 C1 became one parameter plus a formula (IP-GEO-22); C2 was closed by test prints at both ends
 of the range, U=0.5 and U=4; C3 was closed by the observation that the corner and its bulkhead
 are not independent designs at all. C4 is *answered* rather than resolved — the answer is "not
 currently possible", which names a future exploration rather than closing the subject.
 
-**~~OQ-DES-C4 — whole or split at the large sizes?~~ — ANSWERED 2026-08-07: whole, for now.**
+**OQ-DES-C4 — whole or split at the large sizes? — ANSWERED 2026-08-07: whole, for now.**
 There is **no current method for printing large corners or bulkheads in pieces.** Splitting
 is a future exploration rather than an existing capability, and the two parts differ sharply
 in difficulty:
@@ -394,8 +394,8 @@ document, and it interacts with the greeble at both ends.
 Resolved entries keep their full text below, in numerical position, with the reasoning
 that produced the answer.
 
-**~~OQ-DES-C1 — Are `greeble_thickness` and `greeble_nub_thickness` intended to be
-independent?~~ — RESOLVED 2026-08-06: no.** They are now **one parameter plus a formula
+**OQ-DES-C1 — Are `greeble_thickness` and `greeble_nub_thickness` intended to be
+independent? — RESOLVED 2026-08-06: no.** They are now **one parameter plus a formula
 relating them** — `greeble_nub_thickness_of()` in `fuselage_variants.py`, identity today.
 Written as a formula rather than collapsed into a single value on purpose: scale problems
 may yet need the nub thicker or thinner than the seat wall, and when that happens the fix
@@ -425,7 +425,7 @@ its seat, and nothing would report it. If they are meant to be independent, no v
 table exercises that freedom. Deciding this is cheap now and expensive after the FreeCAD
 port has copied the pair forward.
 
-**~~OQ-DES-C2 — What is the greeble actually toleranced for?~~ — RESOLVED 2026-08-06.**
+**OQ-DES-C2 — What is the greeble actually toleranced for? — RESOLVED 2026-08-06.**
 `GREEBLE_TOLERANCE_CORNER_MM = 0.05` is a single unscaled number applied at every `U`
 from 0.5 to 4, while the engagement it governs — the bulkhead's rib in the corner's
 groove — scales with wall thickness (`√U`) and diameter (`U`). The worry was that a
@@ -442,8 +442,8 @@ neither of which cares how large the airframe is. That is the same reasoning tha
 `longeron_tolerance` and `panel_tolerance` unscaled, and this is the first confirmation
 of it in hardware rather than in argument.
 
-**~~OQ-DES-C3 — Is the corner's dependence on `bulkhead_thickness` the right
-interface?~~ — RESOLVED 2026-08-06.** Yes, and the question was posed from a wrong
+**OQ-DES-C3 — Is the corner's dependence on `bulkhead_thickness` the right
+interface? — RESOLVED 2026-08-06.** Yes, and the question was posed from a wrong
 premise. **The corner and the bulkhead it attaches to are not independent designs.**
 They are two halves of one joint, so a shared dimension is not a leak across an
 interface — there is no interface there to leak across. The three `z` dimensions in
@@ -491,7 +491,7 @@ It is correct — they mate — but it means the corner cannot be reasoned about
 the FreeCAD port will have to decide whether the joint is a first-class object with its
 own parameters or stays as two parts that each know a dimension of the other.
 
-### ~~OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own~~ — RESOLVED 2026-08-14
+### OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own — RESOLVED 2026-08-14
 
 The corner seats against the bulkhead on two surfaces: the **diagonal face**, the plane
 `x + y = flat_offset` in the corner-local frame, and the **flat face** at

@@ -2,9 +2,10 @@
 
     freecadcmd check_cowl_interior.py --pass --kind=tail_shell
 
-Add --clearance-check to also run OQ-DES-CW24's thin-wall clearance-margin scan (Metric A,
-flag-only -- never fails the build, and costs on the order of an hour on top of the ordinary
-build above). Off by default; see cowl_interior.clearance_margin_scan.
+Add --clearance-check to also run OQ-DES-CW24's rib clearance-margin scan (Metric A, flag-only --
+never fails the build, and costs on the order of an hour on top of the ordinary build above). Off
+by default; see cowl_interior.clearance_margin_scan. It is a clearance diagnostic, not a
+wall-thickness measurement and not a construction-failure check -- see CLEARANCE_MARGIN_MM.
 
 **The wall and rib checks are the load-bearing ones.** Volume agreement says two solids enclose
 the same space; it does not say the wall is where it should be, and a wall in the wrong place
@@ -346,13 +347,39 @@ def main():
     except ci.PreconditionFailed:
         print('  P4 fires on a notch lying in the layer plane')
 
+    # -- the station floor (IP-FC-144, OQ-DES-CW24 alternative 2)
+    floor = ci.station_floor(t)
+    if floor < t - 1e-12:
+        print('  station floor %.4f is below the wall %.4f  <-- FAIL' % (floor, t))
+        bad += 1
+    else:
+        print('  station floor is the wall thickness, %.4f mm' % floor)
+    # the real defect this fixes: a uniform seed station and a notch edge 0.0009 mm apart
+    near = ci._thin_stations([-300.0, -60.0009, -60.0, -30.0, 0.0], floor)
+    if any(b - a < floor - 1e-12 for a, b in zip(near, near[1:])):
+        print('  _thin_stations left a pair closer than the floor: %s  <-- FAIL' % (near,))
+        bad += 1
+    elif near[0] != -300.0 or near[-1] != 0.0:
+        print('  _thin_stations moved an end station: %s  <-- FAIL' % (near,))
+        bad += 1
+    else:
+        print('  _thin_stations removes a 0.0009 mm pair and keeps both ends')
+    # an end station must survive even when its neighbour crowds it
+    ends = ci._thin_stations([0.0, 1.0, 1.0 + 0.5 * floor], floor)
+    if ends[-1] != 1.0 + 0.5 * floor or any(
+            b - a < floor - 1e-12 for a, b in zip(ends, ends[1:])):
+        print('  _thin_stations dropped or crowded the last station: %s  <-- FAIL' % (ends,))
+        bad += 1
+    else:
+        print('  _thin_stations keeps the last station, displacing its neighbour')
+
     # -- the clearance margin (OQ-DES-CW24), opt-in only
     if clearance_check:
         print('  clearance margin (Metric A, OQ-DES-CW24): %d station(s) under %.3f mm, '
               'worst %.6f mm -- flag-only, does not fail the build'
               % (tip.ThinWallFlags, ci.CLEARANCE_MARGIN_MM, tip.WorstClearanceMargin))
-        print('    Metric B\'s crowding-ratio cutoff is not enforced here, pending sign-off '
-              '(OQ-DES-CW24, cowl.md)')
+        print('    whether this metric is kept at all is OQ-DES-CW25 (cowl.md); its companion '
+              'ratio was removed 2026-10-04, it did not measure tool-to-tool crowding')
 
     print('%s: %s' % (kind, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
     sys.stdout.flush()
