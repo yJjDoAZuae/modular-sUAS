@@ -12,6 +12,7 @@ and the `/impl` skill for the plan format.
 | [geometry_refactor.md](geometry_refactor.md) | Deduplication, interface, and robustness work on the OpenSCAD modules and the Python driving them. Roadmap Phase 2. | Complete |
 | [freecad_migration.md](freecad_migration.md) | Porting the generators to FreeCAD and the capabilities that port enables — the nine use cases. Roadmap Phases 3–7. | Active |
 | [test_coverage.md](test_coverage.md) | Retrofitting real unit/integration test coverage across both interpreter tiers (`tests/` pytest and `freecad/check_*.py`); closes the standing gap that verification has been ad hoc and uncommitted. | Active |
+| [geometry_bridge.md](geometry_bridge.md) | The adaptation library that lets `pytest` drive FreeCAD and OpenVSP across a process boundary, so the project's Python version is free of both vendors' build choices. Resolves OQ-ARCH-22. | Active |
 
 Status values: `Draft`, `Active`, `Complete`, `Superseded`.
 
@@ -28,3 +29,12 @@ New work items in either other plan are expected to carry their own test sub-ite
 TDD rule in [general.md](../guidelines/general.md#test-driven-development-tdd) rather than
 deferring to this plan — `test_coverage.md` exists to pay down the *existing* backlog, not
 to be where future work's tests live.
+
+**`geometry_bridge.md` changes where new geometry tests go, so it interacts with
+`test_coverage.md` without depending on it.** OQ-GB-2 made a new geometry check a bridge-tier
+`pytest` test rather than a `check_*.py` entry, so `test_coverage.md`'s remaining
+`freecadcmd`-tier items should be read as paying down the existing backlog in place, not as the
+pattern for new work. One item overlaps outright: `geometry_bridge.md`'s IP-GB-22 moves the nine
+`check_*.py` scripts that import no FreeCAD into `tests/`, which is test-placement work that
+`test_coverage.md` would otherwise have reached eventually. It is listed in the bridge plan
+because the survey behind that plan is what found them.

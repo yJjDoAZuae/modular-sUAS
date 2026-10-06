@@ -279,10 +279,18 @@ passes through the input contours exactly.
 spline is a tridiagonal solve over all of a patch's stations, so moving one row changes every
 coefficient in that patch. The influence decays geometrically along the knot sequence with
 alternating sign — for uniform knots the ratio is 2 − √3 ≈ 0.268 per span, about 3.7× attenuation
-per station. So it is global in principle but short-ranged in practice: five stations away, a
-0.01 mm displacement is of order 10⁻⁵ mm. **A perturbation response that reaches much further than
-that is not the spline propagating it**, and should be explained by what the geometry downstream
-is holding together, not by the fit.
+per station. So on the knot sequence it is global in principle but short-ranged in practice: five
+stations away, a 0.01 mm displacement is of order 10⁻⁵ mm.
+
+**That figure describes the spline's own coefficients and does not bound the finished wall's
+measured sensitivity — measured 2026-10-04, it understates it by three orders of magnitude.**
+Displacing one row of the input contours and measuring the real cut wall 7.5 station intervals away
+gives a gain of **0.408 mm per mm**, reproduced to three figures at δ = 0.001, 0.003 and 0.01 mm
+(§7.1). That implies about 1.12× attenuation per station where the coefficient decay predicts 3.7×.
+Whatever closes that gap — the cut geometry, the lids and side caps rebuilt from the changed
+surface, or something else — is not the tridiagonal solve, and is not established. **So a
+perturbation response reaching far down the part is not by itself evidence against the fit**, and an
+earlier version of this paragraph which said it was has been withdrawn.
 
 **Patch boundaries are hard stops.** Patches are split at the *body's* own creases, each is fit
 separately, and adjacent patches are made to pass through their shared station exactly — which is
@@ -588,7 +596,7 @@ come from [`solid_measure.py`](../../src/Fuselage/freecad/solid_measure.py) inst
 
 ### 6.1 Measurement cautions
 
-Five ways a measurement of this geometry has misled this work, each one paid for:
+Ten ways a measurement of this geometry has misled this work, each one paid for:
 
 - **A bounding box is not evidence of where material is.** A failed wall piece's box read
   `x` = -164.89 against the blank's -150.25, suggesting material outside the solid it was cut
@@ -604,6 +612,64 @@ Five ways a measurement of this geometry has misled this work, each one paid for
   several times its true size while `Shape.tessellate()`, `MeshPart.meshFromShape()` and STL export
   all return its correct extent — a display artefact, not an export defect.
 - **`Face.Area` is unreliable on B-spline faces** (§9.6); use the wire signed area.
+- **A station named by its printed value is not that station, and adding it to a station set
+  manufactures a near-duplicate pair.** Stations here are notch edges carried at full double
+  precision, and a probe that wants "the station at `z` = -283.9951" and unions that literal into
+  the seed set does not select the existing station — it adds a second one 0.0000339 mm from the
+  real edge at -283.9951338812. That is 28× tighter than the 0.0009433 mm pair §4.1's floor exists
+  to remove, and it puts δ/h ≈ 885 into §6.2's forcing term at δ = 0.03 mm against 11.1 at the pair
+  already established as causal. **Select a station by searching for the nearest existing one and
+  print what was found**; never name one by a rounded literal.
+- **A nearest-point minimum is not a converged wall thickness, and at `WALL_TOL` it is not a
+  measurement at all.** `wall_thickness` samples the inner contour and takes each sample's distance
+  to the nearest point of the outer one. Measured 2026-10-05 on `nose_cowl_shell` at `U` = 1, that
+  minimum does not settle: at **17 of 24 stations it was still falling at 3840 samples**, drifting
+  0.0015 to 0.0079 mm per doubling — for instance `z` = -43.5213 reading 0.5830, 0.5792, 0.5774,
+  0.5661, 0.5606 as the count goes 240 → 3840. It is not noise and not discretization of the outer
+  curve: the outer polyline is 0.0125 mm per segment, whose chord bias is under 1e-6 mm, and a
+  remeasure of the worst station returns the identical value to ten decimals. The measure itself is
+  the problem — a nearest-point distance at a **concave corner cuts across the corner rather than
+  across the wall**, and this section has such a corner at every slot mouth, so denser sampling
+  keeps landing nearer one. A minimum that falls with every doubling cannot be compared against a
+  0.01 mm tolerance in either direction. **Measuring along the contour's own local normal does not
+  fix it** — tried the same day, it oscillates instead of drifting, by up to 0.0139 mm per doubling,
+  because the tangent estimate at a crease is itself unstable. What does converge is the
+  **area-based mean**, (outer area − inner area) / mean ring length: 0.556253, 0.590421, 0.595922,
+  0.596701, 0.596704, 0.596705, 0.596704 mm as the area discretization goes 200 → 64000, settled to
+  1e-6 mm from 16000 on. Note the first of those: **`_wire_area`'s own default of 200 points is
+  0.044 mm wrong**, 4.4× `WALL_TOL`, so any 0.01 mm work must pass an explicit count. Both kinds
+  behave the same way — `tail_shell` at `U` = 1 also had 17 of 24 stations unsettled at 3840 samples,
+  with its own worst reading 0.0555 mm at `z` = -30.8264 — so this is a property of the measure on
+  this geometry and not of one part.
+- **Ask the kernel before building an instrument — but only one of its four routes to these
+  questions survives this geometry.** Everything above was built by hand, and each hand-built
+  measure needed its own convergence study. OCC answers some of it topologically, with no sampling
+  and no threshold. Measured 2026-10-05 on a 2464-face `tail_shell` wall:
+
+  | route | result |
+  | --- | --- |
+  | `Part.makeFace(wires, 'Part::FaceMakerBullseye')` | **works, 0.6 s.** Resolves the section's wires into regions and reports one face with two wires for a continuous ring, several one-wire faces for a broken one. `Part::FaceMakerCheese` agrees exactly; `Part::FaceMakerSimple` does not resolve nesting and returns the two enclosed areas' sum, 150914 mm², instead of the 958.819 mm² between them |
+  | `solid.common(planar_face)` | **unusable.** Would answer the same question, and did not finish in nine minutes |
+  | `Edge.Continuity` | **the wrong quantity.** It reports the edge *curve's* own smoothness, not the continuity between the two faces across the join: a box's sharp creases, a filleted box's tangent joins and a cylinder's periodic seam all read `CN`. FreeCAD's Python API does not expose `BRep_Tool::Continuity(E, F1, F2)`, so §6's G1 requirement cannot be read off the built shape this way |
+  | `Face.makeOffset2D(-d)` | **exact on clean geometry, unusable here.** On a 0.6 × 100 mm polygon ribbon the erosion is textbook — 1.9884 mm² at d = 0.290, 0.0000 at 0.300, `CADKernelError` at 0.310, the transition exactly at the half-width — and on the real section's convoluted B-spline boundary one call did not finish in six minutes |
+
+  So the ring-continuity question is best asked of the kernel, and `Face.Area` on the resulting
+  nested face is a better material area than a difference of two separately-integrated wire areas:
+  958.819 mm² against 954.742 mm² by hand, 0.43 % apart, and the kernel's figure needs no
+  discretization choice. **The morphological thickness measure, which was the standing candidate for
+  a converged local thickness, is refuted on real geometry by the last row.**
+- **A mean thickness from area is only trustworthy where the two loops are near-equal in length.**
+  `area / mean(boundary)` reads 0.5993 mm at the reference station, where the loops are 1601.8 and
+  1598.2 mm — 0.0007 mm from nominal, the best figure any measure here produces. At `z` = -25 on the
+  same part it reads 0.4753 mm, and reads **identically on a healthy and a damaged wall**, so that
+  is the estimator failing and not a defect: a convoluted boundary adds length without adding area
+  and depresses the ratio. Use it where the section is a thin near-uniform ribbon, and nowhere else.
+- **Twelve stations is too few to find this check's own failures, independently of the measure.**
+  `STATIONS` = 12 is what `check_cowl_interior` and `soak_cowl_shell` sample. Re-run at 24 on
+  `tail_shell` at `U` = 1, **three stations fail even the old `TAU` = 0.05 mm** — the 12-station
+  default reports the same build `OK`. Whatever is decided about the tolerance and the measure, the
+  station count is a separate coverage gap: a quantity that varies along the part is not bounded by
+  twelve samples of it.
 
 ### 6.2 Conditioning: the row-nudge probe, and what it can establish
 
@@ -643,6 +709,135 @@ letting the fit reconverge, 21 cases — is reported separately and has never pr
 failure. **Whether the probe corresponds to anything a real build can do is not established**, and
 it is the reason a failure it produces is not by itself grounds for a build-time check.
 
+### 6.3 Rib-cut clearance: what the scan measures, and what it does not
+
+`cavity()` can additionally run a **rib-cut clearance scan** (`clearance_margin_scan`, opt-in
+through `clearance_check`, off by default because it costs on the order of an hour). At each
+sampled station it reports the smallest in-plane distance between the fitted interior candidate's
+own section and the nearest **dilated** buttress tool's section, and flags any station under
+`CLEARANCE_MARGIN_MM` = 0.01 mm. It reports; it never fails a build.
+
+**A figure from it has to pass two prior questions before it means anything, and the distance
+itself answers neither.**
+
+**(1) Is it a clearance at all?** The scan measures wire to wire, which cannot distinguish a tool
+sitting just clear of the surface from one already cutting into it — both give a positive
+boundary-to-boundary distance. So each tool section's own points are tested against the interior
+candidate *solid*, giving three states rather than two:
+
+| state | what the reported figure is |
+| --- | --- |
+| **clear** — no part of the tool's section is inside the surface | a real clearance |
+| **crossing** — part in, part out | zero. The reported figure is the distance from the sampled station to a geometric crossing: a property of where the sampling landed |
+| **engulfed** — the whole section is inside the surface | zero, and the cut is removing material along the tool's entire section |
+
+**A dilated tool is supposed to cross.** §4.2's identity forms the rib by removing `dilate(B, t)`
+from the cavity, so a tool that reaches the wall band at all must cross the surface somewhere along
+its run, and every crossing is a station where this metric reads near zero by construction.
+
+**(2) If it is a clearance, does it bound the wall?** A buttress tool is a slab — a six-sided or
+rectangular profile extruded through `buttress_cut_thickness` — and only part of its boundary bounds
+the finished wall:
+
+| Face | What it bounds |
+| --- | --- |
+| **cheek** — the two broad faces, `buttress_cut_thickness` apart | the slit's own side walls, and nothing about the wall's thickness. The material beyond a cheek is the rib, whose thickness the dilation sets at `t` by construction rather than by any distance measured here |
+| **floor** — the innermost reach of the cut, including both overhang ramps | the wall's radial thickness. The only part of the tool whose distance to the interior surface says anything about the wall |
+| **end** — the two axial caps | the ends of the slit's run |
+| **outer** — the profile's far edge | nothing. It sits outside the blank entirely and cuts no material |
+
+A floor bounds wall only **where it lies inside the blank**, which is not everywhere: the protected
+core (`cowl_tree.core`, the region the buttress cuts may not enter) splits each long diagonal tool's
+floor into an 8.4 mm² piece inside the blank and a 1.4 mm² piece outside it, and leaves sub-0.02 mm²
+slivers on three of the side tools whose normals read as floor while sitting outside the part
+entirely. Both are genuine faces of the real tool; neither bounds any wall where it sits. So this is
+tested per contact rather than inferred from the role.
+
+There is a third possibility, and measurement says it is the common one: **the minimum lands on no
+face's own surface at all.** The dilated boundary reproduces each face's offset over that face's own
+extent, but near an edge of the original slab it is whatever the 48 translated copies bridge the
+corner with — so a contact there is not a distance to either adjacent face, and which of the two
+happens to be nearest is an accident of the bridge rather than a fact about the wall.
+
+`tool_face_roles` labels the faces from the geometry rather than from the construction — the slab's
+own normal gives the two cheeks, and the direction from the tool toward the part's `z` axis
+separates floor from far — and `clearance_face_scan` locates each reported minimum, attributes it to
+a face of the **undilated** tool, and answers all three questions above. **The attribution is
+self-checking, and that is what distinguishes a face contact from an edge contact.** Because §9.2's
+structuring element is a horizontal disc, a face with outward normal `n` moves out by exactly
+`t·hypot(n.x, n.y)`; a contact on that face's own dilated image reproduces the figure, and one on a
+bridging facet does not. Measured on the nose, cheek contacts reproduce it exactly — 0.6000 against
+0.6000 — while the contacts the role test called floor read 0.5490 to 0.5524 against a predicted
+0.5901, which is how the edge contacts were found. `FACE_IMAGE_TOL` = 1 % of `t` is the threshold,
+coarse against the section discretisation and twenty times finer than the 0.04 mm discrepancies an
+edge contact actually produces.
+
+**`Face.Orientation` cannot be used to find a face's outward normal on these tools.** Measured
+2026-10-04 on `tail_shell`'s eleven: every slab reports *both* of its cheeks as `Forward`, so
+flipping the surface normal on that flag returns the same direction for two opposite faces of one
+solid — impossible, and it labelled the cut floor as the far face on all eleven. The outward
+direction is read by stepping off the face and asking the solid which side the point is on, with the
+step kept well inside `buttress_cut_thickness` so it cannot cross to the opposite cheek.
+
+**Measured 2026-10-04 on both kinds at `U` = 1. Of the 15 stations the scan flags under 0.01 mm on
+each, not one is a distance to anything that bounds the finished wall.**
+
+| | `nose_cowl_shell` | `tail_shell` |
+| --- | --- | --- |
+| tools | 1 | 11 |
+| worst figure reported | 0.000081 mm at `z` = -36.9470 | 0.000047 mm at `z` = -78.9869 |
+| **land on a cut floor** | **0** | **0** |
+| land on a cheek | 7 | 11 |
+| land on no face's own dilated surface | 8 | 4 |
+| **crossing** (no clearance exists) | **14** | **14** |
+| **clear** (a real clearance) | 1 | **0** |
+| **engulfed** (no clearance exists) | 0 | 1 |
+
+- **Zero land on a cut floor, on either kind.** The cheek contacts bound the rib, not the wall. The
+  others have a floor as their nearest face but an offset that disagrees with that floor's own
+  dilated image — 0.5490 to 0.5524 mm against 0.5901 on the nose, 0.5213 to 0.5595 against 0.5560
+  and 0.6000 on the tail — so the contact is on the dilation's treatment of the floor-to-cheek
+  corner and not on the floor itself.
+- **The tail has no genuine clearance at all among the fifteen.** Its one non-crossing station,
+  `z` = -83.7372, is `engulfed`: 100 % of the tool's section lies inside the surface. The nose's one
+  non-crossing station, `z` = -8.0479 at 0.000611 mm, is the only real clearance measured on either
+  kind, and even that one is not a floor contact.
+- **What those contacts sit on is not established.** The offsets match neither the adjacent faces'
+  images nor an arc of radius `t` about the shared edge, which would read 0.6000, so the simple
+  corner-arc account of the 48-gon's envelope does not fit them either. What the measurement
+  establishes is the negative: a contact whose offset disagrees with its nearest face's predicted
+  image is not on that face. Identifying the surface they *are* on needs the dilated tool's own face
+  carrying each contact, which has not been recorded.
+- On the nose the flagged stations arrive in pairs about 0.027 mm apart with opposite gap-direction
+  sign — `z` = -34.5506/-34.5774, -39.3934/-39.3665, -27.5384/-27.5115, -36.9470/-36.9702 — which is
+  the refinement pass bracketing one crossing from both sides rather than finding four thin places.
+- **The figures are not reproducible between builds at the same station.** Two `tail_shell` builds
+  at `U` = 1, measured at the identical 15 stations, give 0.000068 and 0.000108 mm at
+  `z` = -66.1661 — 59 % apart — and 0.000282 against 0.000352 mm at `z` = -96.3180. The
+  non-reproducibility previously attributed to Metric B's own defect is present in Metric A too, and
+  follows from the same cause: near a crossing the figure is set by how close the station happens to
+  land, which a rebuilt surface moves.
+
+**Eight of the fifteen figures are smaller than the dilation's own approximation error.** §10 records
+that the 48-gon is inscribed in the disc at `t·cos(π/48)` = 0.99786 `t`, so the dilated boundary
+falls 0.0013 mm short of the true offset at each facet midpoint. The reported minima run from
+0.000081 mm to 0.006470 mm, and the first eight are below that 0.0013 mm: **the scan is resolving
+distances finer than the faceting of the tool it measures against**, which is independent of both
+questions above and true of the figures that pass them.
+
+**One caution on the containment figure itself.** It is tested with a 1e-3 mm tolerance and boundary
+points counted as inside, so a station reading a few percent inside is at or very near the tangency
+rather than deep past it. That does not change the reading — at or near a crossing there is still no
+clearance to measure — but a `fraction_inside` of 0.8 % is not a 0.8 % bite.
+
+**Not measured.** The single worst clearance on record, 60 nm at `z` = -134.498, came from a
+`tail_shell` build above `U` = 1 and is not re-measured here. The crossing mechanism is a property of
+§4.2's identity rather than of scale, so there is no reason to expect it to differ there — but that
+is an expectation, not a measurement.
+
+Whether the metric is kept at all is [OQ-DES-CW25](cowl.md#open-questions), and §10 carries what
+remains unestablished about it.
+
 ---
 
 ## 7. Failure modes to expect
@@ -657,9 +852,19 @@ with **two signatures that are not the same failure**:
 | `z` = -294.1530 | 3 solids: 90900.3, 4349.3, 718.2 mm³ | 2.05e-05 | the wall came apart; cut and complement still sum to the blank |
 | `z` = -60.0000 | 2 solids: 51916.6, 4349.5 mm³ | 0.993 | the partition identity itself collapsed |
 
-Neither conserves the wall's own volume: the severed build totals 95967.8 mm³ against the healthy
-107228.9 mm³, 10.5 % less. **Both are caught** — the solid-count check catches both and the
-partition check independently catches the second (§6).
+**Both are caught** — the solid-count check catches both and the partition check independently
+catches the second (§6).
+
+**The wall's own volume drops in both, but that drop is not material the boolean lost, and the
+figure itself is not trustworthy.** Measured again 2026-10-04 on a fresh build at `z` = -294.1530:
+the partition identity holds at **2.409e-05**, and the blank's two shares move by the same amount in
+opposite directions — the wall's reading falls 16648 mm³ while the cavity's rises 16614 mm³. So the
+cut accounted for the blank; the cavity simply took more of it. What cannot be quantified is the
+wall's volume itself. `solid_measure.converged_volume` does not converge on the severed result at
+all, returning **3171671.63 mm³ at two of the five deflections tried** — thirty times the whole part
+— against 110019.53, 107691.06 and 95131.36 at the other three, on a tessellation with 946 unpaired
+edges. §6.1's rule applies with force here: a volume from a failed wall is not a measurement, and
+the partition identity is the only volume statement this failure supports.
 
 Seen square on the failing `x` ≈ -150 face, with `z` across the page and each returned solid in its
 own colour, against the healthy wall for reference:
@@ -684,8 +889,12 @@ returns:
 Three properties of this failure are measured and worth knowing when diagnosing one:
 
 - **It does not occur at the perturbed station.** The row displaced at `z` = -294.1530 produces
-  detached pieces at `z` -240…-90 and -122…-66. The fit cannot propagate a 0.01 mm displacement
-  that far (§4.4), so the location is a property of the geometry, not of the perturbation.
+  detached pieces at `z` -240…-90 and -122…-66. The same two pieces detach when a different station
+  is perturbed instead (§7.1), so the location is a property of the geometry rather than of the
+  perturbation. **This was previously argued from §4.4's attenuation instead — that the fit could
+  not propagate 0.01 mm that far — and that argument is withdrawn**, because the measured
+  station-to-station gain is three orders of magnitude larger than the coefficient decay predicts.
+  The conclusion stands on the repeated-piece evidence, which does not depend on it.
 - **The detached piece is the same piece in both signatures** — volumes 4349.266 and 4349.504 mm³,
   areas 14723.0 and 14723.1 mm², centres of mass agreeing to 0.0025 mm, 12 of 16 vertices
   bit-identical.
@@ -701,6 +910,138 @@ has **zero volume between `z` = -54 and -52**, with 2958.9 mm³ in the millimetr
 4581.8 mm³ above, measured as thin-slab volume rather than by sectioning (the healthy wall returns
 190.4 mm³ in the same band). A connected solid cannot do that, and nothing in the current checks
 looks for it.
+
+### 7.1 The cut can break the wall's section ring, and nothing catches it
+
+**Reproduced 2026-10-04, characterized 2026-10-05, and this is the one failure mode nothing in the
+construction catches.**
+
+On `tail_shell` at `U` = 3.0, displacing the row at the notch-edge station `z` = -283.9951339 by
+δ = 0.03 mm — a station whose nearest neighbouring row is **0.4311 mm** away, so δ/gap = **0.0696**
+and §6.2's probe is inside its own validity domain — returns:
+
+| | healthy (δ = 0) | δ = 0.03 mm |
+| --- | --- | --- |
+| section at `z` = -217.7261 | **annulus**, 200/200 of the inner loop inside the outer | **two separate strips**, 0/200 inside |
+| ring length | 1600.027 mm | **1506.831 mm — 93.2 mm missing** |
+| material area in section | 954.742 mm² | 922.450 mm² |
+| wall thickness there | **0.5967 mm** | **0.6120 and 0.6132 mm — nominal** |
+| solids returned | 1 | 1 |
+| `isValid()` | True | True |
+| partition slip | 2.831e-05 | **2.396e-05** |
+| mirror/sew | 1 closed shell of 1 | 1 closed shell of 1 |
+| verdict | OK | **OK** |
+
+**It is not a thin wall. It is a wall of correct thickness with a hole in it.** The cross-section
+ring comes apart into a 1293 mm arc and a 213 mm arc, each measuring 0.61 mm across against a
+0.6 mm nominal, with about 93 mm of the 1600 mm ring simply absent. On a part that prints in
+spiral-vase mode with a single perimeter (cowl.md §7) that is an open wall, not a thin one.
+
+**And the existing check reports it as a thickness of 0.355705 mm**, which is why it read as a
+thinning for a day. `check_cowl_interior.wall_thickness` sorts a section's closed loops by enclosed
+area, takes the two largest and measures the distance from the second to the first — correct when
+they are an outer/inner pair, and meaningless when they are two disjoint arcs, where the same code
+measures **the gap between the broken ends**. The 0.355705 mm figure is that gap. The loop-ordering
+fix recorded in that function's own docstring addressed outer-versus-inner; it does not address
+disjointness, and nothing downstream asks whether the section is the annulus the measure assumes.
+
+**The break is at the diagonal buttresses, and mirror-symmetric.** Sampling the gap around the
+section puts every reading under tolerance inside **30.37°–30.56°** and **329.46°–329.66°** about
+the `z` axis — two arcs 0.19° and 0.20° wide, 0.46° and 0.44° from `top_diag_angle` = 30°. Those
+are the two break locations, which is why there are exactly two arcs. The isolated 213 mm arc is
+the same region that detaches outright as the 718 mm³ piece when the cut severs instead (§7), so
+the severed and silent outcomes are the same geometry failing two different ways.
+
+The healthy reference is not in doubt: the 0.546556 mm nearest-point reading reproduces to six
+decimals across five fresh builds in one session and two independently-fitted station sets in
+another, and IP-FC-144's station set reads 0.546559 mm — 3e-6 mm away on 30 rows against 35. What
+that number *is*, however, is a nearest-point distance and not a converged thickness; §6.1's
+seventh caution has what it is worth.
+
+**Every check means every check, and that is measured rather than assumed.** The probe reproduces
+`shell_solid`'s sequence *and* `cavity`'s own `cut_and_check`, which measures §4.2's rib residue
+against `RIB_RESIDUE` = 0.01 mm³ and the cavity's connectivity before the wall cut happens. At
+δ = 0.03 mm the rib residue is **0.000000 mm³** and the rib cut returns one valid solid, so
+`cut_and_check` passes; then the wall cut returns one solid, the partition identity reads 2.396e-05,
+and the mirror sews to one closed shell. Six checks, all passing, on a 0.355705 mm wall.
+
+**The dose series, run as one fresh sequence:**
+
+| δ | rib residue | `cut_and_check` | wall | thickness | change | caught by |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 0.000000 mm³ | passes | 1 solid | 0.546556 mm | — | — |
+| 0.001 mm | 0.000000 mm³ | passes | 1 solid | 0.546964 mm | +0.000408 mm | — |
+| 0.003 mm | 0.000000 mm³ | passes | 1 solid | 0.547781 mm | +0.001225 mm | — |
+| 0.01 mm | 0.000000 mm³ | passes | 1 solid | 0.550640 mm | +0.004084 mm | — |
+| **0.03 mm** | **0.000000 mm³** | **passes** | **1 solid** | **0.355705 mm** | **-0.190851 mm** | **nothing** |
+| 0.1 mm | 0.000000 mm³ | passes | 5 solids | — | — | solid count |
+
+**The construction is linear and well behaved right up to the break.** The first three
+displacements give 0.000408, 0.001225 and 0.004084 mm — a gain of **0.408 mm per mm at every one of
+them**, to three figures. Extrapolating that line to δ = 0.03 mm predicts +0.0123 mm. The measured
+value is **-0.190851 mm**: sixteen times the magnitude and the opposite sign. So this is not a
+gradual degradation that a tighter tolerance would have caught earlier — it is a discontinuity, and
+**it lies between δ = 0.01 mm and δ = 0.03 mm**, which is as far as the bracket has been narrowed.
+
+**δ = 0.01 mm is not reproducible between processes.** This sequence reads +0.004084 mm and passes
+everything; a different process reading the same cached rows severed the wall into three solids at
+the same δ. Both are recorded; neither is treated as the outcome. δ = 0.03 mm, by contrast,
+reproduced at **0.355705 mm in three independent processes**, and §6.1's note on the kernel
+reproducibility floor is where that distinction belongs.
+
+**Whether the fit carries the displacement is now open rather than settled.** This section
+previously argued it could not: the measured station is 66 mm from the perturbed row, about 7.5
+station intervals, so §4.4's 3.7× per-station attenuation would deliver a 0.03 mm displacement as
+roughly 4e-6 mm, against 0.19 mm measured. But the *linear* regime refutes the same argument.
+A gain of 0.408 mm per mm at that distance implies an attenuation of about **1.12× per station**, not
+3.7×, so §4.4's figure understates the station-to-station sensitivity actually measured here by
+three orders of magnitude. **The attenuation argument therefore cannot be used to rule the fit out**,
+and why the measured gain is so much larger than the per-station decay predicts is itself
+unexplained.
+
+**The same region detaches regardless of which station is perturbed.** The 4349–4370 mm³ piece and
+the 718.17–718.19 mm³ piece appear in the severed results at `z` = -283.9951339 and at
+`z` = -294.1530459 alike. The detaching geometry is a property of the part, not of the perturbation.
+
+**And the thin spot is not spread out — it is two arcs a fifth of a degree wide, on the diagonal
+buttresses.** Measuring the silent wall's own section at `z` = -217.7261 all the way round, rather
+than reducing it to one minimum, puts every sample under tolerance inside **30.37°–30.56°** and
+**329.46°–329.66°** about the `z` axis: 13 samples of 2000, 0.7 % of the loop, in two arcs 0.19° and
+0.20° wide, minimum 0.1035 mm. The healthy wall measured the same way has **no** sample under
+tolerance anywhere, reading 0.577 to 0.737 mm. Three things follow:
+
+- **The two arcs are mirror images** about the tail's one cell-boundary plane, 30.46° and 329.56°,
+  so this is a geometric cause occurring twice and not a single kernel accident.
+- **They sit on the diagonal buttress placement.** `top_diag_angle` is 30°, and the arc centres are
+  0.46° and 0.44° from it. That is the same angular location [OQ-DES-CW21](cowl.md#open-questions)
+  pinned its large-`U` wall thinning to, and the same place OQ-DES-CW23 independently recorded this
+  station's worst point — `x` = 134.319 mm, `y` = 78.688 mm, which is 30.4°.
+- **So the global surface motion is beside the point.** Sampling one wall's surface for containment
+  in the other found the inner surface displaced over much of the part — 46.15 % of points outside —
+  but it found 30.07 % for a build that *held*, so the absolute figure localizes nothing, and the
+  defect itself occupies 0.7 % of one section. What that sampling *does* separate is the asymmetry
+  between its two directions: 46.15 % against 7.75 % for the failure, a ratio of 5.95, versus
+  30.07 % against 26.73 % for the control, a ratio of 1.12. The failed wall is largely contained
+  within the healthy one — material gone — where the control merely differs from it. That agrees
+  with the partition identity, which holds at 2.409e-05 while the cavity's share of the blank grows
+  by 16614 mm³.
+
+**What this measurement cannot say.** The silent wall's section is topologically *different* from the
+healthy one — two wires of 2586.876 and 426.785 mm against 1601.839 and 1598.215 mm — so pairing
+"outer loop against inner loop" is valid for the healthy section and not for the silent one. The
+minimum distance and its angular position are sound; the per-band figures away from the thin arcs,
+which read 1.6 mm to 55 mm, are measuring unpaired curves and mean nothing.
+
+**The originally recorded conditions for this result were wrong, and that matters for reproducing
+it.** The claim was logged against `z` = -283.9951 — the four-decimal printing of the real notch
+edge — and a harness that unions that literal into the seed set manufactures a station pair
+0.0000339 mm apart there (§6.1). Run that way, with δ/h = 885, the same δ = 0.03 mm raises
+`Unconverged` three times out of three and δ = 0.01 mm raises `ValueError: Null shape`: the forced
+station fails loudly and never silently. The silent result belongs to the **real** station with its
+ordinary 0.4311 mm gap.
+
+What to do about a failure mode that passes every existing check is a design decision, not a
+measurement, and it is [OQ-DES-CW26](cowl.md#open-questions).
 
 **`Part::Offset2D` returns a null shape.** Seen in IP-FC-54, where every erosion from 3.0 to
 5.0 mm was null and 6.0 mm succeeded — so a "nudge the value" workaround finds a value that
@@ -1128,12 +1469,17 @@ established, and each is a work item in
   a check against it until the mechanism is characterized; that is alternative 4, and the work item
   is [IP-FC-146](../implementation/freecad_migration.md#work-items).
 
-- **One claimed failure mode is neither reproduced nor withdrawn.** An earlier round reported a
-  0.03 mm displacement at `z` = -283.9951 returning a sign-reversed result *with no exception
-  raised*. It was not retested, and it is the only claim of a failure the existing checks would not
-  catch. Until it is reproduced or withdrawn, no statement that "the existing checks are
-  sufficient" is safe. Work item
-  [IP-FC-145](../implementation/freecad_migration.md#work-items).
+- **The silent failure mode is reproduced, and the existing checks are therefore not sufficient**
+  (IP-FC-145, 2026-10-04). A 0.03 mm row displacement at the real notch-edge station
+  `z` = -283.9951339, whose nearest neighbouring row is 0.4311 mm away, returns a wall reading
+  0.355705 mm against a 0.546556 mm reference — 0.244 mm under nominal, nearly five times the
+  tolerance — with one valid solid, a healthy 2.396e-05 partition slip, a mirror that sews closed
+  and no exception anywhere. §7.1 carries the full dose series, the switch behaviour, and the
+  arithmetic ruling out the fit as the mechanism. Two things follow. **The claim's recorded
+  conditions were wrong**: at the forced four-decimal station the original harness used, the same
+  displacement fails loudly instead (`Unconverged`, three of three). And **no statement that the
+  construction's checks catch its failures can stand** — one of them does not. What to do about it
+  is [OQ-DES-CW26](cowl.md#open-questions).
 
 - **The clearance metrics measure less than their names claim.** A corrected per-wire survey (after
   the `_Polyline` multi-loop bug) does show real thin points — 60 nm worst at `z` = -134.498, 15

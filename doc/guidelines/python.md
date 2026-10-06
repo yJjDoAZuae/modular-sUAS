@@ -207,10 +207,17 @@ round-trips, and there is no serialization framework in this project.
 
 ## Testing (Python)
 
-Use **pytest**, for the tier of this codebase that pytest can actually reach: everything
-importable in the project venv, under `src/Fuselage/tools/`. FreeCAD-dependent code under
-`src/Fuselage/freecad/` is a separate tier, tested with `freecadcmd`-run `check_*.py`
-scripts instead, because `FreeCAD`/`Part` are not importable from the venv pytest runs in.
+Use **pytest**. It reaches everything importable in the project venv, under
+`src/Fuselage/tools/`, directly; and it reaches FreeCAD geometry code under
+`src/Fuselage/freecad/` across a process boundary, through the geometry bridge
+([geometry_bridge.md](../architecture/geometry_bridge.md)), which is where a new geometry test
+goes.
+
+`FreeCAD` and `Part` are not *importable* from the venv, and the reason is a CPython ABI version
+lock — FreeCAD's extension modules are built for 3.11 and the venv is 3.13 — not a property of the
+tools. Do not treat it as a reason a geometry function cannot have a named pytest test; the bridge
+exists for exactly that. The `freecadcmd`-run `check_*.py` tier remains for whole-part builds whose
+output is a report a person reads.
 See [general.md](general.md#two-test-tiers-because-two-python-interpreters-are-involved)
 for the full split and [general.md](general.md#testing-geometry-generators) for the
 geometry testing rules — they matter more than the mechanics below.
