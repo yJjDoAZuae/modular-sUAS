@@ -754,6 +754,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-17 | resolved 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 | ARCH-18 | withdrawn 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
 | ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
+| ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -3008,6 +3009,336 @@ costs nothing, is precisely what the criterion is missing, and leaves thresholds
 by measurement untouched. Keeping `MARGINAL` as a reportable verdict is the honest treatment of
 pairs the method genuinely cannot separate from the bar, rather than forcing them one way on
 the strength of a seed.
+
+### OQ-ARCH-22 — How does the pytest tier reach FreeCAD? — DECIDED 2026-10-06: alternative 7
+
+**Decision.** Alternative 7: an adaptation library over both FreeCAD and OpenVSP, passing remote
+object references across a process boundary. The rationale is the 2026-10-05 constraint recorded
+below — the project chooses its own Python version on its own merits, and neither vendor's build
+choice may dictate it — which eliminates alternatives 2, 3 and 5 outright, and the measurement
+that 7 is both more expressive *and* faster than 6, at 0.9 ms per handle operation against 8.8 ms
+per evaluated snippet.
+
+**The design is [geometry_bridge.md](geometry_bridge.md)**, which is the authority for it. Twelve
+probes were run against the prototype after this question was written, specifically to find
+problems it had not raised; five were real gaps, and the design rules follow from those
+measurements. The problem statement and the rejected alternatives are kept below as the record of
+why, and are not the design.
+
+**Caveat attached to the choice.** The library is infrastructure the project owns, and its own
+failure mode is that a defect in the proxy presents as the vendor API appearing not to exist. Two
+such defects were found while prototyping — one of them freed a live object, which is worse than a
+leak — and both were caught only by tests written for the converse case. The design's verification
+section exists because of that, and alternative 6 remains the documented fallback if the library
+proves more than the project wants to maintain.
+
+The project's automated checks run in two separate places. `pytest`, in `tests/`, runs under the
+project's virtual environment (its "venv" — a private Python installation with the project's
+dependencies in it) and covers pure-Python logic: parameter handling, CSV and JSON reading,
+drawing-family lookups. Geometry code — everything under `src/Fuselage/freecad/`, including
+`cowl_interior.py` — is instead checked by standalone `check_*.py` scripts run under
+`freecadcmd`, FreeCAD's own bundled interpreter. In those scripts a check is a printed line and
+an increment of a `bad` counter, not a named assertion: there are no fixtures, no
+`pytest.approx`, no `pytest.raises`, no parametrization, and a single uncaught exception ends the
+whole report. `freecadcmd` also exits 0 on a script exception, so a crashed run can read as a
+pass to anything inspecting only the exit code.
+
+Two guidelines documents state that this split is permanent and that the geometry tier is
+unreachable from pytest as a matter of fact:
+[general.md](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved)
+— "`pytest` cannot reach the `freecadcmd` tier at all — this is an environment limit, not a
+choice to defer. A FreeCAD geometry function's test *is* a `check_*.py` entry; it is never a TODO
+waiting on that function becoming importable under pytest, **because it never will be**" — and
+[python.md](../guidelines/python.md#testing-python), which repeats that `FreeCAD`/`Part` "are not
+importable from the venv". Neither names a mechanism.
+
+**Measured 2026-10-05, the claim is false as stated.** The obstacle is a Python version mismatch,
+and nothing else:
+
+| | Python |
+| --- | --- |
+| Project venv (`.python-version`, `requires-python`) | 3.13.12 |
+| FreeCAD 1.1.3's bundled interpreter | 3.11.14 (conda-forge), ships `python311.dll` |
+
+FreeCAD's Python modules are `.pyd` files — Windows C extension modules — and a `.pyd` is
+compiled against one specific CPython version's binary interface. Loading FreeCAD's from the
+3.13 venv fails in the loader, before any FreeCAD code runs:
+
+```text
+import FreeCAD  -> ModuleNotFoundError: No module named 'FreeCAD'
+import Part     -> ImportError: Module use of python311.dll conflicts with this version of Python.
+```
+
+That was measured with FreeCAD's `lib` on `sys.path` and both `bin` and `lib` registered via
+`os.add_dll_directory`, so it is not a search-path failure. (Python 3.8 and later stopped
+honoring `PATH` when resolving an extension module's own dependent DLLs, which is the usual false
+culprit; it was ruled out.) The modules do exist and are ordinary importable extensions:
+`FreeCAD.pyd` and `FreeCADGui.pyd` in `bin`, and 45 more including `Part.pyd` in `lib`.
+
+**Under FreeCAD's own bundled `python.exe`, pytest reaches the geometry code and passes.**
+Proven with pytest installed by `pip install --target` into a scratch directory, reached through
+`PYTHONPATH`, leaving the FreeCAD installation itself untouched; a `conftest.py` adds `bin`,
+`lib` and `Mod` to `sys.path` and registers the two DLL directories. Six cases — a kernel
+boolean asserting an exact volume, a tube section asserting the annulus identity through
+`check_cowl_interior.section_regions`, its converse on two separate tubes, `_Polyline.closest`
+against `distances`, `_check_slope` under `pytest.raises(PreconditionFailed)`, and the
+`WALL_TOL < TAU` split — **6 passed in 0.84 s**. None of these needs a cowl build.
+
+Three further measurements bear on the choice:
+
+1. **The existing suite also runs under 3.11: 865 passed, 2 failed, 6 errors in 48 s**, against
+   873 passed in 89 s under 3.13. Every one of the eight is `tests/test_oml_export.py`.
+2. **The eight break on OpenVSP, which is pinned the other way.** `openvsp` is not a
+   pip-installed dependency — `oml_export.import_vsp()` discovers it on disk under
+   `C:\Program Files\OpenVSP-*\python\openvsp` — and its `_vsp.pyd` raises `ImportError: DLL load
+   failed while importing _vsp` under 3.11 while working under 3.13. So there is no wheel to
+   re-resolve; a 3.11 OpenVSP would have to be obtained or built.
+3. **A newer numpy over FreeCAD's own is harmless.** The project requires `numpy>=2.3.2`;
+   FreeCAD bundles 1.26.4. With numpy 2.4.6 shadowing it, `FreeCAD`, `Part`, `Mesh` and
+   `MeshPart` all import and a boolean returns the right volume. `pandas` 2.3.3 and
+   `solidpython2` 2.1.3 also resolve for 3.11, so the only cross-version casualty is OpenVSP.
+
+**How the situation arose, for the record.** `.python-version` = 3.13 and
+`requires-python = ">=3.13"` landed on 2026-08-04 in commit `d97d81a` ("python env and roadmap
+doc"), which added only `.python-version`, `doc/roadmap.md`, `pyproject.toml` and `uv.lock` — the
+environment for what was then an OpenSCAD and `solidpython2` project. The first code under
+`src/Fuselage/freecad/` landed four days later, on 2026-08-08 (`973a33e`). The pin was never
+weighed against FreeCAD compatibility, because FreeCAD was not yet in the repository. The
+permanence claim in the guidelines was written later, describing the resulting situation as
+though it were a property of the tools.
+
+**Constraint, set 2026-10-05: the project chooses its own interpreter.** The project's Python
+version is to be selected on the project's own merits — support lifetime, language features,
+the ecosystem it needs — and not dictated by which CPython a CAD tool's binaries happen to have
+been compiled against. FreeCAD's 3.11 and OpenVSP's 3.13 are both vendor build choices, each
+revisable by its vendor at any release, and neither is a reason for the project to move. This is
+a requirement on the answer, not one of the alternatives: it eliminates every option that runs
+the project's own test suite under a vendor's interpreter, or that moves the project's pin to
+match one.
+
+What the choice decides is which interpreter runs which tests, and who picks it:
+
+```text
+                    venv 3.13          FreeCAD's 3.11        worker behind a pipe
+                    ---------          --------------        --------------------
+tests/ (873)        yes                yes, minus 8 VSP      yes, all of them
+FreeCAD geometry    impossible (ABI)   yes, 0.84 s / 6       yes, 1.30 s / 19
+OpenVSP export      yes                no                    yes
+project's pin       free               FreeCAD dictates      free
+per-operation cost  none               none                  0.9 ms (handle)
+                                                             8.8 ms (snippet)
+```
+
+**Alternatives**
+
+1. **Change nothing.** Keep the two tiers and keep testing geometry only through `check_*.py`.
+   *Benefits:* no work; no second environment to maintain; the `check_*.py` scripts are real
+   integration tests that do catch defects, and they found every cowl defect recorded in this
+   document. *Drawbacks:* fails a stated requirement — pytest cases that call FreeCAD. Geometry
+   assertions stay unnamed and uncollected, there is no `pytest.raises` for the precondition
+   classes, a single exception still ends a whole report, and the guidelines keep a false
+   justification that forecloses the question for future readers. *Prerequisites:* none.
+
+2. **Add a second pytest tier under FreeCAD's bundled interpreter.** A new test directory, a
+   `conftest.py` that puts `bin`, `lib` and `Mod` on `sys.path` and registers the DLL
+   directories, and pytest plus any test-only dependencies installed by `pip install --target`
+   into a directory outside the FreeCAD tree, reached by `PYTHONPATH`. Two pytest invocations,
+   each with its own interpreter. *Benefits:* proven working, 6 cases in 0.84 s; strictly
+   additive, so the existing 873 tests and the OpenVSP tests are untouched; the FreeCAD
+   installation is not modified, so a FreeCAD upgrade cannot break it by overwriting anything;
+   named assertions, fixtures and `pytest.raises` become available for geometry; fast cases can
+   be unit tests while `check_*.py` keeps the slow whole-build integration role.
+   *Drawbacks:* two commands rather than one, which needs a documented runner and a CI entry;
+   the `--target` directory must be rebuilt whenever FreeCAD's bundled Python version changes;
+   two sets of pinned test dependencies can drift apart. *Prerequisites:* decide where the new
+   tests live and how the FreeCAD path is discovered rather than hardcoded —
+   `freecad_render.freecadcmd_path()` already solves the same discovery problem for the
+   `check_*.py` tier and should be reused.
+
+3. **Move the whole project to Python 3.11 and run one pytest.** Change `.python-version` and
+   `requires-python`, re-lock, and add the FreeCAD paths in the root `conftest.py`.
+   *Benefits:* one interpreter, one command, one dependency set; geometry and pure-Python tests
+   share fixtures and parametrization directly; the measured 3.11 run was also faster, 48 s
+   against 89 s. *Drawbacks:* breaks the OpenVSP export tier, which is a committed capability
+   and not a test-only dependency; 3.11 reaches end of security support well before 3.13, so the
+   project would be pinned to an aging interpreter by a CAD tool's build choice, and pinned again
+   each time FreeCAD moves; any 3.12-or-later syntax or library behavior in the existing code
+   would have to be found and removed. *Prerequisites:* a working 3.11 OpenVSP Python API, which
+   does not exist on this machine and may require building OpenVSP from source; and a full run of
+   the existing suite plus the sweep under 3.11 to find version-sensitive behavior.
+
+4. **Have pytest drive `freecadcmd` as a subprocess.** Keep the venv at 3.13 and write pytest
+   cases that run a `check_*.py` script, or a small purpose-built script, and assert on its parsed
+   output or on an exported artifact. *Benefits:* works today with no new environment; one pytest
+   invocation; naturally covers the `freecadcmd` exit-code trap by asserting on output rather than
+   on status. *Drawbacks:* the assertions are on text or on files, not on live `Shape` objects, so
+   a test cannot build geometry in a fixture, pass it around, and measure it; each case pays
+   process startup, which is seconds rather than the measured 0.84 s for six in-process cases; a
+   parse layer between the assertion and the geometry is itself something to maintain and get
+   wrong. *Prerequisites:* a stable machine-readable output format from the check scripts, which
+   today print prose intended for a human reader.
+
+5. **Install pytest into the FreeCAD installation itself**, using the `pip` 25.3 already present
+   in its bundled interpreter, and run `freecadcmd -m pytest` or `bin/python.exe -m pytest`
+   directly. *Benefits:* the simplest possible invocation, no `PYTHONPATH` and no `--target`
+   directory. *Drawbacks:* modifies a third-party installation that the project does not own and
+   cannot reproduce; the packages are lost or left stale on every FreeCAD upgrade or reinstall;
+   a dependency installed there is invisible to the project's lock file, so what the tests ran
+   against is unrecorded. *Prerequisites:* none, which is the trap.
+
+6. **Run FreeCAD as a persistent worker behind a process boundary.** pytest stays in the
+   project's own venv, on whatever Python the project chooses, and never imports FreeCAD. A
+   session-scoped fixture starts one `freecadcmd` worker that holds `FreeCAD`, `Part`,
+   `cowl_interior` and `check_cowl_interior`, and the client sends snippets and receives
+   JSON-encodable measurements over the worker's stdin and stdout. The same pattern the FreeCAD
+   MCP server already uses in this toolchain, reduced to a pipe and a session fixture.
+   *Benefits:* the only alternative that satisfies the 2026-10-05 constraint — the project's pin
+   is independent of both vendors, and a FreeCAD that moves to 3.12 or an OpenVSP that moves to
+   3.14 changes nothing on the project's side. Measured working end to end: **16 geometry cases
+   in 0.90 s**, worker startup **0.69 s** once per session, **8.8 ms per call**, with the client
+   on 3.13.12 and the worker on 3.11.14 simultaneously. Fixtures and `@pytest.mark.parametrize`
+   work normally, and `fc.raises('PreconditionFailed', ...)` is a usable stand-in for
+   `pytest.raises`. **Expensive state lives worker-side**: the worker execs into one persistent
+   namespace, so a build is paid once and asserted against many times — the access pattern a
+   990 s cowl build requires, proven on a cheap stand-in. One pytest invocation and one
+   dependency set, so the existing 873 tests and the OpenVSP tests keep running unchanged in the
+   same session. Robustness measured, not assumed: a **45 s** single call survives the pipe with
+   the client blocked on the read throughout, a hard worker death is reported as a named test
+   failure in **0.01 s** rather than hanging, and a remote `SyntaxError` surfaces as a failure.
+   *Drawbacks:* **the loss is expressiveness, not efficiency, and the two should not be
+   confused.** A `Shape` cannot be serialized across the boundary, but nothing forces it to be
+   rebuilt: it stays in the worker and is addressed by name, so one expensive build serves any
+   number of assertions. What this variant does cost is that geometry is written as snippets of
+   source in strings rather than as ordinary Python in the test body, so an editor will not
+   refactor, type-check or lint it and a mistake in one is found at run time. Exception classes
+   do not cross either, only type names, so a typo in an expected name is a test that cannot fail
+   for the right reason. A worker holding session state means tests are not isolated from each
+   other by default. And the bridge is itself project code that has to be maintained and tested.
+   *Prerequisites:* decide the worker's state-isolation policy (one worker per session, per
+   module, or per test, trading startup against independence).
+
+7. **An adaptation library over both FreeCAD and OpenVSP, with remote object references.** The
+   boundary of alternative 6, but passing *handles* instead of source: a worker-side registry
+   holds the live objects, the client holds proxy objects, and attribute and method access become
+   round trips. `wall.Volume` returns a float, `wall.isValid()` returns a bool,
+   `wall.BoundBox.ZLength` and `wall.Solids[0]` return further proxies, and `a.cut(b).cut(c)`
+   passes handles so the whole chain happens worker-side with only the final number crossing.
+   Both libraries sit behind one interface with two interchangeable backends — a worker for a
+   library whose build does not match the project's interpreter, and plain in-process imports for
+   one that does. *Benefits:* satisfies the 2026-10-05 constraint for both vendors at once and
+   keeps satisfying it when either moves, because switching a backend is one line and no test
+   changes. OpenVSP takes the in-process backend today, so nothing about the working export path
+   changes now while the seam that future-proofs it exists. It removes alternative 6's real
+   drawback: geometry is ordinary Python in the test body, so an editor refactors, type-checks and
+   lints it. Measured working: **19 cases in 1.30 s**, worker startup 0.94 s, **323 round trips at
+   0.9 ms each** — faster per operation than snippet evaluation, because a handle operation
+   compiles nothing. Reuse of one build across eleven parametrized stations plus eight further
+   assertions, with a counter asserting the build ran exactly once before and after; and reuse
+   measured **16.2× cheaper than rebuilding** even on a shape that takes 5 ms to build, a ratio
+   that grows to about six orders of magnitude on a 990 s cowl.
+
+   **Error reporting is not a casualty, and the first draft of this entry wrongly said it was.**
+   Measured: the worker sends the exception's class name, its full base chain and its traceback,
+   and the client rebuilds a matching class once and caches it. A project precondition arrives as
+   `PreconditionFailed` and satisfies `pytest.raises(PreconditionFailed)`; the same failure is
+   still caught by a hierarchy catch; the synthesized class is the same object on every raise, so
+   it can be reused; a real kernel refusal arrives as the kernel's own
+   `CADKernelError: makeOffset2D: offset result has no wires.`; and a remote `AttributeError` is
+   catchable as a real `AttributeError`, because a remote builtin inherits from the genuine
+   builtin as well as from the remote base. The worker's traceback names the remote file, function
+   and line and is printed in the failure report, while `__tracebackhide__` on the bridge frames
+   keeps the report pointing at the test's own line. A bridge fault — a dead worker, a broken
+   protocol — is raised as a deliberately *unrelated* class, so a crashed worker cannot be
+   mistaken for a geometry finding and sent someone hunting for a defect that is not there.
+
+   *Drawbacks:* materially more code than alternative 6 — an encoder, a handle registry, a proxy
+   type, a synthesized-exception module and two backends — and it is infrastructure the project
+   must own, test and debug. The failure mode is specific and worth naming: a defect in the proxy
+   presents as the geometry API appearing not to exist. One was found while building this
+   prototype — the proxy refused every attribute beginning with an underscore, which silently made
+   the whole private half of `cowl_interior` unreachable, `_check_slope`, `_Polyline`, `_fit` and
+   `_thin_stations` among them, exactly the functions a unit test wants. Each attribute access is a
+   round trip, so a loop over thousands of samples wants a batched call rather than per-element
+   proxying, and the library has to offer one. Only what is reachable through attribute and call
+   syntax is exposed; operator overloads and anything relying on Python-level object identity need
+   explicit support. A synthesized exception class is not the worker's class object and cannot be,
+   so a test must take its identity from the library rather than by importing the real one.
+   *Prerequisites:* a batching call for sample loops; a decision on where the library lives and
+   whether it is tested independently of the geometry tests that use it.
+
+   **Handle lifetime is the library's responsibility, not the test author's.** An earlier draft of
+   this entry listed memory growth as a cost to be managed by a release policy the author would
+   follow. That is the wrong division of labor and it is unnecessary; the design below removes it,
+   and each part is asserted by a test rather than described:
+
+   - *Distributed reference counting.* The client proxy's `__del__` queues its handle for release,
+     which CPython's reference counting makes prompt for the ordinary non-cyclic case. Measured:
+     200 temporaries in a loop leave nothing behind, and a chain of booleans leaves exactly one
+     live handle — the result — which is freed in turn when it goes out of scope.
+   - *Releases ride along.* The pending list is attached to the next request, so reclaiming costs
+     no round trip of its own; a threshold flush covers a session that has gone quiet.
+   - *A method call allocates nothing.* One `callattr` op does the attribute lookup and the call
+     worker-side, so no handle is created for a bound method — which would otherwise be one per
+     call site, the largest source of growth. A client-side cache of which names are callable per
+     remote type removes the probe round trip, so a warm method call is a single trip: measured
+     20 trips for 20 calls.
+   - *Shutdown is safe.* `__del__` only appends to a list and never performs I/O, which during
+     interpreter teardown would deadlock or raise against half-finalized modules.
+   - *A leak is observable.* The worker reports live and high-water handle counts, and the library
+     offers an explicit no-leak assertion, so the invariant can be pinned in CI instead of
+     trusted.
+   - *Use after free is named.* A released handle used again raises `StaleHandle` identifying the
+     handle, rather than surfacing a bare `KeyError` from inside unrelated work, which would read
+     as a geometry fault and send someone looking for a defect that is not there.
+
+   **One defect found while building this is worth recording, because it is the mistake the design
+   invites.** The bound-method object held the owner's handle *id* rather than a reference to the
+   owner proxy. In `a.cut(b).cut(c)` the first result is never named, so once `.cut` had produced a
+   method object the only thing referring to that shape was an integer: the proxy was collected,
+   its release was queued, and the very request carrying that release then used the handle. The
+   symptom was a `StaleHandle` on an object logically still in use — a live object freed, which is
+   worse than a leak, since a leak wastes memory while this corrupts a result. The rule the fix
+   establishes is *alive while reachable*, not *alive while named*. It was caught only by the test
+   written for the converse — that a still-referenced object must not be freed — which is the test
+   this kind of library most needs and is easiest to omit.
+
+**Recommendation**
+
+**Alternative 7**, built in the shape of alternative 6 so that 6 is the fallback if the library
+proves more than the project wants to own. **Chosen 2026-10-06; see the decision note at the head
+of this question, and [geometry_bridge.md](geometry_bridge.md) for the design.** The 2026-10-05
+constraint eliminates most of the
+field: alternatives 2 and 5 run the project's tests under FreeCAD's interpreter, and 3 moves the
+project's own pin to match it, so all three hand the choice of Python to a CAD vendor. Of the
+three that remain, 6 and 7 both dominate 4 on the thing that matters — a sub-millisecond call
+against a process launch per assertion, and the ability to pay a 990 s build once per session
+rather than once per test — while keeping a single pytest invocation and a single dependency set.
+
+7 is preferred over 6 because it buys back the only real cost of the boundary at a price the
+measurements show is negative rather than positive: a handle operation came in at **0.9 ms**
+against **8.8 ms** for evaluating a snippet, because it compiles nothing. So the variant that
+reads as ordinary Python is also the faster one, and the choice is not a trade between
+expressiveness and speed. What 7 genuinely costs is code the project has to own. Building it in
+the shape of 6 keeps that reversible: the worker, the pipe and the session fixture are common to
+both, and the proxy layer is the part that can be abandoned.
+
+Two things this recommendation deliberately does not claim. **Neither variant loses test
+efficiency.** The worry that a shape could not be reused across assertions is specific to
+*serializing* objects, and neither design serializes them — one build served nineteen cases with a
+counter asserting it ran exactly once, before and after. And **OpenVSP needs no bridge today**,
+since its extension happens to match the project's current interpreter; its place in 7 is the
+in-process backend behind the shared interface, so the day either vendor moves is a one-line
+change rather than a port.
+
+Alternative 1 remains correct for the slow whole-build integration checks. The `check_*.py`
+scripts should not be converted: a quarter-hour build whose job is to print a report is well
+served by a standalone script, and the bridge is for the fast, named, asserted cases that
+have no home today.
+
+Whichever is chosen, the two guidelines passages quoted above should be corrected: the mechanism
+is an ABI version lock, not an impossibility, and the two-tier split should be justified by its
+real cost — OpenVSP's opposite pin, two dependency sets, and the expressiveness of a process
+boundary — rather than by a claim that measurement contradicts.
 
 Alternative 3 is the better long-run answer **if** the soak shows `MARGINAL` is common rather
 than a one-off at the small end — but it requires re-deriving a calibrated threshold, so it

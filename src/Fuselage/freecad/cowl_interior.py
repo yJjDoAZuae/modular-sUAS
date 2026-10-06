@@ -75,9 +75,42 @@ import Part
 #: to be the Hausdorff distance from the fitted contour to an ideal eroded contour, which is a
 #: proxy: it bounds the wall only indirectly, and it made the acceptance test in
 #: `check_cowl_interior` measure a different quantity from the one refinement converged on.
-#: Section 5 now measures the wall itself -- in the layer plane, from the fitted interior out
-#: to the exterior -- so the criterion and the acceptance test are the same measurement.
+#: Section 5 measures the wall itself -- in the layer plane, from the fitted interior out to the
+#: exterior -- so the criterion and the acceptance test measure the same *quantity*.
+#:
+#: **They are not the same number, and an earlier version of this note said they were.**
+#: Corrected 2026-10-05: this is the *convergence criterion* for the fit -- how close the
+#: construction has to get before `_refine` stops subdividing -- and `WALL_TOL` below is the
+#: *acceptance tolerance* on the finished wall. Measuring one quantity does not make one
+#: threshold serve both purposes: a convergence criterion may be as loose as the construction's
+#: own budget allows, but the acceptance tolerance is set by what the slicer does with a thin
+#: perimeter, and that is five times tighter. Keeping them equal meant the acceptance test
+#: inherited the construction's budget instead of the part's requirement, which is backwards.
 TAU = 0.05
+
+#: Section 6: the acceptance tolerance on the **finished wall's own thickness**, in millimetres.
+#:
+#: **One-sided, and five times tighter than `TAU`.** The failure mode this bounds is the slicer
+#: declining to lay a perimeter down at all: that decision is near-binary in the wall's measured
+#: thickness, and a cowl prints in spiral-vase mode with a single perimeter and no second wall to
+#: fall back on (cowl.md section 7), so a wall that comes out materially under `n_p * w` does not
+#: print thin -- it prints with a hole. A 25% reduction, 0.6 mm to 0.45 mm, is enough to flip it.
+#: That is why this is 0.01 mm and not the 0.1 mm that governs *positional* tolerance on these
+#: parts, where bolt clearances are about 0.1 mm and the layer height is 0.2 mm. Position and
+#: thickness are different questions with different answers.
+#:
+#: **One-sided because only the thin side is a defect.** A sample over a rib legitimately reads
+#: more than `n_p * w`, because the wall follows the notch in and back out again and the inner
+#: contour dips with it -- `check_cowl_interior.wall_thickness` says so, and the real sections
+#: read up to 0.69 mm against a 0.6 mm wall for exactly that reason. Only `measured < t - WALL_TOL`
+#: is a failure.
+#:
+#: **Known to be unmet as of 2026-10-05, on both kinds, at every `U` measured.** This constant is
+#: the requirement, not a description of what the construction currently achieves; see
+#: cowl_interior_surface.md section 6 and [OQ-DES-CW21] for the gap and what is being done about
+#: it. It is deliberately recorded as the requirement anyway: a tolerance loosened until the part
+#: passes is not a tolerance, and IP-FC-56 is this project's own precedent for that mistake.
+WALL_TOL = 0.01
 
 #: The hard floor on interval length, below which `_refine` will not subdivide. **Reaching it is
 #: a failure to report, not a result to accept** -- section 5 -- because it means the fitted
@@ -548,6 +581,34 @@ class _Polyline(object):
     def distance(self, px, py):
         return float(self.distances([(px, py)])[0])
 
+    def closest(self, points):
+        """The single nearest pair over `points`, as `(distance, query_point, point_on_self)`.
+
+        `distances` reduces away the one thing IP-FC-148 needs. It keeps each query point's own
+        minimum distance, which is all a clearance number requires, but OQ-DES-CW25 turns on
+        *where* on the tool that minimum lands, and a scalar cannot say. Same point-to-segment
+        arithmetic and the same chunking; only the bookkeeping differs, so the distance this
+        returns is the distance `distances` would have returned for the same inputs.
+        """
+        q = np.asarray(points, dtype=float)
+        best = None
+        for lo in range(0, len(q), self.CHUNK):
+            hi = min(lo + self.CHUNK, len(q))
+            px = q[lo:hi, 0][:, None]
+            py = q[lo:hi, 1][:, None]
+            t = ((px - self.ax) * self.dx + (py - self.ay) * self.dy) / self.den
+            np.clip(t, 0.0, 1.0, out=t)
+            cx = self.ax + t * self.dx
+            cy = self.ay + t * self.dy
+            d2 = (px - cx) ** 2 + (py - cy) ** 2
+            flat = int(np.argmin(d2))
+            i, j = flat // d2.shape[1], flat % d2.shape[1]
+            if best is None or d2[i, j] < best[0]:
+                best = (float(d2[i, j]), lo + i, (float(cx[i, j]), float(cy[i, j])))
+        if best is None:
+            return None
+        return (math.sqrt(best[0]), (float(q[best[1], 0]), float(q[best[1], 1])), best[2])
+
 
 def hausdorff(a_samples, a_dense, b_samples, b_dense):
     """The two-sided Hausdorff distance between two closed contours.
@@ -594,6 +655,34 @@ def _min_wire_distance(wires_a, wires_b):
         d = float(min(_Polyline(pts).distances(a_pts)))
         if best is None or d < best:
             best = d
+    return best
+
+
+def _min_wire_contact(wires_a, wires_b):
+    """`_min_wire_distance`'s own minimum, with the pair of points that realizes it.
+
+    Sampled exactly as `_min_wire_distance` samples -- 200 points per `wires_a` loop, 400 per
+    `wires_b` loop, each loop closed on its own and never flattened together, for the reason
+    that function's own note gives -- so the distance returned here is the number Metric A
+    reports and not a second, differently-sampled approximation of it.
+
+    Returns `(distance, (ax, ay), (bx, by))`, or `None` where `_min_wire_distance` returns it.
+    """
+    if not wires_a or not wires_b:
+        return None
+    a_pts = []
+    for w in wires_a:
+        a_pts.extend((p.x, p.y) for p in w.discretize(Number=200))
+    if not a_pts:
+        return None
+    best = None
+    for w in wires_b:
+        pts = [(p.x, p.y) for p in w.discretize(Number=400)]
+        if len(pts) < 2:
+            continue
+        got = _Polyline(pts).closest(a_pts)
+        if got is not None and (best is None or got[0] < best[0]):
+            best = got
     return best
 
 
@@ -1173,6 +1262,266 @@ def tool_clearance_ranked(surf_shape, tool_shapes, z):
             out.append((i, d))
     out.sort(key=lambda id_: id_[1])
     return out
+
+
+#: How parallel a face normal must be to the slab's own normal for that face to be a cheek, as
+#: a dot product. 0.9 is 26 degrees; the two cheeks are exactly parallel to it by construction,
+#: and no other face of either profile comes within 60 degrees, so nothing here is marginal.
+CHEEK_DOT = 0.9
+
+#: How many points of a tool's own section to test against the interior candidate solid when
+#: deciding whether the two cross at a station. 120 around a section a few millimetres across
+#: resolves a crossing at a fraction of a millimetre, which is all this has to distinguish; the
+#: in-plane distance itself is still measured at `_min_wire_distance`'s own 400.
+CROSSING_SAMPLES = 120
+
+#: How closely a contact's measured offset back to the undilated tool must match that face's own
+#: predicted dilation offset for the contact to be *on that face's image*, as a fraction of `t`.
+#:
+#: **This is what separates a contact on a face from one on an edge**, and it needs a real
+#: threshold rather than an exact comparison. The dilation moves a face with outward normal `n`
+#: out by exactly `t·hypot(n.x, n.y)`, so a contact sitting on that face's dilated image reproduces
+#: the figure; one sitting on a facet that bridges two faces does not, and reads somewhere between
+#: the two faces' own offsets. 1 % of `t` is 0.006 mm, which is coarse enough to absorb the
+#: discretisation of the section wires and far finer than the 0.04 mm discrepancies an edge
+#: contact actually produces.
+FACE_IMAGE_TOL = 0.01
+
+#: How far along the cut direction a face normal must point to be floor rather than an end cap,
+#: as a dot product.
+#:
+#: **0.5 (60 degrees) is deliberately loose, because of the overhang ramps.** Two of the
+#: six-sided profile's edges step inward over a rise of
+#: `buttress_r_inset * tan(overhang_angle_from_bed)` -- cowl.md section 4.1 is what they are for
+#: -- so at the 35 degree print angle their own normals sit about 55 degrees off the cut
+#: direction. They are floor: they are part of the cut's innermost boundary, and the material
+#: between them and the interior surface is wall. A tighter cutoff would label them `end`, which
+#: would be wrong in exactly the place a thin spot is most likely.
+FLOOR_DOT = 0.5
+
+
+#: How far to step off a face to decide which way is out of the solid, in millimetres.
+#:
+#: It has to stay well inside the thinnest dimension the solid has, which for a cutting tool is
+#: `buttress_cut_thickness` = 0.1 mm between its two cheeks: a step of half that or more would
+#: land on or past the opposite cheek and read as outside from either side.
+OUTWARD_STEP_MM = 1.0e-3
+
+
+def _outward_normal(face, solid, step=OUTWARD_STEP_MM):
+    """A face's own outward normal -- the one that leaves `solid`.
+
+    **Read by displacement, not from `Face.Orientation`.** The orientation flag does not survive
+    the way these tools are built: measured 2026-10-04 on `tail_shell`'s eleven cutting tools,
+    every slab reports *both* of its cheeks as `Forward`, so flipping on the flag returns the
+    same normal for two opposite faces of one solid -- impossible, and it mislabelled the cut
+    floor as the far face on every tool. Stepping off the face and asking the solid which side
+    the point is on cannot be fooled that way.
+
+    Raises if neither direction leaves the solid, rather than guessing: that would mean `step`
+    is too large for the solid's own thickness, which is exactly the failure this is replacing.
+    """
+    point = face.CenterOfMass
+    if isinstance(face.Surface, Part.Plane):
+        n = App.Vector(face.Surface.Axis)
+    else:
+        u0, u1, v0, v1 = face.ParameterRange
+        n = face.normalAt(0.5 * (u0 + u1), 0.5 * (v0 + v1))
+    n.normalize()
+    out_plus = not solid.isInside(point + n * step, 0.5 * step, True)
+    out_minus = not solid.isInside(point - n * step, 0.5 * step, True)
+    if out_plus == out_minus:
+        raise PreconditionFailed(
+            'stepping %.1e mm either way off a face of a solid spanning z %.4f..%.4f lands %s '
+            'it both times, so the face has no outward direction to read. The step has to be '
+            'smaller than the solid\'s own thinnest dimension.'
+            % (step, solid.BoundBox.ZMin, solid.BoundBox.ZMax,
+               'outside' if out_plus else 'inside'))
+    return n if out_plus else n * -1.0
+
+
+def tool_face_roles(raw_tool):
+    """Label every face of one undilated buttress cutting tool by what it bounds: OQ-DES-CW25.
+
+    A buttress tool is a slab -- a six-sided or rectangular profile extruded through
+    `buttress_cut_thickness` -- and the distinction the geometry makes, which
+    `tool_clearance_ranked` cannot, is that only part of its boundary bounds the finished wall:
+
+      * ``cheek`` -- one of the two broad faces, `buttress_cut_thickness` apart. These are the
+        slit's own side walls. The wall continues past them: the material beyond a cheek is the
+        rib, and the rib's thickness is set at `t` by `dilated_notches` by construction, not by
+        any distance measured against this face.
+      * ``floor`` -- the innermost reach of the cut, including the two overhang ramps. This is
+        the only part of the tool that bounds the wall's own radial thickness, so it is the only
+        part whose distance to the interior surface says anything about the wall.
+      * ``end`` -- the two axial end caps, closing the ends of the slit's run.
+      * ``outer`` -- the profile's far edge, which sits outside the blank entirely and cuts
+        nothing. A minimum landing here would mean the measurement is reading a face the part
+        does not have.
+
+    Labelled from the geometry rather than from the construction, so a tool built another way
+    still classifies. `e` is `slab_normal`: the slab's own thin direction. `a` is the direction
+    from the tool toward the part's own z axis, projected perpendicular to `e` -- every buttress
+    cut enters from outside the blank and reaches inward, so that is the direction the cut
+    deepens in. A normal along +/-`e` is a cheek, one along +`a` is floor, along -`a` is outer,
+    and anything else is an end cap.
+
+    Returns one dict per face of `raw_tool`, in face order, carrying the role, the outward
+    normal, the two dot products the role was read from, and the face's area.
+    """
+    e = slab_normal(raw_tool)
+    if e is None:
+        raise PreconditionFailed(
+            'a cutting tool spanning z %.4f..%.4f has no planar face, so it is not a slab and '
+            'its faces have no cheek direction to be classified against.'
+            % (raw_tool.BoundBox.ZMin, raw_tool.BoundBox.ZMax))
+    com = raw_tool.CenterOfMass
+    a = App.Vector(-com.x, -com.y, 0.0)
+    a = a - e * a.dot(e)
+    if a.Length > 1.0e-9:
+        a.normalize()
+    else:
+        a = App.Vector(0, 0, 0)
+    out = []
+    for face in raw_tool.Faces:
+        n = _outward_normal(face, raw_tool)
+        d_cheek, d_floor = n.dot(e), n.dot(a)
+        if abs(d_cheek) >= CHEEK_DOT:
+            role = 'cheek'
+        elif d_floor >= FLOOR_DOT:
+            role = 'floor'
+        elif d_floor <= -FLOOR_DOT:
+            role = 'outer'
+        else:
+            role = 'end'
+        out.append(dict(role=role, normal=n, dot_cheek=d_cheek, dot_floor=d_floor,
+                        area=face.Area))
+    return out
+
+
+def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
+    """IP-FC-148: at each station in `zs`, which face of the nearest buttress tool carries
+    Metric A's own minimum, and what that face bounds.
+
+    This is the measurement OQ-DES-CW25 turns on. `clearance_margin_scan` reports the smallest
+    in-plane distance from the interior surface's section to the nearest dilated tool's section,
+    and takes that minimum over the *whole* tool section -- so a minimum on the cut floor, which
+    bounds the wall's radial thickness, and a minimum on a cheek, which bounds nothing because
+    the wall continues past it as the rib, come out as the same number. `tool_face_roles`
+    records what the difference is; this locates which one each reported minimum actually is.
+
+    **The contact is found on the dilated tool and classified against the undilated one.** The
+    dilation is a union of `RIB_FACETS` translates (`dilated_notches`), so the grown tool's own
+    boundary is a comb of offset copies of the original faces plus the facets that bridge them,
+    and a face index into it means nothing stable. The original slab has eight faces with fixed
+    meanings. Because the dilation is a horizontal disc, a face with outward normal `n` moves
+    out by exactly `t * hypot(n.x, n.y)`, which `expected_offset` records beside the measured
+    `offset`: the two agreeing is what confirms the contact really does lie on that face's own
+    dilated image rather than on a bridging facet.
+
+    **`second_role` is not redundant.** Where the two nearest faces are the same distance away,
+    the contact is on the edge between them rather than on either face, which is the
+    near-tangency signature IP-FC-137 describes -- and a minimum of a few nanometres on a
+    tool edge means something different from one on a tool face.
+
+    **`crossing` is the field that decides what the whole metric is worth, and it is not a
+    refinement of the face question but a prior one.** `tool_clearance_ranked` measures wire to
+    wire, which cannot tell a tool section sitting just clear of the interior surface from one
+    already biting into it: both report a positive boundary-to-boundary distance. So each tool
+    section's own sample points are tested against the interior candidate *solid*. Points all
+    outside means the tool is clear there and the distance is a real clearance. Points on both
+    sides means the tool's boundary crosses the surface at this station -- the true in-plane
+    distance is zero, the cut is actively removing material, and whatever small number the scan
+    reports is the distance from the sampled station to a geometric crossing rather than a
+    clearance. A dilated tool is *supposed* to cross: that is how the rib gets its `t` of material
+    (section 4.2's identity). The crossing has to be somewhere along every slot that enters the
+    wall band at all, so finding the scan's minima at one is a property of the sampling.
+
+    **A face only bounds the wall where it lies inside the blank, so that is tested at the
+    contact rather than assumed from the role.** Measured 2026-10-04 on `tail_shell`: the core
+    cut (`cowl_tree.core`, the region the buttress cuts may not enter) splits the cut floor of
+    each of the two long diagonal tools into an 8.4 mm2 piece inside the blank and a 1.4 mm2
+    piece outside it, and leaves sub-0.02 mm2 slivers on three of the side tools whose normals
+    read as floor while sitting outside the part entirely. Both are genuine faces of the real
+    tool; neither bounds any wall where it sits. `in_blank` settles that per contact, and
+    `bounds_wall` is the single answer OQ-DES-CW25 asks for: floor, and inside the part.
+
+    Returns one dict per station, in the order `zs` gives them. A station where no tool has a
+    section, or where the surface has none, is absent rather than present with a null distance.
+    """
+    rows = []
+    roles_cache = {}
+    for z in zs:
+        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z)
+        if not ranked:
+            continue
+        index, metric_a = ranked[0]
+        s_wires = [w for w in _slice_wires(surf_shape, z) if w]
+        t_wires = [w for w in _slice_wires(tool_shapes[index], z) if w]
+        got = _min_wire_contact(s_wires, t_wires)
+        if got is None:
+            continue
+        dist, p_surf, p_tool = got
+        if index not in roles_cache:
+            roles_cache[index] = tool_face_roles(raw_tools[index])
+        roles = roles_cache[index]
+        vertex = Part.Vertex(App.Vector(p_tool[0], p_tool[1], z))
+        near = sorted((face.distToShape(vertex)[0], fi)
+                      for fi, face in enumerate(raw_tools[index].Faces))
+        offset, fi = near[0]
+        entry = roles[fi]
+        n = entry['normal']
+        gap = App.Vector(p_surf[0] - p_tool[0], p_surf[1] - p_tool[1], 0.0)
+        if gap.Length > 0.0:
+            gap.normalize()
+        # A hair along -n, so the sample sits in the material this face's own cut takes out
+        # rather than on the blank's skin.
+        probe = raw_tools[index].Faces[fi].distToShape(vertex)[1][0][0] \
+            - n * (2.0 * OUTWARD_STEP_MM)
+        in_blank = bool(body.isInside(probe, OUTWARD_STEP_MM, True))
+        inside_n, total_n = 0, 0
+        for w in t_wires:
+            for p in w.discretize(Number=CROSSING_SAMPLES):
+                total_n += 1
+                if surf_shape.isInside(p, OUTWARD_STEP_MM, True):
+                    inside_n += 1
+        # **Three states, not two.** An earlier version of this reported only `crossing`, which
+        # conflated the two ways of not crossing: a tool entirely outside the surface, where the
+        # reported figure is a real clearance, and one entirely inside it, where there is no
+        # clearance at all and the cut is removing material along the tool's whole section.
+        # Measured 2026-10-04, both occur -- `nose_cowl_shell` has one station at 0.0 % inside and
+        # `tail_shell` one at 100.0 % -- so collapsing them would have called a fully engulfed tool
+        # a clearance.
+        if inside_n == 0:
+            engagement = 'clear'
+        elif inside_n == total_n:
+            engagement = 'engulfed'
+        else:
+            engagement = 'crossing'
+        row = dict(z=z, tool=index, metric_a=metric_a, contact_distance=dist,
+                   engagement=engagement, crossing=bool(engagement == 'crossing'),
+                   is_clearance=bool(engagement == 'clear'),
+                   fraction_inside=(float(inside_n) / total_n) if total_n else None,
+                   p_surf=p_surf, p_tool=p_tool, face=fi, role=entry['role'],
+                   normal=(n.x, n.y, n.z), dot_cheek=entry['dot_cheek'],
+                   dot_floor=entry['dot_floor'], offset=offset,
+                   expected_offset=t * math.hypot(n.x, n.y),
+                   normal_dot_gap=gap.dot(n), in_blank=in_blank)
+        row['on_face_image'] = bool(
+            abs(row['offset'] - row['expected_offset']) <= FACE_IMAGE_TOL * t)
+        # Only a contact that is *on* a floor's dilated image, inside the blank, is a distance to
+        # something that bounds the wall. A contact on the facet bridging two faces is a distance
+        # to an edge of the tool, and which of the two faces happens to be nearest is then an
+        # accident of the bridge's geometry rather than a fact about the wall.
+        row['bounds_wall'] = bool(entry['role'] == 'floor' and in_blank
+                                  and row['on_face_image'])
+        if len(near) > 1:
+            second = roles[near[1][1]]
+            row.update(second_face=near[1][1], second_role=second['role'],
+                       second_offset=near[1][0],
+                       second_expected=t * math.hypot(second['normal'].x, second['normal'].y))
+        rows.append(row)
+    return rows
 
 
 def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
@@ -2457,6 +2806,48 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     if clearance_check:
         margin = clearance_margin_scan(smooth, ribs, z_lo, z_hi)
         thin = [(z, a) for z, a in margin if a < CLEARANCE_MARGIN_MM]
+        # **IP-FC-148: what each reported minimum is a distance to, if anything.** The scan above
+        # takes its minimum over the whole tool section and cannot say either whether the tool is
+        # clear of the surface at that station -- if it is not, there is no clearance there to
+        # measure -- or which face carries the minimum, of which only the cut floor bounds the
+        # finished wall. `clearance_face_scan` answers both and `tool_face_roles` defines the
+        # face roles; section 6.3 of cowl_interior_surface.md is the authority on what the
+        # answers mean. Run here rather than in a separate pass because this is the one point
+        # where the final candidate surface and the per-tool dilation list are both already in
+        # hand; it costs one extra slice pair per already-reported station, against the scan's
+        # own hundreds.
+        faces = clearance_face_scan(smooth, ribs, notches.Solids, body, t,
+                                    [z for z, _a in margin])
+        for row in faces:
+            note('      z %9.4f %-4s %.6f mm -> tool %2d %s %-5s in_blank=%-5s '
+                 'bounds_wall=%-5s %-8s inside=%5.1f%%  offset %.4f/%.4f  '
+                 'n.gap %+.3f  dot_floor %+.3f'
+                 % (row['z'], 'FLAG' if row['metric_a'] < CLEARANCE_MARGIN_MM else '',
+                    row['metric_a'], row['tool'],
+                    ('face %-2d' % row['face']) if row['on_face_image']
+                    else ('EDGE %d/%s' % (row['face'], row.get('second_face'))),
+                    row['role'] if row['on_face_image']
+                    else '%s|%s' % (row['role'], row.get('second_role')),
+                    row['in_blank'], row['bounds_wall'], row['engagement'],
+                    100.0 * (row['fraction_inside'] or 0.0),
+                    row['offset'], row['expected_offset'], row['normal_dot_gap'],
+                    row['dot_floor']))
+        tally, engaged = {}, {}
+        for row in faces:
+            if not row['on_face_image']:
+                key = 'an edge between %s and %s' % (row['role'], row.get('second_role'))
+            else:
+                key = row['role'] + ('' if row['in_blank'] else ' (outside the blank)')
+            tally[key] = tally.get(key, 0) + 1
+            engaged[row['engagement']] = engaged.get(row['engagement'], 0) + 1
+        note('    clearance margin: the minimum lands on %s; %d of %d bound the finished wall, '
+             'and the tool is %s -- only a `clear` station reports a clearance at all '
+             '(IP-FC-148, OQ-DES-CW25)'
+             % ('; '.join('%d x %s' % (tally[k], k) for k in sorted(tally)) or 'nothing',
+                sum(1 for row in faces if row['bounds_wall']), len(faces),
+                ', '.join('%s at %d' % (k, engaged[k]) for k in sorted(engaged))))
+        if report is not None:
+            report.update(clearance_faces=faces)
         if thin:
             note('    clearance margin: %d station(s) under the %.3f mm thin-wall flag '
                  '(worst %.6f mm at z = %.4f, flag-only)'

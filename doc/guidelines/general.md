@@ -66,19 +66,48 @@ of inherited code that still has no test is tracked in
 
 ### Two test tiers, because two Python interpreters are involved
 
-This project's code runs in two interpreters that cannot import each other's dependencies
-(`FreeCAD`/`Part` are not importable from the venv; `solid2` is not importable from
-`freecadcmd` — see the cross-environment note in [python.md](python.md)). The test
-strategy is split the same way, and neither tier is optional or lesser than the other:
+This project's code runs in two interpreters, and **the reason is an ABI version lock, not an
+inherent limit.** FreeCAD 1.1.3 embeds CPython 3.11 and ships `python311.dll`; the project venv is
+3.13. A `.pyd` extension module is compiled against one specific CPython version, so importing
+`Part` from the venv fails in the loader before any FreeCAD code runs — `ImportError: Module use of
+python311.dll conflicts with this version of Python.` Measured 2026-10-05 with FreeCAD's `lib` on
+`sys.path` and both `bin` and `lib` registered via `os.add_dll_directory`, so it is not a
+search-path failure. OpenVSP is pinned the opposite way: its `_vsp.pyd` works under 3.13 and fails
+under 3.11, and it is not a pip dependency, so there is no wheel to re-resolve.
+
+**The split is therefore a cost decision, not a law.** Running everything under FreeCAD's own
+bundled 3.11 interpreter works — both `FreeCAD` and `Part` import, and 865 of the 873 pytest tests
+pass there — but it breaks the eight OpenVSP tests and would tie the project's Python version to a
+CAD vendor's build choice. **The project chooses its own interpreter** (OQ-ARCH-22,
+[freecad_migration.md](../architecture/freecad_migration.md)), so the two tiers stay, bridged by a
+process boundary rather than merged. See
+[geometry_bridge.md](../architecture/geometry_bridge.md).
+
+Neither tier is optional or lesser than the other:
 
 | Tier | Location | Runs under | Covers | Convention |
 | --- | --- | --- | --- | --- |
 | Unit / integration (pytest) | `tests/` | The project venv (`uv run pytest`) | Pure-Python logic and anything importable in the venv — parameter dataclasses, sweep logic, CSV/JSON handling, drawing-family lookups, comparison and measurement helpers under `src/Fuselage/tools/` | `test_<subject>_<condition>_<expected>` functions, `assert` / `pytest.approx`. See [python.md](python.md#testing-python). |
 | Integration (`freecadcmd`) | `src/Fuselage/freecad/check_*.py` | `freecadcmd` (FreeCAD's bundled interpreter) | FreeCAD document and geometry code: `cowl_tree.py`, `cowl.py`, `cowl_interior.py`, `corner_tree.py`, `oml_blank.py`, `bulkhead_*.py`, `boom_*.py`, `drawing*.py`, and everything else under `src/Fuselage/freecad/` | Standalone script, one `check_<subject>()` function per concern, printed pass/fail lines, a `bad` counter returned as the process exit code, guarded by `corner_common.is_entry_point(__name__)` — `freecadcmd` never triggers a bare `if __name__ == '__main__':` guard, so every check script uses that helper instead. |
 
-`pytest` cannot reach the `freecadcmd` tier at all — this is an environment limit, not a
-choice to defer. A FreeCAD geometry function's test *is* a `check_*.py` entry; it is never
-a TODO waiting on that function becoming importable under pytest, because it never will be.
+**A third tier, the geometry bridge, is where new geometry tests go.** `pytest` cannot *import*
+FreeCAD, for the ABI reason above, but it can drive it across a process boundary: a worker runs
+under the vendor's interpreter and the test holds vendor objects by reference. That gives named
+cases, fixtures, `@pytest.mark.parametrize` and `pytest.raises` for geometry code, at 0.9 ms per
+operation, with an expensive build paid once per session. The design is
+[geometry_bridge.md](../architecture/geometry_bridge.md).
+
+**Which tier a new geometry test goes in (OQ-GB-2, decided 2026-10-06).** A new geometry check is a
+`pytest` function in the bridge tier. It becomes a `check_*.py` script only when what it produces
+is a report a person reads rather than a set of assertions — in practice the whole-part parametric
+builds that take minutes and print a table. **Being document-driven is not a reason to make it a
+script:** the bridge supports attribute assignment specifically so document-driven tests can be
+bridge tests. The existing `check_*.py` scripts are not being converted; a quarter-hour build whose
+output is a report is well served by a standalone script.
+
+The older claim that a FreeCAD geometry function's test can *only* be a `check_*.py` entry,
+"because it never will be" importable under pytest, was wrong on the mechanism and is withdrawn.
+What remains true is that `pytest` never imports FreeCAD directly.
 
 **A `sys.exit()` with buffered stdout loses the whole report under `freecadcmd`.** Found
 2026-09-22 writing `check_plane2d.py`: `if is_entry_point(__name__): sys.exit(main())`

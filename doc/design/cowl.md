@@ -780,7 +780,8 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | ID | Question | Blocking |
 | --- | --- | --- |
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
-| OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; nobody has measured which face the minimum lands on, so whether the number means anything — and whether the metric should be kept at all — is undecided | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
+| OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; the measurement has now been taken and no flagged minimum lands on a cut floor, so whether the metric is kept at all is the remaining decision | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
+| OQ-DES-CW26 | The rib cut can break the wall's cross-section ring over 93 mm while passing every existing check — one valid solid, healthy partition identity, mirror sewing closed, no exception — and the existing thickness check misreports the break as a 0.36 mm thickness. Reproduced and characterized; two checks are now identified that catch it, and which to adopt is the decision | **Blocking** for any claim that a completed `tail_shell` build's wall is verified |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -2911,6 +2912,37 @@ loop belongs there, measured directly on `shell_solid()`'s own finished, cell-si
 real algorithm change, not a constant retune, and is not yet designed or implemented; tracked
 through to completion in [IP-FC-143](../implementation/freecad_migration.md).
 
+**Second correction, 2026-10-05: the chosen fix stands, but this item's scope statement and the
+quality of its evidence do not.** Three things were found while answering
+[OQ-DES-CW26](#open-questions), and none of them changes the decision — alternative 2, investigate
+the mechanism and fix the construction, is still the right direction and still the work
+IP-FC-143 tracks. What they change is what this item claims.
+
+*The title and framing are wrong about `U`.* This item is recorded as the wall reading thin "at the
+high end of the swept `U` range", resolved on the basis that `U` = 0.5 through 2.5 read clean. They
+read clean against a 0.05 mm acceptance tolerance, and the acceptance tolerance on a wall *thickness*
+is **0.01 mm** — `cowl_interior.WALL_TOL`, split out from `TAU` under IP-FC-149, because the slicer's
+decision to lay a single spiral-vase perimeter at all is near-binary in the measured thickness. At
+0.01 mm the same construction reads thin at **22 of 24 stations on `tail_shell` at `U` = 1** and at 2
+of 24 on `nose_cowl_shell` at `U` = 1. The condition is not confined to large `U`; it was below the
+threshold everywhere else.
+
+*The twelve-station sample was hiding failures at this item's own tolerance.* Re-run at 24 stations,
+`tail_shell` at `U` = 1 fails **three** stations against `TAU` = 0.05 mm — the figure this item was
+resolved against — while the 12-station default reports the same build `OK`.
+
+*But the magnitudes this item quotes come from a measure that does not converge, so they are lower
+bounds and not settled deviations.* `wall_thickness`'s nearest-point minimum was still falling at
+3840 samples at 17 of 24 stations on both kinds
+([cowl_interior_surface.md §6.1](cowl_interior_surface.md)). The one measure that does converge, the
+area-based mean, reads **0.0033 mm from nominal at the very station
+[OQ-DES-CW23](#open-questions) calls this build's worst** — inside `WALL_TOL`. A mean cannot rule out
+a local thin spot, so that is not a refutation; it does mean **this item's 0.053 mm and 0.150 mm
+figures should not be treated as measured wall deviations** until IP-FC-151 provides an instrument
+that settles. Whether there is a real local thinning here, and how large, is therefore open again —
+on better terms than before, since the question is now about a known-inadequate instrument rather
+than about the geometry.
+
 ### OQ-DES-CW22 — The post-cut refinement loop's per-round re-scan makes real convergence unaffordably slow — RESOLVED 2026-09-27
 
 **Resolved, 2026-09-27: alternatives 1 and 3, combined.** IP-FC-143's post-cut refinement pass
@@ -3185,6 +3217,176 @@ already exists, and alternatives 2, 3 and 4 are all decisions that should be mad
 than instead of it. Keeping or retiring a diagnostic whose meaning has never been checked is the
 mistake that let Metric B stand as long as it did, and this item should not repeat it one metric to
 the left. Work item: IP-FC-148.
+
+**The measurement called for by alternative 1 has been taken, 2026-10-04**, and is recorded in
+[cowl_interior_surface.md §6.3](cowl_interior_surface.md). On `nose_cowl_shell` at `U` = 1, of the 15
+stations the scan flags under 0.01 mm, **none is a distance to a cut floor**: 7 land on a cheek,
+which bounds the rib rather than the wall, and 8 land on no face's own dilated surface at all. The
+worst figure the scan reports, 0.000081 mm, is a cheek contact. **A prior question the item did not
+anticipate was also answered: 14 of the 15 sit where the dilated tool has already crossed into the
+interior surface**, so there is no clearance at those stations to measure — and a dilated tool is
+*supposed* to cross, because that is how §4.2's identity gives the rib its `t` of material. On
+`tail_shell` at `U` = 1 the same pattern holds: 11 cheek contacts, 4 on no face's surface, zero on a
+cut floor. Separately, 8 of the nose's 15 figures are below the 0.0013 mm by which the 48-gon
+dilation falls short of the disc it approximates.
+
+**So alternatives 2, 3 and 4 are now the live set, and the choice among them is open.** Alternative 2
+(keep it, re-described) is harder to defend than it was: the metric has now been measured and does
+not measure what any of its descriptions claimed. Alternative 3 (retire it, remove `clearance_check`)
+and alternative 4 (replace it with a direct `wall_thickness()` measurement at the same stations) both
+remain available, and alternative 4 has acquired a second reason to be considered — see
+[OQ-DES-CW26](#open-questions), where a wall 0.19 mm thin passes every check the construction has.
+That decision is not one this measurement settles.
+
+### OQ-DES-CW26 — The cut can break the wall's section ring and pass every check; which checks catch it?
+
+**Problem.** The cowl's printed wall is a fixed real-world dimension —
+`cowl_n_perimeters * extrusion_width`, 0.600 mm at the parameter sheet's current values — and it is
+held to **0.01 mm** (`cowl_interior.WALL_TOL`), not to the 0.05 mm that governs the surface fit's own
+convergence. The reason is the slicer: its decision to lay a perimeter down at all is near-binary in
+the measured wall thickness, and a cowl prints in spiral-vase mode with a single perimeter and no
+second wall behind it (§7), so a wall materially under `n_p·w` does not print thin — it prints open.
+The wall is produced by cutting a fitted interior solid out of the buttress-notched blank
+(`notched.cut(inside)`), and the construction checks that result five ways: §4.2's rib residue
+against `RIB_RESIDUE` = 0.01 mm³, the cavity's connectivity, the cut returning exactly one solid,
+the cut and its complement re-adding to the blank within `PARTITION_TOL` = 2.0e-3, and the mirrored
+result sewing into exactly one closed shell.
+
+**Measured 2026-10-04 and characterized 2026-10-05 on `tail_shell` at `U` = 3.0: all five pass on a
+wall with a 93 mm hole in it.** Displacing one row of the fit's input contours by 0.03 mm at the
+station `z` = -283.9951339 — a legitimate conditioning probe, since that station's nearest
+neighbouring row is 0.4311 mm away and the displacement is 7 % of that gap — breaks the wall's
+cross-section ring at `z` = -217.7261 into a 1293 mm arc and a 213 mm arc, with **93.2 mm of the
+1600 mm ring absent**. Both arcs measure 0.612 and 0.613 mm across, against 0.600 nominal: the wall
+is the right thickness and simply missing over part of its circumference. Rib residue reads
+0.000000 mm³, the cut returns one valid solid, the partition slip reads 2.396e-05 against a healthy
+build's 2.831e-05, and the mirror sews to one closed shell. **No exception is raised anywhere.**
+
+**The existing thickness check reports the break as a thickness**, which is how it read as a 0.19 mm
+thinning for a day. `check_cowl_interior.wall_thickness` sorts a section's closed loops by enclosed
+area, takes the two largest, and measures the distance from the second to the first — correct for an
+outer/inner pair, meaningless for two disjoint arcs, where it measures the gap between the broken
+ends and returns 0.355705 mm. That is a defect in the check, independent of this question's own:
+nothing asks whether the section is the annulus the measure presumes. Full evidence, including the
+dose series and the arithmetic on the surface fit, is
+[cowl_interior_surface.md §7.1](cowl_interior_surface.md).
+
+Three measured properties bound what any answer has to cope with:
+
+- **The construction is linear and well behaved right up to the break, so there is no early warning
+  in the numbers.** Displacements of 0.001, 0.003 and 0.01 mm give changes of +0.000408, +0.001225
+  and +0.004084 mm — a gain of 0.408 mm per mm at every one, to three figures, and all three pass
+  every check with a 0.000000 mm³ rib residue. Extrapolating that line to 0.03 mm predicts
+  +0.0123 mm; the measured value is -0.190851 mm. **The failure is a discontinuity, bracketed
+  between δ = 0.01 mm and δ = 0.03 mm**, not a trend a tighter tolerance would have caught sooner.
+- **The dose series is not ordered by severity.** δ = 0.1 mm severs the wall into five solids and is
+  caught; δ = 0.03 mm, a third of it, passes everything and is wrong. A check calibrated on severity
+  will not order these correctly.
+- **Whether the fit carries the displacement is open.** An earlier version of this question argued
+  it could not, on the grounds that the measured station is 66 mm from the perturbed row and the fit
+  attenuates about 3.7× per station. But the linear regime measures a gain of 0.408 mm per mm at
+  that same distance, which implies about 1.12× per station — so the attenuation figure understates
+  the measured sensitivity by three orders of magnitude and cannot be used to rule the fit out. That
+  discrepancy is itself unexplained.
+
+**What is not known.** Whether any *unperturbed* build reaches this state has not been shown. Every
+occurrence so far comes from the row-nudge probe, which no real build performs, and the complementary
+test — varying genuine design inputs and letting the fit reconverge, 21 cases — has never produced a
+construction failure. So this may be a reachable failure mode or an artifact of a synthetic input;
+that distinction is unmeasured and it is the main thing separating the alternatives below.
+
+**Alternatives:**
+
+1. **Measure whether an unperturbed build can reach it, then decide.** Characterize what the switch
+   actually is — which boolean decision changes — and whether any legitimate variation of the design
+   inputs lands on the other side of it. *Benefits:* the only option that establishes whether this
+   needs catching at all; every other alternative either pays for a check against a possibly
+   unreachable state or accepts a possibly real one. *Drawbacks:* open-ended, and the switch has
+   resisted three refuted predictors already (nearest-tool clearance, the crowding ratio, row
+   spacing). *Prerequisites:* none; IP-FC-146's characterization is the start of it.
+2. **The annulus identity on the finished wall's own sections, asked of the kernel.** At each
+   checked station, slice the mirrored wall and hand the wires to
+   `Part.makeFace(wires, 'Part::FaceMakerBullseye')`, which resolves the nesting itself: **one face
+   with two wires means the ring is continuous; several one-wire faces mean it is broken into that
+   many arcs.** `Face.Area` on the result is the material area directly. *Benefits:* it is an
+   **identity, not a tolerance**: a closed shell's
+   transverse section *is* an annulus, so there is no threshold to calibrate and nothing to tune per
+   `U`. Measured on this failure it separates absolutely — across seven stations on each wall, the
+   healthy one reads **annulus at 7 of 7** and the damaged one reads **broken into 2 arcs at 5 of
+   7**, the two that pass being stations the perturbation did not reach, where both walls return
+   bit-identical areas and boundary lengths. The ring-length shortfall (93.2 mm of 1600) and
+   material-area shortfall come from the same slice as corroboration. It needs no boolean and no new
+   geometry: the slice costs about 7 s on a 2464-face wall, which every existing measurement already
+   pays, and the classification adds **0.6 s**. It also catches a class, not an instance: any break
+   in the wall fails it, however caused. *Drawbacks:* it does not
+   measure thickness, so it would not catch a genuine uniform thinning; and a slot's end cap may
+   legitimately break the annulus at some stations, so the false-positive rate across both kinds and
+   the swept `U` range has to be surveyed before it can refuse a build. *Prerequisites:* that
+   survey. **Half of this is already built and verified, 2026-10-05**: `section_regions` classifies
+   the wires and `wall_thickness` returns `None` for a section that is not an annulus, which both
+   its callers already count as a failure. On the two walls this question was characterized against,
+   the healthy one returns thicknesses at all six spot-checked stations and the broken one returns
+   `None` at five of six — so **the external check now catches this failure**, where before the fix
+   it reported it as a 0.355705 mm thickness. What is *not* built is the build-time half: nothing in
+   `shell_solid` runs it, so a build still completes silently.
+3. **A finished-wall thickness check at `WALL_TOL` — which needs an instrument this project does not
+   have.** *Benefits:* measures the quantity the requirement is actually about. **The cost objection
+   an earlier version of this item raised is withdrawn**: `shell_solid` has already built and
+   mirrored the real wall, so the boolean is paid for and what remains is slicing.
+   *Drawbacks, and they are the substance:* the measure available does not converge. Measured
+   2026-10-05 on `nose_cowl_shell` at `U` = 1, `wall_thickness`'s nearest-point minimum was still
+   falling at 3840 samples at **17 of 24 stations**, drifting up to 0.0079 mm per doubling, because a
+   nearest-point distance at a concave corner crosses the corner rather than the wall and this
+   section has such a corner at every slot mouth. Measuring along the contour's local normal
+   oscillates instead, by up to 0.0139 mm. The **area-based mean** does converge — 0.5993 mm from
+   the kernel's own `Face.Area`, 0.0007 mm from nominal — but a mean cannot see a local thin spot,
+   which is the thing the slicer responds to, and it is only trustworthy where the section's two
+   loops are near-equal in length. *Prerequisites:* a converged *local* thickness measure, and **the
+   standing candidate for one is now refuted**. Eroding the section face by `(n_p·w − WALL_TOL)/2`
+   and requiring it to stay connected is sampling-free and exact on clean geometry — on a
+   0.6 × 100 mm polygon ribbon `makeOffset2D` gives 1.9884 mm² at d = 0.290, 0.0000 at 0.300 and
+   raises at 0.310, the transition landing precisely at the half-width — but **one call against the
+   real section's convoluted B-spline boundary did not finish in six minutes**, against 0.6 s for
+   the whole face classification. What to try instead is open.
+4. **Accept it and document it as a limit of the construction.** Record that a completed build's
+   wall is verified by the external `check_cowl_interior` run and not by the build itself, and
+   require that run before a part is used. *Benefits:* no new build cost; honest about where the
+   verification actually lives. *Drawbacks:* leaves a failure mode that produces a usable-looking
+   part, and the external check is not run by the normal build path. **Its other drawback has been
+   repaired rather than accepted:** as of 2026-10-05 the external check does now catch this case,
+   where before the annulus guard it reported the break as a 0.355705 mm thickness — so this
+   alternative is stronger than it was that morning, though it still rests on a check nobody is
+   obliged to run. *Prerequisites:* none.
+
+**Recommendation: adopt alternative 2 now, and treat alternative 3 as the work it actually is.**
+
+Alternative 2 is the answer to "what catches this reliably", and it earns that on three grounds
+rather than on its separation alone. It is an identity, so it needs no threshold — this thread has
+spent three metrics (Metric A, the crowding ratio, row spacing) on thresholds calibrated against
+single observations, and the two checks that have ever caught anything here, the partition identity
+and the rib residue, are both identities. It separates by containment, 200/200 against 0/200, with no
+margin to erode. And it generalizes: it tests the property that makes the part a shell, so it catches
+any break rather than this one.
+
+Alternative 3 remains the only thing that measures the requirement, and it should be built — but
+"add a thickness check" is not a small task, because **the project has no converged local thickness
+measure at 0.01 mm**, and the one in use reports a broken ring as a thickness. Two separate pieces of
+work follow: fix `wall_thickness` so a disjoint section is refused rather than mismeasured, and build
+a local thickness measure that converges. Neither is blocked by this question.
+
+Alternative 1 is no longer the recommendation it was. It was chosen on the principle that
+characterization precedes any new check, and that principle still holds for a *predictor* — a check
+calibrated to fire before a failure. It does not apply to alternative 2, which is not a predictor: it
+detects the broken part itself, after the fact, by a property that is true of every healthy build by
+construction. Characterizing the mechanism is still wanted, and is [IP-FC-146](../implementation/freecad_migration.md#work-items),
+but no longer gates the check.
+
+**What is still unmeasured, and what it would change.** Whether an *unperturbed* build can reach this
+state is unknown — every occurrence comes from §6.2's row-nudge probe, which no real build performs,
+and the 21-case design-input sweep has never produced a construction failure. If it cannot be
+reached, alternative 2 is cheap insurance on a class of failure rather than a guard on a live defect;
+that does not change the recommendation, because the check costs a second a station and needs no
+calibration, but it does change how urgent alternative 3 is.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

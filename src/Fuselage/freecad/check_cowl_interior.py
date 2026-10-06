@@ -49,6 +49,64 @@ def _opt(name, default=None):
     return default
 
 
+#: The face maker that resolves a set of section wires into faces, nesting and all.
+#:
+#: **Bullseye, because it is the one that handles a hole.** Given the two wires of a wall section,
+#: `Part::FaceMakerBullseye` returns one face with two wires -- an outer boundary and one hole --
+#: and `Part::FaceMakerCheese` agrees with it exactly (958.819 mm2 on the reference station, both).
+#: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totalling
+#: 150914 mm2, the sum of the two enclosed areas rather than the material between them.
+FACE_MAKER = 'Part::FaceMakerBullseye'
+
+
+def section_regions(wires):
+    """Classify a section's closed wires into material regions, letting the kernel do the nesting.
+
+    **Replaces a hand-rolled containment vote, and the kernel's answer is both cheaper and more
+    general.** The question is whether a section is the annulus a wall section must be, or a ring
+    broken into arcs; an earlier version answered it by building a face from the largest wire and
+    testing how many points of the next wire fell inside. That works -- measured 200 of 200 on a
+    healthy section against 0 of 200 on a broken one -- but it is pairwise, so it cannot describe a
+    section with more than two wires, and it costs a face build plus a sampled point test.
+    `Part.makeFace` resolves the whole set at once in about 0.6 s and reports the structure directly:
+
+        one face with two wires        the ring is continuous
+        several faces with one wire    the ring is broken into that many arcs
+
+    `Face.Area` on the result is then the material area directly, rather than a difference of two
+    separately-integrated wire areas -- which matters, because that difference is of two numbers
+    near 75000 mm2 and carries both their discretization errors.
+
+    Returns `(faces, wire_counts, area)`, or `None` if the maker will not build. Failing to build
+    is reported as unclassifiable rather than as an annulus, so a caller declines to measure
+    something it cannot interpret.
+    """
+    if not wires:
+        return None
+    try:
+        built = Part.makeFace(wires, FACE_MAKER)
+    except Exception:                                                   # noqa: BLE001
+        return None
+    if not built.Faces:
+        return None
+    return (len(built.Faces), sorted(len(f.Wires) for f in built.Faces),
+            sum(f.Area for f in built.Faces))
+
+
+def _is_annulus(wires):
+    """Is this section one closed ring of material, as a wall section must be?
+
+    True only for a single region with a single hole. Anything else -- arcs with no hole, several
+    regions, or a set the face maker will not resolve -- is not a wall section and has no thickness
+    to report.
+    """
+    got = section_regions(wires)
+    if got is None:
+        return False
+    faces, counts, _area = got
+    return faces == 1 and counts == [2]
+
+
 def wall_thickness(wall, z, expect, tol):
     """In-plane distance from the inner contour to the outer, at one station.
 
@@ -56,6 +114,17 @@ def wall_thickness(wall, z, expect, tol):
     within `tol` of `expect`, and the spread. Samples over a rib legitimately read more than
     `expect`, because the wall follows the notch in and back out and the inner contour dips
     with it; samples reading *less* are the failure, and there should be none.
+
+    **Returns `None` where there is no thickness to report**, which is two cases and not one: a
+    station with fewer than two loops across every solid, and -- since 2026-10-05 -- a station
+    whose section is not an annulus at all, because the ring has come apart into arcs. Both mean
+    "no wall here" and both callers already count that as a failure.
+
+    **`worst_low` is a nearest-point minimum and does not converge; do not compare it against
+    `WALL_TOL`.** Measured 2026-10-05 on `nose_cowl_shell` at `U` = 1, it was still falling at 3840
+    samples at 17 of 24 stations, because a nearest-point distance at a concave corner crosses the
+    corner rather than the wall and this section has one at every slot mouth.
+    cowl_interior_surface.md section 6.1 carries the evidence and what does converge.
     """
     # **Measured per solid, though `build_part.py` (line ~328) now requires exactly one.**
     # Before IP-FC-139/140/141's mirror-order fix, the tail's buttress slots cut through the
@@ -82,6 +151,19 @@ def wall_thickness(wall, z, expect, tol):
         # the cavity retreating deep inward around a rib. Area tracks "which region is bigger"
         # directly, however convoluted either loop's own path is.
         loops.sort(key=lambda w: abs(ci._wire_area(w)), reverse=True)
+        if len(loops) >= 2 and not _is_annulus(loops):
+            # **A section that is not an annulus has no thickness to report, and returning one is
+            # how a hole in the wall read as a thinning.** The pairing above is only a wall
+            # measurement if the second loop lies INSIDE the first. When the ring comes apart into
+            # arcs, each arc's own boundary is a separate closed loop, and the code below then
+            # measures the distance from one arc to the other -- the gap across the break -- and
+            # reports it as a thickness. Measured 2026-10-05 on `tail_shell` at `U` = 3.0: a wall
+            # whose ring was broken over 93.2 mm of 1600, with both arcs at a correct 0.612 and
+            # 0.613 mm, was reported at 0.355705 mm, and every check in the build passed it
+            # (cowl.md OQ-DES-CW26). `None` is the right answer, not a number: it is what this
+            # function already returns for a station with no wall, and both callers already treat
+            # that as a failure rather than skipping it.
+            return None
         if len(loops) >= 2:
             outer = ci._Polyline(
                 [(p.x, p.y) for p in loops[0].discretize(Number=8 * AROUND)])
@@ -270,21 +352,46 @@ def main():
     # `ci.z_extent` exists for exactly this and is given the body, which is one solid.
     lo, hi = ci.z_extent(body)
     lo, hi = lo + 1.0, hi - 1.0
-    print('  wall thickness in the layer plane, expecting %.3f mm within %.3f:' % (t, ci.TAU))
+    # **`WALL_TOL`, not `TAU`, and one-sided.** Corrected 2026-10-05: this is the acceptance test
+    # on the finished wall's thickness, and it had been running at `TAU` = 0.05 mm -- the fit's own
+    # convergence criterion -- which is five times looser than the thickness requirement. The
+    # constant's own note says why 0.01 mm is the right figure and why only the thin side counts.
+    # The reported `near` count stays two-sided, because it is informational and a rib legitimately
+    # reads high; only `worst_low` gates.
+    print('  wall thickness in the layer plane, expecting %.3f mm, no sample under %.3f '
+          '(WALL_TOL = %.3f, one-sided):' % (t, t - ci.WALL_TOL, ci.WALL_TOL))
     bad = 0
+    worst_thin = 0.0
     for i in range(STATIONS):
         z = lo + (hi - lo) * i / float(STATIONS - 1)
-        got = wall_thickness(wall, z, t, ci.TAU)
+        got = wall_thickness(wall, z, t, ci.WALL_TOL)
         if got is None:
             print('    z %9.4f   fewer than two loops -- no wall here' % z)
             bad += 1
             continue
         n, near, lowv, med, highv = got
-        flag = '' if lowv >= t - ci.TAU else '   <-- THIN'
-        if lowv < t - ci.TAU:
+        thin_by = max(0.0, t - lowv)
+        worst_thin = max(worst_thin, thin_by)
+        flag = '' if lowv >= t - ci.WALL_TOL else '   <-- THIN by %.4f mm' % thin_by
+        if lowv < t - ci.WALL_TOL:
             bad += 1
         print('    z %9.4f   %3d/%3d within tol   min %.4f  median %.4f  max %.4f%s'
               % (z, near, n, lowv, med, highv, flag))
+    print('    worst thin reading: %.4f mm under nominal, %.1fx the %.3f mm tolerance'
+          % (worst_thin, worst_thin / ci.WALL_TOL, ci.WALL_TOL))
+    if worst_thin > ci.WALL_TOL:
+        # **What a failure here does and does not mean.** `worst_low` is a nearest-point minimum,
+        # and that quantity does not converge on these sections (IP-FC-151): it was still falling
+        # at 3840 inner samples at 17 of 24 stations, because a nearest-point distance at a concave
+        # corner crosses the corner rather than the wall and there is such a corner at every slot
+        # mouth. So this reading is a lower bound on the deviation, from a measure that cannot
+        # settle. The honest reading of a failure is "compliance with WALL_TOL is not demonstrated",
+        # not "the wall is demonstrably this thin" -- and reporting OK instead would be the worse
+        # error, since a check that cannot show compliance has not shown it.
+        print('    NOTE: this is a nearest-point minimum, which does not converge on these '
+              'sections (IP-FC-151). Read it as "WALL_TOL compliance is not demonstrated", not '
+              'as a settled deviation. The converged area-based mean at the one station measured '
+              'that way is 0.0033 mm from nominal, inside tolerance.')
 
     # -- the rib
     shapes = [n.Shape for n in tip.Notches]
@@ -312,6 +419,13 @@ def main():
         if not pairs:
             print('    z %9.4f   no notch cutting here' % z)
             continue
+        # **This one keeps `TAU` rather than moving to `WALL_TOL`, deliberately.** The rib gap is
+        # `t_cut / sin(theta) + 2t`, so two wall thicknesses do enter it -- but what this compares
+        # is a measured gap against its own closed-form construction value, which makes it a
+        # construction identity rather than a thickness acceptance test. It measures at floating
+        # point noise on every build tried (~1e-13 mm, IP-FC-143), thirteen orders inside either
+        # figure, so the choice of tolerance here changes no verdict. Noted rather than switched
+        # because switching it would imply the quantity had been mis-toleranced, and it had not.
         worst = max(abs(gap - (width + 2.0 * t)) for width, gap in pairs)
         gaps = [gap for _width, gap in pairs]
         print('    z %9.4f   %2d notches   %.4f .. %.4f   worst error %.4f%s'
@@ -372,6 +486,51 @@ def main():
         bad += 1
     else:
         print('  _thin_stations keeps the last station, displacing its neighbour')
+
+    # -- the face roles the clearance minimum is classified against (IP-FC-148, OQ-DES-CW25)
+    #
+    # Checked on the real cutting tools rather than on a constructed stand-in, because what these
+    # assertions are really guarding is that the labels still mean what OQ-DES-CW25 asks about
+    # after whatever the next change to the buttress profile turns out to be. A slab has exactly
+    # two cheeks and they are antiparallel; exactly one face of each profile is the far edge that
+    # cuts nothing; and every tool has a cut floor, or there is nothing for the minimum to land on.
+    role_bad = 0
+    for i, raw in enumerate([n.Shape for n in tip.Notches]):
+        for solid in raw.Solids:
+            roles = ci.tool_face_roles(solid)
+            cheeks = [r for r in roles if r['role'] == 'cheek']
+            outers = [r for r in roles if r['role'] == 'outer']
+            floors = [r for r in roles if r['role'] == 'floor']
+            if len(cheeks) != 2:
+                print('  tool %d has %d cheek face(s), not 2  <-- FAIL' % (i, len(cheeks)))
+                role_bad += 1
+            elif cheeks[0]['normal'].dot(cheeks[1]['normal']) > -0.999:
+                print('  tool %d\'s two cheeks are not antiparallel (dot %.4f)  <-- FAIL'
+                      % (i, cheeks[0]['normal'].dot(cheeks[1]['normal'])))
+                role_bad += 1
+            if len(outers) != 1:
+                print('  tool %d has %d far face(s), not 1  <-- FAIL' % (i, len(outers)))
+                role_bad += 1
+            if not floors:
+                print('  tool %d has no cut floor  <-- FAIL' % i)
+                role_bad += 1
+    if role_bad:
+        bad += role_bad
+    else:
+        print('  tool_face_roles: every tool has 2 antiparallel cheeks, 1 far face and a floor')
+    # `closest` has to return the distance `distances` returns, or the face a minimum is
+    # attributed to is not the face the reported minimum is on.
+    square = [(0.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)]
+    probes = [(2.0, 1.0), (-1.5, 1.5), (4.0, 3.0), (2.0, 7.0)]
+    line = ci._Polyline(square)
+    want = float(min(line.distances(probes)))
+    got = line.closest(probes)
+    if got is None or abs(got[0] - want) > 1.0e-12:
+        print('  _Polyline.closest disagrees with distances: %s against %.12f  <-- FAIL'
+              % (got, want))
+        bad += 1
+    else:
+        print('  _Polyline.closest agrees with distances to %.1e mm' % abs(got[0] - want))
 
     # -- the clearance margin (OQ-DES-CW24), opt-in only
     if clearance_check:

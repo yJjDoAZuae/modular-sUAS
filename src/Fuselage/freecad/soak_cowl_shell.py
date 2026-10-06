@@ -150,7 +150,13 @@ def measure(kind, u):
     missing_stations = 0
     for i in range(stations):
         z = lo + (hi - lo) * i / float(stations - 1)
-        got = cci.wall_thickness(wall, z, t, cci.ci.TAU)
+        # `WALL_TOL`, not `TAU` -- the acceptance tolerance on the finished wall, not the fit's
+        # convergence criterion (corrected 2026-10-05). **This does not change
+        # `worst_wall_error`**, which is `max(0, t - lowv)` and so a pure one-sided deviation that
+        # never consulted the tolerance at all; the argument only sets the `near` count this
+        # function discards. So every `worst_wall_error` figure already recorded stays valid as a
+        # deviation -- what changes is which of them count as failures.
+        got = cci.wall_thickness(wall, z, t, cci.ci.WALL_TOL)
         if got is None:
             missing_stations += 1
             continue
