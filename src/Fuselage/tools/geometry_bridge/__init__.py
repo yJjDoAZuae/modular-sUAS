@@ -22,6 +22,22 @@ from .errors import (                                                    # noqa:
     WorkerDied,
     remote_class,
 )
+from .facades import (                                                   # noqa: F401
+    BoundBox,
+    Document,
+    DocumentObject,
+    Edge,
+    Face,
+    Facade,
+    Placement,
+    Shape,
+    Solid,
+    Vector,
+    Vertex,
+    Wire,
+    unwrap,
+    wrap,
+)
 
 __all__ = [
     'BridgeError',
@@ -31,4 +47,20 @@ __all__ = [
     'StaleHandle',
     'WorkerDied',
     'remote_class',
+    # Typed facades. Importing these costs nothing at module scope: `facades` imports only
+    # `proxy`, which imports nothing vendor-side.
+    'BoundBox',
+    'Document',
+    'DocumentObject',
+    'Edge',
+    'Face',
+    'Facade',
+    'Placement',
+    'Shape',
+    'Solid',
+    'Vector',
+    'Vertex',
+    'Wire',
+    'unwrap',
+    'wrap',
 ]

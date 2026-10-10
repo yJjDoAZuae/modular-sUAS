@@ -105,11 +105,22 @@ TAU = 0.05
 #: read up to 0.69 mm against a 0.6 mm wall for exactly that reason. Only `measured < t - WALL_TOL`
 #: is a failure.
 #:
-#: **Known to be unmet as of 2026-10-05, on both kinds, at every `U` measured.** This constant is
-#: the requirement, not a description of what the construction currently achieves; see
-#: cowl_interior_surface.md section 6 and [OQ-DES-CW21] for the gap and what is being done about
-#: it. It is deliberately recorded as the requirement anyway: a tolerance loosened until the part
-#: passes is not a tolerance, and IP-FC-56 is this project's own precedent for that mistake.
+#: **Known to be unmet at 11 of the 12 configurations measured, 2026-10-06 -- and met at one.**
+#: The full soak corpus (cowl_interior_surface.md section 9.9: both kinds, `U` in {0.5, 1.0, 1.5,
+#: 2.0, 3.0, 4.0}, 28 builds) puts `worst_wall_error` between 0.0234 and 0.1506 mm everywhere
+#: except the nose at `U` = 3.0, which reads 0.0067 mm and is therefore *inside* this tolerance.
+#: An earlier version of this note said "on both kinds, at every `U` measured", which that one
+#: reading falsifies. It is corrected here rather than left standing, because the exception is
+#: the only direct evidence so far that this construction can reach this tolerance at all.
+#:
+#: **That single pass does not relax the requirement, because the error is not monotone in `U`.**
+#: The same kind one `U` higher reads 0.0495 mm, five times the tolerance, so 0.0067 mm is not
+#: the start of a trend to extrapolate -- it is one configuration whose error happens to land
+#: low, between neighbours that do not. This constant is the requirement, not a description of
+#: what the construction currently achieves; see cowl_interior_surface.md section 6 and
+#: [OQ-DES-CW21] for the gap and what is being done about it. It is deliberately recorded as the
+#: requirement anyway: a tolerance loosened until the part passes is not a tolerance, and
+#: IP-FC-56 is this project's own precedent for that mistake.
 WALL_TOL = 0.01
 
 #: The hard floor on interval length, below which `_refine` will not subdivide. **Reaching it is

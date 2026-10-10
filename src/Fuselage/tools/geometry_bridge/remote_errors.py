@@ -39,8 +39,16 @@ CADKernelError = remote_class('CADKernelError', ('CADKernelError', 'Exception'))
 #: The broader OCCT error class.
 OCCError = remote_class('OCCError', ('OCCError', 'Exception'))
 
+#: `solid_measure`'s refusal to report a volume it could not converge: the mesh volume was still
+#: moving at the finest deflection tried. A measurement precondition, not a geometry fault.
+NotConverged = remote_class('NotConverged', ('NotConverged', 'Exception'))
+
+#: `solid_measure`'s precondition on comparing two solids: its difference path is only meaningful
+#: between shapes of matching topology, so unequal face counts are refused up front.
+TopologyMismatch = remote_class('TopologyMismatch', ('TopologyMismatch', 'Exception'))
+
 __all__ = [
-    'BridgeError', 'BridgeTimeout', 'CADKernelError', 'OCCError', 'PreconditionFailed',
-    'ProtocolError', 'RemoteGeometryError', 'StaleHandle', 'Unconverged', 'WorkerDied',
-    'remote_class',
+    'BridgeError', 'BridgeTimeout', 'CADKernelError', 'NotConverged', 'OCCError',
+    'PreconditionFailed', 'ProtocolError', 'RemoteGeometryError', 'StaleHandle',
+    'TopologyMismatch', 'Unconverged', 'WorkerDied', 'remote_class',
 ]

@@ -285,11 +285,16 @@ proxy that owns it. It was caught only by the test written for the converse, tha
 still-referenced object must not be freed, which is the test this kind of library most needs and
 is easiest to omit.
 
-**The residual limit.** Promptness relies on reference counting. A proxy caught in a reference
-cycle waits for a garbage-collection pass, so handles linger until one runs. An explicit collect
-forces it and the counters make it visible, but it is not instantaneous. The delay has not been
-measured on a deliberately constructed cycle; §7 lists that as required coverage before the
-library is relied on.
+**The residual limit, measured 2026-10-06 (IP-GB-19).** Promptness relies on reference counting,
+and reference counting does not see a cycle. A proxy reachable only through one is still held
+after the last name for it is gone — confirmed, and **a single `gc.collect()` is the whole
+remedy**: 40 cycles built in a loop stay held as a group and all 40 release together on the first
+pass, with nothing lost. So the limit is a bounded delay, not growth, and bounding it needs no
+tracking of its own. The converse is pinned too: a proxy *not* in a cycle needs no collector pass,
+and neither does a chain intermediate — which matters because the bound-method defect this design
+already fixed lived exactly there, and if an intermediate's lifetime depended on the collector,
+every chain would hold handles until one happened to run. Tested in the loopback tier, since a
+cycle is a property of the client's own object graph and involves no vendor.
 
 ### 4.7 Liveness: a hang is not a failure mode the prototype had
 
@@ -409,6 +414,47 @@ ordinary local or a dict key inflates its type's count. No attempt is made to re
 a given `.Volume` belongs to — that is exactly the shared-name ambiguity the unambiguous column
 isolates. The ranking is robust to all three; the absolute counts are approximate.
 
+#### What writing the facades changed, 2026-10-06
+
+Three things only showed up once the facades were built against the live vendor, and each changed
+the design rather than the implementation.
+
+**A leaf type name does not identify a vendor object, so the protocol now carries the class
+chain.** A `Part::Box` document object reports its type as `PrimitivePy`; `DocumentObject` is four
+classes up its MRO (`PrimitivePy → Feature → GeoFeature → DocumentObject`). A facade lookup keyed
+on the leaf name — which is what a handle reply carried until now — would have faceted every type
+in the set **except `DocumentObject`**, the most-used of all at 361 uses, and would have done it
+silently, because an unmatched type falls back to the working proxy and raises nothing. Each
+handle reply now carries `bases`, the MRO names with `object` dropped and capped at twelve
+(`ops.base_names`), and `facade_for` walks it leaf first. This is the same mechanism §4.9 already
+uses to rebuild a remote exception's class, so the protocol gained no new idea, only a second
+user. `Remote.remote_isinstance(*names)` is the client-side `isinstance` it also makes possible.
+
+**`Vertex` has no `CenterOfMass`, and it is the only such member, so the facade hierarchy
+branches.** Of every member the facades declare, exactly one is present on `Shape`, `Solid`,
+`Face`, `Edge` and `Wire` but absent from `Vertex`. 137 members are common to all six. So
+`ShapeCommon` carries what all six have, `Shape` adds `CenterOfMass` and `CenterOfGravity`, and
+`Vertex` extends `ShapeCommon` directly rather than `Shape`. Found by checking all six type by
+type; a flat hierarchy would have had `Vertex` advertising a member the vendor does not provide,
+which is exactly the failure §5.6 calls worse than no facade — it type-checks, then raises.
+
+**A member that returns a list arrives as a handle to the list, not as a list of handles.**
+`shape.Faces` is a Python list of vendor objects, which cannot cross as a value, so the obvious
+facade implementation — read the list and wrap each element — allocates a handle per face the
+moment the attribute is touched. On a tail shell that is thousands of handles for a caller who
+wanted `len()`. `wrap` therefore returns a `RemoteSequence`: `len`, indexing and iteration each
+forward to the vendor and face what comes out, so nothing is read until it is asked for, and
+`project` stays available on it for the bulk case.
+
+**Measured while writing them: FreeCAD's docstrings carry real signatures for 31% of the methods
+in the facade set, and for none of `Part.Shape`'s.** `Base.Vector`, `Base.BoundBox` and
+`Base.Placement` document every method with a signature line (17 of 17); `Part.Shape`'s 35 methods
+have none in the first line, though most carry one on the second. This is the measurement
+[OQ-GB-1](#oq-gb-1--typed-facades-generated-stubs-or-neither--decided-2026-10-06-alternative-2)
+named as the prerequisite for alternative 3 and recorded as unmeasured. It does not change the
+decision — the signatures are in prose, not in a form a stub generator could trust, and the shape
+side where the geometry work happens is the side with none — but it is no longer an expectation.
+
 ---
 
 ## 5. Hazards that are not about the protocol
@@ -482,6 +528,10 @@ own hazard** — each is a second surface that can drift from the vendor API as 
 a facade that silently disagrees with the real object is worse than no facade, because it type-
 checks and then fails at run time. §7 requires a test that every facade member actually exists on
 the live vendor object, so drift is caught by the suite rather than by a confused reader.
+**Written, 2026-10-06:** `tests/test_geometry_bridge_facades.py` checks every declared member of
+all eleven facade classes against a live object of that type, and asserts the converse for the one
+member the hierarchy branches on — that `Vertex` really does lack `CenterOfMass` on the vendor
+object, not merely in the source.
 
 ---
 
@@ -578,6 +628,10 @@ Required coverage, each item traceable to a measured hazard above:
 | Orphans | closing the client's stdin ends the worker | §5.5 |
 | **Facade fidelity** | **every member a facade declares exists on the live vendor object, and every facade call reaches the same member the proxy would** | §4.10, §5.6 — the drift hazard, and the one test a facade cannot do without |
 | Facade fallback | a type outside the facade set still works through the dynamic proxy | §4.10 |
+| **Facade lookup** | **a document object, whose leaf type is `PrimitivePy`, resolves to the `DocumentObject` facade** | §4.10 — keying on the leaf name silently unfacets the most-used type |
+| Facade hierarchy | `Vertex` lacks `CenterOfMass` on the live object, not only in the source | §4.10 — the converse of the one branch in the hierarchy |
+| Facade containers | a member returning a list reads lazily and faces its elements | §4.10 — the alternative allocates a handle per element on attribute access |
+| Facade cost | a faceted read is the same one round trip the proxy costs | §4.10 — a facade is a spelling, not a layer |
 
 **A performance budget is part of the contract, not an aspiration**, because the measurements
 above are what justify the design over the alternatives, and a regression would silently remove
@@ -608,9 +662,17 @@ facade instead. And the types that dominate are the document ones, not the geome
 
 **Caveat attached to the choice.** Coverage is deliberately uneven: a type outside the facade set
 falls back to the dynamic proxy, which always works but offers no completion. The fallback is what
-keeps the facade set small, and the alternative — stubs generated from a C extension — was rejected
-on the expectation that introspection yields `(*args, **kwargs)` for most FreeCAD methods, which
-was not measured and remains the reason to revisit only if the facades prove inadequate.
+keeps the facade set small.
+
+**The measurement alternative 3's rejection was waiting on has since been taken, and it supports
+the decision.** Alternative 3 was set aside on the *expectation* that introspecting a C extension
+yields `(*args, **kwargs)`, with the prerequisite that this be measured. Measured while writing
+the facades (§4.10): FreeCAD's docstrings carry a signature line for 31% of the methods in the
+facade set — all 17 of `Base.Vector`, `Base.BoundBox` and `Base.Placement`, and **none** of
+`Part.Shape`'s 35. So the signature information exists, but as prose on a second docstring line
+rather than anything a generator could rely on, and it is absent exactly on the shape side where
+the geometry work happens. Alternative 3 stays rejected, now on a measurement instead of an
+expectation. Revisit it only if the facades prove inadequate.
 
 A proxy forwards attributes dynamically, so an editor cannot offer completions on `shape.` and a
 type checker cannot verify that `shape.Volum` is a typo. In-process imports do not have this

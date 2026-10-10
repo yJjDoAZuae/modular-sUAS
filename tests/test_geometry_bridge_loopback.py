@@ -353,6 +353,100 @@ class TestLifetime:
             'the queued releases must have ridden along with that request'
 
 
+class TestReferenceCycles:
+    """IP-GB-19: what a reference cycle costs, measured rather than assumed.
+
+    §4.6 records this as the design's one unmeasured residual limit. The release policy rests on
+    `__del__` firing when the last reference goes, which is refcounting -- and refcounting does not
+    see a cycle. **The loopback tier is the right place for it**, because a cycle is a property of
+    the client's own object graph and nothing about it involves a vendor.
+
+    The answer: a cycle delays a release until a collector pass, and one pass is the whole remedy.
+    A delay, not a leak, and nothing needs to be tracked to bound it.
+    """
+
+    def test_a_proxy_in_a_cycle_is_not_released_when_its_name_goes(self, session, stub):
+        """The limit itself, written as a test so it cannot quietly become false."""
+        gc.collect()
+        holder = {}
+        holder['self'] = holder
+        holder['shape'] = stub.makeShape()
+        h = holder['shape'].remote_handle
+        session.collect()
+        assert session.transport.dispatcher.registry.is_live(h)
+
+        del holder                            # the only name for the cycle
+        session.flush_releases()
+        assert session.transport.dispatcher.registry.is_live(h), \
+            'a cycle is invisible to refcounting, so the handle must still be held here'
+
+    def test_one_gc_pass_is_the_whole_remedy(self, session, stub):
+        """What bounds the delay: a single `gc.collect()` releases it."""
+        gc.collect()
+        holder = {}
+        holder['self'] = holder
+        holder['shape'] = stub.makeShape()
+        h = holder['shape'].remote_handle
+        del holder
+
+        gc.collect()
+        session.flush_releases()
+        assert not session.transport.dispatcher.registry.is_live(h)
+
+    def test_many_cycles_accumulate_and_then_all_release_together(self, session, stub):
+        """Bounded, not leaked: the handles are delayed as a group, then all reclaimed."""
+        gc.collect()
+        session.collect()
+        before = session.stats()['live']
+        handles = []
+        for _ in range(40):
+            node = {}
+            node['self'] = node
+            node['shape'] = stub.makeShape()
+            handles.append(node['shape'].remote_handle)
+            del node
+        session.flush_releases()
+        held = session.stats()['live'] - before
+        assert held == 40, 'all 40 should still be held, got %d' % held
+
+        gc.collect()
+        session.flush_releases()
+        assert session.stats()['live'] == before
+        reg = session.transport.dispatcher.registry
+        for h in handles:
+            assert not reg.is_live(h)
+
+    def test_a_proxy_not_in_a_cycle_needs_no_gc_pass(self, session, stub):
+        """The converse. Without it the tests above would pass even if nothing were refcounted."""
+        gc.collect()
+        session.collect()
+        before = session.stats()['live']
+        tmp = stub.makeShape()
+        h = tmp.remote_handle
+        del tmp                               # refcount hits zero here; no collector involved
+        session.flush_releases()
+        assert session.stats()['live'] == before
+        assert not session.transport.dispatcher.registry.is_live(h)
+
+    def test_a_chain_intermediate_is_not_a_cycle(self, session, stub):
+        """`a.cut(b).cut(c)`'s unnamed middle result is freed by refcounting, not by a gc pass.
+
+        Pinned because the bound-method defect this design already fixed lived exactly here. If
+        anything about an intermediate's lifetime needed the collector, every chain would hold
+        handles until one happened to run.
+        """
+        gc.collect()
+        session.collect()
+        before = session.stats()['live']
+        a, b, c = stub.makeShape(2.0), stub.makeShape(0.5), stub.makeShape(0.25)
+        result = a.cut(b).cut(c)
+        assert result.Volume == pytest.approx(1.25)
+        del result
+        session.flush_releases()
+        # a, b and c are still named; the intermediate and the result should both have gone.
+        assert session.stats()['live'] - before == 3
+
+
 class TestWatermark:
 
     def test_a_released_handle_is_reported_as_stale(self, session, stub):

@@ -88,6 +88,27 @@ class TestOpenVSP:
 
 class TestLifecycle:
 
+    def test_a_session_is_a_context_manager(self):
+        """A session owns a subprocess, so `with` has to work -- an un-closed one is the orphan
+        hazard §5.5 exists for, and every caller was otherwise writing the same try/finally."""
+        with loopback_session({'m': _Module}) as s:
+            assert s.module('m') is not None
+            assert not s._closed
+        assert s._closed
+
+    def test_the_context_manager_closes_on_an_exception(self):
+        """The case the try/finally was there for in the first place."""
+        s = loopback_session({'m': _Module})
+        with pytest.raises(ValueError):
+            with s:
+                raise ValueError('boom')
+        assert s._closed
+
+    def test_the_context_manager_does_not_swallow(self):
+        """`__exit__` returning anything truthy would silently pass failing tests."""
+        s = loopback_session({'m': _Module})
+        assert s.__exit__(None, None, None) is False
+
     def test_a_session_under_the_ceiling_is_not_restarted(self):
         s = loopback_session({'m': _Module})
         try:

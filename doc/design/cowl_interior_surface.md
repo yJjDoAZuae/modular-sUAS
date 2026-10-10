@@ -596,7 +596,7 @@ come from [`solid_measure.py`](../../src/Fuselage/freecad/solid_measure.py) inst
 
 ### 6.1 Measurement cautions
 
-Ten ways a measurement of this geometry has misled this work, each one paid for:
+Eleven ways a measurement of this geometry has misled this work, each one paid for:
 
 - **A bounding box is not evidence of where material is.** A failed wall piece's box read
   `x` = -164.89 against the blank's -150.25, suggesting material outside the solid it was cut
@@ -670,6 +670,22 @@ Ten ways a measurement of this geometry has misled this work, each one paid for:
   default reports the same build `OK`. Whatever is decided about the tolerance and the measure, the
   station count is a separate coverage gap: a quantity that varies along the part is not bounded by
   twelve samples of it.
+- **`Shape.tessellate(deflection)` does not re-mesh a shape it has already meshed, so a second
+  convergence run on the same object converges on nothing.** FreeCAD caches a shape's
+  triangulation. Measured 2026-10-06 on a cylinder: a *fresh* shape gives 500, 1 672 and 5 024
+  facets at deflections 0.02, 0.005 and 0.001, and the **same** shape asked again gives 5 024 at
+  all three — including when a coarser deflection is requested after a finer one.
+  `solid_measure.converged_volume` walks the deflections coarse to fine on one shape, so its first
+  run is sound: each request really is finer than what is cached. A second run on that shape
+  compares identical volumes, declares convergence immediately, and reports `DEFLECTIONS[1]` — the
+  *coarsest* comparison — as the deflection it converged at. With `tol` = 0 the same call raises
+  `NotConverged` and then succeeds. The volume returned is still the finest mesh's and therefore
+  right; it is the reported deflection, and any convergence *claim*, that is not. The production
+  path is unaffected because `soak_cowl_shell.py` reads `mesh_volume` at one fixed deflection on a
+  freshly built shape. **Measure a convergence on a shape that has not been tessellated before**,
+  and treat a convergence report from a reused shape as unsound. Whether `solid_measure` should
+  defeat the cache, and what that costs on a real cowl, is OQ-DES-CW27 in
+  [cowl.md](cowl.md#open-questions).
 
 ### 6.2 Conditioning: the row-nudge probe, and what it can establish
 
@@ -1076,6 +1092,23 @@ ribs are what bridge the buttress slots. Fuse the tools into one before cutting,
 operation's own postcondition — §9's rib-residue and partition checks — rather than the
 plausibility of the result.
 
+**The ring break now has a reproduction that costs 0.1 s instead of 4 446 s, 2026-10-06.** The
+failure in §7.1 was characterized on a real `tail_shell` at `U` = 3.0. It reproduces on a 20 mm
+tube with a 0.6 mm wall and two opposing partial-height slots: the wall stays one solid, joined
+above and below the slots, and its section at the slot station comes apart into two arcs — which
+is the configuration `wall_thickness`'s annulus guard exists for, since the two loops are beside
+each other rather than nested and the distance between them is the gap across the break, not a
+thickness. `tests/test_geometry_bridge_cowl_checks.py` holds it.
+
+**Two distinctions that reproduction pins down, both easy to get wrong.** The slots must be
+*partial* height: full-height slots split the tube into two separate solids, and `wall_thickness`
+loops over `wall.Solids` and measures each one on its own, so each arc is a single-loop strip and
+reads a correct 0.586 mm with the guard never engaging — the function behaving properly on two
+pieces, not the defect. And the guard only engages at **two or more** loops, so a ring broken by a
+*single* slot leaves one C-shaped loop, takes the strip estimator, and also reads correctly. The
+defect needs one solid whose section has two non-nested loops, which is what the real cowl
+presented and what the synthetic case now presents for a thousandth of the cost.
+
 ---
 
 ## 8. Deliberately not specified here
@@ -1302,6 +1335,79 @@ coplanar merge, not the near-tangent 3-D case this module otherwise avoids) back
 faces as the true boundary has, before extending any of them. Verified end to end after all
 three fixes: both cowls build a valid, exactly symmetric wall at every one of the eight swept
 `U` values, 16 of 16.
+
+### 9.9 Measured, the full soak corpus
+
+**28 builds, 11.6 hours, both kinds, `U` in {0.5, 1.0, 1.5, 2.0, 3.0, 4.0}, with five repeats
+at `U` = 1.0 and `U` = 4.0 on each kind.** Run 2026-10-06 by `soak_cowl_shell.py` (IP-FC-117),
+one build per `freecadcmd` process, judged afterwards by `soak_compare.py` against
+[OQ-ARCH-19](../architecture/freecad_migration.md)'s pairwise criterion. **This replaces the
+corpus of 2026-09-23, which carried no measurements at all** — all 28 of its records were
+`PreconditionFailed`, so every number below is new. Both earlier generations are kept beside it,
+as `soak_results.superseded-2026-10-06.jsonl` and `soak_results.superseded-2026-09-11.jsonl`.
+
+| kind | `U` | wall, mm³ | worst wall error, mm | rib residue, mm³ | partition slip | elapsed, s |
+| --- | --- | --- | --- | --- | --- | --- |
+| nose | 0.5 | 2 407.0057 | 0.0384 | 0.000000 | 1.04e-07 | 88 |
+| nose | 1.0 | 9 710.4721 | 0.0256 | 0.000000 | 8.38e-07 | 106–139 |
+| nose | 1.5 | 21 916.1456 | 0.0271 | 0.000000 | 3.55e-07 | 122 |
+| nose | 2.0 | 39 029.8101 | 0.0234 | 0.000000 | 1.23e-07 | 136 |
+| nose | 3.0 | 87 996.2569 | **0.0067** | 0.000000 | 1.28e-07 | 172 |
+| nose | 4.0 | 156 532.6015 | 0.0495 | 0.000000 | 4.36e-07 | 246–259 |
+| tail | 0.5 | 5 851.3872 | 0.0342 | 0.000000 | 3.64e-06 | 874 |
+| tail | 1.0 | 23 704.2956 | 0.0243 | 0.000000 | **3.66e-04** | 1 209–1 227 |
+| tail | 1.5 | 53 531.0114 | 0.0360 | 0.000000 | 2.44e-07 | 1 424 |
+| tail | 2.0 | 95 633.1602 | 0.0319 | 0.000000 | 2.75e-07 | 2 139 |
+| tail | 3.0 | 215 743.4480 | 0.0534 | 0.000000 | 2.83e-05 | 4 446 |
+| tail | 4.0 | 384 172.2640 | **0.1506** | 0.000000 | 3.20e-07 | 4 861–4 875 |
+
+Every one of the 28 builds returned exactly **one solid, zero open edges in the tessellation, a
+reliable volume, and zero stations with no wall material found**. Volume is `mesh_volume` at the
+fixed `VOLUME_DEFLECTION` = 0.001 mm rung, never `Shape.Volume` (IP-FC-119), at 668 k to 3.71 M
+facets.
+
+**Cross-process reproducibility is exact at all four repeated configurations.** 16 pairs
+compared, 16 identical `canonical_hash` — the screen ended every comparison and nothing reached
+the `XOR / (A · 100U)` and surface-gap thresholds. Since that hash can report "different" about
+parts that agree but never "same" about parts that differ, an equal hash is conclusive. The
+repeated configurations include both kinds' largest case, so this is not a result confined to
+cheap geometry. It neither confirms nor disturbs the separate finding that reproducibility
+breaks down *near a degenerate configuration*: none of the four is near one.
+
+**`worst_wall_error` is not monotone in `U`, on either kind.** The nose runs 0.0384, 0.0256,
+0.0271, 0.0234, 0.0067, 0.0495 and the tail 0.0342, 0.0243, 0.0360, 0.0319, 0.0534, 0.1506 — both
+turn around more than once, and both are worst at `U` = 4.0. So the gap against `WALL_TOL` cannot
+be read as a resolution effect that finer stations would close — refining makes it worse as often
+as better. On the tail, `U` = 3.0 is 2.2 times worse than `U` = 1.0 and `U` = 4.0 is 6.2 times
+worse, both finer constructions than the one they lose to.
+
+**One configuration meets `WALL_TOL`: the nose at `U` = 3.0, at 0.0067 mm against 0.01 mm.** This
+is the first evidence that the construction can reach the acceptance tolerance at all, and it
+falsifies a claim that stood in `cowl_interior.WALL_TOL`'s own note until this run — that the
+tolerance was unmet "at every `U` measured". Corrected there. It is one configuration out of
+twelve, flanked by neighbours at 0.0234 and 0.0495 mm, so it does not change [OQ-DES-CW21]'s
+standing or justify relaxing the constant; what it removes is the belief that the gap is
+uniform.
+
+**`partition_slip` remains unusable as a quality indicator, and this corpus adds a second reason
+why.** §6.1 already records that it moved monotonically *toward* zero as a known defect worsened.
+Here it spans three and a half decades across the corpus with no relation to wall error: its
+largest value, the tail's 3.66e-04 at `U` = 1.0, belongs to that kind's *second best* wall error
+(0.0243 mm), while the tail's worst wall error by a factor of three (0.1506 mm at `U` = 4.0) has
+a slip of 3.20e-07, among the lowest recorded. Read it as a boolean on the partition having
+closed at all, nothing more.
+
+**Measurement cost is now the tail's problem, not the nose's.** Nose builds take 38–117 s to
+build and 50–140 s to measure; the tail takes 727–4 530 s to build against 146–346 s to measure.
+The five tail repeats at `U` = 4.0 are 4 870 s each and are 58 % of the corpus's total wall-clock
+on their own. Any future soak that adds configurations should add them on the nose, or add
+repeats only where a specific pair is in question.
+
+**This supersedes §9.7's `U` = 1 column**, which predates the three fixes in §9.8 and reports a
+different wall for both kinds (9 714.2617 and 23 685.2264 mm³ against 9 710.4721 and
+23 704.2956). §9.7's station counts are refinement stations; the 12 stations this corpus records
+per build are `check_cowl_interior.STATIONS`, the fixed measurement grid, and carry no
+information about the construction.
 
 ---
 

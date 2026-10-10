@@ -42,6 +42,33 @@ def default_is_dynamic(obj):
     return hasattr(obj, 'PropertiesList') or hasattr(obj, 'addProperty')
 
 
+#: How many base-class names a handle reply carries. FreeCAD's deepest relevant chain is
+#: `PrimitivePy, Feature, GeoFeature, DocumentObject, ExtensionContainer, PropertyContainer,
+#: Persistence, BaseClass`, so eight is the real depth and twelve leaves headroom without letting
+#: a pathological hierarchy bloat every reply.
+MAX_BASES = 12
+
+
+def base_names(obj):
+    """The object's class chain, leaf first, as plain names -- **not** just its type name.
+
+    **A leaf type name is not enough to identify what an object is, and assuming it was would have
+    broken the most-used facade.** A `Part::Box` document object reports its type as `PrimitivePy`;
+    `DocumentObject` is four classes up its MRO. Since `DocumentObject` carries 361 of the
+    project's attribute uses -- more than any other type -- a client keying on the leaf name alone
+    would have faceted everything *except* the case that matters most, and done so silently,
+    falling back to the dynamic proxy with no error to notice.
+
+    `object` is dropped because every chain ends there and it identifies nothing.
+    """
+    try:
+        mro = type(obj).__mro__
+    except AttributeError:                                               # noqa: PERF203
+        return []
+    out = [c.__name__ for c in mro if c is not object]
+    return out[:MAX_BASES]
+
+
 class Dispatcher(object):
     """Executes protocol operations against a module table and a handle registry."""
 
@@ -64,7 +91,8 @@ class Dispatcher(object):
             text = repr(obj)[:120]
         except Exception:                                                # noqa: BLE001
             text = '<unreprable>'
-        return {'kind': HANDLE, 'h': hid, 'type': type(obj).__name__, 'repr': text}
+        return {'kind': HANDLE, 'h': hid, 'type': type(obj).__name__, 'repr': text,
+                'bases': base_names(obj)}
 
     def _decode(self, obj):
         return codec.decode_argument(obj, self.registry.resolve)
