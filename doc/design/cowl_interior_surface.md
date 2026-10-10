@@ -560,6 +560,55 @@ That 0.1 mm is a positional tolerance (where a feature sits); wall thickness is 
 and a single spiral-vase perimeter's thickness is exactly where a small absolute change can flip the
 slicer's decision to extrude it at all. That reasoning is unaffected by the corrections above.
 
+### The three convergences, and where the chain breaks
+
+Three convergences run between a candidate surface and a verdict on the part, and **each one hands
+off across a change of quantity**. Written out because the individual facts are recorded above and
+in §6.1 but the chain they form is not, and most of the confusion about this construction — and
+[OQ-DES-CW23](cowl.md#open-questions) in particular — is confusion about which link is which.
+
+| stage | what it measures | criterion | does that quantity converge? |
+| --- | --- | --- | --- |
+| **Pass 1**, `_refine` | the *smooth* fitted surface against the true per-layer erosion, Hausdorff, before any rib | τ = 0.05 mm | **Yes.** Bisection to a floor; reaching the floor is reported, not accepted |
+| **Pass 2**, the post-cut loop | a *prediction* of the finished wall's thinness: slice-to-slice distance between `notched` and the candidate, never the real boolean | τ = 0.05 mm | **Yes**, within `POST_CUT_ROUNDS` = 6 on the one build measured, reaching 0.0430 mm |
+| **Acceptance**, `wall_thickness` | the *real* cut, mirrored wall: a nearest-point minimum from the inner contour to the outer | `WALL_TOL` = 0.01 mm | **No.** Still falling at 3840 inner samples at 17 of 24 stations; the check runs at `AROUND` = 240 |
+| *(candidate)* area-based mean | (outer area − inner area) / mean ring length on the same section | — | **Yes**, to 1e-6 mm from 16000 area points — but a mean cannot see a local thin spot |
+
+Four consequences follow, and they are what make this a design problem rather than a tuning one.
+
+**τ is not `WALL_TOL`, and the gap between them is deliberate.** τ is what the two refinement
+passes stop at; `WALL_TOL` is what the part is held to, five times tighter. A candidate can satisfy
+both passes and still fail acceptance, by construction and not by error — "The tolerance, and why
+it is absolute" above, and the two constants' own notes in `cowl_interior.py`, say why one may be
+as loose as the construction's budget allows while the other is set by what the slicer does with a
+thin perimeter.
+
+**Pass 2 converges a prediction whose disagreement with the real wall is larger than
+`WALL_TOL`.** Measured across all 12 acceptance stations of `tail_shell` at `U` = 3.0, the signed
+prediction-minus-real gap has a mean absolute value of **0.0121 mm — 1.21× `WALL_TOL`** — a maximum
+of 0.0385 mm (3.85×), and exceeds `WALL_TOL` at 5 of the 12. So **no amount of converging pass 2
+can certify the part at 0.01 mm**: the instrument pass 2 uses and the instrument acceptance uses
+disagree by more than the tolerance being claimed. Tightening τ toward `WALL_TOL` would make pass 2
+insert stations chasing a quantity that does not track the one that matters, and station insertion
+is independently measured to move the real wall by about 1/14 of what it moves the prediction.
+
+**The acceptance metric has no settled value to converge to.** This is the decisive link.
+`worst_low` drifts one way — thinner — with sampling, so a reading over `WALL_TOL` does not show
+the wall is that thin, and a reading under it does not show compliance either. `check_cowl_interior`
+prints exactly this, reporting a failure as "`WALL_TOL` compliance is not demonstrated" rather than
+as a settled deviation. At the one station measured both ways the nearest-point minimum reads
+0.0534 mm from nominal while the converged area-based mean reads 0.0033 mm — **inside tolerance** —
+a disagreement of 16×, between two measures of the same wall at the same station.
+
+**Neither available measure is sound at this tolerance**, which is
+[IP-FC-151](../implementation/freecad_migration.md#work-items) and is unstarted: the nearest-point
+minimum does not settle, the local-normal variant oscillates by up to 0.0139 mm per doubling
+because the tangent estimate at a crease is itself unstable, the converged area mean is blind to
+the local thin spot the slicer actually responds to, and the morphological candidate is refuted on
+real geometry (`Face.makeOffset2D` did not finish in six minutes on a real section). **Until that
+item lands, no figure in this document should be read as a settled deviation from `WALL_TOL`** —
+including §9.9's whole corpus, which is built on `worst_low`.
+
 ---
 
 ## 6. Verification
@@ -1381,13 +1430,19 @@ be read as a resolution effect that finer stations would close — refining make
 as better. On the tail, `U` = 3.0 is 2.2 times worse than `U` = 1.0 and `U` = 4.0 is 6.2 times
 worse, both finer constructions than the one they lose to.
 
-**One configuration meets `WALL_TOL`: the nose at `U` = 3.0, at 0.0067 mm against 0.01 mm.** This
-is the first evidence that the construction can reach the acceptance tolerance at all, and it
-falsifies a claim that stood in `cowl_interior.WALL_TOL`'s own note until this run — that the
-tolerance was unmet "at every `U` measured". Corrected there. It is one configuration out of
-twelve, flanked by neighbours at 0.0234 and 0.0495 mm, so it does not change [OQ-DES-CW21]'s
-standing or justify relaxing the constant; what it removes is the belief that the gap is
-uniform.
+**One configuration reads inside `WALL_TOL` — the nose at `U` = 3.0, at 0.0067 mm against 0.01 mm
+— and that is not evidence of compliance.** It falsifies a claim that stood in
+`cowl_interior.WALL_TOL`'s own note until this run, that the tolerance was unmet "at every `U`
+measured", and the note is corrected. But the first correction overstated the other way, calling
+this reading evidence that the construction can reach the tolerance, and **§6.1 is why it is not**:
+`worst_wall_error` is `max(0, t - worst_low)`, and `worst_low` is a nearest-point minimum that does
+not converge on these sections — still falling at 3840 inner samples at 17 of 24 stations, while
+this check samples `AROUND` = 240. The drift runs one way, toward thinner, so a reading *under* the
+tolerance at 240 samples is a lower bound that would be expected to rise past 0.01 mm under finer
+sampling, exactly as every other station's did. Read the whole column as "`WALL_TOL` compliance is
+not demonstrated", which is what `check_cowl_interior` itself prints, and not as twelve verdicts of
+which one passed. What the non-monotonicity above removes is the belief that the gap is uniform;
+what §6.1 removes is the belief that any of these figures is a settled deviation.
 
 **`partition_slip` remains unusable as a quality indicator, and this corpus adds a second reason
 why.** §6.1 already records that it moved monotonically *toward* zero as a known defect worsened.
