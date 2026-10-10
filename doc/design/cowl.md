@@ -782,6 +782,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW23 | `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled? | Not blocking (the external `wall_thickness()` check already catches this case) |
 | OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; the measurement has now been taken and no flagged minimum lands on a cut floor, so whether the metric is kept at all is the remaining decision | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
 | OQ-DES-CW26 | The rib cut can break the wall's cross-section ring over 93 mm while passing every existing check — one valid solid, healthy partition identity, mirror sewing closed, no exception — and the existing thickness check misreports the break as a 0.36 mm thickness. Reproduced and characterized; two checks are now identified that catch it, and which to adopt is the decision | **Blocking** for any claim that a completed `tail_shell` build's wall is verified |
+| OQ-DES-CW27 | FreeCAD caches a shape's triangulation, so `solid_measure.converged_volume` run a second time on the same shape object converges at once on the cached mesh and reports the coarsest deflection as the converged one; with `tol` = 0 the identical call raises and then succeeds. The volume returned is still correct — only the convergence claim is not. Whether to defeat the cache, and at what cost on a real cowl, is the decision | Not blocking (the production path measures at one fixed deflection on a freshly built shape, so no shipped number is affected) |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -3387,6 +3388,98 @@ and the 21-case design-input sweep has never produced a construction failure. If
 reached, alternative 2 is cheap insurance on a class of failure rather than a guard on a live defect;
 that does not change the recommendation, because the check costs a second a station and needs no
 calibration, but it does change how urgent alternative 3 is.
+
+### OQ-DES-CW27 — A shape's triangulation is cached, so a repeated convergence run converges on nothing
+
+**What this is about.** Measuring the volume of a solid built from B-spline surfaces cannot be done
+by asking the kernel for it: `Shape.Volume` is wrong by 0.16 to 0.24% on this project's cowl
+solids, the same order as the differences the reproducibility work exists to detect. So volume is
+measured by *tessellating* the solid — approximating it with flat triangles — and summing the
+triangles. How finely it is tessellated is set by a **deflection**: the maximum distance, in
+millimetres, between the true curved surface and the flat triangle standing in for it. A smaller
+deflection means more, smaller triangles and a more accurate volume.
+
+Because no single deflection is known in advance to be fine enough, `solid_measure.converged_volume`
+tessellates the same solid repeatedly at successively smaller deflections — 0.02, 0.005, 0.001,
+0.00025 mm — and stops when two successive volumes agree to within a tolerance. That agreement is
+the evidence the answer no longer depends on the discretization. It returns the volume, the
+deflection it stopped at, and the triangle count.
+
+**The problem.** FreeCAD caches a shape's triangulation on the shape object. `tessellate(d)` does
+not re-mesh a shape that has already been meshed; it returns the mesh it already has, whatever `d`
+is asked for. Measured 2026-10-06 on a cylinder of radius 5 mm and height 10 mm:
+
+| deflection requested | facets, fresh shape | facets, same shape asked again |
+| --- | --- | --- |
+| 0.02 | 500 | 5 024 |
+| 0.005 | 1 672 | 5 024 |
+| 0.001 | 5 024 | 5 024 |
+
+The first run of `converged_volume` on a given shape is therefore sound: it walks coarse to fine,
+so each request really is finer than what is cached, and the mesh genuinely refines. **A second run
+on that same shape object is not.** Every deflection returns the same cached mesh, so the first two
+volumes compared are bit-identical, convergence is declared at once, and the function reports
+`DEFLECTIONS[1]` = 0.005 mm — the *coarsest* comparison it made — as the deflection at which the
+measurement converged, when the mesh it actually measured is the 0.001 mm one from the earlier run.
+
+Measured on the same cylinder: call one returns 785.394893 mm³ at a reported deflection of 0.001 mm
+and 5 024 triangles; call two returns 785.394893 mm³ at a reported 0.005 mm and 5 024 triangles.
+The sharpest form of it is with `tol` = 0, which no mesh can ever satisfy: the first call raises
+`NotConverged` and the identical second call succeeds.
+
+**What is and is not wrong.** The volume returned is the finest mesh's and is therefore the right
+number — the error is in the reported deflection and in the *claim* that a convergence was
+observed. Nothing shipped is affected: `soak_cowl_shell.py`, the only production caller that
+measures volume, uses `mesh_volume` at one fixed deflection on a freshly built shape, and
+`converged_volume` was measured and rejected for that soak in September on cost grounds (787 s for
+the cheapest case). The exposure is to any future caller that measures the same shape twice, to
+`converged_difference`, which walks deflections over two shapes the same way, and to
+`check_solid_measure.py`, whose convergence assertions are only valid in the order they happen to
+run.
+
+**How it was found.** Porting `check_solid_measure.py` to pytest under IP-GB-20. The ported test
+asserted the `tol` = 0 refusal twice in a loop on one cylinder, to check that a remote exception is
+the same class each time, and the second call did not raise.
+
+**Alternatives**
+
+1. **Document it and require a fresh shape.** Add the caution to the measurement-cautions list,
+   state in `converged_volume`'s docstring that it must be given a shape that has not been
+   tessellated, and have the tests build a fresh shape per convergence run. *Benefits:* no code
+   change, no cost on any build, and the constraint is honest about what the kernel does.
+   *Drawbacks:* a silent wrong answer remains one mistake away, and the mistake is invisible —
+   nothing raises, and the returned volume looks right. *Prerequisites:* none.
+2. **Copy the shape before each deflection.** `Shape.copy()` yields an untessellated shape, so each
+   deflection would mesh from scratch. *Benefits:* `converged_volume` becomes correct for any
+   caller with no constraint to remember. *Drawbacks:* a copy of a real cowl wall is not free, and
+   this would add one copy per deflection rung to a measurement already rejected for the soak on
+   cost; the copy cost on a 2 464-face wall has not been measured. *Prerequisites:* measure
+   `Shape.copy()` on a real `tail_shell` wall at `U` = 1 and 4.
+3. **Detect the cache instead of defeating it.** Compare the triangle count against the previous
+   rung and raise if it did not change when a finer deflection was requested. *Benefits:* cheap —
+   one integer comparison — and turns a silent wrong claim into a named failure; it also catches
+   the genuine case where a shape is already as fine as the kernel will make it. *Drawbacks:* makes
+   `converged_volume` refuse a reused shape rather than measure it, so a caller still has to supply
+   a fresh one; it reports the problem without solving it. *Prerequisites:* none.
+4. **Ask FreeCAD to drop the cached mesh.** If a supported call clears a shape's triangulation,
+   calling it per rung would be cheaper than a copy. *Benefits:* correctness without the copy cost.
+   *Drawbacks:* no such call is known to be exposed in FreeCAD's Python API; it may not exist.
+   *Prerequisites:* establish whether one exists in 1.1.3.
+
+**Recommendation**
+
+**Alternative 3, with alternative 1's documentation alongside it.** The cheapest change that
+removes the silent failure is to make the function refuse what it cannot measure: a triangle count
+that does not rise when the deflection falls is exactly the signature of the cache, costs one
+comparison to detect, and converts a wrong convergence claim into a named error. Pairing it with
+the documented constraint means a caller is told what to do, not only that something is wrong.
+
+Alternative 2 is the only one that makes the function correct for any caller, and it is the right
+answer if `Shape.copy()` turns out to be cheap on a real wall — but that is unmeasured, and this
+function was already rejected for the soak on cost, so adding per-rung copies without measuring
+them first would be the wrong order. Alternative 4 would dominate 2 if the call exists; nobody has
+checked. Alternative 1 alone is not enough, because the failure is silent and the returned volume
+looks correct.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

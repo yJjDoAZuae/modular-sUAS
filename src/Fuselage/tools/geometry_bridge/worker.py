@@ -47,6 +47,8 @@ MODULE_NAMES = (
     ('check_cowl_interior', 'check_cowl_interior'),
     ('cowl_tree', 'cowl_tree'),
     ('corner_common', 'corner_common'),
+    ('solid_measure', 'solid_measure'),
+    ('mesh_stats', 'mesh_stats'),
 )
 
 

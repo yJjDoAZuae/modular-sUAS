@@ -14,11 +14,26 @@ is the source of this plan's test items; each one names the measured hazard it e
 
 **Last updated:** 2026-10-06
 
-**Progress.** The library is working end to end. 138 tests: 92 in the loopback tier with no vendor
-present, 17 on the line protocol and liveness against a fake worker subprocess, and 29 against real
-FreeCAD. The whole project suite is 1011 passing, up from 873, with nothing broken. Measured against
-the real vendor: 29 bridge cases in 5.16 s, a warm method call at one round trip, a handle operation
-under 5 ms, and a method call allocating no handle.
+**Progress.** The library is working end to end, the typed facades are written, and it now has two
+real consumers. 249 tests: 97 in the loopback tier with no vendor present, 17 on the line protocol
+and liveness against a fake worker subprocess, 30 against real FreeCAD, 51 on the facades, 30 on
+`solid_measure` and 21 on `check_cowl_interior`'s measurement functions. The whole project suite is
+**1137 passing**, up from 873 when this plan opened, with nothing broken. Measured against the real
+vendor: a warm method call at one round trip, a handle operation under 5 ms, a method call
+allocating no handle, a faceted read costing the same single round trip as the proxy, and a build
+reused across assertions at 9x the cost of re-reading it.
+
+**The two consumers each found something the scripts they replaced did not report.** Porting
+`check_solid_measure.py` surfaced that FreeCAD caches a shape's triangulation, so a repeated
+convergence run converges on nothing and reports the wrong deflection (OQ-DES-CW27, IP-GB-23), and
+that the script's own slanted-face check has never executed — its cutter does not intersect the
+cube, so the fallback branch runs every time. Porting the cowl checks produced a 0.1 s reproduction
+of the OQ-DES-CW26 ring break that previously needed a 4 446 s build.
+
+**Writing the facades changed the protocol.** A handle reply now carries the object's class chain,
+because a leaf type name does not identify a vendor object — a `Part::Box` document object reports
+`PrimitivePy`, and keying facades on that would have unfaceted `DocumentObject`, the most-used type
+of all, silently. Recorded in [§4.10](../architecture/geometry_bridge.md).
 
 ---
 
@@ -41,13 +56,20 @@ under 5 ms, and a method call allocating no handle.
 | IP-GB-13 | done | Implement the worker lifecycle API: session worker, fresh worker, `reset` per vendor, and restart on a handle ceiling | IP-GB-7, IP-GB-10 | [§5.1](../architecture/geometry_bridge.md), [§5.2](../architecture/geometry_bridge.md), [§5.3](../architecture/geometry_bridge.md) |
 | IP-GB-14 | done | Add the pytest fixtures and conftest wiring: `fc`, `fresh_fc`, module fixtures, autouse per-test vendor reset, and one bridge per xdist worker with no module-global state | IP-GB-13 | [§5.2](../architecture/geometry_bridge.md), [§5.4](../architecture/geometry_bridge.md) |
 | IP-GB-15 | done | Implement `LocalTransport` and wire OpenVSP to it through `oml_export.import_vsp()`'s existing discovery | IP-GB-9 | [§3](../architecture/geometry_bridge.md), [§5.2](../architecture/geometry_bridge.md) |
-| IP-GB-16 | todo | Write the typed facades in survey order — `DocumentObject`, `Vector`, `Document`, `BoundBox`, `Placement` — then one shared `Shape` with thin `Face`/`Edge`/`Vertex`/`Wire` extensions | IP-GB-11 | [§4.10](../architecture/geometry_bridge.md) |
-| IP-GB-17 | todo | Add the facade drift test: every member a facade declares exists on the live vendor object, and a facade call reaches the same member the proxy would | IP-GB-16 | [§4.10](../architecture/geometry_bridge.md), [§5.6](../architecture/geometry_bridge.md) |
-| IP-GB-18 | todo | Add the performance-budget tests: a warm method call is one round trip, a handle op stays under 5 ms, `project` over N elements is one trip, a method call allocates no handle | IP-GB-12, IP-GB-14 | [§7](../architecture/geometry_bridge.md), [§1](../architecture/geometry_bridge.md) |
-| IP-GB-19 | todo | Measure the release delay for a proxy held in a reference cycle, the one residual limit the design records as unmeasured | IP-GB-10 | [§4.6](../architecture/geometry_bridge.md) |
-| IP-GB-20 | todo | Port `check_solid_measure.py`'s four checks to bridge tests as the first real consumer, keeping the script until the port is shown equivalent | IP-GB-14, IP-GB-16 | [§6.1](../architecture/geometry_bridge.md), [general.md](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
-| IP-GB-21 | todo | Give `cowl_interior.py`'s private helpers named bridge tests — `_check_slope`, `_Polyline`, `_thin_stations`, `station_floor`, `section_regions` — the assertions that today are printed lines inside `check_cowl_interior.py` | IP-GB-20 | [§6.1](../architecture/geometry_bridge.md), [cowl_interior_surface.md §6](../design/cowl_interior_surface.md) |
+| IP-GB-16 | done | Write the typed facades in survey order — `DocumentObject`, `Vector`, `Document`, `BoundBox`, `Placement` — then one shared `Shape` with thin `Face`/`Edge`/`Vertex`/`Wire` extensions | IP-GB-11 | [§4.10](../architecture/geometry_bridge.md) |
+| IP-GB-17 | done | Add the facade drift test: every member a facade declares exists on the live vendor object, and a facade call reaches the same member the proxy would | IP-GB-16 | [§4.10](../architecture/geometry_bridge.md), [§5.6](../architecture/geometry_bridge.md) |
+| IP-GB-18 | done | Add the performance-budget tests: a warm method call is one round trip, a handle op stays under 5 ms, `project` over N elements is one trip, a method call allocates no handle | IP-GB-12, IP-GB-14 | [§7](../architecture/geometry_bridge.md), [§1](../architecture/geometry_bridge.md) |
+| IP-GB-19 | done | Measure the release delay for a proxy held in a reference cycle, the one residual limit the design records as unmeasured | IP-GB-10 | [§4.6](../architecture/geometry_bridge.md) |
+| IP-GB-20 | done | Port `check_solid_measure.py`'s four checks to bridge tests as the first real consumer, keeping the script until the port is shown equivalent | IP-GB-14, IP-GB-16 | [§6.1](../architecture/geometry_bridge.md), [general.md](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
+| IP-GB-21 | done | Give `cowl_interior.py`'s private helpers named bridge tests — `_check_slope`, `_Polyline`, `_thin_stations`, `station_floor`, `section_regions` — the assertions that today are printed lines inside `check_cowl_interior.py` | IP-GB-20 | [§6.1](../architecture/geometry_bridge.md), [cowl_interior_surface.md §6](../design/cowl_interior_surface.md) |
 | IP-GB-22 | todo | Move the nine `check_*.py` scripts that import no FreeCAD into `tests/` as ordinary pytest tests | — | [§6.1](../architecture/geometry_bridge.md) |
+| IP-GB-23 | blocked (OQ-DES-CW27) | Act on the tessellation-cache finding in `solid_measure.converged_volume` and `converged_difference` | IP-GB-20 | [cowl.md OQ-DES-CW27](../design/cowl.md#open-questions), [cowl_interior_surface.md §6.1](../design/cowl_interior_surface.md) |
+
+> **IP-GB-23 blocked reason:** OQ-DES-CW27 asks whether `converged_volume` should defeat FreeCAD's
+> triangulation cache by copying the shape per rung, merely detect the cache and refuse, or only
+> document the constraint. The three differ in what they cost on a real cowl wall, and one of them
+> needs a measurement that has not been taken. The behaviour is already pinned by tests and
+> recorded in the measurement cautions, so nothing is silent in the meantime.
 
 Every item above carries its own tests, per the TDD rule in
 [general.md](../guidelines/general.md#test-driven-development-tdd). The test items listed

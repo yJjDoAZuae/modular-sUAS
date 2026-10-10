@@ -38,7 +38,7 @@ See doc/architecture/geometry_bridge.md section 4.3.
 """
 
 #: The proxy's own attributes. Assignments to these are local; everything else is forwarded.
-_INTERNAL = frozenset(('_session', '_h', '_type', '_repr'))
+_INTERNAL = frozenset(('_session', '_h', '_type', '_repr', '_bases'))
 
 #: Arithmetic and comparison dunders forwarded to the vendor object, as an allowlist rather than a
 #: catch-all. `__eq__` and `__ne__` are included so a comparison means what the vendor means.
@@ -58,13 +58,14 @@ _NOT_IMPLEMENTED_TYPE = 'NotImplementedType'
 class Remote(object):
     """A handle to an object living on the other side of the transport."""
 
-    __slots__ = ('_session', '_h', '_type', '_repr')
+    __slots__ = ('_session', '_h', '_type', '_repr', '_bases')
 
-    def __init__(self, session, h, type_name, text=''):
+    def __init__(self, session, h, type_name, text='', bases=()):
         object.__setattr__(self, '_session', session)
         object.__setattr__(self, '_h', h)
         object.__setattr__(self, '_type', type_name)
         object.__setattr__(self, '_repr', text)
+        object.__setattr__(self, '_bases', tuple(bases))
 
     # -- identity and display
 
@@ -80,6 +81,20 @@ class Remote(object):
     def remote_handle(self):
         """The handle id. Exposed for diagnostics and lifetime tests, not for ordinary use."""
         return self._h
+
+    @property
+    def remote_bases(self):
+        """The vendor-side class chain, leaf first, `object` dropped.
+
+        Needed because a leaf type name does not identify what an object is: a `Part::Box`
+        document object reports `PrimitivePy`, and `DocumentObject` is four classes up. See
+        `ops.base_names`.
+        """
+        return self._bases
+
+    def remote_isinstance(self, *names):
+        """Is any of `names` in this object's class chain? The client-side `isinstance`."""
+        return any(n in self._bases for n in names)
 
     def __bool__(self):
         """Always true: a proxy references a real object. See the module docstring."""

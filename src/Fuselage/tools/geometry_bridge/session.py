@@ -103,7 +103,8 @@ class Session(object):
                 # Drop the handle rather than holding a proxy to NotImplemented.
                 self._queue_release(reply['h'])
                 return NotImplemented
-            return Remote(self, reply['h'], reply.get('type', '?'), reply.get('repr', ''))
+            return Remote(self, reply['h'], reply.get('type', '?'), reply.get('repr', ''),
+                          reply.get('bases') or ())
         if kind == LIST:
             return [self._wrap(x) for x in reply.get('items', [])]
         if kind == CALLABLE:
@@ -268,3 +269,15 @@ class Session(object):
             self.transport.close()
         finally:
             self._closed = True
+
+    def __enter__(self):
+        """A session owns a subprocess, so `with` is the right way to hold one.
+
+        Added because every caller outside the pytest fixtures was writing the same try/finally,
+        and a worker left running is the orphan hazard §5.5 exists for.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False

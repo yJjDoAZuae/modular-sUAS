@@ -120,6 +120,10 @@ PRE_REGISTERED = (
     # OCCT, surfaced through FreeCAD
     ('CADKernelError', ('CADKernelError', 'Exception')),
     ('OCCError', ('OCCError', 'Exception')),
+    # solid_measure's guards. Both are preconditions of a *measurement* rather than geometry
+    # faults, and a test asserting one must be able to import it before it has ever fired.
+    ('NotConverged', ('NotConverged', 'Exception')),
+    ('TopologyMismatch', ('TopologyMismatch', 'Exception')),
 )
 
 _CACHE = {'StaleHandle': StaleHandle}

@@ -267,6 +267,50 @@ class TestPerformanceBudget:
         per_call = (time.time() - started) / 50.0
         assert per_call < 5.0e-3, '%.2f ms per handle operation' % (per_call * 1000.0)
 
+    def test_one_build_serves_many_assertions(self, fc, Part):
+        """**The measurement that answers whether the boundary costs test efficiency: it does
+        not.**
+
+        The concern this design was challenged on is that a shape cannot cross the boundary, so a
+        test would have to rebuild geometry for every assertion. It does not: a handle addresses
+        the shape, so one build serves any number of reads. Asserted as a ratio, so it measures the
+        property rather than this machine.
+
+        **The build has to be a boolean, not a primitive.** Measured 2026-10-06: `makeBox` plus a
+        volume read is 1.3 ms and a bare read is 1.15 ms, a ratio of only 1.2 -- because a box
+        costs the kernel nothing and both figures are just round-trip time. That would make the
+        test measure the transport and call it a reuse advantage. A sphere-minus-box boolean costs
+        10.8 ms, so the ratio there is about 9 and reflects real kernel work, which is what the
+        claim is about. The prototype measured 16.2x on a 5 ms shape and six orders of magnitude on
+        a 990 s cowl.
+        """
+        import time
+
+        def build():
+            s = Part.makeSphere(10.0).cut(Part.makeBox(8.0, 8.0, 8.0))
+            s.Volume                          # force the kernel to finish the shape
+            return s
+
+        build()                               # warm the callable cache and the kernel
+        started = time.time()
+        for _ in range(5):
+            build()
+        per_build = (time.time() - started) / 5.0
+
+        shape = build()
+        shape.Volume
+        started = time.time()
+        for _ in range(20):
+            shape.Volume
+        per_read = (time.time() - started) / 20.0
+
+        assert per_read < per_build, (
+            'a read (%.3f ms) must be cheaper than a build (%.3f ms), or holding the shape buys '
+            'nothing' % (per_read * 1000.0, per_build * 1000.0))
+        assert per_build / per_read > 4.0, (
+            'reuse advantage only %.1fx (build %.3f ms, read %.3f ms)'
+            % (per_build / per_read, per_build * 1000.0, per_read * 1000.0))
+
 
 class TestFreshWorker:
 

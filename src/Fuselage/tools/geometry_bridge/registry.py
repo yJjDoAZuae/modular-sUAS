@@ -43,6 +43,15 @@ class Registry(object):
             self._high_water = len(self._held)
         return self._issued
 
+    def is_live(self, hid):
+        """Is `hid` currently held? For observability -- a lifetime test asking without resolving.
+
+        Separate from `resolve` because resolving raises on a released handle, which is right for
+        a caller that meant to use the object and useless for one asking whether it is still
+        there.
+        """
+        return hid in self._held
+
     def resolve(self, hid):
         """The live object for `hid`, or a named failure saying which kind of mistake this is."""
         try:
