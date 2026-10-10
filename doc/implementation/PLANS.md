@@ -13,6 +13,7 @@ and the `/impl` skill for the plan format.
 | [freecad_migration.md](freecad_migration.md) | Porting the generators to FreeCAD and the capabilities that port enables — the nine use cases. Roadmap Phases 3–7. | Active |
 | [test_coverage.md](test_coverage.md) | Retrofitting real unit/integration test coverage across both interpreter tiers (`tests/` pytest and `freecad/check_*.py`); closes the standing gap that verification has been ad hoc and uncommitted. | Active |
 | [geometry_bridge.md](geometry_bridge.md) | The adaptation library that lets `pytest` drive FreeCAD and OpenVSP across a process boundary, so the project's Python version is free of both vendors' build choices. Resolves OQ-ARCH-22. | Active |
+| [wall_thickness_measure.md](wall_thickness_measure.md) | Settle by measurement whether the finished cowl wall meets `WALL_TOL`, and build the instrument that can say so — no measure available today both converges and sees a local thin spot. Supersedes IP-FC-151. | Active |
 
 Status values: `Draft`, `Active`, `Complete`, `Superseded`.
 
@@ -29,6 +30,13 @@ New work items in either other plan are expected to carry their own test sub-ite
 TDD rule in [general.md](../guidelines/general.md#test-driven-development-tdd) rather than
 deferring to this plan — `test_coverage.md` exists to pay down the *existing* backlog, not
 to be where future work's tests live.
+
+**`wall_thickness_measure.md` is a measurement plan, and two design documents are waiting on its
+output rather than the reverse.** It supersedes `freecad_migration.md`'s IP-FC-151, and
+OQ-DES-CW23 and OQ-DES-CW26 cannot be decided on present evidence because the instrument behind
+every thinness figure in the project does not converge. It depends on `geometry_bridge.md` only
+for finished items, and it requires no cowl build: the 2026-10-06 soak saved all 28 finished walls
+as BREP, so real geometry is re-measurable from file.
 
 **`geometry_bridge.md` changes where new geometry tests go, so it interacts with
 `test_coverage.md` without depending on it.** OQ-GB-2 made a new geometry check a bridge-tier

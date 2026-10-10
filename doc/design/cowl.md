@@ -2877,8 +2877,8 @@ passes.
 
 **Resolved, 2026-09-25: alternative 2.** The cowl's interior wall (nominal `t` =
 `cowl_n_perimeters * extrusion_width`, 0.6 mm at the sheet's current values, held to an absolute
-0.05 mm tolerance — [cowl_interior_surface.md §5](
-cowl_interior_surface.md#5-the-refinement-criterion)) was found reading thinner than tolerance at
+0.05 mm tolerance — [cowl_interior_surface.md §5](cowl_interior_surface.md#5-the-refinement-criterion))
+was found reading thinner than tolerance at
 the largest swept sizes: `tail_shell` `U` = 3.0 (0.053 mm thin) and `U` = 4.0 (0.150 mm thin), and
 `nose_cowl_shell` `U` = 4.0 (0.052 mm thin), all at stations inside the tail's shallow-angle
 (30°) diagonal buttress notches. Five direct measurements (full evidence and build-by-build
@@ -2976,11 +2976,74 @@ conditions on starting the work.
 
 ### OQ-DES-CW23 — `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut; how should the resulting small residual gap against the external check be handled?
 
-`cavity()`'s second convergence pass ([OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u--resolved-2026-09-25))
-measures the finished, rib-cut wall by slicing `notched` (the buttress-cut symmetry cell) at each
-candidate station and measuring the distance from that slice to the candidate interior surface's
-own slice at the same station — never by actually performing `shell_solid()`'s real boolean cut
-(`notched.cut(inside)`) and measuring the result. This was a deliberate choice: cutting a second,
+**Which convergence this is about, because `cavity()` converges twice and only the second pass is
+in question.** The two run against different shapes and answer different questions.
+`cowl_interior.py` calls them section 5's first and second pass, after
+[cowl_interior_surface.md §5](cowl_interior_surface.md), which is the design authority for both:
+
+- **Pass 1 — `_refine`.** Converges the *smooth* candidate interior surface against the true
+  erosion, before any rib reaches it, by bisecting station intervals until the fit is within
+  `TAU` = 0.05 mm, or raising `Unconverged` if it reaches the interval floor first.
+- **Pass 2 — the post-cut loop** ([OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u--resolved-2026-09-25)
+  is where it came from). Converges the *finished, rib-cut* wall. After the rib cut it re-measures
+  that wall on an independent grid, and wherever a point reads more than `TAU` thinner than
+  nominal it inserts a station midway between the two bracketing rows and re-cuts. Each such
+  iteration is a **round**, bounded by `POST_CUT_ROUNDS` = 6, after which a build that has not
+  converged raises `Unconverged` rather than shipping a wall this pass has already measured as
+  thin.
+
+Pass 1 converging does not imply pass 2 will: the rib cut removes measurably more material than
+the smooth offset predicts near the shallow-angle end of this construction's notch angles, so the
+finished wall can read thin at a station the smooth surface already passed. That is why pass 2
+exists at all. **Everywhere below, "converged", "unconverged" and "round" mean pass 2.**
+
+**What each convergence settles, and why converging one does not settle another.** The full chain
+is [cowl_interior_surface.md §5, "The three convergences, and where the chain breaks"](cowl_interior_surface.md#the-three-convergences-and-where-the-chain-breaks),
+which is the authority. In short, every stage hands off across a change of quantity:
+
+| stage | measures | criterion | converges? |
+| --- | --- | --- | --- |
+| Pass 1 | the smooth fitted surface against the true erosion | `TAU` = 0.05 mm | yes |
+| Pass 2 | a *prediction* of the finished wall's thinness | `TAU` = 0.05 mm | yes — 0.0430 mm after six rounds |
+| Acceptance | the *real* cut wall, by nearest-point minimum | `WALL_TOL` = 0.01 mm | **no** — still falling at 3840 samples; the check runs at 240 |
+
+Three things that table makes concrete, each needed to read the argument below:
+
+**`TAU` is not the acceptance tolerance.** It is the criterion both refinement passes stop at; the
+part is held to `WALL_TOL`, five times tighter. A candidate can satisfy both passes and still fail
+acceptance, by design rather than by error.
+
+**Pass 2's prediction disagrees with the real wall by more than `WALL_TOL`.** Across the 12
+stations measured below, the signed gap has a mean absolute value of 0.0121 mm — 1.21× `WALL_TOL` —
+a maximum of 0.0385 mm, and exceeds `WALL_TOL` at 5 of the 12. So **no amount of converging pass 2
+can certify the part at 0.01 mm**, independently of everything else in this item: the two
+instruments disagree by more than the quantity being claimed.
+
+**The acceptance metric does not converge, so there is no finer tolerance to reach.** `worst_low`
+drifts one way, toward thinner, with sampling. A reading over `WALL_TOL` therefore does not show
+the wall is that thin, and a reading under it does not show compliance;
+`check_cowl_interior` prints exactly that, reporting a failure as "`WALL_TOL` compliance is not
+demonstrated". At the station this item is about, the nearest-point minimum reads 0.0534 mm from
+nominal while the one measure that does converge, the area-based mean, reads 0.0033 mm — *inside*
+tolerance — a 16× disagreement between two measures of the same wall at the same place.
+[IP-FC-151](../implementation/freecad_migration.md#work-items) exists because neither measure is
+sound at this tolerance, and it is unstarted.
+
+**So the answer to "did the convergence simply not go fine enough" is no**, on four independent
+grounds: the discrepancy is already complete at round 0, before any refinement; station insertion
+moves the real wall by roughly 1/14 of what it moves the prediction; the prediction-to-real
+disagreement exceeds the tolerance being certified; and the gated quantity has no settled value for
+a tighter criterion to converge onto. Each of those is measured below or in §6.1, not inferred.
+
+Finally, **this subsystem uses "convergence" in a fourth, unrelated sense**:
+`solid_measure.converged_volume` means a mesh volume settling as the tessellation deflection is
+refined ([OQ-DES-CW27](#oq-des-cw27--a-shapes-triangulation-is-cached-so-a-repeated-convergence-run-converges-on-nothing)).
+It has nothing to do with any pass here.
+
+**The problem.** Pass 2 measures the finished, rib-cut wall by slicing `notched` (the buttress-cut
+symmetry cell) at each candidate station and measuring the distance from that slice to the
+candidate interior surface's own slice at the same station — never by actually performing
+`shell_solid()`'s real boolean cut (`notched.cut(inside)`) and measuring the result. This was a deliberate choice: cutting a second,
 independent copy of the candidate every round repeats the "two shapes each independently built,
 then a boolean between them" mistake `shell_solid()`'s own docstring already records three
 instances of, and a NURBS-solid boolean at this scale is itself unreliable enough that the
@@ -3001,16 +3064,24 @@ locating it explicitly on the finished, mirrored wall, sits at `x` = 134.319 mm,
 No plausible tolerance shrink would ever have excluded or included a point that far away; the
 hypothesis is refuted by this measurement, not merely unconfirmed.
 
-**The real mechanism, established by the same round-0 measurement this refutation used:** even a
-completely unconverged, round-0 candidate (no post-cut refinement at all) already shows the
-discrepancy in full, at that same station. `cavity()`'s own internal, distance-based check on that
-candidate reads 0.5851 mm (comfortably clear of the 0.6 mm nominal, tolerance 0.05 mm), but
-replaying `shell_solid()`'s real downstream pipeline on the identical candidate (`_extend_across_cell`,
-`notched.cut(inside)`, `mirror_across_cell`) and measuring the actual result with the real, external
-`wall_thickness()` check reads 0.5466 mm — thin by 0.0534 mm, matching the 6-round converged build's
-own final external reading (0.0534 mm) almost exactly, and matching the very first historical
-reading (0.0531 mm) at the start of this whole investigation. Since the discrepancy is fully present
-before any convergence or re-scanning happens, [OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow--resolved-2026-09-27)'s
+**The real mechanism, established by the same round-0 measurement this refutation used:** a
+**round-0 candidate** already shows the discrepancy in full, at that same station. A round-0
+candidate is one that **pass 1 has fully converged and pass 2 has not yet changed** — zero stations
+inserted, zero re-cuts. Round 0 is pass 2's own first round, the one that scans every patch in full
+before any insertion is made, so measuring "at round 0" means measuring the candidate pass 1
+handed over. It is not an unconverged surface in any general sense; it is unconverged only with
+respect to pass 2, which is the pass whose prediction is in question.
+
+`cavity()`'s own internal, distance-based check on that candidate reads 0.5851 mm — 0.0149 mm
+thinner than the 0.6 mm nominal, so comfortably inside pass 2's `TAU` = 0.05 mm criterion and
+nothing pass 2 would act on. But replaying `shell_solid()`'s real downstream pipeline on the
+identical candidate (`_extend_across_cell`, `notched.cut(inside)`, `mirror_across_cell`) and
+measuring the actual result with the real, external `wall_thickness()` check reads 0.5466 mm —
+thin by 0.0534 mm. **That fails `TAU` and is over five times `WALL_TOL`**, the 0.01 mm the finished
+part is actually held to. It matches almost exactly the final external reading of a build that ran
+all six rounds (0.0534 mm), and the very first historical reading (0.0531 mm) at the start of this
+whole investigation. Since the discrepancy is fully present
+before pass 2 has inserted a single station, [OQ-DES-CW22](#oq-des-cw22--the-post-cut-refinement-loops-per-round-re-scan-makes-real-convergence-unaffordably-slow--resolved-2026-09-27)'s
 windowed re-scan does not explain it and cannot close it by tuning. The worst point's own location
 (`y` = 78.688 mm, on the same side of the cell as the un-mirrored original geometry, not the
 reflected copy) also makes the mirror step an unlikely contributor — the gap most plausibly comes
@@ -3048,7 +3119,16 @@ prediction reports and only weakly coupled to what the real boolean cut actually
 exactly why this item's own history shows the internal, predicted reading moving substantially
 (0.0083 mm at the old, wrong-reference implementation, to 0.0430 mm after six rounds against the
 right one) while the real, external reading barely moved at all across the entire investigation
-(0.0531 mm to 0.0534 mm). The real check itself cost 53-54 s per round in this test (`notched.cut`
+(0.0531 mm to 0.0534 mm).
+
+**Stated plainly: pass 2 converges on its own prediction, not on the part.** After six rounds its
+predicted thinness is 0.0430 mm, inside `TAU`, so the loop is satisfied and the build ships. The
+real wall at that same station is 0.0534 mm thin, failing `TAU` and five times over `WALL_TOL`. The
+convergence pass 2 reports is genuine; it is convergence of the wrong quantity. That is what this
+item is asking what to do about, and it is why "the 6-round converged build" above means converged
+*by pass 2's prediction* — not a build whose wall was verified.
+
+The real check itself cost 53-54 s per round in this test (`notched.cut`
 plus `mirror_across_cell`), on top of the round's existing 118-150 s refit-and-cut.
 
 **Alternatives:**
@@ -3102,6 +3182,35 @@ non-notch-edge row) produced a clean, linear response with no instability at any
 is ordinary, bounded sensitivity rather than a symptom of a deeper construction problem. That
 deeper problem does exist, but specifically at notch-tool-edge stations, which this station is
 not — see OQ-DES-CW24.
+
+**Alternative 1's premise was undermined by a later measurement, 2026-10-05, and this is recorded
+rather than acted on because the decision is still open.** Alternative 1 rests on the external
+`wall_thickness()` check being the authoritative gate — it says "nothing about this residual makes
+it any less authoritative." Eight days after that was written, the check's own measure was found
+not to converge: `worst_low` is a nearest-point minimum still falling at 3840 inner samples at 17
+of 24 stations, while the check samples 240 ([IP-FC-151](../implementation/freecad_migration.md#work-items),
+§6.1). Three things follow, and none of them is a reason to prefer a different alternative here:
+
+- **The external check remains the only thing that measures the real, finished wall**, so it is
+  still the right gate in the sense alternative 1 means. What it cannot do is *demonstrate
+  compliance* at `WALL_TOL`, in either direction.
+- **The 0.0534 mm deficit this whole item is built on is not a settled number.** It is a
+  nearest-point minimum at 240 samples. The converged area-based mean at the same station reads
+  0.0033 mm from nominal — inside `WALL_TOL`. Whether this station's wall is actually thin is
+  therefore **not established**, which does not change the prediction-versus-reality finding above
+  (the two methods genuinely disagree, by more than the tolerance) but does change what the
+  disagreement is evidence *about*.
+- **This item is now waiting on evidence, not on a decision.** The gap between alternative 1 and
+  the others is not a matter of preference that someone should settle by choosing: it is that no
+  instrument available can say whether the wall complies, so none of the four alternatives can be
+  scored. [wall_thickness_measure.md](../implementation/wall_thickness_measure.md) is the plan that
+  closes it — five pass/fail gates fixed in advance, four candidate measures screened against
+  known ground truth, then all 28 saved soak walls re-measured. Its IP-WTM-13 and IP-WTM-14 exist
+  specifically to re-measure this item's own 12-station gap and report back here.
+
+Nothing above is a new recommendation, and none of it asks for a choice. The measurements that
+ruled out alternatives 3 and 4 are unaffected: both work by station insertion, which is weakly
+coupled to the real result whichever measure reads it.
 
 ### OQ-DES-CW24 — `shell_solid()`'s cut can sever the cell wall, and neither metric built to predict it does so — RESOLVED 2026-10-04
 
