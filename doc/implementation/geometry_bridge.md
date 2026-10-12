@@ -63,6 +63,7 @@ of all, silently. Recorded in [§4.10](../architecture/geometry_bridge.md).
 | IP-GB-20 | done | Port `check_solid_measure.py`'s four checks to bridge tests as the first real consumer, keeping the script until the port is shown equivalent | IP-GB-14, IP-GB-16 | [§6.1](../architecture/geometry_bridge.md), [general.md](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
 | IP-GB-21 | done | Give `cowl_interior.py`'s private helpers named bridge tests — `_check_slope`, `_Polyline`, `_thin_stations`, `station_floor`, `section_regions` — the assertions that today are printed lines inside `check_cowl_interior.py` | IP-GB-20 | [§6.1](../architecture/geometry_bridge.md), [cowl_interior_surface.md §6](../design/cowl_interior_surface.md) |
 | IP-GB-22 | todo | Move the nine `check_*.py` scripts that import no FreeCAD into `tests/` as ordinary pytest tests | — | [§6.1](../architecture/geometry_bridge.md) |
+| IP-GB-24 | todo | Move the §4.10 facade survey into `geometry_bridge` as a reusable tool — live member lists, project-wide use counts, the unambiguous-use ranking and the shape-kin membership matrix — since those figures are quoted in the design doc but were produced by scratch scripts | IP-GB-17 | [§4.10](../architecture/geometry_bridge.md) |
 | IP-GB-23 | blocked (OQ-DES-CW27) | Act on the tessellation-cache finding in `solid_measure.converged_volume` and `converged_difference` | IP-GB-20 | [cowl.md OQ-DES-CW27](../design/cowl.md#open-questions), [cowl_interior_surface.md §6.1](../design/cowl_interior_surface.md) |
 
 > **IP-GB-23 blocked reason:** OQ-DES-CW27 asks whether `converged_volume` should defeat FreeCAD's
@@ -70,6 +71,14 @@ of all, silently. Recorded in [§4.10](../architecture/geometry_bridge.md).
 > document the constraint. The three differ in what they cost on a real cowl wall, and one of them
 > needs a measurement that has not been taken. The behaviour is already pinned by tests and
 > recorded in the measurement cautions, so nothing is silent in the meantime.
+
+> **IP-GB-24 reason:** §4.10's survey numbers — 361 unambiguous uses for `DocumentObject`, five
+> types covering 90.5%, `CenterOfMass` missing from `Vertex` alone, 31% of methods carrying a
+> docstring signature — decided the facade set and are quoted as design authority, but they came
+> from one-off scripts in a scratchpad and cannot be re-derived or regressed. The drift test
+> (IP-GB-17) durably covers "every declared member still exists"; it does not cover "this is still
+> the right set", which is what the survey answers and what a FreeCAD upgrade or a change in how
+> the project uses the API would move.
 
 Every item above carries its own tests, per the TDD rule in
 [general.md](../guidelines/general.md#test-driven-development-tdd). The test items listed

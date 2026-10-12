@@ -105,21 +105,78 @@ TAU = 0.05
 #: read up to 0.69 mm against a 0.6 mm wall for exactly that reason. Only `measured < t - WALL_TOL`
 #: is a failure.
 #:
-#: **Known to be unmet at 11 of the 12 configurations measured, 2026-10-06 -- and met at one.**
-#: The full soak corpus (cowl_interior_surface.md section 9.9: both kinds, `U` in {0.5, 1.0, 1.5,
-#: 2.0, 3.0, 4.0}, 28 builds) puts `worst_wall_error` between 0.0234 and 0.1506 mm everywhere
-#: except the nose at `U` = 3.0, which reads 0.0067 mm and is therefore *inside* this tolerance.
-#: An earlier version of this note said "on both kinds, at every `U` measured", which that one
-#: reading falsifies. It is corrected here rather than left standing, because the exception is
-#: the only direct evidence so far that this construction can reach this tolerance at all.
+#: **This tolerance is unmet on every `tail_shell` configuration measured, by three to five times,
+#: and consistently at every `U`.** Measured 2026-10-10 with an instrument screened against
+#: closed-form ground truth and at a sampling density refined until the reading settled: the worst
+#: station of a tail wall reads 0.0286 mm thin at `U` = 1, 0.0469 mm at `U` = 3 and 0.0347 mm at
+#: `U` = 4, with three or four of twelve stations over this tolerance on each. Every station is a
+#: healthy annulus, so these are thin walls and not severed ones.
 #:
-#: **That single pass does not relax the requirement, because the error is not monotone in `U`.**
-#: The same kind one `U` higher reads 0.0495 mm, five times the tolerance, so 0.0067 mm is not
-#: the start of a trend to extrapolate -- it is one configuration whose error happens to land
-#: low, between neighbours that do not. This constant is the requirement, not a description of
-#: what the construction currently achieves; see cowl_interior_surface.md section 6 and
-#: [OQ-DES-CW21] for the gap and what is being done about it. It is deliberately recorded as the
-#: requirement anyway: a tolerance loosened until the part passes is not a tolerance, and
+#: **The wall is about as thin as section 5's second pass permits, which is a binding criterion
+#: rather than a construction defect.** That pass stops at `TAU` = 0.05 mm and its own predicted
+#: figures -- 0.0481, 0.0430, 0.0393 mm for those three builds -- agree with the refined real
+#: readings to within 0.0039 mm. So the prediction tracks the part closely and the walls come out
+#: just inside the criterion they were converged to. Whether tightening `TAU` toward this tolerance
+#: produces a compliant wall is unmeasured, and it is not free: `TAU` is what both passes stop at,
+#: so tightening it adds fit rows and re-cut rounds to every build.
+#:
+#: **An earlier version of this note reported 0.1514 and 0.2136 mm at `U` = 3 and 4, and a
+#: "regime change" above `U` = 2. Both are withdrawn: they were the measuring instrument.** Those
+#: figures came from discretizing each section at a fixed 1 440 samples, which on a part whose
+#: perimeter scales with `U` is 0.30 mm apart at `U` = 1 and 1.45 mm at `U` = 4. At the worst
+#: station of the `U` = 4 wall the reading falls from 0.2136 mm to 0.00264 mm when the spacing is
+#: fixed instead of the count. cowl_interior_surface.md section 6.6 is the measurement.
+#:
+#: **`check_cowl_interior.wall_thickness` has the same defect and it is not yet fixed.** `AROUND`
+#: is a fixed 240 inner samples, which is 8.7 mm apart on a tail section at `U` = 4 -- fourteen
+#: times this wall -- so its readings above `U` = 2 are not sound in either direction. `check_samples`
+#: in this module is the pattern to follow: an arc-length spacing, `CHECK_ARC` = 0.20 mm.
+#:
+#: Every figure in the soak corpus (cowl_interior_surface.md section 9.9) is `worst_wall_error`,
+#: which is `max(0, t - worst_low)`, and `worst_low` is `check_cowl_interior.wall_thickness`'s
+#: nearest-point minimum -- **a quantity that does not converge on these sections** (IP-FC-151).
+#: Measured 2026-10-05, it was still falling at 3840 inner samples at 17 of 24 stations, drifting
+#: 0.0015 to 0.0079 mm per doubling, because a nearest-point distance at a concave corner crosses
+#: the corner rather than the wall and this section has such a corner at every slot mouth. The
+#: acceptance check samples `AROUND` = 240, sixteen times coarser than that. So each recorded
+#: figure is a lower bound on its own measure's drift, in both directions: a reading over this
+#: tolerance does not show the wall is that thin, and a reading under it does not show the wall
+#: complies -- the nose's 0.0067 mm would be expected to rise past 0.01 mm under finer sampling,
+#: as every other station's did.
+#:
+#: **Measured 2026-10-10 with a converging measure, at a refined sampling density.**
+#: `wall_measure.candidates.corner_excluded_min` was selected against five pre-committed gates
+#: (doc/implementation/wall_thickness_measure.md) and run over every distinct saved soak wall beside
+#: the incumbent, on identical stations, at a fixed 0.125 mm circumferential spacing. **Of the six
+#: `tail_shell` walls where all 12 stations yielded a section, not one meets this tolerance under
+#: either measure**: they read 0.0135, 0.0286, 0.0421, 0.0345, 0.0469 and 0.0347 mm at `U` = 0.5
+#: through 4.0, with three or four stations over tolerance on each. The six `nose_cowl_shell` walls
+#: section at only 5 to 9 of 12 stations on the grid a saved wall permits and are **not judged**; on
+#: the stations that do section they read 0.0011 to 0.0115 mm, five of six inside this tolerance.
+#:
+#: **Where the corner artefact lives is a clean split between the kinds.** The corner-excluded
+#: measure takes its minimum over a subset of the incumbent's samples, so it can never report more
+#: thinness. On the nose the incumbent reads 0.027 to 0.039 mm where it reads 0.001 to 0.012, so the
+#: incumbent's reading there is dominated by distances cutting across concave corners. On the tail
+#: the two agree closely and at `U` = 1.5 and `U` = 3.0 **exactly** -- which, given the subset
+#: relationship, means the incumbent's own worst sample survived the exclusion. The tail's thin spot
+#: is not at a corner and no corner-based fix reaches it.
+#:
+#: **Three earlier versions of this note were wrong, and the third was the worst.** The first said
+#: the tolerance was unmet "at every `U` measured", overstating what the instrument could show. The
+#: second (2026-10-06) pointed at the soak's 0.0067 mm reading for the nose at `U` = 3.0 as evidence
+#: the construction can reach this tolerance; it is a station-placement artefact of the body-based
+#: grid, and on stations that reach the thin region both instruments read **0.0519 mm** there. The
+#: third (2026-10-10) reported 0.1514 and 0.2136 mm at `U` = 3 and 4 and a defect worsening with
+#: `U`; those came from a fixed sample count and are withdrawn, as the paragraph above records.
+#:
+#: The area-based mean still reads 0.0033 mm from nominal at its one reference station and still
+#: cannot be a gate, because a mean cannot see a local thin spot and a local thin spot is what the
+#: slicer responds to.
+#:
+#: This constant is the requirement, not a description of what the construction achieves; see
+#: cowl_interior_surface.md sections 6 and 6.1 and [OQ-DES-CW21]. It is deliberately recorded as
+#: the requirement anyway: a tolerance loosened until the part passes is not a tolerance, and
 #: IP-FC-56 is this project's own precedent for that mistake.
 WALL_TOL = 0.01
 
@@ -299,9 +356,13 @@ FINISHED_PLANE_TOL = 0.5
 #: unaided (sub-millimetre, over a whole 300 mm patch) would multiply this pass's own cost by an
 #: order of magnitude for resolution almost none of the patch needs.
 #: **The edge, not the notch's interior.** `feature_stations` already returns exactly the
-#: axial positions a rib's own ramp starts, ends, or meets the cut plane -- the points a smooth
-#: fitted surface cannot help but approximate least well, the same reason `_patches` treats them
-#: as patch boundaries for the pre-cut fit. The window is centred on each one.
+#: axial positions a rib's own ramp starts, ends, or meets the cut plane. The reason those are
+#: the points this scan has to watch is that the fitted surface does not know they exist: it
+#: follows the un-notched blank (section 4.2's three-dimensional identity), so a rib edge is not
+#: a crease in it and is not a patch boundary for it -- `_patches` is fed `body`'s creases, not
+#: these. The finished wall at a rib edge is therefore a boolean between a smooth surface and a
+#: dilated tool, and a rib edge is exactly where those two have the least in common. The window
+#: is centred on each one.
 #: **Coarsened, 2026-09-27 (OQ-DES-CW22), now that the fit itself is front-loaded with these same
 #: edges.** At 2.0/0.25 this scan alone measured 373-442 points a patch -- more than the rib cut
 #: it was meant to be cheap next to -- and that was before OQ-DES-CW22 found the *uniform* scan
@@ -1914,9 +1975,27 @@ def feature_stations(notches, z_lo, z_hi):
     them. A list rebuilt from the sheet would be a second statement of one design, and the one
     that moved would win silently.
 
-    These are **patch boundaries, not interior knots**: the exterior has a genuine crease
-    there, and demanding continuity across a rib end would smooth away a feature the part
-    really has.
+    **What the result is used for depends on which solid it is read off, and the two uses are
+    opposites.** Called against `body` -- the un-notched blank -- it returns that blank's own
+    creases, and `cavity` passes those to `_patches` as patch boundaries. Called against
+    `notches` it returns the rib edges, and those are *interpolation rows*, not boundaries: the
+    fit's own seed is front-loaded with every one of them (OQ-DES-CW22) and section 5's second
+    pass scans finely around each.
+
+    **That is the reverse of this function's original purpose, and the reversal is deliberate**
+    (section 4.2's three-dimensional identity). While the surface was fitted through *notched*
+    contours, a rib edge was a crease in the thing being fitted, so splitting there was the only
+    way to avoid smoothing away a feature the part really had. The surface now follows the
+    un-notched blank and the ribs are subtracted from the finished cavity as solids, so there is
+    no crease in the fitted surface to split at -- demanding C2 across a rib edge smooths away
+    nothing, because the blank genuinely is smooth there. Splitting at every rib end is instead
+    what made the tail 60 patches.
+
+    **Measured 2026-10-11: `body` has no interior crease in any configuration built so far.**
+    All twelve walls in the soak corpus -- both kinds, `U` = 0.5 through 4.0 -- report
+    `patch 1/1`, so `_patches` returns a single span every time and the multi-patch machinery
+    below it is currently dormant. The notch-edge count over the same twelve runs 4 for the nose
+    and 19-26 for the tail.
     """
     seen = sorted(v.Point.z for v in notches.Vertexes
                   if z_lo + MIN_INTERVAL < v.Point.z < z_hi - MIN_INTERVAL)
