@@ -255,6 +255,19 @@ def measure(kind, u):
         'missing_stations': missing_stations,
         'worst_wall_error': worst_wall_error,
         'worst_rib_error': worst_rib_error,
+        # **The station grid itself, because the saved wall cannot reproduce it (IP-WTM-18).**
+        # Every station above is placed from `ci.z_extent(body)` -- the full cowl *solid* -- inset
+        # 1 mm, and `check_cowl_interior.main`'s acceptance gate places its own the same way. The
+        # BREP saved above is the finished **wall** only, whose z extent is not the body's, so a
+        # later re-measurement loading that file computes a *different* set of stations: measured
+        # 2026-10-10, a wall-based grid loses 3 to 7 of 12 stations on every `nose_cowl_shell`
+        # wall, because stations near the ends fall where the wall has no closed annular section,
+        # while this soak recorded `missing_stations` = 0 for all 28 builds. Two figures taken on
+        # the two grids are answers about different places and may not be differenced -- the whole
+        # delta column of a first corpus sweep was withdrawn for exactly that. Recording the
+        # bounds here is what lets a later sweep place the gate's own stations instead of its own.
+        'station_z_lo': lo,
+        'station_z_hi': hi,
         'partition_slip': tip.PartitionSlip,
         'wall_hash': wall_hash,
         'brep': brep_path,

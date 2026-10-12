@@ -12,7 +12,7 @@ unblocked IP-FC-16, and raised seven open questions about the cowl. **Five of th
 answered on 2026-08-09**, closing the last blocking cowl question (OQ-DES-CW6) and adding
 IP-FC-42, IP-FC-43 and IP-FC-44.
 
-**Last updated:** 2026-09-20
+**Last updated:** 2026-10-10
 
 ---
 
@@ -328,6 +328,32 @@ fit points -- at one `U`). Sampling density (fixed fine grid vs. coarse-then-ref
 > between adopting the annulus identity as a build-time refusal, building the thickness measure
 > IP-FC-151 describes, or accepting the limit and relying on the external check is made. The check
 > itself is specified and half built; which of those three the project wants is not a measurement.
+>
+> **Its named prerequisite measurement is now taken, 2026-10-10, and the test is clean.** This item
+> asks for the annulus test's false-positive rate to be surveyed across both kinds and the swept `U`
+> range before it may refuse anything, on the concern that a slot's end cap could legitimately break
+> the annulus at some stations — "six spot checks on one healthy `tail_shell` wall passed, which is
+> not a survey." The survey exists as a by-product of the 2026-10-06 soak: the guard went into
+> `wall_thickness` on 2026-10-05, the soak ran the day after with it active, and it recorded
+> `missing_stations` = 0 for all 28 builds — **336 station readings across both kinds at
+> `U` ∈ {0.5, 1, 1.5, 2, 3, 4}, with no false positive**. Since the guard returns `None` on a
+> non-annular section and the soak counts that a missing station, any false positive would have
+> shown as a non-zero count. **Two limits on what that settles:** it is 12 stations a build, roughly
+> 25 mm apart on the tail, so it bounds the false-positive rate at the acceptance grid's own
+> stations and not at whatever denser grid a build-time check would use; and it says nothing about
+> which of OQ-DES-CW26's three alternatives to adopt, which is the choice this item is blocked on.
+
+> **OQ-DES-CW23 was withdrawn on 2026-10-10, and several evidence trails above reference it in the
+> present tense.** Those entries are accurate records of what was known when they were written and
+> are left as they stand. What changed is the item they point at: it asked how to handle a "small
+> residual gap" between `cavity()`'s post-cut prediction and the real cut, and measured with an
+> instrument that converges, the gap is zero below `U` = 3 and 0.11–0.17 mm above it — so the premise
+> was false and the question was missing information rather than a design choice. In particular the
+> 0.546556 mm reading quoted above stands as a *reproducibility* result, which is all it was ever
+> offered as, but the 0.0534 mm deficit derived from it is superseded: the selected measure reads
+> that wall's worst at 0.1514 mm. See
+> [wall_thickness_measure.md](wall_thickness_measure.md) and
+> [cowl_interior_surface.md §6.5](../design/cowl_interior_surface.md#65-pass-2s-prediction-against-the-real-wall-sound-below-u--2-broken-above).
 
 > **IP-FC-144 sequencing note:** IP-FC-146 is deliberately *not* marked blocked on IP-FC-144. The
 > two reproduced severing stations have different causes -- `z` = -60.0000 is the near-duplicate
