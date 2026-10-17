@@ -27,6 +27,11 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# `wall_measure` is the measurement library and lives beside this tier, not in it: it imports no
+# vendor module, so it has to be reachable by path rather than by being a sibling. `ring_scan.py`
+# does the same thing for the same reason.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                'tools'))
 
 import FreeCAD as App
 import Part
@@ -35,9 +40,39 @@ import cowl_interior as ci
 import cowl_tree
 from corner_common import is_entry_point
 
-#: Stations the wall is measured at, and samples around each.
+from wall_measure import candidates, sections
+
+#: Stations the wall is measured at.
 STATIONS = 12
-AROUND = 240
+
+#: Circumferential spacing, in millimetres, each section is sampled at when the wall is measured
+#: across it. **A spacing, not a count, and that is the whole of the change.**
+#:
+#: This was `AROUND` = 240 inner samples with the outer loop at `8 * AROUND`, fixed counts at every
+#: `U`. A cowl's perimeter grows roughly linearly with `U` while its wall stays an absolute
+#: `cowl_n_perimeters * extrusion_width` = 0.6 mm, so a fixed count buys a spacing proportional to
+#: the part: measured, 240 samples is 1.8 mm apart on a `tail_shell` section at `U` = 1 and
+#: **8.7 mm at `U` = 4, fourteen times the wall being measured**. Readings above `U` = 2 were not
+#: sound in either direction, and the same error made a published corpus figure six times too large
+#: (cowl_interior_surface.md section 6.6).
+#:
+#: **0.125 mm is the measured figure, not a round number.** `wall_measure.density` sweeps a station
+#: through six spacings and the reading settles by 0.25 mm, moving 0.00008 mm per halving after
+#: that -- two orders inside `WALL_TOL` = 0.01 mm. 0.125 mm is one halving past settled, and it is
+#: the spacing the whole corpus was re-measured at, so a gate reading and a corpus reading are
+#: comparable rather than merely both fine.
+#:
+#: It is deliberately finer than `cowl_interior.CHECK_ARC` = 0.20 mm, which is a different
+#: question: that one has to resolve the 1.3 mm gap a rib leaves, while this one has to resolve a
+#: 0.01 mm departure in a 0.6 mm wall.
+WALL_ARC = 0.125
+
+#: Floor and ceiling on the derived sample count. The floor keeps a short section a polygon; the
+#: ceiling is a **memory and time guard, not a design value** -- no swept configuration reaches it,
+#: since `U` = 4's 2 088 mm section needs 16 707. If one ever did, the spacing it actually achieved
+#: would be coarser than `WALL_ARC` and `wall_samples` is where to look.
+WALL_MIN = 480
+WALL_MAX = 60000
 
 
 def _opt(name, default=None):
@@ -57,6 +92,16 @@ def _opt(name, default=None):
 #: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totalling
 #: 150914 mm2, the sum of the two enclosed areas rather than the material between them.
 FACE_MAKER = 'Part::FaceMakerBullseye'
+
+
+def wall_samples(perimeter, arc=WALL_ARC):
+    """How many points a loop of this length is discretized at for `arc` mm between them.
+
+    `cowl_interior.check_samples` is the same idea for the construction's own scan, at its own
+    spacing; this is the acceptance check's, and the two differ because they resolve different
+    features (see `WALL_ARC`).
+    """
+    return max(WALL_MIN, min(WALL_MAX, int(round(float(perimeter) / float(arc)))))
 
 
 def section_regions(wires):
@@ -107,13 +152,17 @@ def _is_annulus(wires):
     return faces == 1 and counts == [2]
 
 
-def wall_thickness(wall, z, expect, tol):
-    """In-plane distance from the inner contour to the outer, at one station.
+def wall_thickness(wall, z, expect, tol, arc=WALL_ARC):
+    """The incumbent measure's reading at one station. See `station_measures`, which computes it.
 
-    Returns `(n, near, worst_low, median, worst_high)` -- how many samples, how many landed
-    within `tol` of `expect`, and the spread. Samples over a rib legitimately read more than
-    `expect`, because the wall follows the notch in and back out and the inner contour dips
-    with it; samples reading *less* are the failure, and there should be none.
+    Kept as its own name because it is what both callers and every existing test ask for, and
+    because "the incumbent" is a specific measure with a specific known defect rather than a
+    synonym for "the wall thickness".
+
+    Returns `(n, near, worst_low, median, worst_high)` -- how many samples, how many landed within
+    `tol` of `expect`, and the spread. Samples over a rib legitimately read more than `expect`,
+    because the wall follows the notch in and back out and the inner contour dips with it; samples
+    reading *less* are the failure, and there should be none.
 
     **Returns `None` where there is no thickness to report**, which is two cases and not one: a
     station with fewer than two loops across every solid, and -- since 2026-10-05 -- a station
@@ -124,7 +173,76 @@ def wall_thickness(wall, z, expect, tol):
     `WALL_TOL`.** Measured 2026-10-05 on `nose_cowl_shell` at `U` = 1, it was still falling at 3840
     samples at 17 of 24 stations, because a nearest-point distance at a concave corner crosses the
     corner rather than the wall and this section has one at every slot mouth.
-    cowl_interior_surface.md section 6.1 carries the evidence and what does converge.
+    cowl_interior_surface.md section 6.1 carries the evidence and what does converge. The measure
+    that does is reported beside it as of IP-WTM-10 -- see `station_measures`.
+
+    **The sampling is an arc-length spacing, `WALL_ARC`, derived per station from that station's
+    own perimeter.** It was a fixed count until IP-WTM-25, which is a separate defect from the
+    non-convergence above and pushes the other way: a count fixes the spacing to the part's size,
+    so the same reading meant different things at different `U`. Fixing it does not make
+    `worst_low` converge -- that is the measure, not the sampling -- but it does make a reading at
+    `U` = 4 comparable with one at `U` = 1.
+
+    `arc` is exposed so a caller can refine a station, and so a test can reproduce the coarse
+    sampling and show that it misses a thin spot this one finds. A cause needs its converse tested;
+    without the parameter the fix could only be asserted, not demonstrated.
+    """
+    both = station_measures(wall, z, expect, tol, arc)
+    return None if both is None else both['incumbent']
+
+
+def station_measures(wall, z, expect, tol, arc=WALL_ARC):
+    """Both measures of the wall at one station, from **one** section.
+
+    Returns a dict, or `None` on the cases the incumbent returns `None` for:
+
+    * `incumbent` -- `(n, near, worst_low, median, worst_high)`, exactly as `wall_thickness`
+      returned it before IP-WTM-10, and still the figure the printed output leads with so that a
+      reading can be compared against every one recorded before today.
+    * `selected` -- the minimum of `wall_measure.candidates.corner_excluded_min`, the measure
+      selected against the five pre-committed gates of
+      doc/implementation/wall_thickness_measure.md, or `None` where no solid gave a loop pair.
+    * `selected_samples` -- how many samples survived the corner exclusion, which is the number
+      that says whether the exclusion removed the place the wall is thinnest.
+    * `samples_per_loop` -- the derived discretization, so a reading is never read without it.
+
+    **Both measures see the same point set, and that is the point of computing them together.**
+    The selected measure takes its minimum over a *subset* of the incumbent's distances -- it drops
+    samples within 0.30 mm of a concave corner, where a nearest-point distance crosses the corner
+    rather than the wall -- so `selected >= incumbent` is a structural identity, not a tolerance. A
+    violation of it once revealed a real defect (an earlier version resampled the loop first, making
+    the two different point sets; it reported 0.04806 against 0.04689 mm on a real `tail_shell`).
+    Computing them from separate sections would both double the slicing and destroy the identity.
+
+    The cost is roughly double the incumbent alone, since the second measure is another
+    point-to-segment matrix over the same loops: about 22 s a station at `U` = 4 becomes about 45,
+    against a tail build of 1 200 to 4 900 s. That is deliberate for now -- IP-WTM-10 asks for both
+    reported over one corpus so they can be compared on real builds rather than on saved walls.
+    """
+    out = _station_distances(wall, z, arc)
+    if out is None:
+        return None
+    d, selected, n_per_loop = out
+    if len(d) < 2:
+        return None
+    d = sorted(d)
+    near = sum(1 for v in d if abs(v - expect) <= tol)
+    return {'incumbent': (len(d), near, d[0], d[len(d) // 2], d[-1]),
+            'selected': (min(selected) if selected else None),
+            'selected_samples': len(selected),
+            'samples_per_loop': n_per_loop}
+
+
+def _station_distances(wall, z, arc=WALL_ARC):
+    """One section, every solid: both measures' raw distances and the discretization they used.
+
+    Returns `(incumbent_distances, selected_distances, samples_per_loop)`, or `None` where there is
+    no thickness to report -- which is two cases and not one: a station with fewer than two loops
+    across every solid, and a station whose section is not an annulus at all, because the ring has
+    come apart into arcs. Both mean "no wall here" and both callers count that as a failure.
+
+    Separate from `station_measures` so that the geometry and the statistics are not interleaved:
+    this reaches the kernel, that reduces arrays.
     """
     # **Measured per solid, though `build_part.py` (line ~328) now requires exactly one.**
     # Before IP-FC-139/140/141's mirror-order fix, the tail's buttress slots cut through the
@@ -135,7 +253,7 @@ def wall_thickness(wall, z, expect, tol):
     # `wall.Solids` is kept rather than assuming a single solid outright, since it costs
     # nothing when there is exactly one and this is the check that would notice if the
     # single-solid invariant ever regressed.
-    d = []
+    d, selected, n_per_loop = [], [], None
     for solid in wall.Solids:
         loops = [w for w in solid.slice(App.Vector(0, 0, 1), z) if w.isClosed()]
         if not loops:
@@ -165,22 +283,41 @@ def wall_thickness(wall, z, expect, tol):
             # that as a failure rather than skipping it.
             return None
         if len(loops) >= 2:
-            outer = ci._Polyline(
-                [(p.x, p.y) for p in loops[0].discretize(Number=8 * AROUND)])
-            for p in loops[1].discretize(Number=AROUND):
-                d.append(outer.distance(p.x, p.y))
+            # **One spacing, derived from whichever loop is longer, applied to both.** The outer
+            # loop used to be discretized eight times as densely as the inner, to keep its chords
+            # from cutting inside the true boundary and making the wall read thin. That factor is
+            # retired because the arithmetic says it is pointless at this spacing: a chord on an
+            # arc of radius `R` sampled at `s` sags by about `s^2 / (8R)`, which `wall_measure`
+            # measured at roughly 0.0005 mm for the 1.45 mm spacing the published corpus sweep
+            # used, and scales as `s^2` -- so at 0.125 mm it is about 4e-6 mm, four orders inside
+            # `WALL_TOL`. It also makes this agree with how the candidate measures were validated:
+            # `wall_measure.sweep.measure_wall` discretizes both loops at one spacing, so a gate
+            # figure and a corpus figure are not confounded by their sampling.
+            n = wall_samples(max(loops[0].Length, loops[1].Length), arc)
+            n_per_loop = n
+            outer_pts = sections._points_of(loops[0], n)
+            inner_pts = sections._points_of(loops[1], n)
+            outer = ci._Polyline([(p[0], p[1]) for p in outer_pts])
+            # `distances` in one call, not `distance` per point: it chunks the
+            # (points x segments) matrix itself, and at these counts a call a point is thousands
+            # of numpy round trips for the same arithmetic.
+            d.extend(outer.distances(inner_pts[:, :2]).tolist())
+            # The selected measure, on the identical point set -- see `station_measures` on why
+            # the two are computed from one section and what identity that preserves.
+            _kept, thick = candidates.corner_excluded_min(outer_pts, inner_pts)
+            selected.extend(float(v) for v in thick if v == v)
         else:
             # A piece whose section is a single loop is a strip: its own width is the wall.
             # `2 * area / perimeter` is that width for a long thin region, exact in the limit
             # and 0.1% low at the aspect ratios here.
+            # **The selected measure gets nothing from this branch, deliberately.** It is defined
+            # on an inner/outer loop pair, and `2A/P` is a different estimator of a different
+            # thing; feeding its answer in would make `selected` a mixture and silently break the
+            # subset identity `station_measures` relies on.
             area = abs(ci._wire_area(loops[0]))
             if loops[0].Length > 0.0:
                 d.extend([2.0 * area / loops[0].Length] * 8)
-    if len(d) < 2:
-        return None
-    d = sorted(d)
-    near = sum(1 for v in d if abs(v - expect) <= tol)
-    return len(d), near, d[0], d[len(d) // 2], d[-1]
+    return d, selected, n_per_loop
 
 
 def in_plane_width(tool, t_cut):
@@ -362,23 +499,47 @@ def main():
           '(WALL_TOL = %.3f, one-sided):' % (t, t - ci.WALL_TOL, ci.WALL_TOL))
     bad = 0
     worst_thin = 0.0
+    worst_selected = 0.0
+    # **Both measures, with the incumbent leading and gating (IP-WTM-10).** The selected measure --
+    # `corner_excluded_min`, chosen against this subsystem's five pre-committed gates -- is reported
+    # beside it rather than instead of it, for one corpus, so the two can be compared on real builds
+    # and not only on saved walls. Which one should gate is the next decision and is not taken here:
+    # swapping the gate over on the strength of saved-wall agreement alone would be adopting a
+    # measure on the evidence of the measure it replaces.
     for i in range(STATIONS):
         z = lo + (hi - lo) * i / float(STATIONS - 1)
-        got = wall_thickness(wall, z, t, ci.WALL_TOL)
+        got = station_measures(wall, z, t, ci.WALL_TOL)
         if got is None:
             print('    z %9.4f   fewer than two loops -- no wall here' % z)
             bad += 1
             continue
-        n, near, lowv, med, highv = got
+        n, near, lowv, med, highv = got['incumbent']
         thin_by = max(0.0, t - lowv)
         worst_thin = max(worst_thin, thin_by)
         flag = '' if lowv >= t - ci.WALL_TOL else '   <-- THIN by %.4f mm' % thin_by
         if lowv < t - ci.WALL_TOL:
             bad += 1
-        print('    z %9.4f   %3d/%3d within tol   min %.4f  median %.4f  max %.4f%s'
-              % (z, near, n, lowv, med, highv, flag))
+        sel = got['selected']
+        if sel is None:
+            sel_text = '  selected    n/a'
+        else:
+            worst_selected = max(worst_selected, max(0.0, t - sel))
+            sel_text = ('  selected %.4f (%d of %d samples)'
+                        % (sel, got['selected_samples'], n))
+        print('    z %9.4f   %3d/%3d within tol   min %.4f  median %.4f  max %.4f%s%s'
+              % (z, near, n, lowv, med, highv, sel_text, flag))
     print('    worst thin reading: %.4f mm under nominal, %.1fx the %.3f mm tolerance'
           % (worst_thin, worst_thin / ci.WALL_TOL, ci.WALL_TOL))
+    print('    worst thin reading, selected measure: %.4f mm under nominal, %.1fx tolerance'
+          % (worst_selected, worst_selected / ci.WALL_TOL))
+    if worst_selected > worst_thin + 1.0e-9:
+        # **A structural identity, checked rather than assumed.** The selected measure minimizes
+        # over a subset of the incumbent's samples, so it can never report more thinness. If it
+        # does, the two are no longer reading the same point set and both figures are suspect --
+        # which is exactly the defect an earlier version of that measure had.
+        print('    SUSPECT: the selected measure reports MORE thinness than the incumbent '
+              '(%.6f vs %.6f). It minimizes over a subset, so this cannot happen unless the two '
+              'are sampling differently.' % (worst_selected, worst_thin))
     if worst_thin > ci.WALL_TOL:
         # **What a failure here does and does not mean.** `worst_low` is a nearest-point minimum,
         # and that quantity does not converge on these sections (IP-FC-151): it was still falling

@@ -73,10 +73,24 @@ touching geometry. The reason is `freecadcmd`'s exit code, which is 0 even when 
 the JSON is the only honest record of how far a run got, and a wall is up to an hour, so a crash on
 the eleventh wall must not cost the ten already paid for.
 
+**The input axis is a second population, not more of this one (IP-WTM-41).** The twelve walls above
+vary `U` alone, with every other design input at the parameter sheet's literal, and that is the
+bound this scan leaves. `--family=screen` scans `input_screen.py`'s walls instead -- one design
+input moved per wall at a fixed `U` -- and the two are kept apart deliberately: a verdict has to be
+able to say which population it covered.
+
+**That population is measured too, 2026-10-14: 36 walls, 1 638 stations, every one a healthy
+annulus**, at the same 1 mm axially and 0.2 mm circumferentially. Its cost confirms this module's
+cost model rather than extending it -- **budget by kind and face count, not by `U`**: 35-89 s a nose
+wall at 0.83-2.12 s a station against 536-928 faces, and 242-359 s a tail wall at 5.05-7.48 s a
+station against 2 262-2 930 faces. A screen wall costs what a corpus wall of the same kind and size
+costs, so a further screen is schedulable off the figures already here.
+
 Usage, one `--pass` per argument (see `tau_study.py` for why)::
 
     freecadcmd ring_scan.py --pass --only=tail_shell_U3.0 --pass --axial=1.0
     freecadcmd ring_scan.py --pass --only=nose_cowl_shell_U4.0 --pass --json=out/scan/nose4.json
+    freecadcmd ring_scan.py --pass --family=screen --pass --only=tail_shell_U0.5_top_diag_angle_hi
     freecadcmd ring_scan.py --pass --summarize=out/scan
 
 The whole corpus, tails before noses and descending `U` within a kind -- the order the walls were
@@ -294,16 +308,36 @@ def confirm_no_wall(wall, rows, out=None):
     return verdicts
 
 
+def walls_of(family):
+    """The population to scan. **Two corpora, and they are not merged.**
+
+    `soak` is the 2026-10-06 corpus: twelve distinct walls varying `U` alone, every other design
+    input at the parameter sheet's literal. That is the population IP-WTM-40 scanned, and the
+    input axis is exactly the bound it left.
+
+    `screen` is IP-WTM-41's: walls built by `input_screen.py`, each varying one design input at a
+    fixed `U`. Kept separate because OQ-DES-CW26's remaining question is about that axis
+    specifically, so a verdict has to be able to say which population it covered; a merged "the
+    corpus" figure would mean a different thing depending on what had been built that week.
+    """
+    if family == 'screen':
+        return corpus.screen()
+    if family == 'soak':
+        return corpus.distinct()
+    raise SystemExit('unknown --family=%r -- soak or screen' % family)
+
+
 def main():
     axial = float(_opt('axial', AXIAL_MM))
     around = float(_opt('around', AROUND_MM))
     only = _opt('only')
     out_json = _opt('json')
+    family = _opt('family', 'soak')
     if _opt('summarize'):
         return summarize(_opt('summarize'))
-    records = ordered(corpus.distinct(), only)
-    print('ring_scan: %d wall(s), %.2f mm axially, %.2f mm circumferentially'
-          % (len(records), axial, around), flush=True)
+    records = ordered(walls_of(family), only)
+    print('ring_scan: %s family, %d wall(s), %.2f mm axially, %.2f mm circumferentially'
+          % (family, len(records), axial, around), flush=True)
     results = []
     started = time.time()
     for rec in records:

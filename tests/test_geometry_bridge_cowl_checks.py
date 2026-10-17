@@ -121,6 +121,25 @@ class TestWallThickness:
         assert median == pytest.approx(WALL, abs=0.01)
         assert n > 0
 
+    def test_the_sample_count_comes_from_the_section_not_from_a_constant(self, cci, Part):
+        """IP-WTM-25. A tube ten times round gets ten times the samples, so the spacing in
+        millimetres -- the thing the 0.6 mm wall is measured in -- stays put."""
+        small = (Part.makeCylinder(20.0, HEIGHT).cut(Part.makeCylinder(20.0 - WALL, HEIGHT)))
+        large = (Part.makeCylinder(200.0, HEIGHT).cut(Part.makeCylinder(200.0 - WALL, HEIGHT)))
+        n_small = cci.wall_thickness(small, HEIGHT / 2.0, WALL, 0.01)[0]
+        n_large = cci.wall_thickness(large, HEIGHT / 2.0, WALL, 0.01)[0]
+        assert n_small == pytest.approx(2.0 * math.pi * 20.0 / cci.WALL_ARC, rel=0.02)
+        assert n_large / n_small == pytest.approx(10.0, rel=0.02)
+
+    def test_a_short_section_is_sampled_finer_than_asked_never_coarser(self, cci, Part):
+        """`WALL_MIN` is a floor on the count, so on a small section it buys a spacing finer than
+        `WALL_ARC`. Which way the clamp errs is the whole of its safety: finer is harmless, coarser
+        would silently undo the fix."""
+        small = (Part.makeCylinder(5.0, HEIGHT).cut(Part.makeCylinder(5.0 - WALL, HEIGHT)))
+        n = cci.wall_thickness(small, HEIGHT / 2.0, WALL, 0.01)[0]
+        assert n == cci.WALL_MIN
+        assert 2.0 * math.pi * 5.0 / n < cci.WALL_ARC
+
     def test_a_station_outside_the_solid_returns_none(self, cci, tube):
         """The first documented `None` case: no closed loop at all at that station.
 
@@ -187,6 +206,227 @@ class TestWallThickness:
         assert len(wires) == 2, 'two opposing slots should leave two arcs at this station'
         assert cci._is_annulus(wires) is False
         assert cci.wall_thickness(broken, z, WALL, 0.01) is None
+
+
+#: A pocket milled into the tube's outer face: `POCKET_WIDTH` mm around, `POCKET_DEPTH` mm deep,
+#: full height. Both are **absolute**, so they stay the same size as the tube grows -- which is the
+#: property that makes this model the real mechanism rather than merely a thin spot. A cowl's slot
+#: mouths and rib flanks are absolute too (`2 * n_p * w` = 1.2 mm of the rib gap does not scale with
+#: `U` at all), so a fixed sample count spends proportionally fewer samples on them as `U` rises.
+POCKET_WIDTH = 1.2
+POCKET_DEPTH = 0.2
+
+
+def pocketed_tube(Part, App, r_outer):
+    """A tube of known wall with one pocket milled into its **outer** face.
+
+    The thinnest wall is exactly `WALL - POCKET_DEPTH`, wherever the sampling happens to land. The
+    pocket is on the outside deliberately: the inner loop stays a plain circle with no concave
+    turn anywhere, which isolates the sparse-sampling error from everything to do with corners.
+    """
+    tube = Part.makeCylinder(r_outer, HEIGHT).cut(Part.makeCylinder(r_outer - WALL, HEIGHT))
+    cutter = Part.makeBox(5.0, POCKET_WIDTH, 3.0 * HEIGHT,
+                          App.Vector(r_outer - POCKET_DEPTH, -0.5 * POCKET_WIDTH, -HEIGHT))
+    out = tube.cut(cutter)
+    assert len(out.Solids) == 1
+    return out
+
+
+def notched_tube(Part, App, r_outer, width=POCKET_WIDTH, depth=POCKET_DEPTH):
+    """A tube whose **inner** contour dips outward into the wall and back, over `width` mm.
+
+    This is the one that models the real section, and the difference from `pocketed_tube` is not
+    cosmetic: `check_cowl_interior.wall_thickness`'s own docstring says the wall "follows the notch
+    in and back out and the inner contour dips with it", so a cowl's concave turns are on the
+    **inner** loop -- and the selected measure looks for reflex turns there and nowhere else. A
+    pocket on the outer face leaves the inner loop convex everywhere, so it excludes no samples at
+    all and any test of the exclusion built on it is vacuous.
+
+    The thinnest wall is exactly `WALL - depth`.
+    """
+    r_inner = r_outer - WALL
+    tube = Part.makeCylinder(r_outer, HEIGHT).cut(Part.makeCylinder(r_inner, HEIGHT))
+    cutter = Part.makeBox(depth + 1.0, width, 3.0 * HEIGHT,
+                          App.Vector(r_inner - 1.0, -0.5 * width, -HEIGHT))
+    out = tube.cut(cutter)
+    assert len(out.Solids) == 1
+    return out
+
+
+class TestWallThicknessSampling:
+    """IP-WTM-25: the circumferential sampling is a spacing derived per station, not a constant.
+
+    It was a fixed 240 inner samples with the outer loop at eight times that. A cowl's perimeter
+    grows roughly linearly with `U` while its wall stays an absolute 0.6 mm, so that count bought a
+    spacing proportional to the part -- 1.8 mm on a `tail_shell` section at `U` = 1 and 8.7 mm at
+    `U` = 4, against the wall it was measuring.
+    """
+
+    def test_a_fixed_width_thin_spot_is_found_at_every_section_size(self, cci, Part, App):
+        """The property the gate needs and a fixed count cannot give it: the same answer on a
+        section twenty times round as on a small one, because the defect is the same size on both.
+        """
+        for r in (10.0, 50.0, 200.0):
+            got = cci.wall_thickness(pocketed_tube(Part, App, r), HEIGHT / 2.0, WALL, 0.01)
+            assert got is not None, 'r = %.0f gave no section' % r
+            assert got[2] == pytest.approx(WALL - POCKET_DEPTH, abs=1e-3), 'r = %.0f' % r
+
+    def test_a_coarse_spacing_misses_part_of_that_same_thin_spot(self, cci, Part, App):
+        """**The converse, measured rather than assumed.** A cause needs its converse tested, so
+        `arc` is a parameter: handed a spacing twice the pocket's own width, the function reads the
+        wall 0.0486 mm thicker than it is -- nearly five times `WALL_TOL` of thinning simply not
+        seen. At the default spacing the same geometry reads the pocket exactly.
+
+        Measured at `r` = 200, where a coarse count is unambiguously coarse: the floor on the
+        sample count keeps smaller sections fine whatever is asked for.
+        """
+        part = pocketed_tube(Part, App, 200.0)
+        fine = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01)[2]
+        coarse = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01, 2.5)[2]
+        assert fine == pytest.approx(WALL - POCKET_DEPTH, abs=1e-3)
+        assert coarse > fine + 4.0 * 0.01
+        assert coarse < WALL, 'it should still see some of the pocket, just not its floor'
+
+    def test_the_two_sampling_errors_push_opposite_ways_and_both_are_real(self, cci, Part, App):
+        """Recorded because it is the trap in reasoning about this, and `wall_measure.density` says
+        so in prose: a coarse discretization both **under**-reports thinness, by sampling the inner
+        loop too sparsely to land on a thin spot, and **over**-reports it, by measuring to outer
+        chords that cut inside the true boundary. This geometry isolates the first -- a smooth tube
+        has no chord error worth the name at these radii -- so the coarse reading here is too
+        *thick*. On the real sections the second dominates and the coarse reading is too *thin*:
+        measured on the saved `tail_shell` at `U` = 4, a 1.24 mm spacing reads 0.4454 mm where
+        0.125 mm reads 0.5675 mm. A test that only ever saw one direction would license the wrong
+        conclusion about the other.
+        """
+        part = pocketed_tube(Part, App, 200.0)
+        coarse = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01, 2.5)[2]
+        fine = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01)[2]
+        assert coarse > fine, 'on a smooth tube the sparse-sampling error is the only one'
+
+    def test_the_sample_count_is_derived_and_clamped_at_both_ends(self, cci):
+        """`wall_samples` alone, with no geometry: the arithmetic and both clamps."""
+        assert cci.wall_samples(1000.0) == 8000
+        assert cci.wall_samples(1000.0, 0.5) == 2000
+        assert cci.wall_samples(1.0) == cci.WALL_MIN
+        assert cci.wall_samples(1.0e9) == cci.WALL_MAX
+
+
+class TestStationMeasures:
+    """IP-WTM-10: the selected measure reported beside the incumbent, from one section."""
+
+    def test_the_incumbent_entry_is_what_wall_thickness_returns(self, cci, tube):
+        """The compatibility the item asks for: the leading figure is unchanged, so a reading can
+        still be compared against every one recorded before the second measure existed."""
+        z = HEIGHT / 2.0
+        both = cci.station_measures(tube, z, WALL, 0.01)
+        assert tuple(both['incumbent']) == tuple(cci.wall_thickness(tube, z, WALL, 0.01))
+
+    def test_both_measures_read_a_uniform_wall_as_its_own_thickness(self, cci, tube):
+        both = cci.station_measures(tube, HEIGHT / 2.0, WALL, 0.01)
+        assert both['selected'] == pytest.approx(WALL, abs=0.01)
+        assert both['incumbent'][2] == pytest.approx(WALL, abs=0.01)
+        assert both['samples_per_loop'] > 0
+
+    @pytest.mark.parametrize('width', [2.0, 1.2, 0.8, 0.4])
+    def test_the_selected_measure_never_reports_more_thinness_than_the_incumbent(self, cci, Part,
+                                                                                App, width):
+        """**A structural identity, not a tolerance.** The selected measure minimizes over a
+        *subset* of the incumbent's distances -- the samples not within 0.30 mm of a concave turn
+        of the inner loop -- so its minimum can only be larger or equal. A violation means the two
+        are no longer reading one point set, which is precisely the defect an earlier version of
+        that measure had (0.04806 against 0.04689 mm on a real `tail_shell`).
+
+        Swept across notch widths because the margin is where the identity could fail: at 0.8 mm
+        the two differ, measured, by 0.0002 mm in the permitted direction, and a version that
+        sampled differently would have no reason to respect the sign of that.
+        """
+        part = notched_tube(Part, App, 50.0, width=width)
+        both = cci.station_measures(part, HEIGHT / 2.0, WALL, 0.01)
+        assert both['selected'] is not None
+        assert both['selected'] >= both['incumbent'][2] - 1e-12
+        assert both['selected_samples'] < both['incumbent'][0], \
+            'an inner notch has concave turns, so some samples must have been excluded'
+
+    def test_excluding_the_corners_does_not_remove_this_thin_spot(self, cci, Part, App):
+        """The informative half of the selected measure's design, and it reports the same way the
+        corpus did. `corner_excluded_min` was adopted on the theory that the incumbent's failure is
+        a nearest-point distance taken *at* a concave corner; its own docstring says it fails
+        informatively if excluding them removes the places a wall is thinnest. Here it does not:
+        the thinning sits at the notch floor's ends, where the outer surface curves away, which is
+        a real wall and not a corner artefact -- so both measures report it, and that matches the
+        corpus result that the tail's thin spot is not at a corner and no corner-based fix reaches
+        it.
+        """
+        part = notched_tube(Part, App, 50.0, width=1.2)
+        both = cci.station_measures(part, HEIGHT / 2.0, WALL, 0.01)
+        assert both['incumbent'][2] == pytest.approx(0.3968, abs=5e-4)
+        assert both['selected'] == pytest.approx(both['incumbent'][2], abs=5e-4)
+        assert both['selected'] < WALL - 0.19, 'the thinning must survive the exclusion'
+
+    def test_a_section_with_no_loop_pair_reports_no_selected_figure(self, cci, Part):
+        """The one-loop strip branch feeds the incumbent a `2A/P` estimate and the selected measure
+        nothing, because that measure is defined on an inner/outer pair. Mixing the two would make
+        the second figure a blend of two estimators and break the subset identity above."""
+        rod = Part.makeCylinder(R_OUTER, HEIGHT)
+        both = cci.station_measures(rod, HEIGHT / 2.0, WALL, 0.01)
+        assert both['selected'] is None
+        assert both['selected_samples'] == 0
+        assert both['incumbent'][2] == pytest.approx(R_OUTER, abs=0.01)
+
+    def test_a_broken_ring_returns_none_from_both(self, cci, tube, Part, App):
+        """The annulus guard is upstream of either measure, so neither can report a thickness for a
+        section that is not a wall section."""
+        z = HEIGHT / 2.0
+        a = Part.makeBox(4.0, 4.0, 10.0, App.Vector(R_OUTER - 2.0, -2.0, z - 5.0))
+        b = Part.makeBox(4.0, 4.0, 10.0, App.Vector(-R_OUTER - 2.0, -2.0, z - 5.0))
+        broken = tube.cut(a).cut(b)
+        assert cci.station_measures(broken, z, WALL, 0.01) is None
+
+
+class TestSeamEdgesAreNotListedTwice:
+    """A vendor assumption `boolean_edges.anomalous_edges` was built on, put to the kernel — and
+    refuted. Kept because it is what the classifier's design now rests on.
+
+    That function has to tell a periodic surface's closing **seam** from a genuine **open
+    boundary**, and both present as "one adjacent face" to every cheap test: `face_adjacency`
+    records a face index once per group, and the kernel's own `ancestorsOfType` returns *distinct*
+    ancestors. The first version counted how many times that one face carries the edge, assuming
+    `Face.Edges` lists a seam once per orientation.
+
+    **It does not.** Measured here on a cylinder, whose lateral face certainly has a seam: the seam
+    edge appears exactly **once**, like any other edge. So the occurrence count cannot carry the
+    distinction, and `anomalous_edges` uses the surface's periodicity instead — a seam can only
+    exist on a periodic surface. This test exists so that if the vendor ever starts listing seams
+    twice, the fact is noticed here rather than inferred from a classification going quiet.
+    """
+
+    def lateral_face(self, cyl, r=5.0, h=10.0):
+        """The curved face, picked by area. **Not by `type(...).__name__`**, which across the test
+        bridge is the proxy's class rather than the vendor's, and not by `isUPeriodic`, which the
+        bridge cannot return from a surface proxy. On a cylinder the lateral area `2*pi*r*h` and
+        the cap area `pi*r^2` are exact, so area identifies it without ambiguity."""
+        wanted = 2.0 * math.pi * r * h
+        faces = [f for f in cyl.Faces if abs(f.Area - wanted) < 1e-6]
+        assert len(faces) == 1, 'expected exactly one lateral face of area %.3f' % wanted
+        return faces[0]
+
+    def test_a_cylinders_lateral_face_lists_its_seam_edge_only_once(self, Part):
+        """The measurement that refuted the assumption. One occurrence, not two."""
+        face = self.lateral_face(Part.makeCylinder(5.0, 10.0))
+        seams = [e for e in face.Edges if abs(e.Length - 10.0) < 1e-6]
+        assert len(seams) == 1, (
+            'if the vendor now lists a seam twice, anomalous_edges could use the occurrence count '
+            'again -- see EDGE_SEAM')
+
+    def test_so_a_seam_is_topologically_identical_to_an_open_boundary_here(self, Part):
+        """Why periodicity had to become the discriminator: on the counts alone, a cylinder's seam
+        and a hole in a shell are the same observation."""
+        face = self.lateral_face(Part.makeCylinder(5.0, 10.0))
+        seam = [e for e in face.Edges if abs(e.Length - 10.0) < 1e-6][0]
+        owners = [f for f in Part.makeCylinder(5.0, 10.0).Faces
+                  if any(abs(e.Length - seam.Length) < 1e-6 and abs(e.Area - seam.Area) < 1e-6
+                         for e in f.Edges)]
+        assert len(owners) == 1, 'one face carries it, exactly as an open boundary would'
 
 
 class TestInPlaneWidth:

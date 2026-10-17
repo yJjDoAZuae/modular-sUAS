@@ -20,6 +20,15 @@ This package exists to end that by measurement rather than by argument:
 * `prediction` reads `cavity()`'s own pass-2 prediction back out of a build log and sets it against
   those real readings. That measurement is what withdrew OQ-DES-CW23: the "small residual gap" it
   asked how to handle is zero below `U` = 3 and 0.11-0.17 mm above it.
+* `normal_distance` is the only measure here that is **not** in-plane, and it exists because every
+  other one is. A plane cutting a slab inclined at theta reads `thickness / cos theta`, always
+  thicker than the slab; measured on a real `tail_shell` the interior surface is inclined 21.6-22.1
+  degrees where the wall is thin, so every in-plane figure there is inflated by 1.079 and the real
+  deficit is 0.0550 mm where the incumbent reads 0.0115.
+* `inputs` is the one module here that cannot work from the saved corpus. Every wall the 2026-10-06
+  soak left varies `U` alone, so a question about any other design input needs walls that do not
+  exist yet; `inputs` holds the case list, the sheet-cell arithmetic and the verdict for building
+  them, and `corpus.screen` reads them back as a population deliberately kept apart from the soak's.
 
 **Nothing here imports a vendor module at module scope.** The builders take `Part` and `App` as
 arguments -- bridge proxies in a test, real modules under `freecadcmd` -- so this package is

@@ -12,7 +12,7 @@ unblocked IP-FC-16, and raised seven open questions about the cowl. **Five of th
 answered on 2026-08-09**, closing the last blocking cowl question (OQ-DES-CW6) and adding
 IP-FC-42, IP-FC-43 and IP-FC-44.
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-16
 
 ---
 
@@ -342,6 +342,20 @@ fit points -- at one `U`). Sampling density (fixed fine grid vs. coarse-then-ref
 > 25 mm apart on the tail, so it bounds the false-positive rate at the acceptance grid's own
 > stations and not at whatever denser grid a build-time check would use; and it says nothing about
 > which of OQ-DES-CW26's three alternatives to adopt, which is the choice this item is blocked on.
+>
+> **The first of those two limits is now closed, 2026-10-16, and at the density a build-time check
+> would actually use.** The concern was that 12 stations 25 mm apart cannot bound the false-positive
+> rate of a denser scan. [wall_thickness_measure.md](wall_thickness_measure.md) has since scanned at
+> **1 mm axially** on both kinds: 1 704 stations across all twelve saved `U`-varying walls
+> (IP-WTM-40) and 1 638 more across 36 purpose-built walls that each move one design input off the
+> parameter sheet (IP-WTM-41) — **3 342 stations, 0 severed, 0 confirmed gaps and 0 kernel
+> disagreements**, with every station a healthy annulus. The one `no_wall` in the whole exercise is
+> the `U` = 3.0 slice artifact of [§6.1](../design/cowl_interior_surface.md#61-measurement-cautions),
+> reproduced to the last digit hours later, and it is a property of `Shape.slice()` at one exact
+> plane rather than of the wall. So **the annulus identity is measured not to false-positive at 25×
+> the acceptance grid's density**, which was the measurement this item named, and the slot-end-cap
+> worry it was raised against does not materialize. What remains blocking is the second limit alone:
+> which of OQ-DES-CW26's three alternatives to adopt is a decision, not a measurement.
 
 > **OQ-DES-CW23 was withdrawn on 2026-10-10, and several evidence trails above reference it in the
 > present tense.** Those entries are accurate records of what was known when they were written and

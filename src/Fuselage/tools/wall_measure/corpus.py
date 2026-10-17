@@ -30,6 +30,16 @@ RESULTS = os.path.join(SOAK_DIR, 'soak_results.jsonl')
 #: `nose_cowl_shell_U1.0_r0.brep`
 _NAME = re.compile(r'^(?P<kind>.+?)_U(?P<u>[0-9.]+)_r(?P<repeat>\d+)\.brep$')
 
+#: `tail_shell_U0.5_top1_angle_hi.brep`, `tail_shell_U0.5_base.brep` -- IP-WTM-41's screen walls,
+#: which vary a design input rather than a repeat. **A separate pattern and a separate directory,
+#: not an extra field on the soak's**: `_NAME` requires the trailing `_r<n>` and so skips these, and
+#: a screen wall joining the `U` corpus silently would make any figure quoted "across the corpus"
+#: mean two different populations depending on what had been built that week.
+#: The `(?!r\d+\.)` is load-bearing: without it this pattern also matches the soak's own
+#: `tail_shell_U4.0_r3.brep` with `case` = `r3`, and the two families would overlap.
+_SCREEN_NAME = re.compile(
+    r'^(?P<kind>.+?)_U(?P<u>[0-9.]+)_(?!r\d+\.)(?P<case>[A-Za-z][A-Za-z0-9_]*)\.brep$')
+
 #: The acceptance check's own station count, so a measurement here samples where the gate does.
 STATIONS = 12
 
@@ -40,9 +50,9 @@ END_INSET = 1.0
 class WallRecord(object):
     """One saved wall: how it was built, where the file is, what the soak measured."""
 
-    __slots__ = ('kind', 'u', 'repeat', 'path', 'recorded')
+    __slots__ = ('kind', 'u', 'repeat', 'path', 'recorded', 'case')
 
-    def __init__(self, kind, u, repeat, path, recorded=None):
+    def __init__(self, kind, u, repeat, path, recorded=None, case=None):
         self.kind = kind
         self.u = u
         self.repeat = repeat
@@ -50,9 +60,14 @@ class WallRecord(object):
         #: The soak's own row for this build, or `None` if the results file has no match. Carries
         #: `worst_wall_error`, `wall_volume`, `wall_hash` and the timings.
         self.recorded = recorded
+        #: IP-WTM-41's screen case name (`base`, `top1_angle_hi`), or `None` for a soak wall, which
+        #: is a repeat of the sheet's own configuration and has no case.
+        self.case = case
 
     @property
     def label(self):
+        if self.case is not None:
+            return '%s_U%s_%s' % (self.kind, self.u, self.case)
         return '%s_U%s_r%d' % (self.kind, self.u, self.repeat)
 
     def __repr__(self):
@@ -102,6 +117,60 @@ def distinct(shapes_dir=None, results=None):
                 continue
             seen.add(h)
         out.append(rec)
+    return out
+
+
+def screen(shapes_dir=None, records_dir=None):
+    """IP-WTM-41's design-input screen walls, sorted by kind then `U` then case name.
+
+    The companion to `available`, for the other corpus. These walls vary a design input at a fixed
+    `U`; the soak's vary `U` with every other input at the sheet's literal. **They are deliberately
+    not merged**: OQ-DES-CW26's remaining bound is the input axis specifically, so a scan has to be
+    able to say which population it covered.
+
+    Returns an empty list when the screen has not been run, for the reason `available` does: the
+    walls are build output and are not in version control.
+
+    No deduplication. `distinct` drops byte-identical repeats because the soak built five of each
+    configuration on purpose; here every wall is a different configuration by construction, and a
+    case that *does* come back identical to the baseline is the finding `inputs.unmoved` reports
+    rather than a duplicate to discard.
+    """
+    from . import inputs as _inputs
+    shapes_dir = shapes_dir or _inputs.SCREEN_SHAPES
+    if not os.path.isdir(shapes_dir):
+        return []
+    rows = screen_records(records_dir)
+    out = []
+    for name in os.listdir(shapes_dir):
+        m = _SCREEN_NAME.match(name)
+        if not m:
+            continue
+        kind, u, case = m.group('kind'), m.group('u'), m.group('case')
+        out.append(WallRecord(kind, u, 0, os.path.join(shapes_dir, name),
+                              rows.get('%s_U%s_%s' % (kind, u, case)), case=case))
+    out.sort(key=lambda r: (r.kind, float(r.u), r.case))
+    return out
+
+
+def screen_records(records_dir=None):
+    """The screen's own per-case build records, keyed by label. Empty if the directory is absent.
+
+    A file a case rather than one appended file, and for `ring_scan`'s reason: `freecadcmd` exits 0
+    on an uncaught exception, a tail case is about 1 000 s, and a crash must cost that case alone.
+    """
+    from . import inputs as _inputs
+    records_dir = records_dir or _inputs.SCREEN_RECORDS
+    if not os.path.isdir(records_dir):
+        return {}
+    out = {}
+    for name in sorted(os.listdir(records_dir)):
+        if not name.endswith('.json'):
+            continue
+        with open(os.path.join(records_dir, name), encoding='utf-8') as fh:
+            row = json.load(fh)
+        if row.get('label'):
+            out[row['label']] = row
     return out
 
 

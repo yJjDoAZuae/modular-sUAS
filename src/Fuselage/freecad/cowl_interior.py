@@ -86,6 +86,17 @@ import Part
 #: own budget allows, but the acceptance tolerance is set by what the slicer does with a thin
 #: perimeter, and that is five times tighter. Keeping them equal meant the acceptance test
 #: inherited the construction's budget instead of the part's requirement, which is backwards.
+#:
+#: **Measured 2026-10-12, this value cannot simply be tightened, and the two thresholds are not
+#: even read by the same instrument** (IP-WTM-27, IP-WTM-28; `cowl.md` OQ-DES-CW28). On a
+#: `nose_cowl_shell` at `U` = 4, tightening to 0.02 makes the wall compliant for 14% more build
+#: time. On a `tail_shell` at `U` = 0.5 it does nothing and then fails: `cavity`'s second pass
+#: reads the same 0.0601 mm worst gap at 0.05, 0.02 and 0.01, and raises `Unconverged` at both
+#: tightened values against its 64-station patch budget. And what this criterion is compared
+#: against -- `_finished_wall_gap`, a plain minimum with no corner exclusion -- read 0.03763 mm on
+#: the wall where the acceptance gate's own measure read 0.01345 mm, so `TAU` = `WALL_TOL` would
+#: not request a `WALL_TOL` wall (OQ-DES-CW29). Do not change this constant to close the gap to
+#: `WALL_TOL` without reading those two questions first.
 TAU = 0.05
 
 #: Section 6: the acceptance tolerance on the **finished wall's own thickness**, in millimetres.
@@ -127,10 +138,15 @@ TAU = 0.05
 #: station of the `U` = 4 wall the reading falls from 0.2136 mm to 0.00264 mm when the spacing is
 #: fixed instead of the count. cowl_interior_surface.md section 6.6 is the measurement.
 #:
-#: **`check_cowl_interior.wall_thickness` has the same defect and it is not yet fixed.** `AROUND`
-#: is a fixed 240 inner samples, which is 8.7 mm apart on a tail section at `U` = 4 -- fourteen
-#: times this wall -- so its readings above `U` = 2 are not sound in either direction. `check_samples`
-#: in this module is the pattern to follow: an arc-length spacing, `CHECK_ARC` = 0.20 mm.
+#: **`check_cowl_interior.wall_thickness` had the same defect and it is fixed as of IP-WTM-25.**
+#: `AROUND` was a fixed 240 inner samples, which is 8.7 mm apart on a tail section at `U` = 4 --
+#: fourteen times this wall -- so its readings above `U` = 2 were not sound in either direction. It
+#: now samples at `WALL_ARC` = 0.125 mm, derived per station from that station's own perimeter, the
+#: way `check_samples` in this module already did for the construction's own scan. **The gate's
+#: figures move accordingly**: at the mid station of the saved `tail_shell` at `U` = 4 it read
+#: 0.4454 mm at the old density and reads 0.5675 mm at the new one, so the thinning it reports
+#: there falls from 0.1546 to 0.0325 mm -- the same correction section 6.6 measured on the corpus,
+#: now in the gate that judges a build.
 #:
 #: Every figure in the soak corpus (cowl_interior_surface.md section 9.9) is `worst_wall_error`,
 #: which is `max(0, t - worst_low)`, and `worst_low` is `check_cowl_interior.wall_thickness`'s
@@ -142,7 +158,10 @@ TAU = 0.05
 #: figure is a lower bound on its own measure's drift, in both directions: a reading over this
 #: tolerance does not show the wall is that thin, and a reading under it does not show the wall
 #: complies -- the nose's 0.0067 mm would be expected to rise past 0.01 mm under finer sampling,
-#: as every other station's did.
+#: as every other station's did. **The sampling half of that is now fixed and the measure half is
+#: not**: since IP-WTM-25 the gate samples at a spacing, so a reading at `U` = 4 means what one at
+#: `U` = 1 means, but `worst_low` is still a nearest-point minimum and still does not converge.
+#: Adopting the converged measure beside it is IP-WTM-10.
 #:
 #: **Measured 2026-10-10 with a converging measure, at a refined sampling density.**
 #: `wall_measure.candidates.corner_excluded_min` was selected against five pre-committed gates
@@ -413,6 +432,18 @@ DENSE_FACTOR = 3
 #: `TAU` of the erosion. Seeding six everywhere instead cost 23 minutes a part on a tail whose
 #: 59 feature stations make 60 patches, most of them a fraction of a millimetre long, and
 #: bought nothing the criterion did not already guarantee.
+#:
+#: **That cost figure is stale and must not be quoted again: it prices a construction this module
+#: no longer performs.** The 60 patches came from splitting at every rib end, and `cavity` now
+#: takes its features from `feature_stations(body, ...)` -- the un-notched blank, which carries no
+#: rib edges -- so **every build of both kinds reports `patch 1/1`**. Re-measured 2026-10-14 with
+#: `SEED_MAX` raised from 6 to 24, one patch each: a `nose_cowl_shell` at `U` = 4 costs **23 %**
+#: more and a `tail_shell` at `U` = 0.5 **33 %** more, not minutes. The second half of the note
+#: above is also wrong as a general claim -- generous seeding does buy something the criterion
+#: does not guarantee, because `_refine` stops at the *first* subdivision inside `TAU` and so
+#: accepts a coarse fit that happens to pass: at `U` = 4 the nose goes 0.01530 -> 0.00710 mm on
+#: seeding alone. What the criterion guarantees is `TAU`, and `TAU` = 0.05 is five times
+#: `WALL_TOL`. Section 6.8.3 has both measurements; what to do is OQ-DES-CW31.
 #: A patch at least this long is seeded with the six stations a C2 fit needs; a shorter one is
 #: seeded with its two ends and left for section 5 to subdivide if the erosion turns out not to
 #: be straight across it. Below six rows `approximate` cannot produce C2 at all -- it raises
@@ -680,21 +711,6 @@ class _Polyline(object):
         if best is None:
             return None
         return (math.sqrt(best[0]), (float(q[best[1], 0]), float(q[best[1], 1])), best[2])
-
-
-def hausdorff(a_samples, a_dense, b_samples, b_dense):
-    """The two-sided Hausdorff distance between two closed contours.
-
-    **Two-sided, per section 5 step 4.** One-sided misses a fitted contour that bulges outward
-    where the true one has no material: every point of the true contour still has a fitted
-    point near it, and the excursion goes unmeasured.
-
-    Each side's *samples* are measured against the other side's *dense* polyline, so what is
-    reported is the distance between the curves and not the distance between two coarse
-    approximations of them.
-    """
-    return max(float(b_dense.distances(a_samples).max()),
-               float(a_dense.distances(b_samples).max()))
 
 
 def _min_wire_distance(wires_a, wires_b):
@@ -2310,7 +2326,7 @@ def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHE
 # --------------------------------------------------------------------------------
 
 def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None,
-           clearance_check=False):
+           clearance_check=False, exterior_split=None):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
     `body` is the un-mirrored symmetry cell before any notch reached it (`half` for the tail,
@@ -2372,6 +2388,29 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     bounded by `POST_CUT_ROUNDS`, since evidence gathered before this was written shows the gap
     does not always close quickly, and an unconverged build raises rather than ships a wall this
     pass has already measured as thin.
+
+    **`budget` = 64, not `POST_CUT_ROUNDS`, is the limit that actually binds at a tight `tau`, and
+    it binds on a tail.** Measured 2026-10-12 (IP-WTM-28): on `tail_shell` at `U` = 0.5 this pass
+    raises `Unconverged` at `tau` = 0.02 and 0.01, both times against the station budget while
+    applying a round's insertions -- 20 → 36 → 62 → 94 stations and 23 → 43 → 77 -- with round 6
+    never reached. It does that while making no progress: this pass's own first-round worst gap is
+    0.0601 mm at `tau` = 0.05, 0.02 and 0.01 alike, and 77 of its over-tolerance stations at 0.02
+    sit in intervals already at the `2 * MIN_INTERVAL` floor, which cannot be split at any budget.
+    **So inserting stations is not a lever on the tail's residual**, and raising either constant is
+    buying more of something measured not to work (`cowl.md` OQ-DES-CW28, alternative 7).
+
+    **`exterior_split`, opt-in, off by default (IP-WTM-26).** Give it a list and round 0 of the
+    post-cut loop appends `(z, gap_to_notched, gap_to_oml)` a station: the same
+    `_finished_wall_gap` measure on the same section, once against each of the two exteriors this
+    construction necessarily has. Costs one extra distance field per round-0 station and nothing at
+    all when left `None`, so production is unaffected.
+
+    **What `tau` is compared against here is not what the acceptance gate reports.**
+    `_finished_wall_gap` below is a plain minimum with no corner exclusion; the gate's published
+    figure is `wall_measure.candidates.corner_excluded_min` at a finer spacing. On that same
+    `U` = 0.5 wall they read 0.03763 and 0.01345 mm, a factor of 2.80, essentially all of it corner
+    exclusion rather than sampling. Setting `tau` = `WALL_TOL` therefore does not ask for a
+    `WALL_TOL` wall; which of the two measures should be authoritative is OQ-DES-CW29.
 
     **`clearance_check`, opt-in, off by default (OQ-DES-CW24).** Runs `clearance_margin_scan`
     against the converged smooth surface and the individual dilated ribs once the cut above has
@@ -2537,6 +2576,18 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     note('interior: z %.3f .. %.3f, %d fit points (%.3f mm apart), %d check points '
          '(%.3f mm apart), %d cell plane(s)'
          % (z_lo, z_hi, n_fit, widest / n_fit, n_check, widest / n_check, len(planes)))
+    if report is not None:
+        # **The circumferential sampling as numbers, not only in the log line above (IP-WTM-26).**
+        # IP-WTM-36 showed the *axial* seed is a fixed count and that raising it hits a floor near
+        # 0.0071 mm on a nose at `U` = 4. Whether that floor is the **circumferential** fit
+        # resolution is the next question, and it cannot be asked from a log string: at `U` = 4 the
+        # nose fits at 1.002 mm around the section against a 0.6 mm wall, so the control rows are
+        # further apart than the wall is thick. Section 6.8.3 excluded `FIT_ARC` as a cause of the
+        # `U` *trend*, correctly, because it saturates once its count floor stops binding -- but a
+        # quantity that saturates is the right shape for a floor, which is a different claim.
+        report.update(fit_points=n_fit, fit_spacing_mm=widest / n_fit,
+                      check_points=n_check, check_spacing_mm=widest / n_check,
+                      widest_section_mm=widest)
 
     # **The body's own creases, not the notches'.** The surface follows the un-notched blank
     # now, so a rib start is not a boundary for it -- the rib is subtracted afterwards and
@@ -2632,6 +2683,16 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         patch_entries.append({'p_lo': p_lo, 'p_hi': p_hi, 'is_lo_end': is_lo_end,
                               'is_hi_end': is_hi_end, 'rows': rows, 'main': main,
                               'extra': extra})
+        if report is not None:
+            # **Pass 1's own worst, per patch, which only the log carried before (IP-WTM-36).**
+            # It is the figure that shows this pass stopping *coarser* at larger `U` -- 0.0129 mm
+            # on a nose at `U` = 1 against 0.0308 at `U` = 4, both inside `TAU` = 0.05 and so both
+            # accepted -- because `_seed` takes a fixed `SEED_MAX` stations for any patch over
+            # `SEED_LONG_MM` and bisection stops at the first subdivision that passes. A figure
+            # that explains a `U` trend should not be reachable only by parsing a log line.
+            report.setdefault('smooth_patches', []).append(
+                {'p_lo': float(p_lo), 'p_hi': float(p_hi), 'seeded': len(zs),
+                 'stations': len(rows), 'worst': float(worst)})
 
         note('patch %d/%d  z %9.4f .. %9.4f (%6.3f mm)  %2d seeded -> %2d stations  '
              'worst wall %.4f  %5.1f s  [%.0f s total]'
@@ -2830,6 +2891,26 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 if gap is None:
                     continue
                 worst_finished = max(worst_finished, gap)
+                if exterior_split is not None and round_ == 0:
+                    # **IP-WTM-26: the same measure, the same section, the two exteriors.**
+                    # `_refine` converges the wall out to `outer_at` -- `body`'s un-notched OML,
+                    # because no cut exists when the surface is fitted -- and this loop measures
+                    # it out to `finished_outer_at`, the real exterior after the buttress cut.
+                    # IP-WTM-44 measured pass 1 reaching 0.0073 mm on a `tail_shell` at `U` = 2.0
+                    # while this pass stayed at 0.0481 mm on the wall it was handed, which says
+                    # the residual lives in the difference between those two references rather
+                    # than in the fit. This records both so that claim is measured instead of
+                    # inferred, and it is the *same* `_finished_wall_gap` call with the exterior
+                    # swapped, never a second contour built here -- rebuilding one is how four
+                    # earlier attempts at this comparison each produced a plausible wrong number
+                    # (section 6.1).
+                    #
+                    # Round 0 only, because that is the one round that scans every patch in full;
+                    # later rounds see a window around their own insertions and would weight the
+                    # record toward whatever was already thin.
+                    oml = _finished_wall_gap(solid, z, t, outer_at, planes, n_check)
+                    exterior_split.append((float(z), float(gap),
+                                           None if oml is None else float(oml)))
                 if gap > tau and not divisible:
                     note('    patch %d: finished wall %.4f mm over %.3f at z = %.4f, in an '
                          'interval at the %.3f mm subdivision floor; reported, not split'
@@ -3239,7 +3320,7 @@ def mirror_across_cell(cell_result, normal):
 
 
 def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None,
-                 clearance_check=False):
+                 clearance_check=False, exterior_split=None, stages=None):
     """The wall: `notched` with its cavity removed, mirrored out to the whole part.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
@@ -3296,10 +3377,23 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     but does stop the two operands from sharing an exact face at all.
     """
     inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report,
-                     clearance_check=clearance_check)
+                     clearance_check=clearance_check, exterior_split=exterior_split)
+    # **`stages`, opt-in, off by default (IP-WTM-38).** IP-WTM-37 established that the rib cut
+    # inside `cavity` only trims -- identical control nets -- so no boundary-value error can enter
+    # there. The three booleans *after* it were never covered, and they cannot be checked from a
+    # finished wall: `congruent_identity` compares mirrored copies against each other, so a refit
+    # applied before the mirror leaves every copy equally refit and congruent, and passes. Each
+    # stage's shape is recorded here instead, which is what lets the surface be compared against
+    # the one the previous stage handed over. A reference a step, no copying; nothing when `None`.
+    if stages is not None:
+        stages.append(('cavity', inside))
     for plane in cell_boundary_planes(body):
         inside = _extend_across_cell(inside, plane)
+        if stages is not None:
+            stages.append(('extend_across_cell', inside))
     wall = notched.cut(inside)
+    if stages is not None:
+        stages.append(('notched_cut', wall))
     if len(wall.Solids) != 1:
         raise Unconverged(
             'the cell wall came out as %d disconnected solids, not one, even though its cavity '
@@ -3325,6 +3419,8 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
 
     for normal in mirrors:
         wall = mirror_across_cell(wall, normal)
+        if stages is not None:
+            stages.append(('mirror_across_cell', wall))
     if report is not None:
         report.update(wall_volume=wall.Volume, wall_solids=len(wall.Solids))
     note('wall: %.4f mm3 in %d solid(s) after %d mirror step(s)'

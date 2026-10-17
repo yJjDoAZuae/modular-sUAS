@@ -765,6 +765,306 @@ class TestBsplineSurfaces:
         assert len(be.bspline_surfaces(shape)) == 2
 
 
+# ------------------------------------------------- the mirror steps, on a wall that already exists
+
+
+def mirrored(poles, axis=0):
+    """`poles` reflected through the plane `axis` = 0, which is a rigid motion."""
+    out = []
+    for row in poles:
+        new_row = []
+        for p in row:
+            q = list(p)
+            q[axis] = -q[axis]
+            new_row.append(tuple(q))
+        out.append(new_row)
+    return out
+
+
+def refitted(poles, dz=0.004):
+    """`poles` with one pole nudged: what a `removeSplitter` refit looks like."""
+    out = [list(row) for row in poles]
+    x, y, z = out[-1][-1]
+    out[-1][-1] = (x, y, z + dz)
+    return out
+
+
+class TestCongruentIdentity:
+    """IP-WTM-38. After `mirror_across_cell` a copy's poles are *supposed* to differ, so
+    `surface_identity` asks the wrong question; what must hold is that the copy is the original
+    carried rigidly."""
+
+    def test_a_mirrored_net_is_congruent_though_every_pole_moved(self):
+        a = BSplineSurface(net())
+        b = BSplineSurface(mirrored(net()))
+        out = be.congruent_identity(a, b)
+        assert out['identical'] is True
+        assert out['worst_step_mm'] == pytest.approx(0.0, abs=1e-12)
+        assert be.surface_identity(a, b)['identical'] is False, \
+            'pole equality must fail here, or the mirror moved nothing'
+
+    def test_a_translated_net_is_congruent(self):
+        a = BSplineSurface(net())
+        b = BSplineSurface([[(x + 17.0, y, z) for x, y, z in row] for row in net()])
+        assert be.congruent_identity(a, b)['identical'] is True
+
+    def test_a_refit_is_not_congruent_and_reports_its_magnitude(self):
+        """**The failure this is for.** A refit moves a pole relative to its neighbours, which no
+        rigid motion can do, so the step lengths change by about the displacement."""
+        out = be.congruent_identity(BSplineSurface(net()), BSplineSurface(refitted(net())))
+        assert out['identical'] is False
+        assert out['comparable'] is True
+        assert out['worst_step_mm'] > 1.0e-6
+
+    def test_a_refit_of_a_mirrored_copy_is_still_caught(self):
+        """The case that actually matters: a copy that is both mirrored and refitted, where pole
+        equality cannot separate the two effects."""
+        out = be.congruent_identity(BSplineSurface(net()),
+                                    BSplineSurface(refitted(mirrored(net()))))
+        assert out['identical'] is False
+
+    def test_a_different_knot_vector_is_reported_rather_than_compared(self):
+        out = be.congruent_identity(BSplineSurface(net()),
+                                    BSplineSurface(net(), u_knots=(0.0, 0.5)))
+        assert out['same_knots'] is False
+        assert out['identical'] is False
+
+    def test_a_reversed_index_order_is_allowed_because_a_reflection_renumbers(self):
+        a = BSplineSurface(net())
+        flipped = list(reversed(mirrored(net())))
+        assert be.congruent_identity(a, BSplineSurface(flipped))['identical'] is True
+
+    def test_a_scaled_net_is_not_congruent(self):
+        """A scaling preserves shape but not size, and it is not a motion the construction
+        performs -- so it must fail rather than pass as "the same surface"."""
+        scaled = [[(2.0 * x, 2.0 * y, 2.0 * z) for x, y, z in row] for row in net()]
+        assert be.congruent_identity(BSplineSurface(net()),
+                                     BSplineSurface(scaled))['identical'] is False
+
+
+class TestMirrorFamilies:
+
+    def face_of(self, poles, **kw):
+        return Face(BSplineSurface(poles, **kw), (0, 0, 0), (1, 1, 1))
+
+    def test_a_mirrored_pair_groups_together_and_passes(self):
+        shape = Shape([self.face_of(net()), self.face_of(mirrored(net()))])
+        rows = be.mirror_families(shape)
+        assert len(rows) == 1
+        assert rows[0]['size'] == 2 and rows[0]['mirrored'] == 1
+        assert rows[0]['congruent'] is True
+        assert be.mirror_verdict(rows)['clean'] is True
+
+    def test_a_refitted_copy_fails_inside_its_own_group(self):
+        """**The prediction that is free to fail.** Grouping never looks at a pole and congruence
+        never looks at the key, so a refit cannot escape by changing group."""
+        shape = Shape([self.face_of(net()), self.face_of(refitted(mirrored(net())))])
+        rows = be.mirror_families(shape)
+        assert len(rows) == 1, 'a refit keeps the knots, so it stays in the group'
+        assert rows[0]['congruent'] is False
+        verdict = be.mirror_verdict(rows)
+        assert verdict['clean'] is False
+        assert len(verdict['failed']) == 1
+
+    def test_surfaces_with_different_parameterizations_are_not_compared(self):
+        """Two unrelated B-splines on one wall -- an exterior and an interior -- are not copies of
+        each other and must not be held to congruence."""
+        shape = Shape([self.face_of(net()), self.face_of(net(), u_knots=(0.0, 0.25))])
+        rows = be.mirror_families(shape)
+        assert len(rows) == 2
+        assert all(r['mirrored'] == 0 for r in rows)
+
+    def test_a_wall_with_no_mirrored_copy_reports_vacuous_not_clean(self):
+        """**The sixth-instance guard.** A group whose members are pole-identical has not been
+        mirrored, so congruence in it is trivially true; calling that a pass is the same error as
+        cross-checking two measures of an empty input."""
+        same = net()
+        shape = Shape([self.face_of(same), self.face_of(same), self.face_of(same)])
+        rows = be.mirror_families(shape)
+        verdict = be.mirror_verdict(rows)
+        assert rows[0]['mirrored'] == 0 and rows[0]['exact'] == 3
+        assert verdict['vacuous'] is True
+        assert verdict['clean'] is False, 'nothing was tested, so nothing passed'
+        assert verdict['worst_step_mm'] is None
+
+    def test_a_shape_with_no_bspline_at_all_is_vacuous(self):
+        rows = be.mirror_families(Shape([unit_square_at(0.0)]))
+        assert rows == []
+        assert be.mirror_verdict(rows)['vacuous'] is True
+
+    def test_the_table_marks_the_group_that_failed(self):
+        shape = Shape([self.face_of(net()), self.face_of(refitted(mirrored(net())))])
+        text = be.table_mirror(be.mirror_families(shape))
+        assert 'NOT CONGRUENT' in text
+        assert 'worst step mm' in text
+
+    def test_the_parameterization_key_ignores_where_the_poles_are(self):
+        a = BSplineSurface(net())
+        b = BSplineSurface(mirrored(net()))
+        assert be.parameterization_key(a) == be.parameterization_key(b)
+        c = BSplineSurface(net(), u_mult=(4, 3))
+        assert be.parameterization_key(a) != be.parameterization_key(c)
+
+
+class TestAnomalousEdges:
+    """IP-WTM-35. One of the tail's 3 164 edge groups is not shared by exactly two faces, and a
+    count cannot say which of four things it is -- two of them normal, two of them defects."""
+
+    def faced(self, edges, surface=None, z=0.0):
+        return Face(surface or Plane((0.0, 0.0, z), (0.0, 0.0, 1.0)),
+                    (-1.0, -1.0, z), (1.0, 1.0, z), edges=edges)
+
+    def test_an_edge_shared_by_two_faces_is_not_reported(self):
+        shared = [Edge((0, 0, 0), (1, 0, 0))]
+        shape = Shape([self.faced(shared), self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        assert be.anomalous_edges(shape) == []
+
+    def test_a_zero_length_edge_is_a_parameterization_pole_not_a_defect(self):
+        shape = Shape([self.faced([Edge((2, 2, 0), (2, 2, 0))])])
+        rows = be.anomalous_edges(shape)
+        assert [r['kind'] for r in rows] == [be.EDGE_DEGENERATE]
+        assert be.edge_anomaly_verdict(rows)['clean'] is True
+
+    def test_one_face_on_a_periodic_surface_is_a_seam(self):
+        """**Periodicity is the discriminator, and the occurrence count is not.** An earlier
+        version of this classifier called a seam "one face carrying the edge twice", assuming
+        `Face.Edges` lists it once per orientation. `test_geometry_bridge_cowl_checks` put that to
+        the kernel and it is false -- a cylinder's lateral face lists its seam exactly once -- so
+        the count cannot separate a seam from an open boundary. A seam exists only on a periodic
+        surface, which is what is left to decide it on."""
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))],
+                                  surface=BSplineSurface(net(), u_per=True))])
+        rows = be.anomalous_edges(shape)
+        assert [r['kind'] for r in rows] == [be.EDGE_SEAM]
+        assert rows[0]['occurrences'] == 1, 'one occurrence, as the kernel really reports'
+        assert rows[0]['periodic'] is True
+        assert be.edge_anomaly_verdict(rows)['clean'] is True
+
+    def test_one_face_on_a_non_periodic_surface_is_an_open_boundary_and_is_serious(self):
+        """A plane has no seam for the edge to be, so a single adjacent face means the shell is
+        open there. This is the tail cavity's case: a `SurfaceOfExtrusion` face reporting neither
+        `U` nor `V` periodic."""
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        rows = be.anomalous_edges(shape)
+        assert [r['kind'] for r in rows] == [be.EDGE_FREE]
+        assert rows[0]['periodic'] is False
+        verdict = be.edge_anomaly_verdict(rows)
+        assert verdict['clean'] is False and len(verdict['serious']) == 1
+
+    def test_the_two_one_face_cases_differ_only_in_the_surfaces_periodicity(self):
+        """The converse, held side by side: identical topology, opposite verdicts, and the only
+        input that differs is the surface. If this ever stops being the discriminator, both
+        classifications are unsound at once."""
+        edges = [Edge((0, 0, 0), (1, 0, 0))]
+        free = be.anomalous_edges(Shape([self.faced(edges)]))
+        seam = be.anomalous_edges(Shape([self.faced(edges,
+                                                    surface=BSplineSurface(net(), v_per=True))]))
+        assert free[0]['occurrences'] == seam[0]['occurrences']
+        assert free[0]['faces'] == seam[0]['faces']
+        assert (free[0]['kind'], seam[0]['kind']) == (be.EDGE_FREE, be.EDGE_SEAM)
+
+    def test_three_faces_on_one_edge_is_non_manifold_and_is_serious(self):
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))]),
+                       self.faced([Edge((0, 0, 0), (1, 0, 0))]),
+                       self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        rows = be.anomalous_edges(shape)
+        assert [r['kind'] for r in rows] == [be.EDGE_NONMANIFOLD]
+        assert rows[0]['faces'] == [0, 1, 2]
+        assert be.edge_anomaly_verdict(rows)['clean'] is False
+
+    def test_the_serious_kinds_sort_before_the_harmless_ones(self):
+        """A reader should not have to scan past a thousand seams to find the one open boundary."""
+        shape = Shape([self.faced([Edge((5, 5, 0), (5, 5, 0))]),
+                       self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        rows = be.anomalous_edges(shape)
+        assert rows[0]['kind'] == be.EDGE_FREE
+        assert rows[-1]['kind'] == be.EDGE_DEGENERATE
+
+    def test_the_verdict_counts_every_kind_so_a_seam_is_still_visible(self):
+        shape = Shape([self.faced([Edge((5, 5, 0), (5, 5, 0))]),
+                       self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        verdict = be.edge_anomaly_verdict(be.anomalous_edges(shape))
+        assert verdict['kinds'] == {be.EDGE_DEGENERATE: 1, be.EDGE_FREE: 1}
+        assert verdict['groups'] == 2
+
+    def test_the_table_names_the_surface_types_involved(self):
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        text = be.table_anomalous(be.anomalous_edges(shape))
+        assert 'Plane' in text and be.EDGE_FREE in text
+
+    def test_the_kernel_overrules_the_keying_when_it_says_the_edge_is_shared(self):
+        """**The proxy checked against the authority it stands in for.** `_edge_key` includes the
+        edge's midpoint at `valueAt(0.5 * (First + Last))`, which is a *parameter* and not a
+        position, so two differently-parameterized representations of one shared curve key apart
+        and each half looks like an open boundary. Measured on a real `tail_shell` cavity: the
+        keying found one `free_boundary` on a shape the kernel calls a closed valid solid, which
+        cannot both be true. Where the kernel says two, the anomaly is this instrument's."""
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        part = types.ModuleType('Part')
+        part.Face = Face
+        shape.ancestorsOfType = lambda _edge, _type: [object(), object()]
+        rows = be.anomalous_edges(shape, Part=part)
+        assert [r['kind'] for r in rows] == [be.EDGE_KEYED_APART]
+        assert rows[0]['kernel_faces'] == 2
+        verdict = be.edge_anomaly_verdict(rows)
+        assert verdict['clean'] is True, 'a keying artifact is not a defect in the part'
+        assert verdict['keyed_apart'] == 1
+
+    def test_the_kernel_agreeing_it_is_free_leaves_it_a_finding(self):
+        """The converse: when the kernel also says one face, the open boundary stands."""
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        part = types.ModuleType('Part')
+        part.Face = Face
+        shape.ancestorsOfType = lambda _edge, _type: [object()]
+        rows = be.anomalous_edges(shape, Part=part)
+        assert [r['kind'] for r in rows] == [be.EDGE_FREE]
+        assert be.edge_anomaly_verdict(rows)['clean'] is False
+
+    def test_an_unchecked_finding_is_still_serious_but_counted_as_unchecked(self):
+        """Without `Part` the rows are the proxy's unchecked opinion. That must not read as a clean
+        bill, and it must not read as a confirmed defect either."""
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))])])
+        verdict = be.edge_anomaly_verdict(be.anomalous_edges(shape))
+        assert verdict['clean'] is False
+        assert len(verdict['unchecked']) == 1
+        assert 'not asked' in be.table_anomalous(be.anomalous_edges(shape))
+
+    def test_a_stray_face_outside_every_solid_is_counted(self):
+        """A face left beside a solid by a boolean has free edges by definition, so it would show
+        as an open boundary without the solid being open. The counts are reported, not assumed."""
+        class Solid(object):
+            def __init__(self, faces):
+                self.Faces = faces
+
+        shape = Shape([self.faced([Edge((0, 0, 0), (1, 0, 0))]), unit_square_at(1.0)])
+        shape.Solids = [Solid([shape.Faces[0]])]
+        assert be.loose_faces(shape) == (2, 1)
+
+    def test_an_edge_the_kernel_will_not_describe_is_a_finding_not_a_free_boundary(self):
+        """**The defect this classifier shipped with for ten minutes.** The geometry read sits in a
+        broad `except`, and when it failed the code fell through to the ordinary branches and
+        labelled a zero-length edge `free_boundary` -- an exception turned into a confident
+        diagnosis. An unreadable edge now says so and counts as serious, because "we could not
+        measure it" is not the same claim as "it is fine"."""
+        class Unreadable(Edge):
+            def __getattribute__(self, name):
+                if name == 'Length' and not object.__getattribute__(self, '_building'):
+                    raise RuntimeError('kernel refused')
+                return object.__getattribute__(self, name)
+
+            def __init__(self, a, b):
+                object.__setattr__(self, '_building', True)
+                Edge.__init__(self, a, b)
+                object.__setattr__(self, '_building', False)
+
+        shape = Shape([self.faced([Unreadable((0, 0, 0), (1, 0, 0))])])
+        rows = be.anomalous_edges(shape)
+        assert [r['kind'] for r in rows] == [be.EDGE_UNREADABLE]
+        assert rows[0]['length_mm'] != rows[0]['length_mm'], 'NaN, not a number pretending to be'
+        assert be.edge_anomaly_verdict(rows)['clean'] is False
+        assert '?' in be.table_anomalous(rows), 'the table must not print a NaN as a length'
+
+
 class TestAngleBetween:
 
     def test_identical_directions_are_zero(self):
@@ -1121,3 +1421,146 @@ class TestNoVendorImport:
                      'classify_faces', 'edge_conformance', 'agrees_with_kernel'):
             args = inspect.getfullargspec(getattr(be, name)).args
             assert 'Part' in args, '%s cannot reach a kernel' % name
+
+
+def spline_shape(*surfaces):
+    """A shape carrying the given B-spline surfaces, one face each, plus a non-spline face.
+
+    The extra plane face is there on purpose: `bspline_surfaces` has to ignore it, and a stage
+    comparison that happened to count faces rather than surfaces would be caught by it.
+    """
+    faces = [Face(s, (0, 0, 0), (1, 1, 1)) for s in surfaces]
+    faces.append(Face(Plane((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)), (0, 0, 0), (1, 1, 1)))
+    return Shape(faces)
+
+
+class TestStageIdentity:
+    """IP-WTM-38: the three booleans after `cavity`, which a finished wall cannot answer about.
+
+    `mirror_families` compares a finished wall's mirrored copies against each other, so a refit
+    applied *before* the mirror leaves every copy equally refit, every copy congruent, and the test
+    passing. `_extend_across_cell` and `notched.cut` run before any mirror and `_strip_seam` runs
+    inside the first one, so all three need the intermediate shapes.
+    """
+
+    def test_a_surface_carried_through_unchanged_is_identical(self):
+        a, b = BSplineSurface(net()), BSplineSurface(net())
+        rows = be.stage_identity([('cavity', spline_shape(a)),
+                                  ('notched_cut', spline_shape(b))])
+        assert len(rows) == 1
+        assert rows[0]['matched'] == 1 and rows[0]['lost'] == 0
+        assert rows[0]['identical'] is True
+        assert rows[0]['worst_mm'] == pytest.approx(0.0)
+        assert be.stage_verdict(rows)['clean'] is True
+
+    def test_a_nudged_pole_is_reported_as_a_refit(self):
+        """The same parameterization with poles moved: the key still matches, so the step is
+        compared and fails on the poles rather than vanishing from the comparison."""
+        a, b = BSplineSurface(net()), BSplineSurface(net(dx=0.004))
+        rows = be.stage_identity([('cavity', spline_shape(a)),
+                                  ('notched_cut', spline_shape(b))])
+        assert rows[0]['matched'] == 1 and rows[0]['identical'] is False
+        assert rows[0]['worst_mm'] == pytest.approx(0.004, abs=1e-9)
+        v = be.stage_verdict(rows)
+        assert v['clean'] is False and len(v['refitting']) == 1
+        assert 'REFIT OR LOST' in be.table_stages(rows)
+
+    def test_a_parameterization_that_disappears_is_reported_as_lost(self):
+        """**What a `removeSplitter` refit actually looks like.** The old net is gone and a new
+        one with a different pole count has replaced it, so there is nothing to compare pole for
+        pole — and reporting that as "no mismatch found" would be the worst possible answer."""
+        a = BSplineSurface(net())
+        bigger = [[(0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 2.0, 0.0)],
+                  [(1.0, 0.0, 0.0), (1.0, 1.0, 0.5), (1.0, 2.0, 0.0)]]
+        rows = be.stage_identity([('cavity', spline_shape(a)),
+                                  ('notched_cut', spline_shape(BSplineSurface(bigger)))])
+        assert rows[0]['lost'] == 1 and rows[0]['matched'] == 0
+        assert rows[0]['identical'] is False
+        assert be.stage_verdict(rows)['lost_total'] == 1
+
+    def test_a_stage_with_no_spline_tests_nothing_and_says_so(self):
+        """The vacuity guard. A transition out of a shape with no B-spline surface has not checked
+        anything, and must not report a pass — this subsystem has made that error seven times."""
+        rows = be.stage_identity([('cavity', Shape([Face(Plane((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)), (0, 0, 0),
+                                                        (1, 1, 1))])),
+                                  ('notched_cut', spline_shape(BSplineSurface(net())))])
+        assert rows[0]['vacuous'] is True and rows[0]['identical'] is False
+        v = be.stage_verdict(rows)
+        assert v['vacuous'] is True and v['clean'] is False
+        assert 'NOTHING TESTED' in be.table_stages(rows)
+
+    def test_surfaces_are_matched_by_parameterization_not_by_face_index(self):
+        """A boolean renumbers faces freely and can leave one surface carrying several faces — the
+        tail's cavity carries three over one fitted patch — so the comparison cannot be positional.
+        Here the later stage puts the same surface at a different index and duplicates it."""
+        a = BSplineSurface(net())
+        later = Shape([Face(Plane((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)), (0, 0, 0), (1, 1, 1)),
+                       Face(BSplineSurface(net()), (0, 0, 0), (1, 1, 1)),
+                       Face(BSplineSurface(net()), (0, 0, 0), (1, 1, 1))])
+        rows = be.stage_identity([('cavity', spline_shape(a)), ('mirror_across_cell', later)])
+        assert rows[0]['keys_before'] == 1 and rows[0]['keys_after'] == 1
+        assert rows[0]['matched'] == 1 and rows[0]['identical'] is True
+
+    def test_every_consecutive_pair_becomes_one_transition(self):
+        s = [('cavity', spline_shape(BSplineSurface(net()))),
+             ('extend_across_cell', spline_shape(BSplineSurface(net()))),
+             ('notched_cut', spline_shape(BSplineSurface(net()))),
+             ('mirror_across_cell', spline_shape(BSplineSurface(net())))]
+        rows = be.stage_identity(s)
+        assert [(r['from_stage'], r['to_stage']) for r in rows] == [
+            ('cavity', 'extend_across_cell'),
+            ('extend_across_cell', 'notched_cut'),
+            ('notched_cut', 'mirror_across_cell')]
+        assert be.stage_verdict(rows)['clean'] is True
+
+    def test_one_bad_transition_among_good_ones_is_named(self):
+        s = [('cavity', spline_shape(BSplineSurface(net()))),
+             ('extend_across_cell', spline_shape(BSplineSurface(net()))),
+             ('notched_cut', spline_shape(BSplineSurface(net(dx=0.01))))]
+        rows = be.stage_identity(s)
+        v = be.stage_verdict(rows)
+        assert v['clean'] is False
+        assert [r['to_stage'] for r in v['refitting']] == ['notched_cut']
+        assert 'extend_across_cell->notched_cut' in be.table_stages(rows)
+
+    def test_a_mirror_step_is_checked_for_congruence_not_pole_identity(self):
+        """**The defect this caught on its own first run.** On a `nose_cowl_shell` at `U` = 1.0,
+        which mirrors three times, the mirror-to-mirror transitions reported a worst pole
+        displacement of exactly 1.000e+02 mm and were labelled a refit. A mirror *moves poles* --
+        after one, the shape carries the original and its image under the same parameterization
+        key, so matching by key and comparing poles compares a copy against its own reflection.
+        `congruent_identity` exists for exactly this and its docstring says so; the mistake was
+        applying the identity test to the one step already known to need the other one.
+
+        Here the later stage's net is the earlier one translated bodily by 100 mm, which no pole
+        comparison can accept and congruence must."""
+        a = BSplineSurface(net())
+        moved = [[(x + 100.0, y, z) for (x, y, z) in row] for row in net()]
+        rows = be.stage_identity([('notched_cut', spline_shape(a)),
+                                  ('mirror_across_cell', spline_shape(BSplineSurface(moved)))])
+        assert rows[0]['test'] == 'congruence'
+        assert rows[0]['identical'] is True, 'a rigid motion must pass the congruence test'
+        assert rows[0]['worst_mm'] == pytest.approx(0.0, abs=1e-9)
+        assert be.stage_verdict(rows)['clean'] is True
+
+    def test_a_non_mirror_step_still_uses_pole_identity(self):
+        """The converse of the above: a bodily translation by a boolean that is only supposed to
+        trim is a real defect and must not be excused by the congruence test."""
+        moved = [[(x + 100.0, y, z) for (x, y, z) in row] for row in net()]
+        rows = be.stage_identity([('cavity', spline_shape(BSplineSurface(net()))),
+                                  ('notched_cut', spline_shape(BSplineSurface(moved)))])
+        assert rows[0]['test'] == 'identity'
+        assert rows[0]['identical'] is False
+        assert rows[0]['worst_mm'] == pytest.approx(100.0)
+
+    def test_which_stages_count_as_rigid_is_a_named_constant(self):
+        assert 'mirror_across_cell' in be.ISOMETRY_STAGES
+        rows = be.stage_identity(
+            [('a', spline_shape(BSplineSurface(net()))),
+             ('b', spline_shape(BSplineSurface(net())))], isometries=('b',))
+        assert rows[0]['test'] == 'congruence'
+
+    def test_an_empty_or_single_stage_list_yields_no_transitions(self):
+        assert be.stage_identity([]) == []
+        assert be.stage_identity([('cavity', spline_shape(BSplineSurface(net())))]) == []
+        assert be.stage_verdict([])['vacuous'] is True

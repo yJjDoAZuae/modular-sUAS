@@ -782,7 +782,12 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; the measurement has now been taken and no flagged minimum lands on a cut floor, so whether the metric is kept at all is the remaining decision | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
 | OQ-DES-CW26 | The rib cut can break the wall's cross-section ring over 93 mm while passing every existing check — one valid solid, healthy partition identity, mirror sewing closed, no exception — and the existing thickness check misreports the break as a 0.36 mm thickness. Reproduced and characterized; two checks are now identified that catch it, and which to adopt is the decision | **Blocking** for any claim that a completed `tail_shell` build's wall is verified |
 | OQ-DES-CW27 | FreeCAD caches a shape's triangulation, so `solid_measure.converged_volume` run a second time on the same shape object converges at once on the cached mesh and reports the coarsest deflection as the converged one; with `tol` = 0 the identical call raises and then succeeds. The volume returned is still correct — only the convergence claim is not. Whether to defeat the cache, and at what cost on a real cowl, is the decision | Not blocking (the production path measures at one fixed deflection on a freshly built shape, so no shipped number is affected) |
-| OQ-DES-CW28 | The interior fit's convergence criterion `TAU` = 0.05 mm is **five times looser than the acceptance tolerance** `WALL_TOL` = 0.01 mm the finished wall must meet, and the walls come out just inside the criterion they were converged to — 7 of the 12 distinct corpus walls are over tolerance, every `tail_shell` at every `U`. Tightening `TAU` is measured to work (a nose at `U` = 4 goes 0.01403 → 0.00378 mm at `TAU` = 0.02 for 14 % more build time) but is confirmed on one configuration of one kind, and the cost on a `tail_shell` is unmeasured. What `TAU` should be, and whether it should be a constant or a per-part property, is the decision | **Blocking** for any claim that a build's wall meets `WALL_TOL`; not blocking any build, which fails nothing today |
+| OQ-DES-CW28 | The interior fit's convergence criterion `TAU` = 0.05 mm is **five times looser than the acceptance tolerance** `WALL_TOL` = 0.01 mm the finished wall must meet, and the walls come out just inside the criterion they were converged to — 7 of the 12 distinct corpus walls are over tolerance, every `tail_shell` at every `U`. Tightening `TAU` works on a nose (`U` = 4 goes 0.01403 → 0.00378 mm at `TAU` = 0.02) but is now **measured not to build a tail at all, at two configurations**: at both 0.02 and 0.01 a `tail_shell` at `U` = 0.5 and again at `U` = 2.0 raises `Unconverged` against the 64-station patch budget, and pass 2's own worst gap is unchanged across the whole fivefold range both times, so on a tail `TAU` is not the lever. Pass 1 meanwhile converges to 0.0073 mm, inside `WALL_TOL`, and the finished wall is unmoved — because the two passes measure out to different exteriors, the un-notched OML and the notched one, which diverge by up to 26.5 mm. The two thresholds are additionally read by two different measures, 2.81x apart at `U` = 0.5. What to do instead — accept the wall as built, make the criterion adaptive, raise the refiner's limits, or remove the residual's mechanism — is the decision | **Blocking** for any claim that a build's wall meets `WALL_TOL`; not blocking any build, which fails nothing today |
+| OQ-DES-CW29 | The acceptance gate now reports two wall-thickness measures side by side, and on a real `nose_cowl_shell` build they disagree about whether the part complies: the incumbent nearest-point minimum reads 0.0376 mm under nominal at 9 of 12 stations and fails the build, while the measure selected against five pre-committed gates reads 0.0031 mm and passes it with three times the margin. The incumbent is known not to converge; the selected measure is known to exclude samples near concave corners, which is where the incumbent's minima sit on a nose. Which of the two gates a build — and therefore whether a nose cowl is shippable today — is the decision | **Blocking** for any pass/fail verdict on a `nose_cowl_shell`; not blocking a `tail_shell`, where both measures agree the wall is over tolerance |
+| OQ-DES-CW30 | `cavity`'s output carries an **open boundary** — one edge of 3 164, 1.0587 mm long, adjacent to exactly one face, confirmed by the kernel's own adjacency and not a seam, a pole, a stray face or an artifact of the measurement. `Shape.isValid()` passes it and the construction reports `1 solids, valid=True`, so the existing check does not establish that the cavity's shell is closed. The finished walls are unaffected: all twelve carry zero such edges, so a later step resolves it. Whether the construction should refuse an open cavity shell — which would fail every `tail_shell` build today while the parts they produce are sound — is the decision | Not blocking (no shipped wall is affected; the question is what the construction should refuse) |
+| OQ-DES-CW31 | The interior fit's axial seed is a fixed **count** — `SEED_MAX` = 6 stations for any stretch over 3 mm — while a `nose_cowl_shell`'s stretch runs 22 mm at `U` = 0.5 and 176 mm at `U` = 4.0, so the axial spacing grows from 2.44 to 17.60 mm and the finished wall's error tracks it to within ±13 %, from 0.00189 to **0.01530 mm** against `WALL_TOL` = 0.01. **This is why `U` = 4.0 is the only failing nose configuration**, confirmed by its converse: raising `SEED_MAX` to 12 at fixed `U` = 4 takes the wall to 0.00733 mm, passing, at no measurable build cost. **Two premises corrected 2026-10-14.** The apparent 0.0071 mm "floor" is `TAU`, not the construction: `_refine` stops at the first subdivision inside it, and at `TAU` = 0.02 the same nose reaches 0.00268 mm — so **either lever alone makes the nose compliant** and the real floor under both is 0.00268 mm, 3.7x inside tolerance. And the 23-minutes-a-part cost objection prices the superseded 60-patch construction; every current build is `patch 1/1`, and generous seeding measures **+23 % on a nose and +33 % on a tail**. The tail prerequisite is measured too: it buys 12 %, leaving the tail 3.3x over tolerance while pass 1 improves 4.9x. So the decision is no longer a build-time trade — it is whether to adopt a correct seeding rule that fixes the nose knowing it does nothing for the tail, and whether `TAU` should do that job instead | **Blocking** a compliant `nose_cowl_shell` at `U` = 4.0; not blocking any tail, which fails for separate reasons |
+| OQ-DES-CW32 | The rib dilation is a union of `RIB_FACETS` = 48 translated copies on a circle of radius `t`, so it is a solid only while `in_plane / t > 2·sin(π/48)` = 0.130806 — a fixed **count** standing against a ratio that two design rows move. The parameter sheet sits at 0.16667, **1.274× the floor**, and a single-parameter excursion crosses it in either direction: measured 2026-10-14, `buttress_cut_thickness` 0.1 → 0.07 mm, `extrusion_width` 0.6 → 0.8 mm and `cowl_n_perimeters` 1 → 2 are each refused by the precondition, needing 55, 52 and 77 facets. So the bounds are `buttress_cut_thickness` > 0.0785 mm and `cowl_n_perimeters × extrusion_width` < 0.7644 mm, and **a two-perimeter cowl does not build at all**. The same three are refused on a `tail_shell` at `U` = 0.5, where the binding tool is an axial slab reading 0.1004 mm in-plane rather than the nose's exact 0.1000. Whether to derive the count per tool, raise it to one larger fixed value, or document the region and leave it, is the decision | Not blocking any shipped wall — every value on the parameter sheet builds, with 27 % margin in the ratio; it blocks a two-perimeter cowl and bounds how far IP-WTM-41's input screen can reach |
+| OQ-DES-CW33 | Every wall-thickness measure in this subsystem is **in-plane**, and a plane cutting a slab inclined at θ reads `thickness / cos θ` — always thicker than the slab is. Measured with a new 3-D normal-distance measure verified first against closed-form fixtures: across four saved walls, **66 readings on the fitted interior surface, every one confirmed thin and thinner than the plane said, none exonerated**. Real worst deficits **0.0943 mm (tail `U` = 0.5), 0.0790 (nose `U` = 4.0) and 0.0645 (tail `U` = 1.0) — six to nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and 0.0226, understating by 2.9–7.0×. The surface is inclined 21.5–30.8° there and `normal / cos θ` reproduces every in-plane figure to 0.0037 mm; the in-plane column independently reproduces IP-WTM-45's 0.01345 and OQ-DES-CW28's 0.01403. **Not localized**: on the tail at `U` = 1.0, 1 954 of one station's 4 267 samples are thin on the fitted surface, 46 % of the circumference. **No measure the gate has or is choosing between can see any of it**, and in-plane severity is measured to rank the real readings *last*, so a cheap worst-`N` confirmation pass selects against the defect. Whether to filter by face class and measure, document the bias and leave the gate in-plane, or something else, is the decision | **Blocking** any claim that an in-plane pass means a wall meets `WALL_TOL`; not blocking a build, and an in-plane *failure* is still evidence of a defect |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -3049,11 +3054,18 @@ both statements came from the withdrawn fixed-count readings and neither holds.
 `tail_shell` wall's worst station reads 0.028 to 0.048 mm thin — three to five times `WALL_TOL`,
 consistently across `U` — while pass 2 stops at τ = 0.05 mm and the walls come out just inside it.
 The wall is about as thin as the criterion permits, which is a binding criterion rather than a
-construction defect, and exactly what τ's own note says it is by design. Whether tightening τ
-toward `WALL_TOL` yields a compliant wall is unmeasured. τ is what both passes stop at, so
-tightening it adds fit rows and re-cut rounds to every build, and the `U` = 3.0 build already spends
-5 of its 6 allowed rounds. **That is a measurement, not a design choice, and it is being taken.** `freecad/tau_study.py` builds one part at several `TAU` and measures the resulting wall, the fit rows and the rounds spent, so the three possible answers are all readable off the same run: the wall gets thinner in proportion and `TAU` is the lever; or the build raises `Unconverged` because pass 2 cannot reach the criterion inside `POST_CUT_ROUNDS` = 6, which the `U` = 3.0 build makes a live possibility at 5 of 6 already; or the wall does not improve at all, which refutes the reading above and sends the search back to the mechanism. Cost is an output of that test rather than a reason to defer it. It is in any case not this item's subject, which
-was how to handle the prediction-versus-real gap.
+construction defect, and exactly what τ's own note says it is by design.
+
+**Whether tightening τ yields a compliant wall was a measurement, and it has been taken — with
+opposite answers on the two kinds.** `freecad/tau_study.py` builds one part at several τ and
+measures each resulting wall. A `nose_cowl_shell` at `U` = 4 becomes compliant at τ = 0.02 for 14 %
+more build time. A `tail_shell` at `U` = 0.5 does not improve at all — pass 2's worst gap reads
+0.0601 mm at τ = 0.05, 0.02 and 0.01 alike — and then raises `Unconverged` at both tightened values,
+against `cavity`'s 64-station patch budget rather than `POST_CUT_ROUNDS`. **So on a tail the
+criterion is not what binds**, and the sentence above is a nose statement. What binds a tail is the
+residual's own mechanism (IP-WTM-26), which station insertion is now measured not to reach. The
+decision this leaves is OQ-DES-CW28; it is in any case not this item's subject, which was how to
+handle the prediction-versus-real gap.
 
 **One earlier worry is retired.** This note previously flagged that the `U` = 4 readings sat at or
 above the 0.19 mm a severed section ring was once misreported as a thickness at, so the walls might
@@ -3253,13 +3265,17 @@ Three measured properties bound what any answer has to cope with:
   discrepancy is itself unexplained.
 
 **What is not known.** Whether any *unperturbed* build reaches this state has not been shown. Every
-occurrence so far comes from the row-nudge probe, which no real build performs, and the complementary
-test — varying genuine design inputs and letting the fit reconverge, 21 cases — has never produced a
-construction failure. So this may be a reachable failure mode or an artifact of a synthetic input,
-and that distinction is the main thing separating the alternatives below. **It is now measured as
-far as the saved corpus can measure it** — every distinct wall scanned at 1 mm axially, 1 704
-stations, not one severed ring (see the evidence below) — so what is left of the question is whether
-a configuration *outside* that corpus can reach it, and what the switch actually is.
+occurrence comes from the row-nudge probe, which no real build performs. So this may be a reachable
+failure mode or an artifact of a synthetic input, and that distinction is the main thing separating
+the alternatives below.
+
+**Two of the three bounds on that evidence are now closed by measurement** (see the evidence below).
+Along `U`: every distinct corpus wall scanned at 1 mm axially, 1 704 stations, not one severed ring.
+Along the **design inputs**: a second corpus built one input off the sheet per wall, 36 walls over
+two kinds, 1 638 stations, every one a healthy annulus. So no legitimate configuration yet built, at
+any `U` or at any single-input excursion from the sheet, is in the severed state. What is left is an
+**interaction** — two inputs moved together, or one input at a large `U` — and **what the switch
+actually is**.
 
 **Alternatives:**
 
@@ -3270,10 +3286,12 @@ a configuration *outside* that corpus can reach it, and what the switch actually
    unreachable state or accepts a possibly real one. *Drawbacks:* open-ended, and the switch has
    resisted three refuted predictors already (nearest-tool clearance, the crowding ratio, row
    spacing). *Prerequisites:* none; IP-FC-146's characterization is the start of it. **This splits
-   in two, and the reachability half is now done:** whether any saved unperturbed wall is in the
-   severed state is measured — 1 704 dense stations across all twelve distinct walls, none severed,
-   plus the 336 acceptance-grid readings and the 21-case input sweep — while *what the switch is*
-   remains unmeasured. So choosing this alternative now means committing to the switch alone.
+   in two, and the reachability half is now done on both axes:** whether any saved unperturbed wall
+   is in the severed state is measured — 1 704 dense stations across all twelve distinct walls on
+   the `U` axis, 1 638 more across 36 walls on the design-input axis, none severed, plus the 336
+   acceptance-grid readings — while *what the switch is* remains unmeasured. So choosing this
+   alternative now means committing to the switch alone, plus whatever interaction testing is
+   wanted.
 2. **The annulus identity on the finished wall's own sections, asked of the kernel.** At each
    checked station, slice the mirrored wall and hand the wires to
    `Part.makeFace(wires, 'Part::FaceMakerBullseye')`, which resolves the nesting itself: **one face
@@ -3352,11 +3370,14 @@ construction. Characterizing the mechanism is still wanted, and is [IP-FC-146](.
 but no longer gates the check.
 
 **What is still unmeasured, and what it would change.** Whether an *unperturbed* build can reach this
-state is unknown — every occurrence comes from §6.2's row-nudge probe, which no real build performs,
-and the 21-case design-input sweep has never produced a construction failure. If it cannot be
-reached, alternative 2 is cheap insurance on a class of failure rather than a guard on a live defect;
-that does not change the recommendation, because the check costs a second a station and needs no
-calibration, but it does change how urgent alternative 3 is.
+state is unknown — every occurrence comes from §6.2's row-nudge probe, which no real build performs.
+Two axes have now been searched for it and come back empty: 1 704 dense stations across the twelve
+`U`-varying corpus walls, and 1 638 across 36 walls that each move one design input off the parameter
+sheet, with every station a healthy annulus. **That strengthens rather than weakens the case for
+alternative 2**, read the right way round: a check with nothing to catch is the cheap-insurance
+reading of it, and the two scans make that reading more likely while leaving interactions and the
+mechanism untested. It does not change the recommendation, because the check costs a second a station
+and needs no calibration; it does make alternative 3 less urgent than it looked.
 
 **Evidence on that question, 2026-10-10, reported from
 [wall_thickness_measure.md](../implementation/wall_thickness_measure.md).** Two findings bear on this
@@ -3433,12 +3454,48 @@ false positive rather than a missed break.
 
 **What this closes, and what it does not.** It closes the *axial* bound this item set itself: the
 remaining uncertainty is no longer where between two gate stations a short break might sit. What
-remains is the **input-space** bound, which is a different and larger thing — these twelve walls
-vary in `U` alone, with every other design input at the parameter sheet's values, so the scan says
-nothing about a configuration the corpus does not contain. The complementary evidence on that axis
-is the 21-case design-input sweep, which also produced no construction failure. And the mechanism is
-still uncharacterized: what the switch between δ = 0.01 mm and δ = 0.03 mm actually is remains
-[IP-FC-146](../implementation/freecad_migration.md#work-items).
+remained was the **input-space** bound, a different and larger thing — those twelve walls vary in
+`U` alone, with every other design input at the parameter sheet's values, so that scan said nothing
+about a configuration the corpus does not contain.
+
+**That bound is now measured too, 2026-10-14, and it is the same answer.** IP-WTM-41 built a second
+corpus in which one design input is moved off the sheet per wall, at a fixed `U`, and scanned it at
+the same 1 mm axially and 0.2 mm circumferentially: **36 walls across two kinds, 1 638 stations, 0
+severed, 0 confirmed gaps, 0 kernel disagreements.** The two populations are reported separately
+rather than folded together, because they answer different questions:
+
+| population | cases | built | refused | scanned | stations | severed |
+| --- | --- | --- | --- | --- | --- | --- |
+| `nose_cowl_shell` at `U` = 1.0 | 18 | 15 | 3 | 15 | 630 | **0** |
+| `tail_shell` at `U` = 0.5 | 24 | 21 | 3 | 21 | 1 008 | **0** |
+
+That is **14 excursion cases over 8 design rows on the nose and 20 over 11 rows on the tail**, each
+row moved both ways except where one direction is refused or is not a design: how wide every rib tool
+cuts, how far in every tool is set, how its dilation ramp leans, the wall thickness itself, and — on
+the tail — where the diagonal buttresses start, how deep and at what angle they run, and where the
+two top placements sit. Four of those rows move **all eleven** tools at once, which is how the
+`side*` and `bottom*` placements are covered without a build each. **Every excursion changed the
+built wall** —
+checked, not assumed, by a fingerprint of solids, faces, edges, bounding box and raw volume, with
+volumes running 3936 to 6352 mm³ on the tail against the baseline's 5851 — so this is coverage of
+those inputs and not the baseline scanned thirty-six times. The baseline is a control in its own
+right: the nose's hashes to the same value as all five of the 2026-10-06 soak repeats, so the harness
+builds what that corpus built.
+
+Three cases on each kind are **refused by the construction** rather than scanned, and all six are
+the same cause: `RIB_FACETS` = 48 is a fixed facet count and the dilation is only a solid above a
+floor that two design rows cross. That is [OQ-DES-CW32](#open-questions), and those three points of
+the input space stay uncovered until it is answered.
+
+This supersedes the 21-case design-input sweep of 2026-09-30 as the evidence on this axis. That
+sweep tested construction *validity* on the round-0 construction and saved nothing, so it could not
+be asked about the ring at all.
+
+**What still remains:** the screen moves one input at a time at one `U` per kind, so an
+**interaction** between two inputs, or between an input and a large `U`, is untested — and `U` = 3.0
+on a tail, the configuration the break was reproduced on, is covered only along the `U` axis. And the
+mechanism is still uncharacterized: what the switch between δ = 0.01 mm and δ = 0.03 mm actually is
+remains [IP-FC-146](../implementation/freecad_migration.md#work-items).
 
 **The single `no_wall` reading is a slice artifact, and distinguishing it needed a step the scan did
 not have at first.** At `z` = -293.98226487 the slice returned no closed wire at all. The kernel
@@ -3610,14 +3667,83 @@ cheapest configuration that fails the tolerance:
 Compliant at `TAU` = 0.02 for four extra rows and 14 % more time, with five times the margin at
 0.01. Neither tightening raised `Unconverged` and neither exhausted the six-round budget.
 
-**What is not known is the cost on a `tail_shell`, which is the kind that actually fails.** The nose
-was 0.004 mm over tolerance before tightening, so the lever had little work to do; a tail is three
-to five times over. A tail at `U` = 4 already carries 32 rows over 400 mm and takes 4 525 s, against
-the nose's 11 rows over 176 mm and 117 s, and `tail_shell` at `U` = 3.0 already spends 5 of its 6
-post-cut rounds at `TAU` = 0.05. So a tail could become compliant cheaply, become compliant
-expensively, or fail to converge inside the round budget, and nothing measured so far distinguishes
-those. The cheapest tail build is 727 s
-([wall_thickness_measure.md](../implementation/wall_thickness_measure.md) IP-WTM-28).
+**Re-measured 2026-10-14, further down, and the nose has a limit too.** Pushing past the values in
+that table, at `U` = 4 with `SEED_MAX` = 24 so the seed is not the binding constraint:
+
+| `TAU` | stations | pass 1's worst | real wall |
+| --- | --- | --- | --- |
+| 0.02 | 28 | 0.00428 | 0.00268 mm |
+| 0.01 | 28 | 0.00428 | 0.00268 mm |
+| 0.004 | **63** | 0.00512 | 0.00268 mm |
+| 0.002 | — | — | **`Unconverged`**, 64-station patch budget |
+
+Three readings worth taking from it. **`TAU` is a two-position switch on a nose, not a dial** — 0.02
+and 0.01 produce the identical build, and 0.004 produces 63 stations against 28 and the identical
+wall, so there is a floor at 0.00268 mm that tightening does not pass. **Pass 1 cannot reach 0.004**,
+stalling at 0.00512 with 63 stations, so neither pass converges to zero under insertion. And **the
+64-station patch budget stops a nose as well**, which matters for alternative 7 below: that limit was
+recorded here as the thing that refuses tails, and it is the construction's limit on both kinds.
+(The 0.00378 mm figure in the table above was taken before 2026-10-14's re-measurement, which reads
+0.00393 mm for the same configuration — a 4 % difference, and its 0.01403 mm baseline reads 0.01530;
+the two sets are not differenced anywhere, and each table is internally consistent.)
+
+**On a `tail_shell` it does not work at all, measured 2026-10-12 (IP-WTM-28).** `tail_shell` at
+`U` = 0.5, the cheapest tail there is, one build and then one re-cut per criterion:
+
+| `TAU` | pass 1 stations | pass 2's round-1 gap | outcome | real wall | over `WALL_TOL` | re-cut |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.05 (current) | 19 | 0.0601 | converged | 0.01346 mm | 3 of 12 | 711 s |
+| 0.02 | 20 | 0.0601 | **`Unconverged`** | — | — | 3 827 s |
+| 0.01 | 23 | 0.0601 | **`Unconverged`** | — | — | 2 154 s |
+
+Three things in that table matter more than the failure itself.
+
+**Pass 2's gap is the same number at all three criteria** — 0.0601 mm, to the four decimals the log
+prints — while pass 1's own worst prediction falls 0.0286 → 0.0122 → 0.0081 mm across the same
+range. Tightening the criterion fivefold moved the smooth surface and left the finished wall where
+it was. So on a tail `TAU` is **not the lever**, which is the reading this whole question was built
+on and is now refuted for the kind that actually fails.
+
+**The failure is not the round budget.** `POST_CUT_ROUNDS` = 6 is never reached. Both runs stop
+against `cavity`'s other limit, `budget` = 64 stations in one patch, while applying round 3's and
+round 2's insertions — 20 → 36 → 62 → 94 stations at `TAU` = 0.02, and 23 → 43 → 77 at 0.01. And
+where the refiner wants to split it increasingly cannot: 77 over-tolerance stations at `TAU` = 0.02
+sit "in an interval at the 0.400 mm subdivision floor", a hard geometric floor, with gaps in the
+same 0.020–0.055 mm band as the residual itself.
+
+**`TAU` and `WALL_TOL` are not thresholds on the same measure.** Pass 2 converges a plain minimum
+distance with no corner exclusion, at `CHECK_ARC` = 0.20 mm; the "real wall" column above, and the
+corpus table, are `corner_excluded_min` at 0.125 mm. Those are the incumbent and the selected
+measure of OQ-DES-CW29, which is itself open. On this wall they read **0.03794 and 0.01346 mm**, a
+factor of 2.81, so `TAU` = `WALL_TOL` does not ask for a 0.01 mm wall — it asks pass 2's measure to
+reach 0.01 mm. The factor varies across the corpus (2.81x, 1.68x, 1.15x, 1.06x, 0.92x, 1.13x at
+`U` = 0.5 to 4.0), and **`U` = 0.5 is its worst case**, which is an unlucky coincidence rather than
+a chosen one: that `U` was picked for costing 727 s.
+
+**That confound has since been removed, and the conclusion survives it (IP-WTM-44).** The same
+study was run on `tail_shell` at `U` = 2.0, where the two measures read 1.10x apart under the same
+instrument, so `TAU` = 0.01 there asks for about 0.0091 mm by the gate's measure rather than
+`U` = 0.5's 0.0036 mm. Both tightened values raise `Unconverged` again, against the same 64-station
+patch budget, after 5 656 s and 1 799 s — and pass 2's round-1 gap is again flat at 0.0481 mm at
+both, against 0.0508 mm at `TAU` = 0.05. **Pass 1 meanwhile converges to 0.0073 mm, inside
+`WALL_TOL`, and the finished wall it hands over is unchanged.** There is a structural reason: the
+two passes measure out to *different exteriors* by necessity — pass 1 to `body`'s un-notched OML,
+since no cut exists when the surface is fitted, and pass 2 to `notched`'s real exterior, which
+`cavity` records as diverging from it by 26.5 mm at one real thin station. Tightening `TAU` tightens
+a quantity referenced to the OML, which is not the quantity the part is held to
+([cowl_interior_surface.md](cowl_interior_surface.md) §6.8, §6.8.1).
+
+**Measured at the station level, that is now more specific, and it is the strongest single datum
+here.** Both exteriors were measured on one tail build with the same `_finished_wall_gap` call and
+only the reference swapped (§6.8.2). At `tail_shell` `U` = 0.5's worst station, `z` = -15.27863, the
+notch-referenced reading is **0.06005 mm** — the figure that is invariant in `TAU` and that refuses
+the build at 0.02 and 0.01 — while the OML-referenced reading at that same station is
+**0.00175 mm**. *The fit is accurate to under two thousandths of a millimetre exactly where pass 2
+refuses to converge.* `TAU` governs the fit, so there is nothing for it to improve there. Across
+that wall the reference surface accounts for 106 of 114 over-tolerance stations; 8 survive the swap
+at 0.0103–0.0185 mm. On a `nose_cowl_shell` at `U` = 4.0 it accounts for **none** of 20, the two
+readings agreeing to 0.00003 mm — so the two kinds' residuals are different phenomena, measured
+rather than inferred.
 
 **`TAU` is also not reachable from the document.** `cowl_tree._CowlShell.execute` calls
 `shell_solid` without a `tau` argument and the shell object carries no `Tau` property, so every
@@ -3639,23 +3765,27 @@ distinguish them and none is offered.
    construction so the fit converges to the tolerance the part must meet.
    *Benefits:* the only setting under which the construction can guarantee its own acceptance
    criterion rather than meeting it by luck; removes the standing inconsistency between the two
-   thresholds; measured to give five times the margin on the one configuration tested; one
+   thresholds; measured to give five times the margin on `nose_cowl_shell` at `U` = 4; one
    constant, no new plumbing.
-   *Drawbacks:* unmeasured cost on a tail, which is where every failure is and where the build is
-   already 4 525 s at the largest `U`; risks `Unconverged` on a configuration that currently
-   succeeds, which turns a passing build into a refused one.
-   *Prerequisites:* IP-WTM-28 — run `tau_study.py` on a `tail_shell`, cheapest first at `U` = 0.5
-   (727 s a build, three `TAU` values).
+   *Drawbacks:* **measured not to build, at two configurations.** On `tail_shell` at `U` = 0.5 it
+   raises `Unconverged` after 2 154 s and at `U` = 2.0 after 1 799 s, both against the 64-station
+   patch budget rather than the round budget, having moved pass 2's gap not at all either time.
+   Adopting it as written would refuse every tail, which is a worse outcome than the thin wall it is
+   meant to fix. It also equates thresholds on two different measures referenced to two different
+   exteriors (see the problem statement), so even the compliance it appears to guarantee is not the
+   compliance the gate tests.
+   *Prerequisites:* to become viable again it needs whatever makes a tail converge — alternative 5
+   or alternative 7 — not a further measurement of itself.
 
 2. **Set `TAU` = 0.02 mm** — the loosest value measured to produce a compliant wall.
-   *Benefits:* compliant on the tested configuration at 14 % more build time; leaves more of the
-   construction's budget intact than alternative 1, so less likely to hit the round limit on a
-   tail.
-   *Drawbacks:* still looser than the tolerance, so it is a measured coincidence rather than a
-   guarantee — a configuration whose residual is larger than the nose's would pass convergence and
-   fail acceptance, exactly as today; 0.02 is fitted to one build and has no independent
-   justification.
-   *Prerequisites:* the same tail measurement as alternative 1.
+   *Benefits:* compliant on `nose_cowl_shell` at `U` = 4 at 14 % more build time.
+   *Drawbacks:* **also measured not to build**, and it fails *more* expensively than alternative 1:
+   `Unconverged` after 3 827 s on `tail_shell` at `U` = 0.5 and 5 656 s at `U` = 2.0, reaching round
+   3 and round 2 respectively before exhausting the station budget. At `U` = 2.0 its worst gap also
+   *rose* between those rounds, 0.0481 to 0.0514 mm, after 27 insertions. It is additionally still
+   looser than the tolerance, so on the kinds where it does build it is a measured coincidence
+   rather than a guarantee.
+   *Prerequisites:* the same as alternative 1.
 
 3. **Keep `TAU` = 0.05 mm and accept the walls as built** — record that the finished wall is within
    0.047 mm of nominal rather than 0.01 mm, and state the compliance claim at that figure.
@@ -3677,8 +3807,12 @@ distinguish them and none is offered.
    bisection discipline is load-bearing (forcing a station at an arbitrary `z` was measured to make
    the finished wall 0.10–0.35 mm *worse* everywhere in the patch), so a second criterion
    interacting with it needs its own measurement; harder to reason about than one number.
-   *Prerequisites:* alternative 1's or 2's measurement first, to know whether a uniform tightening
-   is affordable — if it is, this complexity buys nothing.
+   *Prerequisites:* none outstanding. Its prerequisite was alternative 1's or 2's measurement, to
+   know whether a uniform tightening was affordable; that measurement is done and a uniform
+   tightening does not build on a tail, so this alternative's complexity is no longer competing
+   against a simpler setting that works. One caution the measurement adds: pass 2 already inserts
+   selectively and that is precisely what failed, so "tighten only where pass 2 measures a station
+   over `WALL_TOL`" has to mean something other than more insertion at the same places.
 
 5. **Fix the mechanism instead of converging harder** — leave `TAU` alone and find what produces
    the residual, on the evidence that the nose's thinning is strictly monotonic in `U` (0.00115 to
@@ -3704,31 +3838,855 @@ distinguish them and none is offered.
    single constant is at least uniform.
    *Prerequisites:* a decided value for the default, from one of 1–4.
 
+7. **Raise the refiner's own limits** — `cavity`'s `budget` = 64 stations a patch and
+   `MIN_INTERVAL` = 0.20 mm (a 0.400 mm subdivision floor) are what the tail actually hit, not
+   `TAU`. Raise one or both, and a tighter `TAU` may simply converge.
+   *Benefits:* the only alternative that attacks the measured failure rather than the symptom that
+   led to it; both are constants; it would tell us whether a tight criterion is unreachable in
+   principle on a tail or merely disallowed by two numbers chosen for a different situation.
+   *Drawbacks:* the evidence that it would be enough is weak and points the other way, and `U` = 2.0
+   strengthened that. 77 of the over-tolerance stations at `TAU` = 0.02 on the `U` = 0.5 build are
+   already at the 0.400 mm floor and cannot be split at any budget; pass 2's worst gap did not move
+   across a fivefold range of `TAU` at either configuration; and at `U` = 2.0 the gap **rose** from
+   0.0481 to 0.0514 mm across a round that inserted 27 stations, which is the opposite of what a
+   raised budget is supposed to buy. The station counts also diverge rather than settle — 30 → 57 →
+   106 at `U` = 2.0 — so there is no visible ceiling to raise the budget to. Cost rises steeply:
+   3 827 s and 5 656 s to reach the budget at `TAU` = 0.02 on the two tails, each round re-fitting
+   and re-cutting. `MIN_INTERVAL` also has a geometric reason behind it rather than being a
+   performance knob.
+   **One addition, 2026-10-14, and it cuts both ways.** The 64-station budget is now measured to
+   stop a **nose** as well — `TAU` = 0.002 at `U` = 4 raises `Unconverged` against it — so this is
+   the construction's limit on both kinds rather than a tail pathology, which is the strongest thing
+   yet said for attacking it. But the same run shows there would be nothing to collect: between
+   `TAU` = 0.02 and 0.004 the nose's station count goes 28 to 63, a 2.25x increase well inside the
+   budget, and the finished wall does not move at all. A budget raise buys stations, and on the kind
+   where stations are affordable they are already measured not to help.
+   *Prerequisites:* one run of `tau_study.py` on a tail with a raised budget, which is hours and
+   may not terminate; bound it before starting it.
+
 **Recommendation**
 
-**Alternative 1, conditional on IP-WTM-28, with alternative 4 as the fallback if the tail's cost is
-prohibitive.**
+**Alternative 5 is now the critical path, with alternative 3 as the honest interim and alternative 6
+decidable independently. Alternative 1 is what should be adopted the moment a tail can reach it,
+and today it cannot.**
 
-A convergence criterion looser than the acceptance tolerance cannot guarantee the tolerance; it can
-only happen to meet it, and the corpus shows it does not — 7 of 12 walls over, every tail at every
-`U`. That is a structural argument and it does not depend on the size of the gap. Alternative 2
-fixes the symptom at the one magnitude that was measured and leaves the same inconsistency in place
-for the next configuration; the measured cost difference between 0.02 and 0.01 on the nose was 5 s
-(133 against 138), which is not a reason to prefer the weaker guarantee.
+The previous version of this recommendation chose alternative 1 outright and said it was not
+decidable until IP-WTM-28 reported. It has reported, and it changed the answer. The structural
+argument for alternative 1 is untouched — a convergence criterion looser than the acceptance
+tolerance cannot guarantee the tolerance, it can only happen to meet it, and the corpus shows it
+does not. But a setting that refuses to build every tail does not deliver that guarantee either; it
+converts seven non-compliant walls into six absent ones. Alternative 1 remains the right
+*destination* and is not currently a reachable setting.
 
-Alternative 3 is the one that should be ruled out explicitly rather than left as a default. It is
-what the project does today, and it amounts to accepting a known risk of a dropped perimeter on
-every tail; `WALL_TOL` was chosen for that reason and nothing has been measured to say 0.047 mm is
-safe.
+What the measurement moved, and why:
 
-**This recommendation is not yet decidable and should not be acted on until IP-WTM-28 reports.** If
-a `tail_shell` converges at `TAU` = 0.01 within the six-round budget at an acceptable build time,
-alternative 1 is simply correct and the question closes. If it converges but costs several times the
-current build, the trade between build time and compliance is a real one and is the user's to make,
-with alternative 4 the way to buy most of the compliance for part of the cost. If it does not
-converge at all, the round budget and the mechanism become the question and alternative 5 moves
-from an aspiration to the critical path. Alternative 6 is worth deciding at the same time but is
-independent of the value.
+- **Alternatives 1 and 2 are not adoptable as settings.** Both raise `Unconverged` on the cheapest
+  tail. This is not a cost objection, which is what the question anticipated; it is a refusal.
+- **Alternative 5 moves from an aspiration to the critical path**, which is exactly the branch the
+  previous recommendation named for this outcome. Station insertion is now measured not to be a
+  lever on the tail's residual — pass 2's gap is unchanged across a fivefold range of `TAU` at two
+  separate configurations, and most of its thin stations are at the subdivision floor where it
+  cannot split further. A mechanism that insertion cannot reach has to be removed rather than
+  converged away. That is IP-WTM-26 and IP-WTM-36, and neither has a schedule. IP-WTM-44 also hands
+  it a starting point it did not have: pass 1 converges to 0.0073 mm against the **un-notched OML**
+  while the finished wall, referenced to the **notched** exterior, stays at 0.0481 mm, so the
+  residual lives in that difference and not in the fit.
+- **Alternative 3 is the honest description of the interim**, not a decision to stop. While 5 is
+  open the project is shipping `TAU` = 0.05 and walls at 0.013–0.047 mm, and it should say so at
+  that figure rather than imply a 0.01 mm wall. What it still lacks is a statement of what wall
+  error the print actually tolerates; `WALL_TOL` is a slicer-risk threshold and nothing in this
+  project has measured 0.047 mm to be safe. That is the part of alternative 3 that is a real
+  decision and it is unchanged.
+- **Alternative 7 is new and is cheap to rule out, not cheap to adopt.** The tail failed against
+  `budget` and `MIN_INTERVAL`, not against `TAU` or the round count, so those two constants are
+  worth naming; but the evidence that raising them would help is weak and points the other way.
+- **Alternative 4 no longer competes against a simpler setting that works**, so its complexity is
+  easier to justify than it was. Its own caution is that pass 2 is already selective, and being
+  selective is what failed.
+
+**One thing should be settled before this question is, and it is not a matter of taste.**
+OQ-DES-CW29 decides which measure reads a wall. `TAU` is compared against one of them and
+`WALL_TOL` against the other, and on `tail_shell` at `U` = 0.5 they differ by a factor of 2.81. Any
+numeric relationship adopted between the two thresholds — and alternative 1 is exactly such a
+relationship — means something different depending on how CW29 is answered. Answering CW29 first
+costs nothing here, because none of the alternatives above becomes harder for having waited.
+
+### OQ-DES-CW29 — Two wall-thickness measures now disagree about whether a nose cowl complies; which one gates?
+
+**The problem**
+
+The cowl's printed wall is a fixed real-world dimension — `cowl_n_perimeters * extrusion_width`,
+0.600 mm at the parameter sheet's current values — and it is held to **`WALL_TOL` = 0.01 mm**,
+because a cowl prints in spiral-vase mode with a single perimeter and no second wall behind it, so a
+wall materially under that does not print thin, it prints open. The acceptance check
+`check_cowl_interior.py` decides whether a finished build meets it.
+
+**Measuring that thickness turned out to be the hard part, and the project now has two answers.**
+
+- The **incumbent** is a nearest-point minimum: discretize the section's inner and outer contours,
+  and for each inner sample take the distance to the nearest point on the outer contour. It is what
+  every figure this project has published was measured with. **It does not converge.** Measured on
+  `nose_cowl_shell` at `U` = 1, it was still falling at 3 840 samples at 17 of 24 stations, drifting
+  up to 0.0079 mm per doubling, because a nearest-point distance taken at a **concave corner**
+  crosses the corner rather than the wall — and these sections have such a corner at every slot
+  mouth.
+- The **selected measure** is `wall_measure.candidates.corner_excluded_min`: the same nearest-point
+  minimum, with every sample within 0.30 mm of a concave turn of the inner contour dropped. It was
+  chosen against five pass/fail gates fixed in advance of any candidate being run
+  ([wall_thickness_measure.md](../implementation/wall_thickness_measure.md)), and it passes all
+  five where the incumbent fails the convergence gate.
+
+As of IP-WTM-10 the gate computes **both, from one section, at one sampling** and prints them side
+by side; the incumbent still decides pass or fail. **On a real `nose_cowl_shell` build, 2026-10-12,
+they disagree about the verdict:**
+
+| | worst reading under nominal | stations over `WALL_TOL` | verdict |
+| --- | --- | --- | --- |
+| incumbent | **0.0376 mm**, 3.8× tolerance | 9 of 12 | **fails** |
+| selected | **0.0031 mm**, 0.3× tolerance | 0 of 12 | **passes** |
+
+The two are not independent: the selected measure minimizes over a *subset* of the incumbent's own
+samples, so it can never report more thinness, and the gate now checks that identity on every run.
+The disagreement is therefore entirely accounted for by the excluded samples — 100 to 230 of about
+3 000 per station, 3 to 7 % — which is to say **the incumbent's minimum on a nose sits at a concave
+corner at nearly every station**, exactly where its own known defect lives. The corpus sweep found
+the same split: on the nose the incumbent reads 0.027 to 0.039 mm where the selected measure reads
+0.001 to 0.012, and at `tail_shell` `U` = 1.5 and 3.0 the two agree **exactly**.
+
+**One generalization that used to sit here is withdrawn.** It said that on the tail the two measures
+agree closely, so the tail's thin spot is not at a corner and no corner-based exclusion reaches it.
+Measured directly on the saved `tail_shell` `U` = 0.5 wall on 2026-10-12, that is false for that
+configuration: the incumbent reads 0.03663 mm against the selected measure's 0.01345, a factor of
+2.7, with a corner term of 0.019 to 0.033 mm at nine of the twelve stations. The exact agreement at
+`U` = 1.5 and 3.0 stands; what does not stand is treating it as a fact about the kind. The two
+measures also do not have their worst stations in the same place on that wall — the incumbent's
+worst is 89 % corner term, while the selected measure's worst has a corner term of 0.0002 mm and is
+a genuine thin wall 6.7 mm from the nearest rib
+([cowl_interior_surface.md](cowl_interior_surface.md) §6.8.1).
+
+**So the decision changes a verdict only on the nose**, and there it changes it completely: a nose
+cowl is either three to four times outside its wall tolerance or comfortably inside it, depending
+on which measure is believed. Every tail exceeds `WALL_TOL` under both measures and is unaffected by
+the choice, even where the two differ by a factor of 2.7.
+
+**What makes this a decision rather than a measurement.** Both measures are now implemented,
+tested, and run on real builds, so no further data settles them — the question is what the gate
+should be *for*. Excluding corner samples is either removing an artefact of the measure or removing
+the places a wall is genuinely thinnest, and the geometry cannot say which without a definition of
+what "the wall thickness" means at a concave corner of a 0.6 mm wall. That is a design judgment
+about the requirement, not a property of the part.
+
+**There is now some direct evidence, and it runs one way.** `locate.criterion_split` reports, per
+station, what each measure reads on one section at one sampling, which separates the corner
+disagreement from the sampling difference. On the two `tail_shell` walls measured so far:
+
+| | `U` = 0.5 | `U` = 2.0 |
+| --- | --- | --- |
+| corner term at the **selected** measure's own worst station | 0.0002 mm | **0.00000 mm** |
+| corner term at the **incumbent's** own worst station | 0.0326 of 0.0366 (89 %) | 0.0221 of 0.0383 |
+
+Where the selected measure reports the wall at its thinnest, both measures agree about that place.
+Where the incumbent reports its own worst, it is usually reporting a corner. That does not answer
+the definitional question — a corner reading could still be the thing the slicer cares about — but
+it does mean the incumbent's *magnitude* is, at those stations, a measurement of a corner rather
+than of a wall, which is the defect it was already known to have.
+
+**An independent measure now reaches the selected measure's own figure, which bears on this
+question's central worry.** The standing objection to alternative 2 is that the 0.30 mm exclusion
+margin was chosen by screening rather than derived, so it might be discarding the places a wall is
+genuinely thinnest. `candidates.outer_corner_excluded_min` approaches the same wall from the
+opposite direction: it never looks at the inner contour, and instead drops samples whose nearest
+point on the **outer** contour sits at a crease — which is what a notch face meeting the OML is. On
+the saved `tail_shell` `U` = 0.5 wall, with 546 creases found and 2 852 samples dropped, so the test
+demonstrably engaged:
+
+| | worst reading | station |
+| --- | --- | --- |
+| incumbent | 0.03663 mm | `z` = -31.545 |
+| selected (inner concave turns excluded) | **0.01345 mm** | `z` = -5.364 |
+| outer creases excluded | **0.01345 mm** | `z` = -5.364 |
+
+The two exclusions agree to 1e-5 mm at 7 of 12 stations, differ nowhere by more than 0.00065 mm, and
+agree exactly on the worst reading and on which station it sits at. They are excluding the same
+samples, and those samples are at notch junctions
+([cowl_interior_surface.md](cowl_interior_surface.md) §6.8.2.1). That does not prove the material is
+there — both measures are in-plane and the surfaces at a junction are inclined to the layer plane —
+but it does mean the selected measure's exclusions are not arbitrary, which was the specific doubt
+against them.
+
+**That 3-D measurement now exists, and it changes the premise of this question: both measures are
+optimistic where it matters.** `wall_measure.normal_distance` leaves the wall's inner boundary along
+its own normal and bisects `Shape.isInside` for the depth of material
+([cowl_interior_surface.md §6.8.2.2](cowl_interior_surface.md#6822-the-wall-measured-perpendicular-to-itself-and-the-two-populations-it-separates)).
+On `tail_shell` at `U` = 0.5 it separates the 372 under-tolerance readings into two populations with
+**opposite** biases:
+
+* **348 of 372 sit on planar cut faces** — rib-slot cheeks — where the in-plane path runs across a
+  slot mouth at 15–73° to the surface's own normal. Along their normals these read 0.68–3.0 mm and
+  **none is confirmed thin**. The incumbent's worst figure on this wall, 0.56337 mm, is one of these,
+  so it is an artifact — which supports this question's case against the incumbent.
+* **24 of 372 sit on the fitted interior surface**, the only readings that are wall thicknesses, and
+  **all 24 are confirmed thin and thinner than the plane said** — 0.50570 mm at the worst, against
+  the in-plane 0.58655. Across four walls, 66 such readings were measured and **none** was
+  exonerated. The surface is inclined 21.5–30.8° there, and `normal / cos θ` reproduces each in-plane
+  figure to **0.0037 mm or better** — a trigonometric identity holding between a 2-D polyline minimum
+  and a 3-D kernel bisection, so it is a cross-check and not one instrument agreeing with itself.
+
+So the real worst deficit on that wall is **0.0943 mm, 9.4× `WALL_TOL`**, where the incumbent reads
+0.0135 mm at the same sample and the selected measure puts the wall's worst at 0.01345 mm. On a
+`tail_shell` at `U` = 1.0 it is 0.0645 mm across 46 % of one station's circumference. **Both
+candidates in this question understate the one defect that is real, by 2.9–7.0× and for the same
+reason: they are in-plane and the wall is not.** Choosing between them remains a decision —
+alternative 1's "no verdict changes" and alternative 2's "a nose becomes shippable" are unaffected —
+but neither choice makes the gate able to see this. What the gate should do about it is OQ-DES-CW33.
+
+**A caution about the agreement figures above.** The "two measures agree closely on the tail"
+comparisons, including the 1.06x and 0.92x that made `U` = 2.0 and 3.0 look like clean tests, are
+ratios of each measure's *maximum over the wall*. At `U` = 2.0 the three maxima fall at three
+different stations, and underneath a 1.10x ratio the per-station corner term still runs 0.019 to
+0.036 mm at eight of twelve stations. A ratio of maxima is not an instrument comparison; the
+per-station split is.
+
+**Alternatives**
+
+1. **Keep the incumbent gating and go on reporting both.** *Benefits:* no verdict changes, so
+   nothing shipped today becomes acceptable by a change of instrument; preserves comparability with
+   every figure recorded so far; the conservative reading, since the incumbent can only report more
+   thinness. *Drawbacks:* the gate's verdict rests on a measure known not to converge, so a nose
+   failure means "compliance is not demonstrated" rather than "the wall is this thin", and the gate
+   cannot ever return a clean pass on a nose. It also leaves the project in the position of having
+   selected a measure against pre-committed gates and then not used it. *Prerequisites:* none.
+2. **Switch the gate to the selected measure, keeping the incumbent printed.** *Benefits:* the gate
+   decides with the measure the screening selected, which is the only one of the two that
+   converges; a nose build gets a verdict that means something. *Drawbacks:* it changes a failing
+   nose into a passing one, which is a decision to ship on the strength of a 0.30 mm exclusion
+   margin that was itself chosen by screening rather than derived from the slicer's behaviour. If a
+   genuine 0.03 mm thin spot does sit within 0.30 mm of a slot mouth, this gate will not see it.
+   *Prerequisites:* none technically; in judgment, a reason to believe 0.30 mm is right.
+3. **Gate on both: fail if either is over tolerance.** *Benefits:* no verdict loosens, and the gate
+   gains the convergent measure's evidence without discarding the incumbent's. *Drawbacks:* given
+   the subset identity, failing if *either* fails is arithmetically identical to alternative 1 —
+   the incumbent is always the larger reading — so this is alternative 1 under a name that suggests
+   more. Recorded because it is the obvious proposal and it is empty. *Prerequisites:* none.
+4. **Gate on the selected measure but tighten the exclusion margin until the two agree, and report
+   the margin at which they do.** *Benefits:* turns the 0.30 mm constant into a measured quantity
+   rather than a screened one, and the margin at which a nose's verdict flips is itself a
+   diagnostic — it says how far from a corner the thinning actually extends. *Drawbacks:* more work
+   before any verdict changes, and it may find no margin that both excludes the artefact and keeps
+   the thin spot, in which case the question returns unchanged. *Prerequisites:* a sweep of
+   `reflex_margin_mm`, and it is cheaper than this entry first recorded — **no build at all.** The
+   nose walls are already saved in the corpus and `freecad/criterion_check.py` reads them, at about
+   24 s a station on a tail and less on a nose, so the sweep is minutes of machine time rather than
+   a build.
+5. **Resolve the definition first: measure what the wall actually is at a concave corner, and gate
+   on that.** The in-plane nearest-point distance is one definition; the perpendicular distance to
+   the outer contour along the inner contour's own normal is another, and the eroded-section
+   construction defines a third — the wall *should* be the 2-D inset distance `t` by construction,
+   which is the quantity §6 of the algorithm document is written around. *Benefits:* the only
+   alternative that answers the question rather than choosing between two proxies for it; would
+   also settle `WALL_TOL` compliance for the tail, which neither measure currently does.
+   *Drawbacks:* the largest piece of work of the five, and the local-normal variant was already
+   measured to oscillate by up to 0.0139 mm, so the third definition is the one with any promise
+   and it is unbuilt. *Prerequisites:* a converged local thickness measure, which
+   [cowl_interior_surface.md](cowl_interior_surface.md) §6.4 records as the standing open problem.
+6. **Remove the cause instead and let the question lapse.** If the fit's convergence criterion is
+   tightened (OQ-DES-CW28) and the residual's mechanism found (IP-WTM-26, IP-WTM-36), the wall may
+   come out well inside tolerance on both measures, at which point which one gates stops mattering.
+   *Benefits:* the only alternative that makes the disagreement irrelevant rather than adjudicated.
+   *Drawbacks:* it is a bet on two unfinished investigations, and it does nothing for a build run
+   today. **Half of its prerequisite has now reported, negatively:** IP-WTM-28 measured that
+   tightening `TAU` does not improve a tail's wall at all and raises `Unconverged` at both 0.02 and
+   0.01, so the cheap half of this bet is gone and what remains rests entirely on the two mechanism
+   investigations. *Prerequisites:* OQ-DES-CW28 decided, and IP-WTM-26 or IP-WTM-36 delivering a
+   mechanism — no longer IP-WTM-28, which has reported.
+
+**Recommendation: alternative 1 for now, with alternative 4 as the work that makes alternative 2
+decidable.**
+
+Keep the incumbent gating, because changing a failing verdict to a passing one is the one move here
+that cannot be undone by later evidence — a part built and printed on the strength of it is built.
+The incumbent's non-convergence argues for distrusting its *magnitude*, not for preferring the
+measure that reads smaller: a measure that cannot settle still establishes that *something* at those
+stations reads 0.0376 mm under nominal, and the selected measure's answer to that is to stop looking
+there. That may well be right, and alternative 4 is how it would be shown rather than assumed — the
+margin at which the two verdicts meet is a number this project can measure in one build, and it
+turns a screened constant into evidence.
+
+Alternative 3 should be struck rather than considered: it is arithmetically identical to
+alternative 1. Alternative 5 is the right long answer and remains the standing open problem;
+nothing here should wait for it. Alternative 6 is worth preferring to all of this if OQ-DES-CW28's
+decision happens to make the wall compliant on both measures, which would be the cleanest outcome
+available and is not in this question's gift.
+
+### OQ-DES-CW30 — The cavity's shell is open at one edge and every validity check passes it
+
+**The problem**
+
+Both cowl cells are built by cutting a fitted interior solid out of a buttress-notched blank. The
+intermediate result of that cut — the **cavity** — is checked four ways by the construction, one of
+which is `Shape.isValid()`, FreeCAD's wrapper over the kernel's own shape checker. Every
+`tail_shell` build reports `cavity closed: 1 solids, valid=True`.
+
+**Measured 2026-10-12 on `tail_shell` at `U` = 0.5: that cavity has an open boundary in it.** Of its
+3 164 distinct edges, exactly one is adjacent to a single face rather than the two that every edge of
+a closed shell must have. It is 1.05867 mm long and lies on a `SurfaceOfExtrusion` face — one of the
+end-overrun walls the fitted interior is extended by. Four alternative explanations were tested and
+all four are excluded: it is not a parameterization pole (it has length), not an artifact of the
+measurement's own edge matching (the kernel's `ancestorsOfType` independently reports one face), not
+a stray face left beside the solid by a boolean (1 060 of 1 060 faces belong to a solid), and not a
+periodic surface's closing seam (the surface is periodic in neither direction). The full evidence,
+including two errors in the first version of the diagnosis, is
+[cowl_interior_surface.md §6.9.1](cowl_interior_surface.md).
+
+**So `isValid()` does not establish that a shape's shell is closed**, and the construction's
+`valid=True` reads as a stronger guarantee than it is. That is the same class as §7.1's invalid
+five-face sliver passing a volume check: a check that returns a reassuring answer about a question
+it does not ask.
+
+**What is not affected, and this is most of the practical weight.** The finished walls are clean.
+All twelve distinct saved walls — both kinds at `U` = 0.5 through 4.0 — carry **zero** edge groups
+not shared by exactly two faces, so whatever leaves this edge open is resolved by one of the steps
+that follow (`_extend_across_cell`, `notched.cut(inside)`, `_strip_seam`, `mirror_across_cell`). No
+shipped part is known to carry it, and the 1 704-station dense ring scan found no severed section
+anywhere (OQ-DES-CW26).
+
+**Why this is a decision and not simply a missing check.** Adding a closed-shell test to `cavity`
+would **fail every `tail_shell` build today**, on configurations whose finished walls are sound by
+every other measure. So the choice is not "should the construction be correct" but "what should it
+refuse", and refusing a build that produces a good part has a real cost.
+
+**Alternatives:**
+
+1. **Record it and check nothing.** Document that `valid=True` on the cavity does not mean the shell
+   is closed, and that one open edge is known and tolerated on the tail. *Benefits:* no build
+   changes; honest about what the existing check establishes. *Drawbacks:* the open shell is then an
+   accepted property with nothing watching it, so a *second* one — or one that does not get resolved
+   downstream — would arrive unannounced. *Prerequisites:* none.
+2. **Check the finished wall's shell instead of the cavity's.** Assert on the mirrored result, where
+   the measurement says every wall is already clean. *Benefits:* tests the thing that matters, the
+   part that gets printed, and passes on all twelve corpus walls today, so it can be added without
+   failing anything. It would have caught the severed ring of OQ-DES-CW26 as well, since a break
+   leaves free edges. *Drawbacks:* it does not localize the fault — a failure says the wall is open
+   somewhere, with four candidate steps upstream and no indication which. *Prerequisites:* none;
+   `boolean_edges.anomalous_edges` already does it on a saved wall and could run on a built one.
+3. **Check the cavity's shell and fix whatever leaves the edge open.** *Benefits:* the only
+   alternative that removes the defect rather than deciding how to live with it, and it would make
+   `cavity`'s own diagnosis trustworthy at the step where the geometry is still simple enough to
+   debug. *Drawbacks:* the cause is unknown and sits in the end-overrun extension, which is the part
+   of the construction with the least test coverage; the work is open-ended, and until it lands the
+   check cannot be enabled. *Prerequisites:* find the cause, starting from the one
+   `SurfaceOfExtrusion` face and the 1.0587 mm edge.
+4. **Check the cavity's shell but report rather than refuse.** Print the open-edge count in the
+   build's own progress output, as `cavity` already does for rib residue and partition slip.
+   *Benefits:* the fault becomes visible on every build, at the step where it arises, for the cost
+   of a few seconds; nothing fails, so no sound part is rejected. *Drawbacks:* a reported-only check
+   is one nobody is obliged to read, which is the drawback OQ-DES-CW26's alternative 4 carries too.
+   *Prerequisites:* none.
+
+**Recommendation: alternatives 4 and 2 together, and treat 3 as the real fix when someone has the
+time for it.**
+
+Report it at the cavity, where it arises and where it can be localized, and assert it on the finished
+wall, where the property actually has to hold and where asserting it costs nothing today because
+every corpus wall already passes. That pairing gives a check that can fail — on the artifact that
+matters — and a diagnostic that says where to look when it does, without rejecting a single build
+that currently produces a good part. Alternative 1 is too weak now that the open edge is known to
+exist rather than suspected; alternative 3 is correct and should not block the other two, since
+nothing about adding a report and a finished-wall assertion depends on knowing the cause.
+
+A caveat on alternative 2 worth stating plainly: it passes on all twelve corpus walls, which vary in
+`U` alone. That is the same coverage bound OQ-DES-CW26's dense scan has, and it means "passes today"
+is a statement about one axis of the input space.
+
+### OQ-DES-CW31 — The fit's axial seed is a fixed count, and it is why a large nose cowl fails its wall tolerance
+
+**The problem**
+
+The cowl's interior surface is built by fitting a smooth surface through a stack of eroded
+cross-sections taken at discrete axial positions, called **stations**, and then subtracting the
+buttress ribs from it. How many stations a stretch of the part gets is decided by `cowl_interior`'s
+`_seed`:
+
+```
+n = SEED_MAX if (z_hi - z_lo) >= SEED_LONG_MM else SEED_MIN
+```
+
+with `SEED_MAX` = 6, `SEED_MIN` = 2 and `SEED_LONG_MM` = 3.0 mm. **That is a count, not a spacing.**
+Any stretch longer than 3 mm gets six stations whether it is 22 mm long or 176 mm. A refinement pass
+then bisects between them and stops as soon as the surface it predicts is within `TAU` = 0.05 mm of
+the erosion, so a coarser start is accepted at a coarser resolution rather than refined back to a
+fixed quality.
+
+The cowls are generated across a size parameter `U`, and a `nose_cowl_shell`'s single stretch runs
+22 mm at `U` = 0.5 and 176 mm at `U` = 4.0 — eightfold. The printed wall is an absolute 0.600 mm at
+every size, because it is `cowl_n_perimeters * extrusion_width` and extrusion width is a property of
+the machine. So nothing here is supposed to scale with `U`, and the wall's error does
+([cowl_interior_surface.md](cowl_interior_surface.md) §6.8.3):
+
+| `U` | stretch | stations | axial spacing | finished wall error |
+| --- | --- | --- | --- | --- |
+| 0.5 | 22.00 mm | 10 | 2.44 mm | 0.00189 mm |
+| 1.0 | 44.00 mm | 10 | 4.89 mm | 0.00370 mm |
+| 2.0 | 88.00 mm | 11 | 8.80 mm | 0.00666 mm |
+| 3.0 | 132.00 mm | 10 | 14.67 mm | 0.00997 mm |
+| 4.0 | 176.00 mm | 11 | 17.60 mm | **0.01530 mm** |
+
+The station count is 10 or 11 throughout while the spacing grows sevenfold, and the error tracks the
+spacing to within ±13 %. The acceptance tolerance on the finished wall is **`WALL_TOL` = 0.01 mm**,
+set by what a slicer does with a too-thin perimeter: a cowl prints in spiral-vase mode as a single
+0.6 mm perimeter with nothing behind it, so a wall materially under tolerance does not print thin,
+it prints open. **`U` = 4.0 is the only `nose_cowl_shell` configuration that fails that tolerance,
+and this is why.**
+
+**The cause is confirmed by its converse, and the converse also bounds what fixing it buys.**
+Holding `U` = 4.0 and raising `SEED_MAX` alone, with nothing else changed:
+
+| `SEED_MAX` | stations | axial spacing | finished wall error | build |
+| --- | --- | --- | --- | --- |
+| 6 (current) | 11 | 17.60 mm | **0.01530 mm**, fails | 236 s |
+| 12 | 15 | 12.57 mm | **0.00733 mm**, passes | 233 s |
+| 24 | 26 | 7.04 mm | **0.00710 mm**, passes | 299 s |
+
+So this is a real cause rather than a correlate: the failing configuration becomes compliant. But
+the gain **saturates** — halving the spacing again from 12.57 to 7.04 mm buys 3 % — leaving the wall
+near 0.0071 mm at `U` = 4 however much it is seeded.
+
+**CORRECTION, 2026-10-14: that saturation is not a floor in the construction, it is `TAU`, and this
+changes what the question is deciding.** `_refine` stops at the first subdivision inside `TAU`, so
+once the seed is dense enough that the *as-seeded* fit already passes, bisection does nothing at all
+and the accepted error stays wherever `TAU` permits. The `SEED_MAX` = 24 row above is that case: 26
+seeded stations become 26 stations, with pass 1 pinned at 0.04991 immediately under `TAU` = 0.05.
+Measured at `U` = 4 with both levers moved
+([cowl_interior_surface.md §6.8.3](cowl_interior_surface.md#683-the-noses-u-trend-is-the-axial-seed-being-a-count-and-it-has-a-floor-underneath)):
+
+| | `TAU` = 0.05 | `TAU` = 0.02 |
+| --- | --- | --- |
+| `SEED_MAX` = 6 (current) | 0.01530 mm, **fails** | **0.00393 mm**, 245 s |
+| `SEED_MAX` = 24 | 0.00710 mm, 279 s | **0.00268 mm**, 319 s |
+
+**Either lever alone makes the nose compliant**, and `TAU` = 0.02 does it without touching the seed
+at all, for 19 s more build. `TAU` = 0.01 and 0.004 give the identical wall — `TAU` is a two-position
+switch here, not a dial — and under it there is a genuine floor at **0.00268 mm**, 3.7x inside
+`WALL_TOL`, which 63 stations reach no better than 28 do. `TAU` = 0.002 raises `Unconverged` against
+the same 64-station budget that stops the tails. So the nose has no unexplained residual above
+tolerance left, and IP-WTM-26 keeps only the `tail_shell`.
+
+**CORRECTION, 2026-10-14: the cost objection below describes a construction that no longer exists.**
+The 23-minute figure comes from `SEED_MAX`'s own note, which prices "a tail whose 59 feature stations
+make 60 patches". `cavity` no longer patches that way: it computes its features from
+`feature_stations(**body**, …)` — the un-notched blank, which carries no rib edges — where the
+60-patch regime came from reading the *notches*. The code's comment at that line says so in the past
+tense, "splitting at every rib end is what made the tail 60 patches", and **every current build of
+both kinds reports `patch 1/1`**, confirmed on a real `tail_shell` and a real `nose_cowl_shell` log.
+Generous seeding therefore costs one patch's seeding, not sixty.
+
+**The tail figure this question named as its prerequisite is now measured, at `U` = 0.5 with nothing
+else changed — and it answers both halves of the trade:**
+
+| `SEED_MAX` | stations | pass 1's worst | finished wall | build |
+| --- | --- | --- | --- | --- |
+| 6 (current) | 19 | 0.02855 | **0.03794 mm** | 732 s |
+| 24 | 33 | **0.00579 mm** | **0.03346 mm** | 970 s |
+
+**The cost is 33 %** — 732 s to 970 s, against the 23 minutes a part this question was written
+expecting. **The benefit is 12 %**, which leaves the tail 3.3x over `WALL_TOL` where the identical
+change takes the nose from failing to passing. The nose figure for comparison is 23 %.
+
+**The divergence between the two columns is the real result.** Pass 1 improves by a factor of 4.9 and
+lands *inside* `WALL_TOL` at 0.00579 mm, while the finished wall moves by 1.13. The fitted surface
+becomes five times more accurate and the wall does not follow — because the two passes measure out to
+different exteriors, and 63 % of what pass 2 reads on a tail is taken at a notch junction
+(OQ-DES-CW29, IP-WTM-45). So **generous seeding is affordable on both kinds and only fixes one**, and
+the decision this question asks is no longer a build-time trade: it is whether to adopt a correct
+seeding rule that makes the nose compliant while knowing it does nothing for the tail.
+
+**Why this was thought to be a decision and not just a fix, and what is left of that.** `SEED_MAX`'s
+own note records the cost of being generous as **23 minutes a part** on a tail whose 59 feature
+stations make 60 patches, and a seed expressed as a spacing would give a 176 mm nose stretch about 25
+stations and a 0.5 mm tail patch two — the behaviour wanted — so the worry was the interaction of a
+per-patch spacing with 60 short patches. **Both halves of that worry are now gone:** there are no
+longer 60 patches (every build is `patch 1/1`, the note being stale), and the tail cost is measured
+at 33 %. What is left is not a build-time trade at all. It is that adopting any of these changes
+every build of both kinds, so **every recorded wall figure in this subsystem is superseded and the
+corpus needs re-measuring** — which is IP-WTM-46, and is the real price. The numbers above remain
+**one kind at one `U`** on the nose plus one tail configuration.
+
+**One addition since this question was written: the lever is not nose-only.** IP-WTM-30 measured the
+same direction on a `tail_shell` at `U` = 0.5 — Spearman's rho of +0.556 on the incumbent and +0.599
+crease-excluded against the fit-row interval width, so the tail also reads thinner where its rows are
+further apart, and every interval under 1.7 mm reads under 0.0031 mm. That makes alternative 1
+relevant to both kinds rather than a nose fix, and it also means the tail's build-time cost is the
+real unknown rather than an incidental one.
+
+**Alternatives**
+
+1. **Express the seed as an axial spacing** — replace `SEED_MAX` with a `SEED_ARC` in millimetres
+   and derive the count, clamped to `SEED_MIN` and a new ceiling, exactly as `FIT_ARC` and
+   `CHECK_ARC` already do for the circumferential directions.
+   *Benefits:* removes the `U` dependence at its source, so the construction's accuracy stops being
+   a function of part size; makes the nose compliant at every `U` measured; consistent with the two
+   constants beside it, which are already spacings, so it removes an inconsistency rather than
+   adding a special case. *Drawbacks:* changes every build of both kinds, so every recorded wall
+   figure in this subsystem is superseded and the corpus needs re-measuring (IP-WTM-46) — which is
+   now the only real cost, since the 60-patch warning is stale and the tail price is measured at
+   33 %; the right spacing is a new constant needing its own derivation; and it buys the tail 12 %
+   without making it compliant. *Prerequisites:* none remaining — the tail build this listed has
+   been run.
+2. **Raise `SEED_MAX` to a larger count** — leave the parameterization alone and set it to, say, 12,
+   which is measured sufficient at `U` = 4.
+   *Benefits:* a one-constant change, measured to fix the only failing nose configuration, at **no
+   measurable build-time cost** (233 s against 236 s at `U` = 4); cannot make a short patch
+   expensive, because a short patch still falls to `SEED_MIN`. *Drawbacks:* still a count, so the
+   `U` dependence is reduced rather than removed and returns at some larger `U`; 12 is fitted to one
+   configuration of one kind; leaves the construction inconsistent with `FIT_ARC`/`CHECK_ARC`.
+   *Prerequisites:* none to adopt; the tail build has been run and costs 33 %.
+3. **Tighten `TAU` instead and let the refinement do the work** — the seed only sets where
+   refinement starts, and a tighter criterion would refine further from any seed.
+   *Benefits:* no change to the seeding; **measured 2026-10-14 to fix the nose on its own**, `TAU` =
+   0.02 at the seed as it stands taking `U` = 4 to 0.00393 mm for 19 s more build, so this is a
+   complete alternative to 1 and 2 rather than a partial one; `TAU` = 0.01 and 0.004 give the
+   identical wall, so the setting is not delicate. *Drawbacks:* **measured not to build a
+   `tail_shell`** at either 0.02 or 0.01, at two separate `U` (OQ-DES-CW28), so it cannot be adopted
+   globally — it would have to be per-kind, which is a worse kind of special case than the one
+   alternative 1 removes; and it leaves the seed a count, so the `U` dependence is still there in
+   the fit even where the criterion hides it. *Prerequisites:* OQ-DES-CW28, which this would
+   pre-empt.
+4. **Accept it and bound `U` for the nose** — declare `U` = 4.0 out of range for a
+   `nose_cowl_shell`.
+   *Benefits:* no code change, no re-measurement. *Drawbacks:* this is a construction defect with
+   an identified cause and a measured fix, so bounding the input range to avoid it is the thing
+   this project has a standing rule against — `U` limits belong at the geometric floor, not in front
+   of a fixable defect. It also leaves the `U` = 3.0 nose at 0.00997 mm, inside tolerance by
+   0.00003 mm, which is not a margin. *Prerequisites:* none.
+5. **Do nothing yet and fix the floor first** — if the floor's cause were the same mechanism, one
+   change might address both.
+   *Benefits:* avoids changing the construction twice and re-measuring the corpus twice.
+   *Drawbacks:* **the premise is gone.** The 0.0071 mm figure is not a floor, it is `TAU`; the floor
+   under it is 0.00268 mm, 3.7x inside tolerance, and is not what makes any configuration fail. There
+   is nothing here to wait for. *Prerequisites:* none; this alternative is retired.
+
+**Recommendation**
+
+**Alternative 1 directly, with alternative 2 only if the re-measurement has to be deferred.**
+
+The recommendation has changed, and the measurements of 2026-10-14 are why. Alternative 1 was
+previously held back for a tail price that `SEED_MAX`'s note warned about; that price is now measured
+at **33 %**, the warning itself prices a 60-patch construction that no longer exists, and the tail
+build this question listed as a prerequisite has been run. So the reason to stage it through
+alternative 2 is gone, and alternative 2's own selling point — "no measurable build cost" — was
+always an artifact of the nose being cheap. What remains is the corpus re-measurement (IP-WTM-46),
+which both alternatives incur equally, so taking the correct form once is strictly better than
+taking a count now and the spacing later.
+
+**Alternative 3 is now a genuine competitor and should be rejected on a stated ground rather than on
+cost.** `TAU` = 0.02 fixes the nose by itself, for 19 s, and is insensitive to the exact value. It is
+rejected because it cannot be adopted globally — it does not build a tail at all — so it would have
+to be set per kind, and a per-kind convergence criterion is a worse special case than the
+count-versus-spacing inconsistency alternative 1 removes. It also leaves the seed a count, so the
+`U` dependence stays in the fit and is merely hidden by a tighter criterion.
+
+**Alternative 4 should be ruled out explicitly** rather than left as the default: the cause is
+identified, the fix is measured, and bounding `U` to avoid it would be shrinking the design space to
+hide a construction defect.
+
+Two things this recommendation does **not** claim. It does not make the wall exact: the nose's
+irreducible residual is 0.00268 mm, and what sets *that* is unexplained — though it is 3.7x inside
+tolerance and fails nothing. And it does not help the `tail_shell`, which gains 12 % and stays 3.3x
+over tolerance; the tail's residual resists this lever and `TAU` both, and is IP-WTM-26's remaining
+subject.
+
+### OQ-DES-CW32 — The rib dilation's facet count is fixed, and it is what bounds the design inputs
+
+**The problem**
+
+Each buttress cutting tool is a thin slab. Before the interior cavity is cut, `cowl_interior`
+**dilates** every slab by the wall thickness `t`, so that the cavity it carves out stops `t` short of
+the rib and the finished wall keeps its full thickness where a rib passes through it. The dilation is
+not an exact offset — `Part.makeOffsetShape` returns a null shape on the first tail tool — but a
+union of `RIB_FACETS` = 48 translated copies of the slab, placed at equal angles on a circle of
+radius `t` lying in the layer plane.
+
+That construction has a floor, and `cowl_interior.dilated_notches` enforces it per tool. Adjacent
+copies sit `2·t·sin(π/N)` apart, so their union is a single solid only while that spacing is smaller
+than the slab's own thickness **measured in the layer plane**. Below the floor the copies stop
+touching and the "dilated" tool is a comb: nothing downstream notices, because the tool is still a
+valid solid and the rib gaps still measure correctly, and the wall simply comes out with material
+missing where the gaps fell. That was measured on 2026-09-05 at `RIB_FACETS` = 24, where a
+`tail_shell` at `U` = 1 lost 1 332 mm³ of wall and two stations reported 0.1035 mm of wall where
+0.6 mm was wanted. The precondition that refuses it is therefore correct, and is not a guard on an
+unfixed bug.
+
+The buildable region it defines is
+
+    in_plane / t  >  2·sin(π / RIB_FACETS)  =  0.130806   at RIB_FACETS = 48
+
+where `in_plane` is the slab's thickness in the layer plane — `buttress_cut_thickness / sin θ` for a
+tool whose cut plane sits θ from the layer plane — and `t` is `cowl_n_perimeters × extrusion_width`,
+the one dimension on this part that does not scale with `U`. On a `nose_cowl_shell` every tool is
+θ = 90°, so `in_plane` is `buttress_cut_thickness` itself and the parameter sheet sits at
+`0.1 / 0.6` = 0.166667, which is **1.274× the floor**.
+
+**That margin is consumed by a single-parameter excursion in either direction.** Measured
+2026-10-14 on a `nose_cowl_shell` at `U` = 1.0, through
+[wall_thickness_measure.md](../implementation/wall_thickness_measure.md) IP-WTM-41's design-input
+screen, one row moved off the sheet at a time:
+
+| case | row | from | to | `in_plane`/`t` | outcome |
+| --- | --- | --- | --- | --- | --- |
+| `base` | — | — | — | 0.16667 | builds; wall hash identical to all five 2026-10-06 soak repeats |
+| `buttress_cut_thickness_lo` | `buttress_cut_thickness` | 0.1 mm | 0.07 mm | 0.11667 | **refused**, needs 55 facets |
+| `extrusion_width_hi` | `extrusion_width` | 0.6 mm | 0.8 mm | 0.12500 | **refused**, needs 52 facets |
+| `cowl_n_perimeters_hi` | `cowl_n_perimeters` | 1 | 2 | 0.08333 | **refused**, needs 77 facets |
+
+Read along the design inputs rather than in facets, the bounds are `buttress_cut_thickness` >
+**0.0785 mm** at one perimeter of 0.6 mm, and `cowl_n_perimeters × extrusion_width` < **0.7644 mm**
+at `buttress_cut_thickness` = 0.1 mm. So a 21 % reduction in the cut thickness, or a 28 % increase in
+the wall, crosses it — and **a two-perimeter cowl does not build at all** at the sheet's cut
+thickness. The third row above was run specifically to test the inequality where it is not
+interpolating between the two failures either side of the sheet, and it predicted the refusal and the
+required facet count exactly.
+
+`RIB_FACETS`' own note already states the arithmetic and prices the headroom as "38 facets minimum
+and 48 leaves 26 % headroom". That is correct, and it is the same fact read in the facet count at one
+configuration. What was not on record is that the margin is a property of **that point in the input
+space** rather than of the design, and that two of the parameter sheet's own rows cross it within an
+ordinary excursion. It is a fixed count standing against a ratio that two design inputs move, which
+is the sixth place in this subsystem where that pattern has appeared and the first where it bounds
+what can be **built** rather than biasing what is measured.
+
+**The same three cases were run on a `tail_shell` at `U` = 0.5 and the inequality holds there too,
+where it is not merely arithmetic already done.** A tail's slabs are tilted, so `in_plane` is
+`buttress_cut_thickness / sin θ` rather than the cut thickness itself, and which of the eleven tools
+trips the precondition first is a fact about the design rather than a prediction. All three are
+refused, and the tool that refuses is a side slab reading **0.1004 mm** in the layer plane — not the
+nose's exact 0.1000 — needing 52 facets at `t` = 0.8 mm and 55 at the reduced cut thickness. The
+30° diagonals have twice an axial slab's in-plane thickness and are nowhere near the floor, so it is
+the axial slabs that bound the tail.
+
+**That direction is worth stating because the diagnostic runs the other way.** `in_plane` is
+`buttress_cut_thickness / sin θ`, so a *shallower* cut is a *thicker* slab in the layer plane and
+therefore has **more** headroom, not less — the precondition binds on the steepest tools. What
+`dilated_notches` reports alongside it is `min(angles)`, the shallowest cut it saw, printed as
+"shallowest cut plane 30.00 deg from the layer plane" on a tail. That is the tool with the most
+margin. On a nose it happens to be the binding one, every tool being at 90°; on a tail it is not,
+and a reader watching that figure for a warning is watching the wrong tool. Reporting
+`max(angles)`, or the smallest `in_plane / t` ratio outright, would point at the tool that fails
+first — a one-line change, listed here rather than made, because it belongs with whichever
+alternative below is chosen.
+
+**One further observation, and it refutes the reason first given for it.** The precondition needs
+only the notch solids and `t`, both of which exist before `cavity` begins fitting, and it currently
+runs *after* the interior fit — so a configuration that will be refused pays for pass 1 first. That
+looked like a large saving and it is not. **Measured 2026-10-14 on all six refused cases, in
+process:** a refusal costs **83–99 s** on a `tail_shell` at `U` = 0.5 against 525–856 s for a build
+that completes, and **36–38 s** on a `nose_cowl_shell` at `U` = 1.0 against 37–54 s. The hoistable
+part is pass 1 alone, which the tail's log times at **25.3 s** plus 1 s to fuse; the remaining
+55–75 s is the OML import and the body and notch construction, all of which the check consumes as
+inputs. On the nose a refusal already costs essentially what a whole build costs, so there is
+nothing to hoist at all. The reordering is still correct, but it buys about 26 s on a tail at
+`U` = 0.5, not the 700 s first claimed here — pass 1's share of a build does grow with `U`, and that
+is unmeasured above `U` = 0.5.
+
+**Alternatives**
+
+1. **Derive `N` per tool from its own `in_plane` and `t`.** `N = ceil(π / asin(in_plane / 2t)) + 1`,
+   clamped below by the 38 the gap-accuracy measurement already requires and above by a stated
+   ceiling. *Benefits:* the construction builds every configuration whose geometry is sound instead
+   of refusing it; removes a fixed count standing against a varying ratio, which is the same defect
+   as `SEED_MAX` in OQ-DES-CW31 and the four before it; the arithmetic is already written — it is the
+   expression inside the error message that currently refuses the build; accuracy improves rather
+   than degrades, since the inscribed polygon's under-dilation `t·(1 − cos(π/N))` falls as `N` rises.
+   *Drawbacks:* build time becomes a function of the design inputs, and `N` would differ per tool on
+   a tail, where the 30° diagonals have twice the in-plane thickness of an axial slab; no build has
+   been measured at a derived `N`, and the count drives the boolean cost directly — `RIB_FACETS`' own
+   note measures 4.0 s a tool at 48, 8.6 s at 64 and 23.6 s at 96; an unclamped derivation would let
+   a pathological input ask for an arbitrarily large `N`. *Prerequisites:* a ceiling, and one build at
+   a derived `N` to price it — 727 s on the cheapest tail, and nothing blocks it.
+2. **Raise `RIB_FACETS` to a single larger fixed count.** 80 would cover `cowl_n_perimeters` = 2 at
+   the sheet's cut thickness. *Benefits:* one constant, no per-tool variation, no new arithmetic, and
+   the dilation accuracy only improves. *Drawbacks:* **every** build pays for the worst case, and the
+   measured cost is steep — at 96 facets, 23.6 s a tool against 4.0 s at 48, which on a tail's eleven
+   tools is minutes a build spent for configurations nobody is using; and it is still a count, so a
+   thin enough cut or a thick enough wall crosses the new floor in exactly the same way.
+   *Prerequisites:* measure the build cost at the chosen count on a tail.
+3. **Leave the count and document the buildable region.** Put the inequality and the two numeric
+   bounds in this document and in `RIB_FACETS`' note, so a configuration that will be refused is
+   known before a build is started. *Benefits:* free; the refusal is already correct and already
+   named, and `dilated_notches`' message computes the facet count the configuration would need, so a
+   user is told what to change rather than only that something is wrong. *Drawbacks:* leaves
+   `cowl_n_perimeters` = 2 unbuildable and leaves the construction refusing configurations whose
+   geometry is sound; leaves the input screen's coverage of those three cases permanently empty.
+   *Prerequisites:* none.
+4. **Hoist the precondition above pass 1.** Independent of 1–3 and compatible with all of them: move
+   the per-tool check to before the interior fit, where its two inputs already exist. *Benefits:*
+   a refused configuration stops before paying for a fit it will discard. *Drawbacks:* **the saving
+   is small, and that is measured rather than assumed** — about 26 s on a `tail_shell` at `U` = 0.5
+   and less on a nose, because a refusal already costs only 83–99 s on a tail and 36–38 s on a nose,
+   and most of that is the OML import and the body and notch construction, which the check consumes
+   as inputs; it also changes which exception a doubly-bad configuration reports, since pass 1 could
+   have raised first. *Prerequisites:* none. Pass 1's share of a build grows with `U` and is
+   unmeasured above `U` = 0.5, so the saving on a large tail is not known.
+
+**Recommendation**
+
+**Alternative 1, with alternative 4 taken alongside it, and alternative 3's documentation written
+either way.** Deriving the count is the same correction this subsystem has now made five times for a
+fixed count standing against a quantity that varies, the expression needed is already in the code —
+in the error message that currently refuses the build — and a clamp bounds the cost at both ends.
+What it needs first is one tail build at a derived `N`, because the count drives the boolean cost and
+77 facets on eleven tools is unpriced; that is 727 s and nothing blocks it.
+
+Alternative 2 should be rejected rather than left as the cheap option: it makes every build pay for a
+configuration nobody uses, and it leaves a count in place, so the same question returns the next time
+a design input moves.
+
+**Alternative 4 is a correct reordering and a weak one, and the measurement is what demoted it.** It
+was written here on the expectation that a refused tail configuration was paying ~700 s for a fit it
+would throw away; the three refused tail cases then measured the refusal at 83–99 s, of which about
+26 s is the fit. So take it if `dilated_notches` is being edited anyway, and do not take it for the
+time.
+
+One thing this recommendation does **not** claim: that any of it changes a wall that ships today. The
+parameter sheet's own values build, with 27 % margin in the ratio, and the three refusals above are
+the construction declining to build a neighbour of the design rather than shipping a bad part. What
+is at stake is how much of the design space is reachable, and how long it takes to find out that a
+given point is not.
+
+### OQ-DES-CW33 — Every measure the gate has is in-plane, and the wall is inclined to the layer plane
+
+**The problem**
+
+The acceptance gate decides whether a finished cowl wall is at least `t` = 0.6 mm thick by sectioning
+it at twelve stations and measuring, **within each section plane**, from the inner loop to the outer
+loop. Both candidate measures in OQ-DES-CW29 work that way, and so does `cavity`'s own convergence
+criterion.
+
+A plane cutting a slab that is inclined to it does not measure the slab's thickness. It measures
+`thickness / cos θ`, where θ is the inclination — always **larger**. So wherever the wall's inner
+surface is not perpendicular to the layer plane, every in-plane measure in this subsystem reads the
+wall as thicker than it is, and reads it as compliant sooner than it should.
+
+**This is measured, not inferred**
+([cowl_interior_surface.md §6.8.2.2](cowl_interior_surface.md#6822-the-wall-measured-perpendicular-to-itself-and-the-two-populations-it-separates)).
+`wall_measure.normal_distance` leaves the inner boundary along its own outward normal and bisects
+`Shape.isInside` for the depth of material; it is checked against closed-form fixtures first, reading
+0.6 mm on a uniform tube, 0.45 inside a patch cut into the outer surface and 1.0 mm on a rib raised
+off the inner one. On `tail_shell` at `U` = 0.5, at the four samples that sit on the fitted interior
+surface rather than on a cut face:
+
+| wall | station | samples | worst in-plane | **worst normal, 3-D** | obliquity | ratio |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tail_shell` `U` = 0.5 | -5.3636 | 5 | 0.58655 | **0.50570** | 30.1–30.8° | **7.0×** |
+| `nose_cowl_shell` `U` = 4.0 | -104.0907 | 14 | 0.58597 | **0.52098** | 27.2–27.3° | **5.6×** |
+| `tail_shell` `U` = 1.0 | -72.2723 | 14 | 0.57742 | **0.53554** | 21.5–21.9° | **2.9×** |
+
+**66 readings on the fitted surface were measured across three walls and every one is confirmed thin
+and thinner than the plane said. None was exonerated.** Two independent checks say the figures are
+sound: the identity `normal / cos θ` reproduces each in-plane figure to **0.0037 mm or better**,
+between a 2-D polyline minimum in `numpy` and a 3-D kernel bisection — two unrelated instruments
+agreeing through trigonometry rather than one agreeing with itself — and the **in-plane** column
+reproduces figures already in the record from separate work: 0.01345 mm is exactly IP-WTM-45's
+crease-excluded worst for that wall, and 0.01403 mm is exactly the nose figure this document records
+at `U` = 4 under OQ-DES-CW28.
+
+**The consequence, quantified.** The real worst deficits are **0.0943, 0.0790 and 0.0645 mm — six to
+nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and
+0.0226. **No measure the gate has or is choosing between can see any of it.**
+
+**And it is not localized.** How much of a wall's thin population is real varies enormously with
+configuration — 0 of 109 readings on a compliant `nose_cowl_shell` at `U` = 1.0, 24 of 372 on a
+`tail_shell` at `U` = 0.5, 94 of 251 on the nose at `U` = 4.0, and **2 018 of 2 456** on the tail at
+`U` = 1.0. At one station there, `z` = -72.2723, **1 954 of 4 267 samples are thin on the fitted
+surface: 46 % of the section's circumference.**
+
+**A census tolerance was biasing those proportions and had to be corrected first.** `distToShape` to
+a planar face is exact; to a trimmed B-spline it is an iterative solve. A 1e-6 mm "on this face"
+threshold therefore placed cheek samples and rejected fitted-surface ones — and of the samples no
+face claimed at 1e-6, **every one** lands on a B-spline at 1e-4 (20 of 20, 86 of 86, 336 of 336).
+That moved the nose at `U` = 4.0 from 3 % real to **37 %** real.
+
+**What a 3-D pass costs, measured.** The 3-D measure is about 2 s a sample — a `distToShape` per
+candidate face to find the sample's own face, eight more for a parameter-free normal, and about
+fifteen `isInside` calls to bisect — against a vectorized in-plane measure that does two thousand
+samples a station in well under a second. Twelve stations at twelve samples each is **770 s** on a
+`tail_shell`, measured. A tail builds in 525–856 s, so a full confirmation pass roughly doubles the
+cost of producing and checking one.
+
+**Alternatives**
+
+1. **Leave the gate in-plane and record the bias.** State in the design document and in the gate's
+   own output that a reading is `thickness / cos θ` and therefore optimistic wherever the surface is
+   inclined, with the measured factor of 1.08–1.16 at the thin stations as the known case.
+   *Benefits:* free; changes no verdict; the bias has a sign, so an in-plane pass is not evidence of
+   compliance while an in-plane *failure* is still evidence of a defect. *Drawbacks:* leaves a
+   measured 0.0943 mm deficit invisible to every check, on the kind that already fails; "we know the
+   number is wrong and by roughly how much" is not a gate. *Prerequisites:* none.
+2. **Add a 3-D confirmation pass over the worst in-plane samples.** Keep the in-plane measure as the
+   cheap search, then re-measure the worst N samples a station along their normals, and gate on that.
+   *Benefits:* the gate measures the quantity it is supposed to; the machinery exists and is verified
+   against closed form. *Drawbacks:* **its prerequisite has now been measured and it refutes the
+   alternative.** In-plane severity ranks the readings that are wall thicknesses at the *bottom* of
+   the ordering, on every wall that has any — ranks 38–52 of 55, 48–58 of 62, 14–35 of 36, 12–87 of
+   88, and 19–2 016 of 2 017 — so on three of five measured stations `N` would have to be every thin
+   sample at the station. The cause is structural: an artifact's path cuts clean across a slot mouth,
+   an error of up to 0.73 mm, while a real reading is wrong only by the inclination factor of
+   1.08–1.16 and so sits *just* under tolerance. Sorting by severity sorts artifacts first by
+   construction. The first run of the measure demonstrated it accidentally: at `N` = 12 a station it
+   re-measured 111 samples on a `tail_shell` and found **none** of the 24 that were wall thicknesses.
+   *Prerequisites:* none remaining; the prerequisite was run and the answer is that this selector
+   does not work.
+3. **Gate on the face class first, then measure.** Discard readings taken on cut faces outright —
+   they are not wall thicknesses — and apply the 3-D measure to every remaining sample.
+   *Benefits:* selects **correctly**, which alternative 2 is now measured not to; removes the
+   artifact population at the root rather than excluding it by a geometric heuristic as
+   `corner_excluded_min` does; on three of the four walls measured it cuts the set hard — 372 to 24,
+   251 to 94, 109 to nothing at all. *Drawbacks:* **it is not cheap where it matters.** On the
+   `tail_shell` at `U` = 1.0 the filter still leaves 2 018 samples, about 67 minutes at the measured
+   ~2 s a sample, so on the wall with the worst defect this is a re-measurement and not a
+   confirmation pass. It also makes the gate depend on the kernel's face classification, a
+   construction detail rather than a design quantity, and `Part::GeomBSplineSurface` identifies both
+   the fitted interior surface **and** the OML, so the class alone is not a complete discriminator.
+   *Prerequisites:* a reliable way to name the fitted interior surface specifically, which the
+   surface type does not give; and a way to bound the cost on a wall where most readings are real.
+4. **Make the fit's own criterion the gate and stop measuring the finished wall.** Pass 1 measures
+   the eroded section against the interior candidate directly and reaches 0.00579 mm on this wall.
+   *Benefits:* cheap, already computed, and converges. *Drawbacks:* measures the wrong object — pass 1
+   and the finished wall measure out to **different exteriors**, diverging by up to 26.5 mm at one
+   station (§6.8.2), which is why pass 1 reads 0.00579 mm on a wall whose real worst is 0.0943;
+   it would be gating on a prediction rather than on the part. *Prerequisites:* none; this is listed
+   to be rejected.
+
+**Recommendation**
+
+**Alternative 3, with alternative 1's documentation written immediately and regardless.**
+
+This was alternative 2 when the question was filed. The prerequisite that alternative named has
+since been run and it refutes it: in-plane severity does not merely rank the real readings low, it
+ranks them last, and a small-`N` pass selects almost purely against the defect. That is not a
+tunable shortcoming, because the mechanism producing it — artifacts being wrong by a slot width and
+real readings only by an inclination factor — guarantees the ordering. So the cheap search cannot be
+the selector, and the face class is the selector that works.
+
+**Adopt it knowing it is not cheap on the wall that matters.** Filtering by face class costs almost
+nothing and is decisive on three of the four walls measured, but on the `tail_shell` at `U` = 1.0 it
+still leaves 2 018 samples and about 67 minutes. Either that is accepted as the price of a gate that
+measures the right quantity, or the gate measures a bounded sample of the fitted-surface readings
+and reports a bound rather than a worst — which is a weaker claim but an honest one, and a choice
+worth making deliberately rather than by letting `N` do it silently.
+
+Alternative 1's documentation is owed in any case rather than being an alternative to the others:
+the bias has a known sign, a measured magnitude of 1.08–1.16, and a measured consequence of 2.9–7.0×
+on the deficit. **An in-plane pass must not be read as evidence of compliance** until one of the
+others is in place. An in-plane *failure* remains evidence of a defect.
+
+Alternative 4 should be rejected explicitly rather than left as the cheap option — it would gate on
+a figure already measured to be nine times smaller than the real deficit, for the recorded reason
+that it measures to a different exterior.
+
+**One thing this recommendation does not claim.** None of these alternatives makes the wall thicker.
+They decide whether the gate can see a defect that is now measured at 0.065–0.094 mm on both kinds;
+what to do about the defect itself is not this question, and nothing in this plan has yet explained
+why the interior surface is inclined 21–31° where the wall is thin.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

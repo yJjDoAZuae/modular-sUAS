@@ -159,6 +159,271 @@ class TestStationDetail:
         assert row['worst_thin'] is None
 
 
+def toothed(outer_r=20.0, wall=0.6, n=4000, span_deg=1.0, bump=0.45, at_deg=40.0):
+    """An annulus whose inner loop carries a narrow outward step: a genuinely thin spot.
+
+    **This is a thin wall, not a corner artifact, and the difference matters for what can be
+    tested with it.** Measured while writing `criterion_split`: on this shape the reflex detector
+    does find the step's two shoulders and the exclusion does drop 20 samples, but the minimum is
+    unmoved at every span from 0.085 to 0.677 mm of arc and at both step heights tried. The
+    exclusion zone lands on the *smooth* side of each shoulder, because `_within_arc_of` measures
+    its margin along the sampled polyline and the step's own height is charged against it -- so a
+    0.45 mm step consumes a 0.30 mm margin by itself. That is the right answer here: the 0.15 mm
+    reading on the step's flat top is a real wall thickness measured perpendicular, and dropping it
+    would hide a thin wall. A synthetic convex loop therefore cannot produce a non-zero corner
+    term, which is why the corner term is tested for its arithmetic and its guard here and measured
+    on a real wall instead (IP-WTM-10, IP-WTM-28).
+    """
+    a = np.radians(np.linspace(0.0, 360.0, n, endpoint=False))
+    deg = np.degrees(a)
+    r = np.full_like(a, outer_r - wall)
+    r[(deg > at_deg) & (deg < at_deg + span_deg)] += bump
+    inner = np.stack([r * np.cos(a), r * np.sin(a), np.zeros_like(a)], axis=1)
+    return [ring(outer_r, n), inner]
+
+
+class TestCriterionSplit:
+    """IP-WTM-28: `TAU` and `WALL_TOL` are thresholds on two different measures.
+
+    `cavity`'s second pass converges a plain minimum at `CHECK_ARC` = 0.20 mm; the figure the
+    corpus publishes is the corner-excluded minimum at 0.125 mm. On `tail_shell` at `U` = 0.5 the
+    two read 0.03794 and 0.01346 mm on one wall. `criterion_split` attributes that difference, so
+    that setting `TAU` = `WALL_TOL` can be judged for what it actually asks.
+    """
+
+    def _patch(self, monkeypatch, by_count, perimeter=121.9):
+        """Serve a different set of loops per sample count, which is what the two spacings buy."""
+        monkeypatch.setattr(density, 'section_perimeter', lambda *a, **k: perimeter)
+        monkeypatch.setattr(sections, 'station_loops',
+                            lambda shape, z, n, **k: by_count(n))
+
+    def test_a_coarse_sampling_that_misses_a_thin_spot_reads_less_thinness(self, monkeypatch):
+        """The sampling term's sign is the useful part. A coarser sampling can only *miss* a thin
+        spot, never invent one, so when the two differ by sampling alone the coarse reading is the
+        smaller thinness and the term is negative."""
+        n_gate = density.counts_for_spacing(121.9, 0.125)
+        n_pass2 = density.counts_for_spacing(121.9, locate.PASS2_ARC)
+        assert n_pass2 < n_gate, 'the coarse sampling has to be the coarser one'
+        fine = toothed(n=n_gate)
+        coarse = annulus(outer_r=20.0, wall=0.6, n=n_pass2)    # the step is not resolved at all
+        self._patch(monkeypatch, lambda n: fine if n == n_gate else coarse)
+        row = locate.criterion_split(None, [-5.0])[0]
+        assert row['state'] == locate.ANNULUS
+        assert row['thin_incumbent'] == pytest.approx(0.45, abs=1.0e-3)
+        assert row['thin_pass2'] == pytest.approx(0.0, abs=1.0e-3)
+        assert row['sampling_term'] < 0.0
+        assert row['sampling_term'] == pytest.approx(-0.45, abs=1.0e-3)
+
+    def test_the_two_terms_add_up_to_the_whole_discrepancy(self, monkeypatch):
+        """The split is only useful if it is exhaustive: whatever is not sampling is corners."""
+        self._patch(monkeypatch, lambda n: toothed(n=max(400, n)))
+        row = locate.criterion_split(None, [-5.0])[0]
+        total = row['thin_pass2'] - row['thin_selected']
+        assert row['sampling_term'] + row['corner_term'] == pytest.approx(total, abs=1.0e-12)
+
+    def test_the_corner_term_is_zero_on_a_convex_synthetic_loop(self, monkeypatch):
+        """**Recorded as a vacuity note, not as a pass.** The exclusion drops samples on this shape
+        and the minimum does not move, so a zero corner term here says nothing about the real
+        wall's corners -- see `toothed`. The test exists so that a change which made this shape
+        report a corner term would be noticed, since on this geometry that would be a false
+        positive."""
+        self._patch(monkeypatch, lambda n: toothed(n=max(400, n)))
+        row = locate.criterion_split(None, [-5.0])[0]
+        assert row['corner_term'] == pytest.approx(0.0, abs=1.0e-9)
+        assert row['subset_violated'] is False
+
+    def test_a_selected_reading_thinner_than_the_incumbent_is_reported_not_clamped(
+            self, monkeypatch):
+        """`corner_excluded_min` minimizes over a *subset*, so its thinness can never exceed the
+        incumbent's. A violation is a defect in the measure and once was one (0.04806 against
+        0.04689 mm on a real wall), so it is surfaced rather than quietly clamped."""
+        self._patch(monkeypatch, lambda n: annulus(outer_r=20.0, wall=0.6, n=max(400, n)))
+        monkeypatch.setattr(candidates, 'corner_excluded_min',
+                            lambda outer, inner, **k: (inner, np.full(len(inner), 0.4)))
+        row = locate.criterion_split(None, [-5.0])[0]
+        assert row['subset_violated'] is True
+        assert row['corner_term'] < 0.0
+        assert 'SUBSET VIOLATED' in locate.criterion_table([row])
+
+    def test_a_station_whose_ring_is_not_an_annulus_reports_the_state_and_no_readings(
+            self, monkeypatch):
+        self._patch(monkeypatch, lambda n: c_shape(n=max(240, n // 8)))
+        row = locate.criterion_split(None, [-5.0])[0]
+        assert row['state'] == locate.SEVERED_ONE
+        assert row['thin_pass2'] is None and row['thin_selected'] is None
+        assert row['sampling_term'] is None
+
+    def test_a_station_with_no_measurable_perimeter_returns_a_row(self, monkeypatch):
+        """No perimeter means no spacing can be derived, which is an absent reading rather than an
+        error -- the same convention `station_detail` follows."""
+        monkeypatch.setattr(density, 'section_perimeter', lambda *a, **k: None)
+        row = locate.criterion_split(None, [-5.0])[0]
+        assert row['z'] == -5.0 and row['state'] is None
+        assert row['n_pass2'] is None
+
+    def test_the_table_reports_each_column_worst_independently(self, monkeypatch):
+        """`TAU` and `WALL_TOL` are each compared against the worst reading of their own measure
+        over the whole wall, so the three worst figures need not come from one station."""
+        rows = [
+            {'z': -1.0, 'thin_pass2': 0.03, 'thin_incumbent': 0.02, 'thin_selected': 0.001,
+             'sampling_term': 0.01, 'corner_term': 0.019, 'subset_violated': False,
+             'state': locate.ANNULUS},
+            {'z': -2.0, 'thin_pass2': 0.01, 'thin_incumbent': 0.05, 'thin_selected': 0.004,
+             'sampling_term': -0.04, 'corner_term': 0.046, 'subset_violated': False,
+             'state': locate.ANNULUS},
+        ]
+        text = locate.criterion_table(rows)
+        last = text.strip().splitlines()[-1]
+        assert last.split()[0] == 'worst'
+        assert '0.03000' in last and '0.05000' in last and '0.00400' in last
+
+
+class TestRankCorrelation:
+
+    def test_a_perfect_monotone_pair_scores_one(self):
+        assert locate.rank_correlation([1, 2, 3, 4], [10, 20, 30, 40]) == pytest.approx(1.0)
+
+    def test_a_perfectly_reversed_pair_scores_minus_one(self):
+        assert locate.rank_correlation([1, 2, 3, 4], [40, 30, 20, 10]) == pytest.approx(-1.0)
+
+    def test_it_is_insensitive_to_a_nonlinear_but_monotone_relation(self):
+        """Why a rank measure and not a straight-line fit: the claim under test is 'thin spots sit
+        where the rows are further apart', which is monotone and need not be linear."""
+        assert locate.rank_correlation([1, 2, 3, 4], [1, 4, 9, 16]) == pytest.approx(1.0)
+
+    def test_too_few_points_or_no_spread_returns_none(self):
+        assert locate.rank_correlation([1, 2], [1, 2]) is None
+        assert locate.rank_correlation([1, 1, 1], [1, 2, 3]) is None
+
+    def test_none_entries_are_dropped_in_pairs(self):
+        assert locate.rank_correlation([1, None, 3, 4], [1, 2, 3, 4]) == pytest.approx(1.0)
+
+    def test_ties_are_averaged_rather_than_ordered_arbitrarily(self):
+        rho = locate.rank_correlation([1, 1, 2, 2], [5, 5, 9, 9])
+        assert rho == pytest.approx(1.0)
+
+
+class TestRowSpacingVerdict:
+    """IP-WTM-30: thin spots against the local fit row spacing."""
+
+    def _row(self, z, interval, inc, exc):
+        return {'z': z, 'interval_mm': interval, 'nearest_row_mm': 0.5 * interval,
+                'interval_lo': z - 0.5 * interval, 'interval_hi': z + 0.5 * interval,
+                'thin_incumbent': inc, 'thin_excluded': exc, 'state': locate.ANNULUS}
+
+    def test_widely_spaced_rows_reading_thinner_gives_a_positive_rho(self):
+        rows = [self._row(-1.0, 1.0, 0.001, 0.001), self._row(-2.0, 5.0, 0.005, 0.005),
+                self._row(-3.0, 10.0, 0.010, 0.010), self._row(-4.0, 20.0, 0.020, 0.020)]
+        v = locate.row_spacing_verdict(rows)
+        assert v['rho_excluded'] == pytest.approx(1.0)
+        assert v['vacuous'] is False
+
+    def test_crowded_rows_reading_thinner_gives_a_negative_rho(self):
+        """The crowding hypothesis predicts this sign — tight rows being the bad ones — which is
+        the opposite of §6.8.3's nose result, so the verdict must be able to report either."""
+        rows = [self._row(-1.0, 1.0, 0.020, 0.020), self._row(-2.0, 5.0, 0.010, 0.010),
+                self._row(-3.0, 10.0, 0.005, 0.005), self._row(-4.0, 20.0, 0.001, 0.001)]
+        v = locate.row_spacing_verdict(rows)
+        assert v['rho_excluded'] == pytest.approx(-1.0)
+
+    def test_intervals_without_enough_spread_are_not_scorable(self):
+        """**A vacuity guard, like the others here.** If every station sits in a similarly wide
+        interval there is no independent variable, and a rho computed from that would be noise
+        presented as a finding."""
+        rows = [self._row(-1.0, 5.0, 0.001, 0.001), self._row(-2.0, 5.5, 0.020, 0.020),
+                self._row(-3.0, 6.0, 0.003, 0.003)]
+        v = locate.row_spacing_verdict(rows)
+        assert v['vacuous'] is True
+        assert 'NOT SCORABLE' in locate.row_spacing_table(rows)
+
+    def test_a_station_outside_every_interval_is_counted_but_not_scored(self):
+        rows = [self._row(-1.0, 1.0, 0.001, 0.001), self._row(-2.0, 10.0, 0.010, 0.010),
+                self._row(-3.0, 20.0, 0.020, 0.020),
+                {'z': -99.0, 'interval_mm': None, 'nearest_row_mm': None, 'interval_lo': None,
+                 'interval_hi': None, 'thin_incumbent': 0.5, 'thin_excluded': 0.5,
+                 'state': locate.ANNULUS}]
+        v = locate.row_spacing_verdict(rows)
+        assert v['stations'] == 4 and v['scored'] == 3
+
+
+class TestExteriorVerdict:
+    """IP-WTM-26: whether the residual is only in the gap between the two exteriors.
+
+    `_refine` converges the wall out to `body`'s un-notched OML; the post-cut loop measures it out
+    to `notched`'s real exterior. IP-WTM-44 measured pass 1 reaching 0.0073 mm while the finished
+    wall stayed at 0.0481, which makes a reference-surface explanation attractive. The test that
+    could refute it is a station thin against **both** exteriors, and that is what this verdict
+    isolates.
+    """
+
+    def test_a_station_thin_against_both_exteriors_is_unexplained(self):
+        rows = [(-10.0, 0.048, 0.047), (-20.0, 0.002, 0.002)]
+        v = locate.exterior_verdict(rows)
+        assert len(v['unexplained']) == 1
+        assert v['unexplained'][0][0] == -10.0
+        assert v['clean'] is False
+        assert v['worst_unexplained_oml'] == pytest.approx(0.047)
+
+    def test_a_station_thin_only_against_the_notched_exterior_is_explained(self):
+        rows = [(-10.0, 0.048, 0.0005), (-20.0, 0.002, 0.002)]
+        v = locate.exterior_verdict(rows)
+        assert len(v['explained']) == 1 and not v['unexplained']
+        assert v['clean'] is True
+
+    def test_a_record_where_the_exteriors_never_coincide_is_vacuous_not_a_pass(self):
+        """**The converse has to be exercised.** If no station has the two exteriors agreeing,
+        nothing has tested whether a station away from every notch is thin too, and reporting that
+        as a clean result is the empty-input cross-check this subsystem has made six times."""
+        rows = [(-10.0, 0.048, 0.0005), (-20.0, 0.030, 0.0004)]
+        v = locate.exterior_verdict(rows)
+        assert v['vacuous'] is True
+        assert v['clean'] is False, 'a vacuous record must not report clean'
+        assert 'NOTHING TESTED' in locate.exterior_table(rows)
+
+    def test_a_record_with_no_thin_station_is_vacuous_not_a_pass(self):
+        """**Found by running it.** The first `exterior_split.py` run, `nose_cowl_shell` at
+        `U` = 1.0, returned 63 stations whose worst reading was 0.0037 mm against a 0.01 mm
+        tolerance — a compliant build. With nothing thin, `explained` and `unexplained` are both
+        empty and an earlier version of this verdict reported CLEAN. A compliant specimen cannot
+        test an explanation of non-compliance."""
+        rows = [(-10.0, 0.0037, 0.0034), (-20.0, 0.0012, 0.0012)]
+        v = locate.exterior_verdict(rows, wall_tol=0.01)
+        assert v['thin'] == []
+        assert v['vacuous'] is True
+        assert v['clean'] is False, 'a compliant build must not report clean'
+        assert any('compliant' in r for r in v['vacuous_because'])
+        assert 'NOTHING TESTED' in locate.exterior_table(rows, wall_tol=0.01)
+
+    def test_both_vacuity_reasons_are_reported_together_when_both_apply(self):
+        rows = [(-10.0, 0.0037, 0.0001), (-20.0, 0.0012, 0.0002)]
+        v = locate.exterior_verdict(rows, wall_tol=0.01)
+        assert len(v['vacuous_because']) == 2
+
+    def test_coincident_stations_are_found_by_the_readings_not_by_geometry(self):
+        """Two readings that agree to `coincide_tol` mean no buttress tool removed exterior
+        material within reach — which is read off the measurement rather than recomputed from the
+        tools, so it cannot disagree with what was actually measured."""
+        rows = [(-10.0, 0.0020, 0.0020), (-20.0, 0.048, 0.0005)]
+        v = locate.exterior_verdict(rows)
+        assert [r[0] for r in v['coincident']] == [-10.0]
+
+    def test_an_unreadable_station_is_counted_not_dropped(self):
+        """`_finished_wall_gap` returns `None` when a section is not one closed loop. A station it
+        could not evaluate is not evidence either way, and silently dropping it is how a thin
+        reading becomes an absent one (IP-WTM-19, IP-WTM-35)."""
+        rows = [(-10.0, 0.048, 0.0005), (-20.0, None, None), (-30.0, 0.002, 0.002)]
+        v = locate.exterior_verdict(rows)
+        assert v['unreadable'] == 1 and v['readable'] == 2
+        assert v['stations'] == 3
+        assert 'unreadable' in locate.exterior_table(rows)
+
+    def test_the_table_names_the_unexplained_stations(self):
+        rows = [(-10.0, 0.048, 0.047), (-20.0, 0.002, 0.002)]
+        text = locate.exterior_table(rows)
+        assert 'UNEXPLAINED' in text
+        assert 'does not explain these' in text
+
+
 class TestCurvature:
 
     def test_a_circle_reads_its_own_radius(self):

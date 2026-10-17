@@ -147,6 +147,30 @@ def check(cut, smooth, tool, arc=be.SAMPLE_ARC, probes=PATCH_PROBES,
               % (len(groups), nonmanifold, time.time() - at))
     for key in sorted(kinds, key=lambda k: -kinds[k]):
         out.write('    %-28s %4d\n' % (key, kinds[key]))
+    # **IP-WTM-35: say *which* it is, not just how many.** A seam, a parameterization pole, an open
+    # boundary and a true non-manifold edge all present identically to a count, and only the last
+    # two are defects. This runs over the whole cut rather than over `face_rows`, because the
+    # anomalous group found on the tail is a `lid` group and the question is about the shape, not
+    # about the rib.
+    odd_edges = be.anomalous_edges(cut, Part=Part)
+    edge_verdict = be.edge_anomaly_verdict(odd_edges)
+    total_faces, solid_faces = be.loose_faces(cut)
+    out.write('  %d edge group(s) diagnosed as not two-faced: %s\n'
+              % (edge_verdict['groups'],
+                 ' '.join('%s=%d' % kv for kv in sorted(edge_verdict['kinds'].items()))
+                 or 'none'))
+    # **A stray face beside the solid would produce an open boundary without the solid being
+    # open**, so the two counts are printed rather than assumed equal.
+    out.write('  %s faces, %s of them in a solid%s\n'
+              % (total_faces, solid_faces,
+                 '' if total_faces == solid_faces
+                 else '   <-- %d face(s) belong to no solid' % (total_faces - solid_faces)))
+    if odd_edges:
+        out.write('\n'.join('    ' + line
+                            for line in be.table_anomalous(odd_edges).splitlines()) + '\n')
+        if not edge_verdict['clean']:
+            out.write('    %d SERIOUS -- an open boundary or a non-manifold edge\n'
+                      % len(edge_verdict['serious']))
     out.write('  %d rib edge(s) where the fitted surface meets a tool face, %.2f mm in all\n'
               % (len(edge_rows), total_mm))
     out.flush()
@@ -198,6 +222,8 @@ def check(cut, smooth, tool, arc=be.SAMPLE_ARC, probes=PATCH_PROBES,
     return {'faces': tally, 'edges': len(edge_rows), 'edge_length_mm': total_mm,
             'edge_groups': len(groups), 'nonmanifold_groups': nonmanifold,
             'edge_kinds': kinds, 'truncated_edges': truncated, 'summary': summary,
+            'edge_anomalies': [{k: v for k, v in r.items() if k != 'key'} for r in odd_edges],
+            'edge_anomaly_kinds': edge_verdict['kinds'],
             'agreement': agreement, 'face_rows': face_rows,
             'identity': identity, 'patch': patch, 'creases': creases}
 
