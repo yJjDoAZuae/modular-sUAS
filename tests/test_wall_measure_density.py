@@ -1,9 +1,10 @@
 """Sampling density as a spacing, and the chord-sag error that a fixed sample count hides.
 
 The cowl scales with `U` while the wall stays an absolute 0.6 mm, so every measurement that fixes a
-sample *count* gets a spacing that grows with `U`. `check_cowl_interior` fixes `AROUND` = 240 and
-`sweep.measure_wall` fixed `level` = 1440; `cowl_interior.check_samples` does not, being arc-length
-based at `CHECK_ARC` = 0.20 mm.
+sample *count* gets a spacing that grows with `U`. `check_cowl_interior` fixed `AROUND` = 240 and
+`sweep.measure_wall` fixed `level` = 1440; `cowl_interior.check_samples` did not, being arc-length
+based at `CHECK_ARC` = 0.20 mm. The gate is fixed as of IP-WTM-25 and samples at `WALL_ARC` = 0.125
+mm; `prior_gate_spacing` keeps the old arithmetic, because the published figures were taken with it.
 
 **The mechanism is checked against closed-form truth here, not just asserted.** A circle of radius
 `R` sampled at spacing `s` has chords that sag by `R - sqrt(R^2 - (s/2)^2)`, about `s^2 / (8R)`. On
@@ -13,16 +14,37 @@ large-`U` finding a mechanism rather than a correlation.
 
 See doc/implementation/wall_thickness_measure.md.
 """
+import ast
 import os
 import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                'src', 'Fuselage', 'tools'))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO, 'src', 'Fuselage', 'tools'))
 
 from wall_measure import candidates, density                             # noqa: E402
+
+GATE_SOURCE = os.path.join(REPO, 'src', 'Fuselage', 'freecad', 'check_cowl_interior.py')
+
+
+def gate_constant(name):
+    """Read a module-level constant out of the gate's source, without importing it.
+
+    `check_cowl_interior` imports FreeCAD at module level, so a test running on the project's own
+    interpreter cannot import it to compare a value. Parsing is the way to hold a mirrored constant
+    to its original anyway: it fails loudly if the gate's name changes, where a hand-copied number
+    just goes quietly stale.
+    """
+    with open(GATE_SOURCE) as handle:
+        tree = ast.parse(handle.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == name:
+                    return ast.literal_eval(node.value)
+    raise AssertionError('%s is not a module-level constant of check_cowl_interior' % name)
 
 
 def ring(radius, n, phase=0.0):
@@ -66,28 +88,66 @@ class TestSpacingArithmetic:
         """The cap that the first density run needed and did not have."""
         assert density.counts_for_spacing(1.0e9, 0.001) == density.MAX_POINTS
 
-    def test_the_gate_spacing_grows_with_the_part(self):
-        """**The defect, in one assertion.** `AROUND` is a fixed 240, so the inner spacing is
-        proportional to the perimeter -- 1.8 mm on a tail at `U` = 1 and 8.7 mm at `U` = 4, against a
-        wall of 0.6 mm at both."""
-        inner_u1, outer_u1 = density.gate_spacing(428.3)
-        inner_u4, outer_u4 = density.gate_spacing(2088.4)
+    def test_the_prior_gate_spacing_grows_with_the_part(self):
+        """**The defect, in one assertion, kept because the published figures carry it.**
+        `PRIOR_GATE_AROUND` is a fixed 240, so the inner spacing is proportional to the perimeter --
+        1.8 mm on a tail at `U` = 1 and 8.7 mm at `U` = 4, against a wall of 0.6 mm at both."""
+        inner_u1, _outer_u1 = density.prior_gate_spacing(428.3)
+        inner_u4, outer_u4 = density.prior_gate_spacing(2088.4)
         assert inner_u1 == pytest.approx(1.785, abs=0.002)
         assert inner_u4 == pytest.approx(8.702, abs=0.002)
-        assert outer_u4 == pytest.approx(inner_u4 / density.GATE_OUTER_FACTOR)
+        assert outer_u4 == pytest.approx(inner_u4 / density.PRIOR_GATE_OUTER_FACTOR)
         assert inner_u4 / inner_u1 == pytest.approx(2088.4 / 428.3, rel=1e-6)
 
-    def test_the_gate_samples_coarser_than_the_wall_it_measures_at_large_u(self):
-        """The figure that makes the finding plain: at `U` = 4 the gate puts its inner samples
+    def test_the_prior_gate_sampled_coarser_than_the_wall_it_measured_at_large_u(self):
+        """The figure that made the finding plain: at `U` = 4 the gate put its inner samples
         fourteen times the wall thickness apart."""
-        inner, _outer = density.gate_spacing(2088.4)
+        inner, _outer = density.prior_gate_spacing(2088.4)
         assert inner > 10 * density.NOMINAL
 
-    def test_the_constructions_own_scan_is_a_spacing_not_a_count(self):
-        """`cowl_interior.CHECK_ARC` is why pass 2's scan density holds at large `U` while the
-        things that measure the result do not. Carried here so the inconsistency is visible."""
+    def test_the_fixed_gate_holds_its_spacing_across_the_whole_u_range(self):
+        """IP-WTM-25: the same spacing at `U` = 0.5 and `U` = 4, which is the property a count
+        cannot have. The ratio the prior test asserts grows by 4.9x is now exactly 1."""
+        short = density.gate_spacing(214.0)[0]
+        long_ = density.gate_spacing(2088.4)[0]
+        assert short == pytest.approx(density.GATE_ARC, rel=1e-3)
+        assert long_ == pytest.approx(density.GATE_ARC, rel=1e-3)
+        assert long_ / short == pytest.approx(1.0, rel=1e-3)
+
+    def test_the_fixed_gate_samples_an_order_finer_than_the_wall_it_measures(self):
+        """The inverse of the prior gate's failure: the spacing has to be well inside the 0.6 mm
+        being measured, not a multiple of it."""
+        inner, outer = density.gate_spacing(2088.4)
+        assert inner < density.NOMINAL / 4
+        assert outer == inner, 'one spacing, both loops -- the 8x outer factor is retired'
+
+    def test_a_short_section_hits_the_floor_and_is_sampled_finer_not_coarser(self):
+        """Which direction the clamp errs in is the part that matters: finer than asked is
+        harmless, coarser would silently undo the fix."""
+        assert density.gate_spacing(10.0)[0] < density.GATE_ARC
+
+    def test_a_section_past_the_ceiling_is_reported_coarser_so_it_cannot_hide(self):
+        """The ceiling is a cost guard, so the one thing required of it is that the spacing it
+        actually achieves is visible rather than assumed to be `GATE_ARC`."""
+        huge = 10.0 * density.GATE_MAX * density.GATE_ARC
+        assert density.gate_spacing(huge)[0] > density.GATE_ARC
+
+    def test_the_mirrored_gate_constants_match_the_gates_own_source(self):
+        """**A mirror that drifts is worse than no mirror.** This module cannot import the gate --
+        it must stay importable with no FreeCAD -- so the values are copied, and the copy is held
+        to the original by reading it."""
+        assert density.GATE_ARC == gate_constant('WALL_ARC')
+        assert density.GATE_MIN == gate_constant('WALL_MIN')
+        assert density.GATE_MAX == gate_constant('WALL_MAX')
+        assert density.PRIOR_GATE_AROUND == 240, 'history, not a mirror: the gate no longer has it'
+
+    def test_the_constructions_own_scan_is_a_spacing_too_and_a_coarser_one(self):
+        """`cowl_interior.CHECK_ARC` is why pass 2's scan density held at large `U` while the things
+        measuring the result did not. Both are spacings now, and the gate's is the finer of the two
+        deliberately: 0.20 mm resolves the 1.3 mm gap a rib leaves, 0.125 mm resolves a 0.01 mm
+        departure in a 0.6 mm wall."""
         assert density.CONSTRUCTION_ARC == 0.20
-        assert density.CONSTRUCTION_ARC < density.gate_spacing(428.3)[0]
+        assert density.GATE_ARC < density.CONSTRUCTION_ARC
 
 
 # ------------------------------------------------------------- the mechanism, against closed form

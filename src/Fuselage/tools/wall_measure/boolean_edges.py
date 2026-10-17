@@ -626,6 +626,391 @@ def surface_identity(a, b, atol=KERNEL_TOL):
     return out
 
 
+def congruent_identity(a, b, atol=KERNEL_TOL):
+    """Are two B-spline surfaces the same surface **up to a rigid motion**? For the mirror steps.
+
+    `surface_identity` compares poles where they stand, which is the right question for a boolean
+    that is supposed to leave its operand alone. It is the wrong question after
+    `mirror_across_cell`: a mirrored copy's poles are *reflected*, so identical coordinates would
+    mean the mirror had not moved anything. What must hold instead is that the copy is the original
+    carried rigidly -- same parameterization, same shape, a different place.
+
+    **A mirror is an isometry, so the control net's own internal distances are preserved exactly.**
+    This compares the step lengths along each parameter direction, pole by pole:
+    `|P[i+1][j] - P[i][j]|` and `|P[i][j+1] - P[i][j]|`. A refit moves poles relative to each other
+    and changes these; a reflection, rotation or translation cannot touch them. No plane of
+    reflection has to be known or guessed, which matters because a finished wall carries several
+    copies composed through several cell planes and the composition is not recoverable from the
+    saved shape.
+
+    The lattice may also be indexed the other way round in either direction, because a reflection
+    reverses orientation and the kernel may renumber, so the four flip combinations are tried and
+    the closest reported. Transposition is **not** tried: swapping `u` for `v` is a
+    reparameterization rather than a rigid motion, and accepting it would hide the kind of change
+    this exists to find.
+
+    Returns the same shape of dict as `surface_identity` with `worst_step_mm` in place of
+    `worst_pole_mm`, so one formatter prints either.
+    """
+    out = {'same_degrees': None, 'same_pole_counts': None, 'same_knots': None,
+           'same_weights': None, 'same_periodicity': None, 'worst_step_mm': None,
+           'identical': False, 'comparable': False}
+    try:
+        out['same_degrees'] = (a.UDegree, a.VDegree) == (b.UDegree, b.VDegree)
+        out['same_pole_counts'] = (a.NbUPoles, a.NbVPoles) == (b.NbUPoles, b.NbVPoles)
+        out['same_periodicity'] = (bool(a.isUPeriodic()), bool(a.isVPeriodic())) == \
+                                  (bool(b.isUPeriodic()), bool(b.isVPeriodic()))
+        out['same_knots'] = (_close(a.getUKnots(), b.getUKnots(), atol)
+                             and _close(a.getVKnots(), b.getVKnots(), atol)
+                             and list(a.getUMultiplicities()) == list(b.getUMultiplicities())
+                             and list(a.getVMultiplicities()) == list(b.getVMultiplicities()))
+        out['comparable'] = True
+        if not out['same_pole_counts']:
+            return out
+        out['worst_step_mm'] = _worst_step_difference(_pole_array(a), _pole_array(b))
+        out['same_weights'] = _close(np.ravel(_weight_array(a)), np.ravel(_weight_array(b)), atol)
+        out['identical'] = bool(out['same_degrees'] and out['same_pole_counts']
+                                and out['same_knots'] and out['same_weights']
+                                and out['same_periodicity']
+                                and out['worst_step_mm'] is not None
+                                and out['worst_step_mm'] <= atol)
+    except Exception:                                               # noqa: BLE001 kernel/API
+        pass
+    return out
+
+
+#: Classifications `anomalous_edges` separates an edge group into.
+#: One face, and that face's surface is **periodic**: the closing seam signature.
+#:
+#: **Periodicity is the discriminator, and an earlier version used the occurrence count instead --
+#: wrongly.** It classified a seam as "one face carrying the edge twice", on the assumption that
+#: `Face.Edges` lists a seam once per orientation. Measured on a cylinder through the test bridge,
+#: it does **not**: the lateral face lists its seam edge exactly once, the same as any other edge.
+#: So the count cannot separate a seam from an open boundary, and neither can the kernel's
+#: `ancestorsOfType`, which returns *distinct* ancestors and so answers "one face" for both. A seam
+#: exists only on a periodic surface, which is what is left to decide it on.
+EDGE_SEAM = 'seam'
+#: One face, and that face's surface is not periodic: an open boundary. On a closed solid, a defect.
+EDGE_FREE = 'free_boundary'
+EDGE_DEGENERATE = 'degenerate'        #: Zero length: a pole of the parameterization.
+EDGE_NONMANIFOLD = 'nonmanifold'      #: Three or more faces share it.
+#: The kernel would not say how long it is or where its ends are. **Counted a finding, not a pass.**
+#: An earlier version let the read fail into the ordinary branches, which turned a zero-length edge
+#: into a confident `free_boundary` -- a broad `except` producing a diagnosis instead of an error.
+EDGE_UNREADABLE = 'unreadable'
+#: The kernel says two faces share it and the geometric keying did not. **A finding about this
+#: instrument, not about the part**, and it has to be a category of its own: `_edge_key` includes
+#: the edge's midpoint at `valueAt(0.5 * (First + Last))`, which is *parameter*-dependent, so two
+#: representations of one curve that are parameterized differently key apart and each present as a
+#: one-face group. Reporting that as an open boundary on a shape the kernel calls a closed solid
+#: would be the proxy overruling the authority.
+EDGE_KEYED_APART = 'keyed_apart'
+
+
+def kernel_face_count(Part, shape, edge):
+    """How many faces the **kernel** says share `edge`, or `None` if it will not say.
+
+    `ancestorsOfType` is a search over the shape per edge, which is why `face_adjacency` keys
+    edges geometrically instead -- a tail cavity has thousands of each. Asked here for the handful
+    of edges the keying already called anomalous, where the cost is nothing and the keying is
+    exactly what is in doubt.
+    """
+    try:
+        return len(shape.ancestorsOfType(edge, Part.Face))
+    except Exception:                                               # noqa: BLE001 kernel/API
+        return None
+
+
+def loose_faces(shape):
+    """Faces of `shape` that belong to no solid. A compound can carry one, and it is a finding.
+
+    A stray face left beside a solid by a boolean has free edges by definition, so it would show
+    up as an open boundary without the solid being open at all. Returns `(total, in_solids)`;
+    unequal counts mean the shape is not just its solids.
+    """
+    try:
+        total = len(shape.Faces)
+        in_solids = sum(len(s.Faces) for s in shape.Solids)
+        return total, in_solids
+    except Exception:                                               # noqa: BLE001 kernel/API
+        return None, None
+
+
+def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
+    """Every edge group of `shape` not shared by exactly two faces, each one classified.
+
+    **On a closed solid every edge has exactly two faces, so a group that does not is one of four
+    different things and they are not equally serious** (IP-WTM-35). `face_adjacency` counts them
+    and stops there, which is right for its own purpose -- an unmatched key is a rib edge that
+    would otherwise go unexamined -- but it leaves "one of the tail's 3 164 edge groups is not
+    shared by exactly two faces" as a fact with no diagnosis. The four cases:
+
+    * `EDGE_DEGENERATE` -- zero length. A pole of the parameterization, where a surface collapses
+      to a point. Entirely normal on a revolved or lofted patch and not a defect.
+    * `EDGE_SEAM` -- one face, whose surface is **periodic**: the closing seam, equally normal.
+    * `EDGE_FREE` -- one face, whose surface is not periodic, so it has no seam to be: an open
+      boundary. On a shape that should be a closed solid this is a real defect, and it is the one of
+      the four worth raising.
+
+    **Periodicity is what separates those two, because nothing else can.** `face_adjacency` records
+    a face index once per group, so a seam presents as a one-face group; the kernel's own
+    `ancestorsOfType` returns *distinct* ancestors and so also answers "one face"; and
+    `Face.Edges` was measured **not** to list a seam twice (a cylinder's lateral face lists its
+    seam once, like any other edge), so the occurrence count cannot carry the distinction either.
+    `occurrences` is reported because it is cheap and would matter if that vendor behaviour ever
+    changed, but no classification depends on it.
+
+    A genuine open boundary on a *periodic* face is therefore indistinguishable from a seam by this
+    test and would be reported as a seam. That limit is real and is the price of the only sound
+    discriminator available.
+    * `EDGE_NONMANIFOLD` -- three or more faces. Also a real defect.
+
+    Returns one row a group, with the face indices, how many times each face carries the edge, the
+    edge's length, whether its endpoints coincide, and the surface type and periodicity of the
+    faces involved -- enough to tell a seam from a free boundary without going back to the shape.
+
+    **Pass `Part` and every anomaly is cross-checked against the kernel's own adjacency, which is
+    the authority this grouping is a proxy for.** `_edge_key` includes the edge's midpoint at
+    `valueAt(0.5 * (First + Last))`, and that is a *parameter*, not a position: two
+    differently-parameterized representations of one shared curve key apart, and each half then
+    presents as a one-face group indistinguishable from a real open boundary. Where the kernel says
+    two faces share the edge, the row becomes `EDGE_KEYED_APART` -- a defect in this measurement
+    rather than in the part. Without `Part` the rows are the proxy's unchecked opinion, which on a
+    shape the kernel calls a closed valid solid is not enough to report an open boundary.
+    """
+    groups, unkeyed = {}, []
+    for index, face in enumerate(shape.Faces):
+        for edge in face.Edges:
+            try:
+                key = _edge_key(edge, quantum)
+            except Exception:                                       # noqa: BLE001 kernel/API
+                # **Reported, not skipped.** `_edge_key` reads the edge's length and midpoint, so
+                # an edge the kernel will not describe cannot be grouped -- and dropping it here
+                # would remove it from the count as well, which is the one outcome that looks like
+                # a clean wall. It becomes a finding of its own below.
+                unkeyed.append(index)
+                continue
+            slot = groups.setdefault(key, {'edge': edge, 'faces': {}})
+            slot['faces'][index] = slot['faces'].get(index, 0) + 1
+    out = [{'kind': EDGE_UNREADABLE, 'faces': [i], 'occurrences': 1,
+            'length_mm': float('nan'), 'closed': False,
+            'surfaces': sorted({type(shape.Faces[i].Surface).__name__}),
+            'periodic': _is_periodic(shape.Faces[i].Surface),
+            'kernel_faces': None, 'key': None}
+           for i in unkeyed]
+    for key, slot in groups.items():
+        faces = slot['faces']
+        if sum(faces.values()) == 2 and len(faces) == 2:
+            continue
+        edge = slot['edge']
+        try:
+            length = float(edge.Length)
+            verts = [v.Point for v in edge.Vertexes]
+            if len(verts) < 2:
+                closed = True
+            else:
+                a, b = verts[0], verts[-1]
+                # Read by attribute, not by index. A vendor vector happens to support `v[0]`, and
+                # relying on that is what made this branch raise and then mis-label the edge.
+                closed = bool(abs(a.x - b.x) <= length_tol and abs(a.y - b.y) <= length_tol
+                              and abs(a.z - b.z) <= length_tol)
+            readable = True
+        except Exception:                                           # noqa: BLE001 kernel/API
+            length, closed, readable = float('nan'), False, False
+        occurrences = sum(faces.values())
+        surfaces = sorted({type(shape.Faces[i].Surface).__name__ for i in faces})
+        periodic = any(_is_periodic(shape.Faces[i].Surface) for i in faces)
+        if not readable:
+            kind = EDGE_UNREADABLE
+        elif length <= length_tol:
+            kind = EDGE_DEGENERATE
+        elif len(faces) >= 3:
+            kind = EDGE_NONMANIFOLD
+        elif len(faces) == 1:
+            # Periodic, not the occurrence count: see `EDGE_SEAM`. A non-periodic surface has no
+            # seam for this to be, so the edge really is a boundary of the shell.
+            kind = EDGE_SEAM if periodic else EDGE_FREE
+        else:
+            # Two faces, but one of them carries the edge twice -- a seam on a face that also abuts
+            # a neighbour there. Named rather than lumped in with the ordinary two-faced edges.
+            kind = EDGE_SEAM
+        kernel_faces = kernel_face_count(Part, shape, edge) if Part is not None else None
+        if kernel_faces == 2 and kind in (EDGE_FREE, EDGE_NONMANIFOLD):
+            # The authority says this edge is shared normally, so the anomaly is the keying's.
+            kind = EDGE_KEYED_APART
+        out.append({'kind': kind, 'faces': sorted(faces), 'occurrences': occurrences,
+                    'length_mm': length, 'closed': closed, 'surfaces': surfaces,
+                    'periodic': periodic, 'kernel_faces': kernel_faces, 'key': key})
+    order = {EDGE_FREE: 0, EDGE_NONMANIFOLD: 1, EDGE_UNREADABLE: 2, EDGE_KEYED_APART: 3,
+             EDGE_SEAM: 4, EDGE_DEGENERATE: 5}
+    # `-length_mm` would put a NaN anywhere, so the kind alone orders the unreadable ones.
+    return sorted(out, key=lambda r: (order.get(r['kind'], 9),
+                                      0.0 if r['length_mm'] != r['length_mm']
+                                      else -r['length_mm']))
+
+
+def _is_periodic(surface):
+    try:
+        return bool(surface.isUPeriodic() or surface.isVPeriodic())
+    except Exception:                                               # noqa: BLE001 non-spline
+        return False
+
+
+def edge_anomaly_verdict(rows):
+    """Fold `anomalous_edges`' rows into one answer. A seam and a pole are not findings.
+
+    `unchecked` counts the rows that would be findings but were never put to the kernel. They are
+    still reported as serious -- an unchecked suspicion is not a clean bill -- but the count says
+    whether the verdict rests on the proxy alone, which on a shape the kernel calls a closed solid
+    is the difference between a finding and an artifact.
+    """
+    serious = [r for r in rows if r['kind'] in (EDGE_FREE, EDGE_NONMANIFOLD, EDGE_UNREADABLE)]
+    counts = {}
+    for r in rows:
+        counts[r['kind']] = counts.get(r['kind'], 0) + 1
+    return {'groups': len(rows), 'kinds': counts, 'serious': serious,
+            'unchecked': [r for r in serious if r.get('kernel_faces') is None],
+            'keyed_apart': counts.get(EDGE_KEYED_APART, 0),
+            'clean': not serious}
+
+
+def table_anomalous(rows, limit=12):
+    """`anomalous_edges` as text, worst kind first."""
+    head = '%-14s %10s %7s %8s %-22s %8s %s' % ('kind', 'length mm', 'faces', 'times', 'surfaces',
+                                                'periodic', 'kernel faces')
+    out = [head, '-' * len(head)]
+    for r in rows[:limit]:
+        out.append('%-14s %10s %7d %8d %-22s %8s %s'
+                   % (r['kind'],
+                      '?' if r['length_mm'] != r['length_mm'] else '%.5f' % r['length_mm'],
+                      len(r['faces']), r['occurrences'],
+                      ','.join(s[:20] for s in r['surfaces']), 'yes' if r['periodic'] else 'no',
+                      'not asked' if r.get('kernel_faces') is None else r['kernel_faces']))
+    if len(rows) > limit:
+        out.append('... %d more' % (len(rows) - limit))
+    return '\n'.join(out)
+
+
+def parameterization_key(surface, quantum=KERNEL_TOL):
+    """Everything about a B-spline surface except where its poles are: degrees, pole counts, knots,
+    multiplicities and periodicity, quantized so two copies of one fit hash together."""
+    def q(values):
+        return tuple(int(round(float(v) / quantum)) for v in values)
+    return (surface.UDegree, surface.VDegree, surface.NbUPoles, surface.NbVPoles,
+            q(surface.getUKnots()), q(surface.getVKnots()),
+            tuple(surface.getUMultiplicities()), tuple(surface.getVMultiplicities()),
+            bool(surface.isUPeriodic()), bool(surface.isVPeriodic()))
+
+
+def mirror_families(shape, atol=KERNEL_TOL):
+    """Group a finished wall's B-spline surfaces by parameterization, and test each group for
+    congruence. **The build-free half of the after-`cavity` question.**
+
+    `shell_solid` finishes a wall by mirroring one cell across its cell planes, so a saved wall
+    already carries several copies of the fitted interior patch. Each mirror step runs its own
+    boolean and its own `removeSplitter`, either of which could refit the surface -- and a refit is
+    what `surface_identity` was built to detect, except that it cannot be asked here, because a
+    mirrored copy's poles are *supposed* to differ.
+
+    **The test is non-circular because it predicts one property from another.** Two B-spline
+    surfaces on one finished wall that agree in degrees, pole counts, knots, multiplicities and
+    periodicity are copies of the same fit -- nothing else in the construction produces that
+    structure twice. If they are copies, they must also be **congruent**, since a mirror is an
+    isometry. So within each parameterization group, congruence is a prediction that can fail:
+    grouping is by `parameterization_key`, which never looks at a pole, and the verdict is
+    `congruent_identity` on the poles, which never looks at the key.
+
+    Returns one row a group: `size`, how many members are *exactly* equal to the representative,
+    the worst congruence mismatch in millimetres, and the pole counts. The `exact` count is what
+    says the test is not vacuous -- a group where every member is pole-identical has not been
+    mirrored at all, and congruence there is trivially true.
+    """
+    rows = {}
+    for index, face in enumerate(shape.Faces):
+        surf = face.Surface
+        if type(surf).__name__ != 'BSplineSurface':
+            continue
+        try:
+            key = parameterization_key(surf, atol)
+        except Exception:                                           # noqa: BLE001 kernel/API
+            continue
+        rows.setdefault(key, []).append((index, surf))
+    out = []
+    for key, members in rows.items():
+        _i0, first = members[0]
+        worst, exact, comparable = 0.0, 0, True
+        for _i, surf in members[1:]:
+            verdict = congruent_identity(first, surf, atol)
+            if not verdict['comparable'] or verdict['worst_step_mm'] is None:
+                comparable = False
+                continue
+            worst = max(worst, verdict['worst_step_mm'])
+            if _same_surface(first, surf):
+                exact += 1
+        out.append({'poles': (key[2], key[3]), 'degrees': (key[0], key[1]),
+                    'size': len(members), 'exact': exact + 1, 'mirrored': len(members) - exact - 1,
+                    'worst_step_mm': worst, 'comparable': comparable,
+                    'congruent': bool(comparable and worst <= atol),
+                    'faces': [i for i, _s in members]})
+    return sorted(out, key=lambda r: (-r['size'], r['poles']))
+
+
+def mirror_verdict(rows):
+    """Fold `mirror_families`' rows into one answer, and say whether it was vacuous.
+
+    `tested` counts only the groups that actually contain a mirrored copy: a wall whose every
+    B-spline group is pole-identical throughout has told us nothing about the mirror steps, and
+    reporting that as a pass would be the same error as cross-checking two measures of an empty
+    input.
+    """
+    tested = [r for r in rows if r['mirrored'] > 0]
+    return {'groups': len(rows), 'surfaces': sum(r['size'] for r in rows),
+            'groups_with_a_mirrored_copy': len(tested),
+            'mirrored_copies': sum(r['mirrored'] for r in tested),
+            'worst_step_mm': (max(r['worst_step_mm'] for r in tested) if tested else None),
+            'failed': [r for r in rows if not r['congruent']],
+            'vacuous': not tested,
+            'clean': bool(tested and all(r['congruent'] for r in rows))}
+
+
+def table_mirror(rows):
+    """`mirror_families` as text, one line a parameterization group."""
+    head = '%6s %10s %6s %6s %9s %14s' % ('faces', 'poles', 'exact', 'mirror', 'degrees',
+                                          'worst step mm')
+    out = [head, '-' * len(head)]
+    for r in rows:
+        out.append('%6d %10s %6d %6d %9s %14s%s'
+                   % (r['size'], '%dx%d' % r['poles'], r['exact'], r['mirrored'],
+                      '%dx%d' % r['degrees'],
+                      'n/a' if r['worst_step_mm'] is None else '%.3e' % r['worst_step_mm'],
+                      '' if r['congruent'] else '   <-- NOT CONGRUENT'))
+    return '\n'.join(out)
+
+
+def _lattice_steps(poles):
+    """Distances between adjacent poles, along `u` then along `v`. Invariant under a rigid motion."""
+    du = np.linalg.norm(poles[1:, :, :] - poles[:-1, :, :], axis=-1)
+    dv = np.linalg.norm(poles[:, 1:, :] - poles[:, :-1, :], axis=-1)
+    return du, dv
+
+
+def _worst_step_difference(pa, pb):
+    """The smallest worst-case step mismatch over the four index-flip combinations."""
+    ua, va = _lattice_steps(pa)
+    best = None
+    for flip_u in (False, True):
+        for flip_v in (False, True):
+            q = pb[::-1, :, :] if flip_u else pb
+            q = q[:, ::-1, :] if flip_v else q
+            ub, vb = _lattice_steps(q)
+            if ua.shape != ub.shape or va.shape != vb.shape:
+                continue
+            worst = max(float(np.max(np.abs(ua - ub))) if ua.size else 0.0,
+                        float(np.max(np.abs(va - vb))) if va.size else 0.0)
+            best = worst if best is None else min(best, worst)
+    return best
+
+
 def _close(a, b, atol):
     a, b = np.asarray(list(a), dtype=float), np.asarray(list(b), dtype=float)
     return bool(a.shape == b.shape and np.allclose(a, b, rtol=0.0, atol=atol))
@@ -1037,3 +1422,141 @@ def table(summary, agreement=None):
                             r.get('kernel_boundary_mm', float('nan')),
                             r['cheap_tool_mm'], r['kernel_tool_mm']))
     return '\n'.join(lines) + '\n'
+
+
+#: Stage names that move the geometry **rigidly**, so pole-for-pole identity is the wrong test
+#: across them and congruence is the right one.
+#:
+#: **This constant exists because the first run of `stage_identity` got it wrong.** On a
+#: `nose_cowl_shell` at `U` = 1.0, which mirrors three times, the two mirror-to-mirror transitions
+#: reported a worst pole displacement of exactly **1.000e+02 mm** and were labelled a refit. That
+#: is a reflection distance, not a refit: after a mirror the shape carries the original copy *and*
+#: its image, both with the same parameterization key and different pole coordinates, so matching
+#: by key and comparing poles can compare a copy against its own reflection. `congruent_identity`'s
+#: docstring says precisely this about `surface_identity`; the mistake was applying the identity
+#: test to the one step already known to need the congruence test.
+ISOMETRY_STAGES = ('mirror_across_cell',)
+
+
+def stage_identity(stages, atol=KERNEL_TOL, isometries=ISOMETRY_STAGES):
+    """IP-WTM-38: does the fitted interior surface survive each boolean *after* `cavity`?
+
+    `stages` is the list `cowl_interior.shell_solid` fills when given one: `(name, shape)` a step,
+    in order, starting with `cavity`'s own output. For each consecutive pair this asks whether the
+    B-spline surface the earlier stage carried is still there, pole for pole, in the later one.
+
+    **Why a finished wall cannot answer this and a staged build can.** `mirror_families` tests that
+    a finished wall's mirrored copies are congruent to one another, which catches a refit applied
+    to one copy and not the others. It cannot catch a refit applied *before* the mirror: every copy
+    is then equally refit, every copy is congruent, and the test passes. `_extend_across_cell` and
+    `notched.cut(inside)` both run before any mirror, and `_strip_seam` runs inside the first one,
+    so all three are invisible from the finished article. That is the gap this closes.
+
+    **Matched by parameterization, not by face index.** A boolean renumbers faces freely and can
+    leave one surface carrying several faces -- the tail's cavity carries three faces over one
+    fitted patch -- so the surfaces are grouped by `parameterization_key` and a stage's group is
+    compared against the same key in the next stage. A key that **disappears** between stages is
+    the interesting outcome and is reported as `lost`, since that is what a refit looks like: the
+    old parameterization is gone and a new one has taken its place.
+
+    Returns one row a transition, each with:
+
+    * `from_stage`, `to_stage` -- the two step names.
+    * `keys_before`, `keys_after` -- how many distinct parameterizations each side carried.
+    * `matched` -- keys present on both sides.
+    * `lost` -- keys present before and gone after: a refit, or a surface the step removed.
+    * `worst_mm` -- over matched keys, the largest discrepancy the applied test found.
+    * `test` -- `'identity'` (poles where they stand) or `'congruence'` (internal step lengths).
+    * `identical` -- every matched key passed the applied test, and nothing was lost.
+    * `vacuous` -- the earlier stage carried no B-spline surface at all, so nothing was tested.
+
+    **Which test is applied depends on the step**, and getting that wrong is how this function's
+    first run produced a false positive -- see `ISOMETRY_STAGES`. A step that moves the geometry
+    rigidly is checked with `congruent_identity`, which compares the control net's own internal
+    step lengths and is invariant under reflection; every other step is checked with
+    `surface_identity`, which compares poles where they stand and is the right question for a
+    boolean that is supposed to leave its operand alone.
+    """
+    rows = []
+    for (name_a, shape_a), (name_b, shape_b) in zip(stages, stages[1:]):
+        before, after = {}, {}
+        for store, shape in ((before, shape_a), (after, shape_b)):
+            for _index, surf in bspline_surfaces(shape):
+                try:
+                    store.setdefault(parameterization_key(surf, atol), surf)
+                except Exception:                                   # noqa: BLE001 kernel/API
+                    continue
+        matched = sorted(set(before) & set(after), key=repr)
+        lost = sorted(set(before) - set(after), key=repr)
+        rigid = name_b in isometries
+        worst, all_same = None, True
+        for key in matched:
+            if rigid:
+                ident = congruent_identity(before[key], after[key], atol)
+                found = ident['worst_step_mm']
+            else:
+                ident = surface_identity(before[key], after[key], atol)
+                found = ident['worst_pole_mm']
+            if found is not None:
+                worst = found if worst is None else max(worst, found)
+            all_same = all_same and bool(ident['identical'])
+        rows.append({
+            'from_stage': name_a, 'to_stage': name_b,
+            'keys_before': len(before), 'keys_after': len(after),
+            'matched': len(matched), 'lost': len(lost),
+            'worst_mm': worst, 'test': 'congruence' if rigid else 'identity',
+            'identical': bool(all_same and not lost and matched),
+            'vacuous': not before,
+        })
+    return rows
+
+
+def stage_verdict(rows):
+    """Fold `stage_identity`'s transitions into one answer.
+
+    `clean` requires every transition to be identical **and** at least one transition to have
+    tested something. A run where no stage carried a B-spline surface would otherwise report a pass
+    from having measured nothing, which is the error this subsystem has now made seven times
+    (cowl_interior_surface.md section 6.1).
+    """
+    tested = [r for r in rows if not r['vacuous']]
+    bad = [r for r in rows if not r['vacuous'] and not r['identical']]
+    worst = max((r['worst_mm'] for r in rows if r['worst_mm'] is not None), default=None)
+    return {
+        'transitions': len(rows),
+        'tested': len(tested),
+        'refitting': bad,
+        'lost_total': sum(r['lost'] for r in rows),
+        'worst_pole_mm': worst,
+        'vacuous': not tested,
+        'clean': bool(tested and not bad),
+    }
+
+
+def table_stages(rows):
+    """`stage_identity` as text, one line a transition."""
+    v = stage_verdict(rows)
+    head = '%-22s %-22s %7s %7s %7s %6s %11s %12s %s' % (
+        'from', 'to', 'before', 'after', 'matched', 'lost', 'test', 'worst', 'verdict')
+    out = [head, '-' * len(head)]
+    for r in rows:
+        out.append('%-22s %-22s %7d %7d %7d %6d %11s %12s %s'
+                   % (r['from_stage'], r['to_stage'], r['keys_before'], r['keys_after'],
+                      r['matched'], r['lost'], r['test'],
+                      '-' if r['worst_mm'] is None else '%.3e' % r['worst_mm'],
+                      'NOTHING TESTED' if r['vacuous'] else
+                      ('passes' if r['identical'] else 'REFIT OR LOST')))
+    out.append('-' * len(head))
+    if v['vacuous']:
+        out.append('NOTHING TESTED: no stage carried a B-spline surface, so no step was checked')
+    elif v['clean']:
+        out.append('CLEAN: the fitted surface survives all %d tested transition(s) pole for '
+                   'pole, worst displacement %s mm'
+                   % (v['tested'],
+                      '-' if v['worst_pole_mm'] is None else '%.3e' % v['worst_pole_mm']))
+    else:
+        out.append('%d of %d tested transition(s) refit or lost the surface: %s'
+                   % (len(v['refitting']), v['tested'],
+                      ', '.join('%s->%s' % (r['from_stage'], r['to_stage'])
+                                for r in v['refitting'])))
+    return '\n'.join(out)

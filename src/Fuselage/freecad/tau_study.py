@@ -29,6 +29,26 @@ here mutates `cowl_interior.TAU`, so a failure cannot leak into a later build in
 is forty times cheaper, and at `U` = 4 its wall reads 0.0115 mm, just over tolerance, so it has room
 to show an effect. Only then pay for a tail.
 
+**Both have now been run, and they gave different answers -- outcome 1 on the nose, outcomes 2 and 3
+together on the tail.** `nose_cowl_shell` at `U` = 4 (IP-WTM-27): compliant at `TAU` = 0.02 for 14 %
+more build time, 0.01403 -> 0.00378 -> 0.00187 mm, neither tightening raising `Unconverged`.
+`tail_shell` at `U` = 0.5 (IP-WTM-28), 1 h 52 min for three re-cuts: the wall does not move -- pass
+2's first-round gap is **0.0601 mm at all three criteria**, while pass 1's own worst prediction falls
+0.0286 -> 0.0122 -> 0.0081 mm -- and the build then raises `Unconverged` at both 0.02 and 0.01.
+
+Two things worth knowing before running this again:
+
+* **The failure is `cavity`'s `budget` = 64 stations a patch, not `POST_CUT_ROUNDS`.** Station
+  counts went 20 -> 36 -> 62 -> 94 at `TAU` = 0.02 and 23 -> 43 -> 77 at 0.01, and round 6 was never
+  reached. A run that fails this way has not exhausted its rounds, so do not read the round count as
+  the limit it hit.
+* **`measure()` here and pass 2 are not the same measure.** This module measures with
+  `candidates.corner_excluded_min` at `SPACING`; `cowl_interior._finished_wall_gap`, which `TAU` is
+  compared against, is a plain minimum with no corner exclusion at `CHECK_ARC` = 0.20 mm. On the
+  `U` = 0.5 tail they read 0.01345 and 0.03763 mm on one wall. So the `predicted` and `real` columns
+  of a row differ by instrument as well as by prediction error, and
+  `wall_measure.locate.criterion_split` is what separates the two (section 6.8.1).
+
 Usage, under `freecadcmd`. **Every argument needs its own `--pass`**, as `soak_cowl_shell.py`'s own
 docstring shows: `--pass` takes a single token, so one `--pass` followed by several flags leaves
 `freecadcmd` parsing the rest as its own options and printing its usage instead of running anything.

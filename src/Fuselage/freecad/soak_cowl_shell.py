@@ -156,6 +156,13 @@ def measure(kind, u):
         # never consulted the tolerance at all; the argument only sets the `near` count this
         # function discards. So every `worst_wall_error` figure already recorded stays valid as a
         # deviation -- what changes is which of them count as failures.
+        #
+        # **What does change every figure: IP-WTM-25.** `wall_thickness` sampled each section at a
+        # fixed 240 inner points until 2026-10-12 and samples at `WALL_ARC` = 0.125 mm now, so a
+        # `worst_wall_error` recorded by this soak before that date and one recorded after are not
+        # the same measurement. The 2026-10-06 corpus is the "before" set; at the mid station of its
+        # saved `tail_shell` at `U` = 4 the reading moves from 0.4454 to 0.5675 mm. Do not difference
+        # the two sets -- re-measure the saved walls instead, which needs no build.
         got = cci.wall_thickness(wall, z, t, cci.ci.WALL_TOL)
         if got is None:
             missing_stations += 1

@@ -65,6 +65,97 @@ def _segment_distances(points, poly, max_block=MAX_BLOCK):
     return out
 
 
+def _segment_nearest(points, poly, max_block=MAX_BLOCK):
+    """`_segment_distances`, and also *which* segment of `poly` each point was nearest to.
+
+    Same arithmetic, same blocking, same result for the distance -- the only addition is the
+    `argmin` alongside the `min`. Separate from `_segment_distances` rather than replacing it
+    because the index costs an extra `(k, s)` reduction and every existing caller wants only the
+    distance.
+
+    Needed because a thin reading can be an artifact *of where on the exterior it was taken*,
+    which the distance alone cannot say (IP-WTM-45).
+    """
+    a = poly[:, :2]
+    b = np.roll(a, -1, axis=0)
+    ab = b - a
+    denom = np.einsum('ij,ij->i', ab, ab)
+    denom = np.where(denom > 0.0, denom, 1.0)
+    m, s = points.shape[0], a.shape[0]
+    if m == 0:
+        return np.zeros(0, dtype=np.float64), np.zeros(0, dtype=np.int64)
+    rows = max(1, int(max_block // max(1, s)))
+    dist = np.empty(m, dtype=np.float64)
+    which = np.empty(m, dtype=np.int64)
+    for lo in range(0, m, rows):
+        chunk = points[lo:lo + rows, :2]
+        p = chunk[:, None, :]
+        ap = p - a[None, :, :]
+        t = np.clip(np.einsum('ksj,sj->ks', ap, ab) / denom, 0.0, 1.0)
+        closest = a[None, :, :] + t[:, :, None] * ab[None, :, :]
+        d = np.linalg.norm(p - closest, axis=2)
+        k = int(chunk.shape[0])
+        which[lo:lo + k] = np.argmin(d, axis=1)
+        dist[lo:lo + k] = d[np.arange(k), which[lo:lo + k]]
+    return dist, which
+
+
+def outer_creases(outer, angle_deg=30.0):
+    """Which vertices of `outer` are a genuine crease rather than a sampled curve.
+
+    **The threshold separates two things that are far apart, not two that are close.** On a cowl
+    section the smooth part is a rounded rectangle: at the gate's 0.125 mm sampling a 5 mm corner
+    arc spans about 63 samples and turns 90 degrees in total, so roughly 1.4 degrees a vertex. A
+    notch face meeting the OML turns tens of degrees at a *single* vertex. Anything from about 10
+    to 60 degrees separates them, so the exact value is not a tuned parameter.
+    """
+    xy = outer[:, :2]
+    prev, nxt = np.roll(xy, 1, axis=0), np.roll(xy, -1, axis=0)
+    v1, v2 = xy - prev, nxt - xy
+    n1 = np.linalg.norm(v1, axis=1)
+    n2 = np.linalg.norm(v2, axis=1)
+    ok = (n1 > 0) & (n2 > 0)
+    cos = np.ones(len(xy))
+    cos[ok] = np.clip(np.einsum('ij,ij->i', v1[ok], v2[ok]) / (n1[ok] * n2[ok]), -1.0, 1.0)
+    return np.degrees(np.arccos(cos)) >= float(angle_deg)
+
+
+def outer_corner_excluded_min(outer, inner, margin_mm=0.30, angle_deg=30.0):
+    """The incumbent, with samples whose nearest *exterior* point sits at a crease dropped.
+
+    **A different exclusion from `corner_excluded_min`, and for a different artifact.** That one
+    drops inner samples near a concave turn of the *inner* contour, where the measured chord
+    crosses the inner boundary's own corner. This one drops inner samples whose nearest point on
+    the *outer* contour is at a crease of the exterior -- which is what a notch face meeting the
+    OML is. The two can fire on different samples and neither subsumes the other.
+
+    **Why this is worth measuring (IP-WTM-45).** `cowl_interior`'s second pass compares `TAU`
+    against a plain minimum to the notched exterior and reads 0.0601 mm on a `tail_shell` at
+    `U` = 0.5, invariant in `TAU`, while the same wall measured to the un-notched OML reads
+    0.00175 mm at that very station. `dilate(B, t)` rounds a notch tool's convex edges to radius
+    `t`, so where a notch emerges through the OML the cavity boundary lies `t` from a
+    three-dimensional *edge*; an in-plane nearest-point distance from such a sample can read
+    shorter than `t` with no material missing. If that is what the 0.0601 is, excluding the
+    crease should remove it.
+
+    Like `corner_excluded_min` this takes its minimum over a **subset** of the incumbent's own
+    distances, so it can never report more thinness -- which is a structural check on it, not a
+    tolerance.
+    """
+    dist, which = _segment_nearest(inner, outer)
+    crease = outer_creases(outer, angle_deg)
+    if not crease.any():
+        return inner, dist
+    # A sample is dropped when the segment it is nearest to lies within `margin_mm` of a crease,
+    # measured along the exterior's own arc. `_within_arc_of` works on the vertices; a segment is
+    # indexed by its start vertex, so the vertex mask transfers directly.
+    blocked = _within_arc_of(outer[:, :2], crease, float(margin_mm))
+    keep = ~blocked[which]
+    if not keep.any():
+        return inner[:0], np.zeros(0)
+    return inner[keep], dist[keep]
+
+
 def nearest_point_min(outer, inner):
     """**The incumbent.** Each inner sample's distance to the nearest point of the outer loop.
 

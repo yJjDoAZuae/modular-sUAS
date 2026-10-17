@@ -447,6 +447,494 @@ def scan_table(walls):
     return '\n'.join(out)
 
 
+#: Circumferential spacing, in mm, that `cowl_interior`'s second pass measures the finished wall at
+#: -- its `CHECK_ARC`, mirrored here the way `density`'s gate constants mirror the gate's. A build's
+#: log prints the realized figure ("480 check points (0.199 mm apart)"), which is what this is
+#: checked against rather than against the constant.
+PASS2_ARC = 0.20
+
+
+def criterion_split(shape, zs, nominal=0.6, App=None, pass2_arc=PASS2_ARC, gate_arc=0.125,
+                    on_station=None):
+    """Why `cavity`'s own convergence criterion and the gate's reading are different numbers.
+
+    **These are not two samplings of one quantity; they are two quantities.** `cavity`'s second
+    pass converges `_finished_wall_gap`, a plain minimum distance over the whole discretized inner
+    loop, at `CHECK_ARC` = 0.20 mm. The figure the corpus publishes is `corner_excluded_min` at
+    0.125 mm. The first has no corner exclusion, so a concave corner of the wall -- where the inner
+    loop turns inside the outer loop's own radius and the nearest-point distance stops being a wall
+    thickness -- is scored as thinness by one and dropped by the other. Which of the two *should*
+    read the wall is `cowl.md` OQ-DES-CW29, and that question is open.
+
+    This matters beyond bookkeeping, because `TAU` is compared against the first and `WALL_TOL`
+    against the second. Measured on `tail_shell` at `U` = 0.5 (IP-WTM-28): pass 2 read 0.03794 mm
+    where the gate's measure read 0.01346 mm on the same wall, 2.8 times as much. Setting
+    `TAU` = `WALL_TOL` therefore does not ask the construction for a 0.01 mm wall; it asks pass 2's
+    measure to reach 0.01 mm, which on that wall is a different and much harder thing.
+
+    Returns a row a station with the three readings and the difference split in two:
+
+    * `thin_pass2`     -- the incumbent measure at `pass2_arc`: what the criterion sees.
+    * `thin_incumbent` -- the incumbent measure at `gate_arc`.
+    * `thin_selected`  -- the corner-excluded measure at `gate_arc`: what the corpus publishes.
+    * `sampling_term`  -- `thin_pass2 - thin_incumbent`, one measure at two spacings.
+    * `corner_term`    -- `thin_incumbent - thin_selected`, one spacing and two measures.
+
+    **The two fine readings come from one section at one sampling**, which is what makes
+    `corner_term` non-negative by construction rather than by tolerance: `corner_excluded_min`
+    minimizes over a subset of the distances the incumbent minimizes over, so its distance is never
+    smaller and its thinness never larger (IP-WTM-10). A negative `corner_term` is a defect, not a
+    rounding artifact, and is reported in the row as `subset_violated` rather than being clamped.
+
+    `sampling_term` has no such guarantee and is signed on purpose: a coarser sampling can miss a
+    thin spot (reading thinner than truth is impossible, so the term goes positive) and can also
+    land on a different point of the same corner (either way). Its *size* is the useful output,
+    since it is the part of the discrepancy that is an instrument difference rather than a
+    disagreement about what a wall is.
+
+    `on_station` is called with each row as it is produced, the same convention `profile` follows.
+    **Pass it on a large-`U` tail.** Three sections a station on a 2 400-face solid is tens of
+    seconds, so a twelve-station wall is minutes and a corpus run is an hour or more with nothing
+    printed in between; a stall then cannot be told from slow progress.
+    """
+    from . import density                           # local: avoids a cycle, density imports nothing
+    out = []
+
+    def _emit(row):
+        out.append(row)
+        if on_station is not None:
+            on_station(row)
+        return row
+
+    for z in zs:
+        perimeter = density.section_perimeter(shape, z, App=App)
+        row = {'z': float(z), 'perimeter_mm': perimeter, 'state': None,
+               'thin_pass2': None, 'thin_incumbent': None, 'thin_selected': None,
+               'sampling_term': None, 'corner_term': None, 'subset_violated': False,
+               'n_pass2': None, 'n_gate': None}
+        if perimeter is None:
+            _emit(row)
+            continue
+        n_pass2 = density.counts_for_spacing(perimeter, pass2_arc)
+        n_gate = density.counts_for_spacing(perimeter, gate_arc)
+        row.update(n_pass2=n_pass2, n_gate=n_gate)
+        coarse = sections.station_loops(shape, z, n_pass2, App=App)
+        state_c, detail_c = ring_state(coarse)
+        fine = sections.station_loops(shape, z, n_gate, App=App)
+        state, detail = ring_state(fine)
+        row['state'] = state
+        if state != ANNULUS or state_c != ANNULUS:
+            _emit(row)
+            continue
+        o_c, i_c = coarse[0], coarse[detail_c['nested'][0]]
+        _p, d_pass2 = candidates.nearest_point_min(o_c, i_c)
+        outer, inner = fine[0], fine[detail['nested'][0]]
+        _p, d_inc = candidates.nearest_point_min(outer, inner)
+        _p, d_sel = candidates.corner_excluded_min(outer, inner)
+        thin_pass2 = max(0.0, nominal - float(np.min(d_pass2)))
+        thin_inc = max(0.0, nominal - float(np.min(d_inc)))
+        finite = d_sel[d_sel == d_sel]
+        thin_sel = max(0.0, nominal - float(np.min(finite))) if len(finite) else None
+        row.update(thin_pass2=thin_pass2, thin_incumbent=thin_inc, thin_selected=thin_sel,
+                   sampling_term=thin_pass2 - thin_inc)
+        if thin_sel is not None:
+            row.update(corner_term=thin_inc - thin_sel,
+                       subset_violated=bool(thin_sel > thin_inc + 1e-12))
+        _emit(row)
+    return out
+
+
+def _rank(values):
+    """Ranks, averaging ties, so a rank correlation can be taken without `scipy`."""
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        shared = 0.5 * (i + j) + 1.0
+        for k in range(i, j + 1):
+            ranks[order[k]] = shared
+        i = j + 1
+    return ranks
+
+
+def rank_correlation(xs, ys):
+    """Spearman's rho on paired samples, or `None` when there are fewer than three or no spread.
+
+    **A rank correlation rather than a straight-line fit, deliberately.** The claim being tested is
+    monotone -- "thin spots sit where the rows are further apart" -- and a rank measure does not
+    assume the relationship is linear, which the one measurement here that *is* roughly linear
+    (section 6.8.3) only turned out to be after the fact.
+    """
+    pairs = [(x, y) for x, y in zip(xs, ys) if x is not None and y is not None]
+    if len(pairs) < 3:
+        return None
+    rx = _rank([p[0] for p in pairs])
+    ry = _rank([p[1] for p in pairs])
+    n = len(pairs)
+    mx, my = sum(rx) / n, sum(ry) / n
+    sxy = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    sxx = sum((a - mx) ** 2 for a in rx)
+    syy = sum((b - my) ** 2 for b in ry)
+    if sxx <= 0.0 or syy <= 0.0:
+        return None
+    return sxy / ((sxx ** 0.5) * (syy ** 0.5))
+
+
+def row_spacing_split(shape, row_zs, zs, nominal=0.6, App=None, arc=0.125, margin_mm=0.30,
+                      angle_deg=30.0, on_station=None):
+    """IP-WTM-30: does a thin spot's magnitude go with the local **fit row spacing**?
+
+    §6.7.1 refuted the tail's diagonals acting through the *cut* -- ten of twelve thin spots sit
+    more than 3`t` from any rib -- and left a refined hypothesis: that they act through the **fit**
+    instead, because the fit's seed is front-loaded with every notch edge and `station_floor`
+    then drops five or six as too close to a neighbour, so the diagonals *crowd* the rows rather
+    than subdividing the domain.
+
+    **That predicts the opposite sign from §6.8.3's nose result**, which is why both are worth
+    having: on a nose, error grows with the axial spacing (sparse rows are bad); the crowding
+    hypothesis says tight rows are bad. This function reports, per station, the width of the row
+    interval the station falls in and the distance to the nearest row, beside the two thinness
+    readings, and `rank_correlation` scores the monotone claim either way.
+
+    `row_zs` must come from the **same build** as `shape` -- `cavity`'s `station_positions` and the
+    wall that build returned. Taking rows from one build and the wall from another assumes a
+    reproducibility this subsystem only has away from degenerate configurations, and nothing here
+    needs that assumption.
+    """
+    from . import density                           # local: avoids a cycle, density imports nothing
+    rows_sorted = sorted(float(z) for z in row_zs)
+    out = []
+    for z in zs:
+        z = float(z)
+        row = {'z': z, 'state': None, 'thin_incumbent': None, 'thin_excluded': None,
+               'interval_mm': None, 'nearest_row_mm': None, 'interval_lo': None,
+               'interval_hi': None}
+        lo = hi = None
+        for a, b in zip(rows_sorted, rows_sorted[1:]):
+            if a <= z <= b:
+                lo, hi = a, b
+                break
+        if lo is not None:
+            row.update(interval_mm=hi - lo, interval_lo=lo, interval_hi=hi,
+                       nearest_row_mm=min(z - lo, hi - z))
+        perimeter = density.section_perimeter(shape, z, App=App)
+        if perimeter is not None:
+            n = density.counts_for_spacing(perimeter, arc)
+            loops = sections.station_loops(shape, z, n, App=App)
+            state, detail = ring_state(loops)
+            row['state'] = state
+            if state == ANNULUS:
+                outer, inner = loops[0], loops[detail['nested'][0]]
+                _p, d_inc = candidates.nearest_point_min(outer, inner)
+                _k, d_exc = candidates.outer_corner_excluded_min(
+                    outer, inner, margin_mm=margin_mm, angle_deg=angle_deg)
+                row['thin_incumbent'] = max(0.0, nominal - float(np.min(d_inc)))
+                if len(d_exc):
+                    row['thin_excluded'] = max(0.0, nominal - float(np.min(d_exc)))
+        out.append(row)
+        if on_station is not None:
+            on_station(row)
+    return out
+
+
+def row_spacing_verdict(rows):
+    """Score the monotone claim both ways, and say when there is not enough spread to score it."""
+    scored = [r for r in rows if r['interval_mm'] is not None]
+    inc = rank_correlation([r['interval_mm'] for r in scored],
+                           [r['thin_incumbent'] for r in scored])
+    exc = rank_correlation([r['interval_mm'] for r in scored],
+                           [r['thin_excluded'] for r in scored])
+    widths = [r['interval_mm'] for r in scored]
+    return {
+        'stations': len(rows),
+        'scored': len(scored),
+        'rho_incumbent': inc,
+        'rho_excluded': exc,
+        'interval_min': min(widths) if widths else None,
+        'interval_max': max(widths) if widths else None,
+        'spread': (max(widths) / min(widths)) if widths and min(widths) > 0 else None,
+        'vacuous': len(scored) < 3 or not widths or min(widths) <= 0
+                   or (max(widths) / min(widths)) < 2.0,
+    }
+
+
+def row_spacing_table(rows):
+    """`row_spacing_split` as text, with the rank correlations and a vacuity note."""
+    v = row_spacing_verdict(rows)
+    head = '%12s %10s %10s %11s %11s %s' % (
+        'z', 'interval', 'to nearest', 'incumbent', 'excluded', 'state')
+    out = [head, '-' * len(head)]
+
+    def _f(x, w=10):
+        return ('%*s' % (w, '-')) if x is None else ('%*.5f' % (w, x))
+
+    for r in sorted(rows, key=lambda r: -(r['interval_mm'] or 0.0)):
+        out.append('%12.5f %s %s %s %s %s'
+                   % (r['z'], _f(r['interval_mm']), _f(r['nearest_row_mm']),
+                      _f(r['thin_incumbent'], 11), _f(r['thin_excluded'], 11),
+                      r['state'] or '-'))
+    out.append('-' * len(head))
+    out.append('%d of %d station(s) fell inside a row interval; widths %s to %s mm'
+               % (v['scored'], v['stations'], _f(v['interval_min']).strip(),
+                  _f(v['interval_max']).strip()))
+    out.append("Spearman rho against interval width: incumbent %s, crease-excluded %s"
+               % ('-' if v['rho_incumbent'] is None else '%+.3f' % v['rho_incumbent'],
+                  '-' if v['rho_excluded'] is None else '%+.3f' % v['rho_excluded']))
+    if v['vacuous']:
+        out.append('NOT SCORABLE: fewer than three stations, or the interval widths span less '
+                   'than a factor of two, so no monotone claim can be tested on this set')
+    return '\n'.join(out)
+
+
+def junction_split(shape, zs, nominal=0.6, App=None, arc=0.125, margin_mm=0.30,
+                   angle_deg=30.0, on_station=None):
+    """IP-WTM-45: how much of a wall's thinness is read *at a crease of the exterior*?
+
+    Per station, on one section at one sampling: the incumbent plain minimum, and the same
+    minimum with samples whose nearest point on the **outer** contour sits within `margin_mm` of
+    a crease dropped (`candidates.outer_corner_excluded_min`). The question is whether
+    `cowl_interior`'s second pass reads 0.0601 mm on a `tail_shell` at `U` = 0.5 because the wall
+    is thin where a notch cuts it, or because the in-plane distance is taken across the junction
+    where a notch face meets the OML (section 6.8.2).
+
+    **`creases` and `dropped` are returned per station because a null result is otherwise
+    unreadable.** The exclusion only fires where the exterior turns sharply enough to be called a
+    crease; a junction spread over a gentle angle produces none, and then "the reading did not
+    move" means "nothing was excluded" rather than "the crease was not the cause". Measured on a
+    synthetic notch, an 8-degree span yields zero creases while a 2-degree span yields three, so
+    the distinction is real and has to be reported rather than assumed.
+
+    This reads the **finished wall's own section**, whose outer loop *is* the notched exterior, so
+    it needs no build -- unlike the two-exterior comparison in `cavity`, which needs `body` as
+    well and so needs one.
+    """
+    from . import density                           # local: avoids a cycle, density imports nothing
+    out = []
+    for z in zs:
+        perimeter = density.section_perimeter(shape, z, App=App)
+        row = {'z': float(z), 'state': None, 'thin_incumbent': None, 'thin_excluded': None,
+               'creases': None, 'dropped': None, 'samples': None, 'subset_violated': False}
+        if perimeter is None:
+            out.append(row)
+            if on_station is not None:
+                on_station(row)
+            continue
+        n = density.counts_for_spacing(perimeter, arc)
+        loops = sections.station_loops(shape, z, n, App=App)
+        state, detail = ring_state(loops)
+        row['state'] = state
+        if state == ANNULUS:
+            outer, inner = loops[0], loops[detail['nested'][0]]
+            _p, d_inc = candidates.nearest_point_min(outer, inner)
+            kept, d_exc = candidates.outer_corner_excluded_min(
+                outer, inner, margin_mm=margin_mm, angle_deg=angle_deg)
+            thin_inc = max(0.0, nominal - float(np.min(d_inc)))
+            thin_exc = (max(0.0, nominal - float(np.min(d_exc)))
+                        if len(d_exc) else None)
+            row.update(thin_incumbent=thin_inc, thin_excluded=thin_exc,
+                       creases=int(candidates.outer_creases(outer, angle_deg).sum()),
+                       samples=int(len(d_inc)), dropped=int(len(d_inc) - len(d_exc)))
+            if thin_exc is not None:
+                row['subset_violated'] = bool(thin_exc > thin_inc + 1e-12)
+        out.append(row)
+        if on_station is not None:
+            on_station(row)
+    return out
+
+
+def junction_table(rows):
+    """`junction_split` as text, worst-incumbent first, with the counts that make it readable."""
+    head = '%12s %11s %11s %8s %8s %8s %s' % (
+        'z', 'incumbent', 'excluded', 'creases', 'dropped', 'samples', 'state')
+    out = [head, '-' * len(head)]
+
+    def _f(v, w=11):
+        return ('%*s' % (w, '-')) if v is None else ('%*.5f' % (w, v))
+
+    for r in sorted(rows, key=lambda r: -(r['thin_incumbent'] or 0.0)):
+        out.append('%12.5f %s %s %8s %8s %8s %s'
+                   % (r['z'], _f(r['thin_incumbent']), _f(r['thin_excluded']),
+                      '-' if r['creases'] is None else r['creases'],
+                      '-' if r['dropped'] is None else r['dropped'],
+                      '-' if r['samples'] is None else r['samples'],
+                      (r['state'] or '-')))
+    scored = [r for r in rows if r['thin_incumbent'] is not None]
+    with_exc = [r for r in scored if r['thin_excluded'] is not None]
+    worst_inc = max((r['thin_incumbent'] for r in scored), default=None)
+    worst_exc = max((r['thin_excluded'] for r in with_exc), default=None)
+    total_creases = sum(r['creases'] or 0 for r in scored)
+    total_dropped = sum(r['dropped'] or 0 for r in scored)
+    out.append('-' * len(head))
+    out.append('%d station(s) scored, %d crease(s) found in total, %d sample(s) dropped'
+               % (len(scored), total_creases, total_dropped))
+    out.append('worst incumbent %s, worst with creases excluded %s'
+               % ('-' if worst_inc is None else '%.5f' % worst_inc,
+                  '-' if worst_exc is None else '%.5f' % worst_exc))
+    if total_creases == 0:
+        out.append('NOTHING EXCLUDED: no station\'s exterior turns sharply enough to register a '
+                   'crease, so this run cannot say whether a crease would explain the reading')
+    elif worst_inc is not None and worst_exc is not None:
+        out.append('the exclusion removes %.5f mm of the worst reading (%.1f%%)'
+                   % (worst_inc - worst_exc,
+                      100.0 * (worst_inc - worst_exc) / worst_inc if worst_inc else 0.0))
+    if any(r['subset_violated'] for r in rows):
+        out.append('SUBSET VIOLATED: the excluded measure cannot exceed the incumbent')
+    return '\n'.join(out)
+
+
+def exterior_verdict(rows, tau=0.05, wall_tol=0.01, coincide_tol=1.0e-6):
+    """IP-WTM-26: does the residual live in the gap between the two exteriors, or not?
+
+    Takes `cavity`'s `exterior_split` record -- `(z, gap_to_notched, gap_to_oml)` a station, the
+    same measure on the same section with only the reference surface swapped -- and answers the
+    one question that distinguishes a reference-surface explanation from every other.
+
+    **The converse is what makes this a test rather than a restatement.** `_refine` converges the
+    wall out to the un-notched OML and the post-cut loop measures it out to the notched exterior,
+    so of course the two can differ. The claim worth testing is *stronger*: that the residual is
+    **only** in that difference. If it is, then at a station where the two exteriors coincide --
+    no buttress tool has removed exterior material within reach, so the two readings are the same
+    number -- there should be no residual either. A station that reads thin against **both**
+    exteriors refutes it, because no choice of reference surface explains that station.
+
+    So the rows split three ways:
+
+    * `coincident` -- the two readings agree to `coincide_tol`. No notch in reach.
+    * `explained` -- thin against the notched exterior, not against the OML. The reference
+      surface accounts for it.
+    * `unexplained` -- thin against **both**. The reference surface does not account for it, and
+      these are the stations a mechanism has to explain.
+
+    **`clean` requires the record to have exercised the question, in two separate ways.** It is
+    `True` only when `unexplained` is empty *and* `coincident` is non-empty *and* at least one
+    station was thin at all. Both guards were paid for:
+
+    * A record in which the exteriors never coincide has not exercised the converse.
+    * A record with **no station over `wall_tol`** cannot distinguish the hypotheses either, and
+      this one was found the hard way -- the first run of `exterior_split.py`, on
+      `nose_cowl_shell` at `U` = 1.0, returned 63 stations whose worst reading was 0.0037 mm
+      against a 0.01 mm tolerance, so `explained` and `unexplained` were both empty and an earlier
+      version of this function reported **CLEAN**. A compliant specimen cannot test an explanation
+      of non-compliance. The nose at `U` = 1 is the wrong build to ask, not evidence.
+
+    Both are the same error as cross-checking two measures of an empty input, which this subsystem
+    had already made six times before this became the seventh (section 6.1).
+    """
+    coincident, explained, unexplained, unreadable, thin = [], [], [], [], []
+    for row in rows:
+        z, notched, oml = row[0], row[1], row[2]
+        if notched is None or oml is None:
+            unreadable.append(row)
+            continue
+        if abs(notched - oml) <= coincide_tol:
+            coincident.append(row)
+        if notched > wall_tol:
+            thin.append(row)
+            if oml > wall_tol:
+                unexplained.append(row)
+            else:
+                explained.append(row)
+    readable = [r for r in rows if r[1] is not None and r[2] is not None]
+    reasons = []
+    if not coincident:
+        reasons.append('the two exteriors coincide nowhere in this record, so the converse was '
+                       'never exercised')
+    if not thin:
+        reasons.append('no station reads over %.3f mm, so this build is compliant and cannot '
+                       'test an explanation of non-compliance' % wall_tol)
+    return {
+        'stations': len(rows),
+        'readable': len(readable),
+        'unreadable': len(unreadable),
+        'coincident': coincident,
+        'explained': explained,
+        'unexplained': unexplained,
+        'thin': thin,
+        'worst_notched': max((r[1] for r in readable), default=None),
+        'worst_oml': max((r[2] for r in readable), default=None),
+        'worst_unexplained_oml': max((r[2] for r in unexplained), default=None),
+        'vacuous': bool(reasons),
+        'vacuous_because': reasons,
+        'clean': bool(not unexplained and coincident and thin),
+    }
+
+
+def exterior_table(rows, tau=0.05, wall_tol=0.01, limit=24):
+    """`exterior_split` as text: the two readings a station and which bucket it fell in."""
+    v = exterior_verdict(rows, tau, wall_tol)
+    head = '%12s %11s %11s %11s %s' % ('z', 'to notched', 'to OML', 'difference', 'bucket')
+    out = [head, '-' * len(head)]
+    coin = {id(r) for r in v['coincident']}
+    unex = {id(r) for r in v['unexplained']}
+    expl = {id(r) for r in v['explained']}
+    shown = sorted(rows, key=lambda r: -(r[1] or 0.0))[:limit]
+    for r in shown:
+        z, notched, oml = r[0], r[1], r[2]
+        if notched is None or oml is None:
+            out.append('%12.5f %11s %11s %11s %s' % (z, '-', '-', '-', 'unreadable'))
+            continue
+        bucket = ('UNEXPLAINED' if id(r) in unex else
+                  'explained' if id(r) in expl else
+                  'coincident' if id(r) in coin else 'thin-free')
+        out.append('%12.5f %11.5f %11.5f %11.5f %s'
+                   % (z, notched, oml, notched - oml, bucket))
+    if len(rows) > limit:
+        out.append('... %d more station(s), worst-first' % (len(rows) - limit))
+    out.append('-' * len(head))
+    out.append('%d station(s): %d over tolerance, %d coincident, %d explained by the exterior, '
+               '%d UNEXPLAINED'
+               % (v['stations'], len(v['thin']), len(v['coincident']), len(v['explained']),
+                  len(v['unexplained'])))
+    out.append('worst to notched %s, worst to OML %s'
+               % ('-' if v['worst_notched'] is None else '%.5f' % v['worst_notched'],
+                  '-' if v['worst_oml'] is None else '%.5f' % v['worst_oml']))
+    if v['vacuous']:
+        out.append('NOTHING TESTED: ' + '; and '.join(v['vacuous_because']))
+    elif v['clean']:
+        out.append('CLEAN: every thin station is thin only against the notched exterior')
+    else:
+        out.append('%d station(s) read thin against BOTH exteriors -- worst %.5f mm to the OML. '
+                   'The reference surface does not explain these.'
+                   % (len(v['unexplained']), v['worst_unexplained_oml']))
+    return '\n'.join(out)
+
+
+def criterion_table(rows, nominal=0.6):
+    """`criterion_split` as text, plus the worst of each column -- which is the comparable figure.
+
+    The per-station maxima are taken independently, so the three worst readings need not come from
+    one station. That is correct for the question being asked: `TAU` and `WALL_TOL` are each
+    compared against the worst reading of their own measure over the whole wall, not against each
+    other at one `z`.
+    """
+    head = '%12s %9s %9s %9s %9s %9s %7s' % (
+        'z', 'pass2', 'incumbent', 'selected', 'sampling', 'corner', 'state')
+    out = [head, '-' * len(head)]
+
+    def _f(v):
+        return '-' if v is None else '%9.5f' % v
+
+    for r in rows:
+        out.append('%12.5f %s %s %s %s %s %7s'
+                   % (r['z'], _f(r['thin_pass2']), _f(r['thin_incumbent']),
+                      _f(r['thin_selected']), _f(r['sampling_term']), _f(r['corner_term']),
+                      (r['state'] or '-')[:7]))
+    out.append('-' * len(head))
+    worst = {k: max([r[k] for r in rows if r.get(k) is not None] or [None],
+                    key=lambda v: (v is not None, v))
+             for k in ('thin_pass2', 'thin_incumbent', 'thin_selected')}
+    out.append('%12s %s %s %s' % ('worst', _f(worst['thin_pass2']), _f(worst['thin_incumbent']),
+                                  _f(worst['thin_selected'])))
+    violations = [r['z'] for r in rows if r.get('subset_violated')]
+    if violations:
+        out.append('SUBSET VIOLATED at %d station(s): %s'
+                   % (len(violations), ', '.join('%.5f' % z for z in violations)))
+    return '\n'.join(out)
+
+
 def agrees_with_kernel(shape, zs, Part, App, n_points=N_POINTS, spacing=None):
     """Check this module's nesting test against the kernel's face-making one, station by station.
 

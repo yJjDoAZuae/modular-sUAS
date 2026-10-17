@@ -5,12 +5,18 @@ two: `cowl_n_perimeters` and `extrusion_width`, which are absolute because a noz
 with the airframe. The wall is their product, 0.6 mm, at every `U`. A tail section's perimeter
 therefore grows roughly linearly with `U` while the quantity being measured across it stays fixed.
 
-**Every measurement of that wall so far has fixed the sample count, which makes the spacing scale
-with `U`.** `check_cowl_interior.wall_thickness` discretizes the inner loop at `AROUND` = 240 points
-and the outer at `8 * AROUND`, regardless of `U`. `sweep.measure_wall` uses `level` = 1440 for both.
-`cowl_interior`'s own `check_samples` does *not* -- it is arc-length based at `CHECK_ARC` = 0.20 mm,
-which is why pass 2's scan density holds up at large `U` -- so the inconsistency is between the
+**Every measurement of that wall fixed the sample count, which makes the spacing scale with `U`.**
+`check_cowl_interior.wall_thickness` discretized the inner loop at `AROUND` = 240 points and the
+outer at `8 * AROUND`, regardless of `U`, and `sweep.measure_wall` uses `level` = 1440 for both.
+`cowl_interior`'s own `check_samples` did *not* -- it is arc-length based at `CHECK_ARC` = 0.20 mm,
+which is why pass 2's scan density holds up at large `U` -- so the inconsistency was between the
 construction and the things that measure it.
+
+**The gate has since been fixed (IP-WTM-25) and now samples at `WALL_ARC` = 0.125 mm**, derived per
+station from that station's own perimeter, with one spacing for both loops. The count-based figures
+are kept here as `PRIOR_GATE_AROUND`/`prior_gate_spacing`, because every published corpus number
+taken before the fix was taken with them and a reader comparing against one needs to know what it
+was measured with. `sweep.measure_wall`'s `level` remains available for exactly that reason.
 
 Two separate errors follow from a coarse discretization, and they push in opposite directions:
 
@@ -53,11 +59,27 @@ SPACINGS = (2.0, 1.0, 0.5, 0.25, 0.125, 0.0625)
 #: it does, and the saved `U` = 4 wall takes minutes to scan at a fine spacing.
 LOCATE_SPACING = 0.5
 
-#: `check_cowl_interior.AROUND`, carried so this module can report what the gate achieves.
-GATE_AROUND = 240
+#: `check_cowl_interior.WALL_ARC` -- the spacing the production gate samples at since IP-WTM-25.
+#:
+#: **A mirror, and it has to be changed in step with the gate.** This module must import no vendor
+#: module, so it cannot read the real constant; the pair is kept honest by
+#: `tests/test_wall_measure_density.py`, which asserts the value against the gate's own source.
+GATE_ARC = 0.125
 
-#: `check_cowl_interior`'s outer-loop multiplier.
-GATE_OUTER_FACTOR = 8
+#: `check_cowl_interior.WALL_MIN`/`WALL_MAX`, mirrored on the same terms as `GATE_ARC`. The floor
+#: keeps a short section a polygon; the ceiling is a cost guard no swept configuration reaches.
+GATE_MIN = 480
+GATE_MAX = 60000
+
+#: What the gate used **before** IP-WTM-25: a fixed 240 inner samples with the outer loop at eight
+#: times that, at every `U`.
+#:
+#: Kept, rather than deleted with the defect, because every corpus figure published before the fix
+#: was measured with them -- so `prior_gate_spacing` is what says that a `U` = 4 reading taken then
+#: was sampled 8.7 mm apart on a 0.6 mm wall. Deleting it would leave those numbers in the
+#: documents with nothing to explain them.
+PRIOR_GATE_AROUND = 240
+PRIOR_GATE_OUTER_FACTOR = 8
 
 #: `cowl_interior.CHECK_ARC` -- the construction's own circumferential spacing, which is the one
 #: figure in this subsystem already expressed as a spacing rather than a count.
@@ -109,11 +131,28 @@ def counts_for_spacing(perimeter, spacing):
     return int(min(MAX_POINTS, max(16, round(float(perimeter) / float(spacing)))))
 
 
-def gate_spacing(perimeter, around=GATE_AROUND, outer_factor=GATE_OUTER_FACTOR):
-    """What circumferential spacing the production gate actually achieves on this section.
+def gate_spacing(perimeter, arc=GATE_ARC, lo=GATE_MIN, hi=GATE_MAX):
+    """What circumferential spacing the production gate achieves on this section, since IP-WTM-25.
 
-    Returns `(inner_mm, outer_mm)`. This is the diagnostic: at `U` = 1 the figures are ordinary and
-    at `U` = 4 they are several millimetres on a 0.6 mm wall, and nothing in the gate reports it.
+    Returns `(inner_mm, outer_mm)`, which are now the same number: the gate derives one count from
+    the longer loop and applies it to both. The pair is kept so a caller can still ask the question
+    separately, and so the answer is comparable with `prior_gate_spacing`'s.
+
+    **It is `arc` unless a clamp bites**, which is the only reason this is a function rather than a
+    constant: at the floor a short section is sampled finer than asked, and at the ceiling a very
+    long one coarser. Nothing in the swept range reaches either.
+    """
+    p = float(perimeter)
+    n = max(lo, min(hi, int(round(p / float(arc)))))
+    return p / n, p / n
+
+
+def prior_gate_spacing(perimeter, around=PRIOR_GATE_AROUND, outer_factor=PRIOR_GATE_OUTER_FACTOR):
+    """What the gate achieved **before** IP-WTM-25, for reading figures published then.
+
+    Returns `(inner_mm, outer_mm)`. This is the diagnostic that found the defect: at `U` = 1 the
+    figures are ordinary and at `U` = 4 they are several millimetres on a 0.6 mm wall, and nothing
+    in the gate reported it. Both scale with the perimeter, which is the defect itself.
     """
     p = float(perimeter)
     return p / float(around), p / float(around * outer_factor)

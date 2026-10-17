@@ -13,7 +13,7 @@ and the `/impl` skill for the plan format.
 | [freecad_migration.md](freecad_migration.md) | Porting the generators to FreeCAD and the capabilities that port enables — the nine use cases. Roadmap Phases 3–7. | Active |
 | [test_coverage.md](test_coverage.md) | Retrofitting real unit/integration test coverage across both interpreter tiers (`tests/` pytest and `freecad/check_*.py`); closes the standing gap that verification has been ad hoc and uncommitted. | Active |
 | [geometry_bridge.md](geometry_bridge.md) | The adaptation library that lets `pytest` drive FreeCAD and OpenVSP across a process boundary, so the project's Python version is free of both vendors' build choices. Resolves OQ-ARCH-22. | Active |
-| [wall_thickness_measure.md](wall_thickness_measure.md) | Settle by measurement whether the finished cowl wall meets `WALL_TOL`, and build the instrument that can say so. **Answered:** the measure is the corner-excluded minimum indexed by sample *spacing*. On a station grid placed from the real axial extent, **5 of the 12 distinct walls meet the tolerance and 7 do not** — every `tail_shell` fails at every `U` (0.013–0.047 mm) and the only nose failure is `U` = 4. The rib cut is verified to trim without refitting — identical control nets, a patch interior flat at 1e-15 mm, normals at 0.0000° — so neither the rib edges nor a boundary-value error at them is the mechanism. A **1 704-station** dense ring scan of all twelve walls at 1 mm axially finds **no severed section anywhere**, closing OQ-DES-CW26's axial-sampling bound and leaving its input-space bound. Supersedes IP-FC-151; withdrew OQ-DES-CW23. | Active |
+| [wall_thickness_measure.md](wall_thickness_measure.md) | Settle by measurement whether the finished cowl wall meets `WALL_TOL`, and build the instrument that can say so. **Answered:** the measure is the corner-excluded minimum indexed by sample *spacing*. On a station grid placed from the real axial extent, **5 of the 12 distinct walls meet the tolerance and 7 do not** — every `tail_shell` fails at every `U` (0.013–0.047 mm) and the only nose failure is `U` = 4. The rib cut is verified to trim without refitting — identical control nets, a patch interior flat at 1e-15 mm, normals at 0.0000° — so neither the rib edges nor a boundary-value error at them is the mechanism. A **1 704-station** dense ring scan of all twelve walls at 1 mm axially finds **no severed section anywhere**, closing OQ-DES-CW26's axial-sampling bound; **its input-space bound is now closed too**, by a second scan of 36 purpose-built walls moving one design input at a time — **1 638 more stations, 0 severed, 0 confirmed gaps**, 6 h 56 min of machine time. The gate now samples by **spacing** (0.125 mm, not 240 points) and reports both measures, which disagree about whether a nose complies — OQ-DES-CW29. **Tightening the fit's criterion is measured to fix a nose and to be refused by a tail**, at two configurations: at `TAU` = 0.02 and 0.01 a `tail_shell` raises `Unconverged` against the 64-station patch budget at `U` = 0.5 and again at `U` = 2.0, with pass 2's own worst gap unchanged across the whole fivefold range both times, so on a tail `TAU` is not the lever and the residual's mechanism (IP-WTM-26) is the critical path. **Pass 1 converges to 0.0073 mm, inside `WALL_TOL`, and the finished wall does not move** — the two passes measure out to different exteriors by necessity, the un-notched OML and the notched one, which diverge by up to 26.5 mm. The two thresholds also turn out to be compared against two *different* measures, 2.80x apart on that wall, essentially all of it corner exclusion rather than sampling. **And every figure above is in-plane, which the plan's last measurement shows is the wrong direction**: the surface carrying the wall is inclined 21.5–30.8° to the section plane, so an in-plane reading is `thickness / cos θ`, and measured along the surface's own normal instead, **66 readings across three walls are every one confirmed thin and none exonerated** — worst deficits 0.0943 / 0.0790 / 0.0645 mm, six to nine times `WALL_TOL`, where the in-plane figures read 0.0135 / 0.0140 / 0.0226. So the compliance answer stands in its *ordering* and understates its *magnitude*. Supersedes IP-FC-151; withdrew OQ-DES-CW23; raised OQ-DES-CW28 through OQ-DES-CW33, which are six open decisions and the whole of what the plan is now waiting on. | Active |
 
 Status values: `Draft`, `Active`, `Complete`, `Superseded`.
 
@@ -36,6 +36,14 @@ output rather than the reverse.** It supersedes `freecad_migration.md`'s IP-FC-1
 cowl build: the 2026-10-06 soak saved all 28 finished walls as BREP and prints pass 2's own
 prediction per build in its log, so both sides of every comparison were re-measurable from file.
 
+**That stopped being true at IP-WTM-41, and the exception is worth recording for the next plan that
+budgets off this one.** Every question answerable from the saved corpus is a question about walls
+that vary in `U` alone, because that is the only axis the soak swept. Asking about any other design
+input means building walls that do not exist: IP-WTM-41 built 36 of them and spent **6 h 56 min** of
+machine time, of which the `tail_shell` population alone is 6 h 16 min. The resulting walls are saved
+beside the soak's, in their own directory and under their own filename pattern, so the two
+populations can be scanned and reported separately rather than merged into one figure.
+
 **Delivered 2026-10-10, and it withdrew one of the two open questions rather than informing it.**
 OQ-DES-CW23 asked how to handle a "small residual gap" between `cavity()`'s post-cut prediction
 and the real cut. Measured, that gap is at most 0.0039 mm — small, as the item said — and knowing
@@ -49,9 +57,28 @@ plan's first corpus figures fixed the sample *count* at 1 440 a loop. A cowl sca
 while its 0.6 mm wall does not, so that bought 0.30 mm of circumferential spacing at `U` = 1 and
 1.45 mm at `U` = 4, and a station reading 0.2136 mm thin there reads 0.00264 mm at a fixed
 0.125 mm spacing. A corpus worst of 0.2136 mm and a "regime change above `U` = 2" were both
-published off that and both are withdrawn. **`check_cowl_interior` has the same defect and it is
-not yet fixed** (`AROUND` = 240, 8.7 mm apart at `U` = 4), which is IP-WTM-25 and now blocks
-IP-WTM-10. Four items remain, three of them measurements.
+published off that and both are withdrawn. `check_cowl_interior` had the same defect
+(`AROUND` = 240, 8.7 mm apart at `U` = 4); that is **fixed** under IP-WTM-25, which sets
+`WALL_ARC` = 0.125 mm derived per station, and IP-WTM-10 is no longer blocked.
+
+**The instrument stayed the biggest thing it found, right to the end.** The last and largest
+instrument finding is that every measure in the subsystem is **in-plane** while the surface carrying
+the wall is inclined 21.5–30.8° to the section plane, so every figure the plan published reads
+`thickness / cos θ` and understates the deficit. Measured along the surface's own normal, 66
+readings across three walls are every one confirmed thin, worst deficits 0.0943 / 0.0790 /
+0.0645 mm against in-plane figures of 0.0135 / 0.0140 / 0.0226 at the same samples. That is
+OQ-DES-CW33. Two things make this the pattern rather than an incident: it is the **third** time a
+sampling or tolerance choice inside the instrument moved a published figure by more than the
+quantity being measured, and like the other two it was found by asking what the instrument could not
+see rather than by a disagreement between runs.
+
+**Status 2026-10-16: 42 of 49 items done, 1 `todo`, 6 blocked on open questions.** The plan has run
+out of work that is its own to do. Every blocked item waits on one of OQ-DES-CW28 through
+OQ-DES-CW33 — six decisions the plan raised, each with its evidence gathered and its alternatives
+priced, none waiting on further measurement. The one `todo`, IP-WTM-49, is a measurement and needs
+no decision: *why* the interior surface is inclined where the wall is thin, which is the one
+quantity the plan measured and did not explain, and which could retire OQ-DES-CW33 rather than
+answer it.
 
 **`geometry_bridge.md` changes where new geometry tests go, so it interacts with
 `test_coverage.md` without depending on it.** OQ-GB-2 made a new geometry check a bridge-tier
