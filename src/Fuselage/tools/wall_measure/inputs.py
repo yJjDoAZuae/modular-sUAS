@@ -71,6 +71,13 @@ SCREEN_DIR = os.path.normpath(os.path.join(_HERE, '..', '..', 'freecad', 'out', 
 SCREEN_SHAPES = os.path.join(SCREEN_DIR, 'shapes')
 SCREEN_RECORDS = os.path.join(SCREEN_DIR, 'records')
 
+#: The pair screen keeps its own directories for the reason above, one level further: a pair wall
+#: is a *third* population, and a count taken across "the screen" would mean something different
+#: again if 128 two-row walls were sitting in the one-row screen's directory.
+PAIR_DIR = os.path.normpath(os.path.join(_HERE, '..', '..', 'freecad', 'out', 'screen_pairs'))
+PAIR_SHAPES = os.path.join(PAIR_DIR, 'shapes')
+PAIR_RECORDS = os.path.join(PAIR_DIR, 'records')
+
 #: `=unit_width * 0.07`, `=-unit_width * 0.30`. The only expression form a case may perturb: the
 #: coefficient is the design fraction and bumping it is a design change. Anything else -- a derived
 #: row like `=cut_len + buttress_z_offset`, or `=U * 100` -- raises rather than being guessed at,
@@ -128,11 +135,52 @@ class Case(object):
         return self.alias is None
 
     @property
+    def moves(self):
+        """The row moves this case applies, as `(alias, delta)`. Empty for the baseline.
+
+        Exists so `apply_case` need not know how many rows a case moves, which is what lets
+        `PairCase` exist without a second application path that could drift from this one.
+        """
+        return [] if self.alias is None else [(self.alias, self.delta)]
+
+    @property
     def label(self):
         return '%s_U%s_%s' % (self.kind, _u_text(self.u), self.name)
 
     def __repr__(self):
         return '<Case %s>' % self.label
+
+
+class PairCase(Case):
+    """Two rows moved together: the interaction a one-row-at-a-time screen cannot reach.
+
+    **Why this is a separate population and not simply more screen cases.** `cowl.md`
+    OQ-DES-CW26 records that the single-input screen -- 36 walls, 1 638 stations, 0 severed --
+    leaves an *interaction* between two inputs untested, and an interaction is not reachable by
+    moving rows one at a time however many rows are moved. Each pair is a legitimate
+    configuration in its own right: both cells take values the sheet could carry, so a severed
+    ring here would be a reachable failure rather than a probe artifact, which is exactly the
+    distinction CW26's alternatives turn on.
+
+    The first row's `alias`/`delta` are the inherited ones, so a `PairCase` labels and prints like
+    a `Case` and every consumer that reads `alias` still sees a real row rather than `None`.
+    """
+
+    __slots__ = ('second_alias', 'second_delta', 'second_unit')
+
+    def __init__(self, kind, u, name, alias, delta, unit, second_alias, second_delta,
+                 second_unit='', why=''):
+        Case.__init__(self, kind, u, name, alias, delta, unit, why)
+        self.second_alias = second_alias
+        self.second_delta = float(second_delta)
+        self.second_unit = second_unit
+
+    @property
+    def moves(self):
+        return [(self.alias, self.delta), (self.second_alias, self.second_delta)]
+
+    def __repr__(self):
+        return '<PairCase %s>' % self.label
 
 
 #: **The screen, by kind.** Magnitudes are roughly a third of the sheet's own value where it is
@@ -259,11 +307,16 @@ def value_of(rows, alias):
 
 
 def apply_case(rows, case):
-    """`rows` with `case`'s `U` set and its one excursion applied. The baseline sets `U` only."""
+    """`rows` with `case`'s `U` set and every one of its row moves applied.
+
+    The baseline sets `U` only. A `PairCase` applies both of its rows, each bumped from the sheet
+    value after the previous move, which matters only if a pair ever names the same row twice --
+    `pair_cases` does not generate one, and `override` would silently let it through.
+    """
     out = override(rows, 'U', repr(float(case.u)))
-    if case.is_baseline:
-        return out
-    return override(out, case.alias, bump(value_of(out, case.alias), case.delta))
+    for alias, delta in case.moves:
+        out = override(out, alias, bump(value_of(out, alias), delta))
+    return out
 
 
 def cases(kind, u, excursions=None):
@@ -284,9 +337,100 @@ def cases(kind, u, excursions=None):
     return out
 
 
+def sign_suffix(sign):
+    """`'lo'` or `'hi'`, the one place the suffix convention lives."""
+    return 'lo' if sign < 0 else 'hi'
+
+
+def built_single_names(kind, u, records_dir=None):
+    """Which single-row cases for this kind at this `U` actually built, from the screen's records.
+
+    Returns a set of case names, or `None` when no records are present -- which a caller must
+    distinguish from "none built", because filtering a pair list against an empty set would
+    silently produce no cases at all.
+    """
+    where = records_dir or SCREEN_RECORDS
+    if not os.path.isdir(where):
+        return None
+    prefix = '%s_U%s_' % (kind, _u_text(u))
+    found, any_record = set(), False
+    for name in os.listdir(where):
+        if not (name.startswith(prefix) and name.endswith('.json')):
+            continue
+        any_record = True
+        # Plain `open`, not `io.open`: this package is held to a curated import allowlist so it
+        # stays loadable under the worker interpreter, and `io` is not on it. See
+        # `test_wall_measure_sweep.TestThePackageIsPortableToTheWorker`, which caught exactly this.
+        with open(os.path.join(where, name), encoding='utf-8') as fh:
+            record = json.load(fh)
+        if 'error' not in record:
+            found.add(record.get('case'))
+    return found if any_record else None
+
+
+def pair_cases(kind, u, excursions=None, include_baseline=True, members=None):
+    """Every two-row interaction for one kind at one `U`, each row at every sign it screens at.
+
+    **The population the single-input screen cannot produce.** `cases` moves one row at a time,
+    so it covers each input's own axis and nothing about two moving together; `cowl.md`
+    OQ-DES-CW26 names that gap explicitly as what its alternative 1 still has open. This builds
+    the cross product: for each unordered pair of distinct rows, one case per combination of
+    their own `signs`, so a row that only screens one way (`cowl_n_perimeters`, which cannot go
+    below one perimeter) contributes half as many cases rather than being skipped.
+
+    **Ordered so an interrupted run still covers the crowding axis**, the same reason `cases`
+    gives: `EXCURSIONS` lists the rows that move every tool first, and pairs are emitted in that
+    order, nearest-first.
+
+    Size, since this is a build per case and the cost is per kind: a `nose_cowl_shell`'s nine rows
+    give **128 pairs** and a `tail_shell`'s twelve give **242**, plus the baseline in each. At the
+    screen's own measured 48 s and 629 s a case that is about **1.7 hours** and about **42 hours**,
+    which is why the tail is reported rather than run.
+
+    **`members` is what makes the result readable, and it is not an optimization.** Three of the
+    nose's single-row cases are already refused by the construction on their own
+    (`buttress_cut_thickness_lo`, `cowl_n_perimeters_hi`, `extrusion_width_hi` -- the facet floor
+    of [OQ-DES-CW32](../../../doc/design/cowl.md#open-questions)), and a pair containing one of
+    them is refused for that inherited reason whatever the other row does. Counting those among
+    the pair screen's refusals would report an interaction that is not there. Given a collection
+    of single-case names -- `built_single_names` reads them from the screen's own records -- only
+    pairs whose *both* members build alone are generated, so every refusal the pair run reports
+    is a combination that fails where neither of its parts does. Passing `None` generates them
+    all.
+    """
+    exc = list(EXCURSIONS[kind] if excursions is None else excursions)
+    out = ([Case(kind, u, BASELINE, why='the sheet as it stands; the control on the harness')]
+           if include_baseline else [])
+    for i, a in enumerate(exc):
+        for b in exc[i + 1:]:
+            for sa in a.signs:
+                for sb in b.signs:
+                    first = '%s_%s' % (a.alias, sign_suffix(sa))
+                    second = '%s_%s' % (b.alias, sign_suffix(sb))
+                    if members is not None and not (first in members and second in members):
+                        continue
+                    out.append(PairCase(
+                        kind, u, '%s__%s' % (first, second), a.alias, sa * a.delta, a.unit,
+                        b.alias, sb * b.delta, b.unit,
+                        why='%s together with %s' % (a.why, b.why)))
+    return out
+
+
 def find(kind, u, name, excursions=None):
     """One case by name, or `None`."""
     for case in cases(kind, u, excursions):
+        if case.name == name:
+            return case
+    return None
+
+
+def find_pair(kind, u, name, excursions=None):
+    """One `pair_cases` case by name, or `None`.
+
+    Separate from `find` rather than a flag on it, so a driver cannot be pointed at the pair
+    population by accident and write two-row walls into the one-row screen's records.
+    """
+    for case in pair_cases(kind, u, excursions):
         if case.name == name:
             return case
     return None

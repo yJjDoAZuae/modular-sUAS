@@ -153,6 +153,18 @@ def screen(shapes_dir=None, records_dir=None):
     return out
 
 
+def pairs(shapes_dir=None, records_dir=None):
+    """The two-input interaction walls, sorted the way `screen` sorts its own.
+
+    A **third** population, kept apart from the soak's `U` corpus and the screen's one-row corpus
+    for the same reason those two are kept apart: OQ-DES-CW26 asks a different question of each,
+    and a merged count would answer none of them. These walls move two design rows at once, which
+    is the axis a one-row screen cannot reach however many rows it moves.
+    """
+    from . import inputs as _inputs
+    return screen(shapes_dir or _inputs.PAIR_SHAPES, records_dir or _inputs.PAIR_RECORDS)
+
+
 def screen_records(records_dir=None):
     """The screen's own per-case build records, keyed by label. Empty if the directory is absent.
 

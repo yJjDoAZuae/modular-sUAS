@@ -37,12 +37,12 @@ carries a `sqrt(2)` on `flat_offset` and not on `flat_x`: dimension both the sam
 they get different gaps.
 
 
-- [Case 1 — The clearance on both faces, at the 0.05 mm test value](#case-1)
-- [Case 2 — No panel, and the interface clearance is unaffected by that](#case-2)
-- [Case 3 — The smallest corner of the six](#case-3)
-- [Case 4 — The largest corner of the six](#case-4)
-- [Case 5 — The case the whole investigation turned on](#case-5)
-- [Case 6 — The panel term governs, and it makes no difference here](#case-6)
+- [Case 1 — The clearance on both faces, at the 0.05 mm test value](#case-1--the-clearance-on-both-faces-at-the-005-mm-test-value)
+- [Case 2 — No panel, and the interface clearance is unaffected by that](#case-2--no-panel-and-the-interface-clearance-is-unaffected-by-that)
+- [Case 3 — The smallest corner of the six](#case-3--the-smallest-corner-of-the-six)
+- [Case 4 — The largest corner of the six](#case-4--the-largest-corner-of-the-six)
+- [Case 5 — The case the whole investigation turned on](#case-5--the-case-the-whole-investigation-turned-on)
+- [Case 6 — The panel term governs, and it makes no difference here](#case-6--the-panel-term-governs-and-it-makes-no-difference-here)
 
 
 ## Case 1 — The clearance on both faces, at the 0.05 mm test value

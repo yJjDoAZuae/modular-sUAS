@@ -69,7 +69,7 @@ of all, silently. Recorded in [§4.10](../architecture/geometry_bridge.md).
 > **IP-GB-23 blocked reason:** OQ-DES-CW27 asks whether `converged_volume` should defeat FreeCAD's
 > triangulation cache by copying the shape per rung, merely detect the cache and refuse, or only
 > document the constraint. The three differ in what they cost on a real cowl wall, and one of them
-> needs a measurement that has not been taken. The behaviour is already pinned by tests and
+> needs a measurement that has not been taken. The behavior is already pinned by tests and
 > recorded in the measurement cautions, so nothing is silent in the meantime.
 
 > **IP-GB-24 reason:** §4.10's survey numbers — 361 unambiguous uses for `DocumentObject`, five

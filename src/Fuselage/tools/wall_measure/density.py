@@ -261,6 +261,59 @@ def settles_to(rows, tol=0.001):
     return bool(abs(last) <= tol), usable[-1]['thin'], float(last)
 
 
+def convergence_survey(shape, zs, measures, App=None, spacings=SPACINGS, tol=0.001,
+                       on_station=None):
+    """Does each measure settle at *every* station, or only at the one it was gated on?
+
+    **Why this exists as its own function.** `gates.convergence_gate_on_section` scores a candidate
+    at a single station, and C4 was selected on one: `nose_cowl_shell` at `U` = 1, `z` = -44.8421.
+    The incumbent's rejection, by contrast, was a 24-station survey -- "still falling at 3840
+    samples at 17 of 24 stations" -- so the two are not comparable evidence, and a measure that
+    settles at one station is not thereby a converged instrument. `cowl.md` OQ-DES-CW26's
+    alternative 3 turns on having one, so the survey has to match the breadth that rejected the
+    incumbent rather than the breadth that selected its replacement.
+
+    `measures` maps a name to a callable taking `(outer, inner)` and returning `(points,
+    thicknesses)`, as `candidates`' do. Each is swept independently over the same stations and
+    spacings: the question here is each measure's own refinement behavior, not the structural
+    identity between them that `station_measures` relies on.
+
+    `on_station`, if given, is called with each finished row, so a long run reports progress
+    instead of going quiet for an hour.
+
+    Returns one row per station per measure: `settled`, the finest `value`, the `last_delta` that
+    decided it, and the full `rows` from `sweep_by_spacing`. A station the section cannot be read
+    at comes back with `settled` `None` rather than being dropped, so the denominator stays the
+    station count that was asked for.
+    """
+    out = []
+    for z in zs:
+        for name, measure in measures.items():
+            rows = sweep_by_spacing(shape, z, measure=measure, App=App, spacings=spacings)
+            if not rows:
+                row = {'z': float(z), 'measure': name, 'settled': None, 'value': None,
+                       'last_delta': None, 'rows': []}
+            else:
+                settled, value, last = settles_to(rows, tol=tol)
+                row = {'z': float(z), 'measure': name,
+                       'settled': None if value is None else bool(settled),
+                       'value': value, 'last_delta': last, 'rows': rows}
+            out.append(row)
+            if on_station is not None:
+                on_station(row)
+    return out
+
+
+def survey_verdict(rows, measure):
+    """`(settled, total)` for one measure across a `convergence_survey`.
+
+    A station the section could not be read at counts in `total` and not in `settled`: a measure
+    that cannot produce a reading has not converged to one.
+    """
+    mine = [r for r in rows if r['measure'] == measure]
+    return sum(1 for r in mine if r['settled']), len(mine)
+
+
 def artefact_fraction(rows):
     """How much of the coarsest reading the refinement removed, as a fraction of it.
 

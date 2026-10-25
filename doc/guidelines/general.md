@@ -151,6 +151,23 @@ Applies to both tiers above:
   measures agreement between two computations of the same geometry; it is not a
   manufacturing fit, and must not be reused as one.
 
+### The documentation has invariants, and they are checked by running something
+
+`python src/Fuselage/tools/doc_check.py` checks the bookkeeping the design and implementation
+documents carry by convention: every anchored link resolves, an open-question summary table
+lists exactly the questions still open, a `blocked` work item names its blockers in the status
+cell and those blockers are really unfinished, every work item's status is in the vocabulary,
+every `IP-`/`OQ-` id mentioned exists, and the prose is American English. `tests/test_doc_check.py`
+runs it over the tree, so a document that drifts fails the suite rather than waiting to be
+noticed.
+
+**Run it after editing a document, and read what it says rather than assuming.** Its first run
+reported 320 findings and 27 of those were the checker's own false positives -- a question
+reported resolved because the word "fixed" appeared in its title, a correct link reported broken
+because the slug function trimmed a space GitHub keeps. A finding is a place to look, not a
+verdict. `--fix-spelling` is the one class it will repair on its own; everything else needs a
+person to decide what the document should say.
+
 ### Capability belongs in the durable code, not the throwaway tool
 
 **A one-off script may orchestrate durable code. It must not be where the durable code
@@ -189,7 +206,7 @@ arguments to — at which point discarding the tool would have cost nothing.
 
 Before improving something, ask whether it survives. Work that only makes scheduled-for-
 deletion code nicer to *read* is spent twice: once doing it, once discarding it — and in
-between it carries the full risk of changing behaviour.
+between it carries the full risk of changing behavior.
 
 This is the general form of the unit exemption above, which is one instance of it. The
 test is not "is this better?" but **"does this survive the next phase, and does it make
@@ -475,7 +492,7 @@ into generated `.scad`, in one named function. Everything above that line is SI.
 
 Parameters travel as dataclasses assembled in Python — `Parameters` and `NoseParameters`
 in `fuselage_variants.py`, with a group per subsystem. IP-GEO-16 converted them from
-nested dicts; see [python.md](python.md#dataclasses) for why, and do not reintroduce a
+nested dicts; see [python.md](python.md#type-hints) for why, and do not reintroduce a
 dict of parameters.
 
 They are still *flattened* into keyword arguments to cross into OpenSCAD, which has no

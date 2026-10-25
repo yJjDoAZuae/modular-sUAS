@@ -130,7 +130,7 @@ Rules over the whole fuselage design. Argued in [design_basis.md section 4](desi
 | **DES-10** | The panel envelope **shall** be fixed by the frame and stated without reference to any panel design | AR-MOD-1, AR-MOD-5 | I | `check_derived_geometry.py` | verified indirectly, through INT-5 |
 | **DES-11** | Where a feature's function is set by something that does not scale with the airframe, its size **shall** be floored at what that function requires | AR-PRT-1 | A | `check_derivation.py` | verified, 7 relations; **3 of the 7 floors are justified nowhere** |
 | **DES-12** | A cowl **shall** remain printable in spiral vase mode: the solid exported for printing carries one closed contour per layer and no interior geometry whatsoever | AR-PRT-1 | A | `check_vase_printable.py` | verified — *(q)* |
-| **DES-13** | A printed part **shall** be modelled in the orientation it prints in — the print bed is the x/y plane and +z the build direction — and that orientation **shall** be chosen so the layer orientation carries the load the part is designed for | AR-PRT-2 | R | review | **partially verifiable** — *(n)* |
+| **DES-13** | A printed part **shall** be modeled in the orientation it prints in — the print bed is the x/y plane and +z the build direction — and that orientation **shall** be chosen so the layer orientation carries the load the part is designed for | AR-PRT-2 | R | review | **partially verifiable** — *(n)* |
 | **DES-14** | A printed part **shall** build without support material: no downward-facing surface leans shallower than `overhang_angle_from_bed` from the bed | AR-PRT-3 | A | **nothing yet** | **not verified, but verifiable** — *(o)*, [IP-FC-95](../implementation/freecad_migration.md) |
 | **DES-15** | At a bay end, the features that mate with the adjoining bay — the OML perimeter, the longeron positions and sizes, and the fastener positions and sizes — **shall** be identical across every bay of the same size. **The interior aperture is not one of those features** and **shall** be free to vary | AR-MOD-1, AR-MOD-2, AR-MOD-3 | I | **nothing yet** | **not verified, but verifiable** — *(p)*, [IP-FC-100](../implementation/freecad_migration.md) |
 
@@ -187,7 +187,7 @@ The alternative, naming the two parts to check, would let a new vase-printed cow
 in silence, which is the failure DES-12 exists to prevent.
 
 *(n)* **DES-13's orientation is recorded by construction, and its correctness is only half
-checkable.** Every existing part is modelled in its print orientation, so **the model is the
+checkable.** Every existing part is modeled in its print orientation, so **the model is the
 record** — there is no separate orientation field that can go stale, and no part can be
 "oriented wrongly" in the file without being wrong geometry. What cannot be checked today is
 whether the chosen orientation is the *right* one: that is **partly an overhang evaluation**,
@@ -541,8 +541,8 @@ today and the other is not.
 | | **DES-13** — orientation | **DES-14** — support |
 | --- | --- | --- |
 | Cites | AR-PRT-2 | AR-PRT-3 |
-| Says | the part is modelled in the orientation it prints in, bed = x/y plane, +z = build direction, chosen so the layers carry the load | no downward-facing surface leans shallower than `overhang_angle_from_bed` from the bed |
-| Recorded how | **by construction** — every existing part is already modelled in its print orientation, so the model *is* the record | `overhang_angle_from_bed` = 35°, one value for the project, reason in the constants file |
+| Says | the part is modeled in the orientation it prints in, bed = x/y plane, +z = build direction, chosen so the layers carry the load | no downward-facing surface leans shallower than `overhang_angle_from_bed` from the bed |
+| Recorded how | **by construction** — every existing part is already modeled in its print orientation, so the model *is* the record | `overhang_angle_from_bed` = 35°, one value for the project, reason in the constants file |
 | Verified | **held by review**, and only half checkable even in principle | **computable, not yet computed** — IP-FC-95 |
 
 **Orientation is recorded by construction, which answers the drawback this question raised.**
@@ -599,7 +599,7 @@ nondeterminism that was always there and nobody had looked for. Doing DRW-7 firs
 note's effect on the layout readable. The other three are independent of each other and of these.
 
 **DES-12 is still the one with a live failure mode**, and that is a reason to weight it, not to
-reorder: a modelling change that gives the cowl a wall destroys vase-mode printability while the
+reorder: a modeling change that gives the cowl a wall destroys vase-mode printability while the
 part still builds, still exports and still measures correctly.
 
 **DES-14 and DES-15 join the same queue**, from [OQ-DES-SR1](#open-questions) and

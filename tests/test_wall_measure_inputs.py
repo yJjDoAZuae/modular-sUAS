@@ -151,6 +151,70 @@ class TestApplyCase:
         with pytest.raises(ValueError):
             inputs.apply_case(SHEET, case)
 
+    def test_a_pair_sets_u_and_exactly_two_more_rows(self):
+        case = inputs.PairCase('tail_shell', 0.5, 'two', 'extrusion_width', 0.2, 'mm',
+                               'buttress_cut_thickness', 0.03, 'mm')
+        got = _rows_to_dict(inputs.apply_case(SHEET, case))
+        assert float(got['U']) == pytest.approx(0.5)
+        assert float(got['extrusion_width']) == pytest.approx(0.8)
+        assert float(got['buttress_cut_thickness']) == pytest.approx(0.13)
+        for alias, value in SHEET:
+            if alias not in ('U', 'extrusion_width', 'buttress_cut_thickness'):
+                assert got[alias] == value
+
+    def test_a_pairs_second_row_goes_through_the_same_bump_as_the_first(self):
+        """An expression row moved as the *second* member keeps its expression form.
+
+        The second move is the one that could have been written as a plain assignment, which
+        would turn `=unit_width * 0.07` into a literal and silently decouple the row from `U`.
+        """
+        case = inputs.PairCase('tail_shell', 0.5, 'two', 'extrusion_width', 0.2, 'mm',
+                               'top1_y', 0.02, 'fraction of unit_width')
+        got = _rows_to_dict(inputs.apply_case(SHEET, case))
+        assert got['top1_y'].startswith('=unit_width * ')
+        assert float(got['top1_y'].split('*')[1]) == pytest.approx(0.09)
+
+    def test_a_pair_on_an_absent_second_row_raises_before_any_build(self):
+        case = inputs.PairCase('tail_shell', 0.5, 'two', 'extrusion_width', 0.2, 'mm',
+                               'bogus', 1.0, 'mm')
+        with pytest.raises(ValueError):
+            inputs.apply_case(SHEET, case)
+
+
+class TestPairCases:
+    """OQ-DES-CW26 alternative 1's remaining axis: two inputs moved together."""
+
+    def test_every_unordered_pair_appears_once_at_every_sign_combination(self):
+        exc = (inputs.Excursion('extrusion_width', 0.2, 'mm', 'a'),
+               inputs.Excursion('buttress_cut_thickness', 0.03, 'mm', 'b'),
+               inputs.Excursion('buttress_z_offset', 0.01, 'mm', 'c'))
+        got = inputs.pair_cases('tail_shell', 0.5, exc, include_baseline=False)
+        assert len(got) == 12                      # 3 pairs x 4 sign combinations
+        assert len({c.name for c in got}) == 12
+        assert len({tuple(sorted(a for a, _d in c.moves)) for c in got}) == 3
+
+    def test_a_one_sided_row_contributes_half_as_many_and_is_not_skipped(self):
+        exc = (inputs.Excursion('extrusion_width', 0.2, 'mm', 'a'),
+               inputs.Excursion('cowl_n_perimeters', 1, 'perimeters', 'b', signs=(1.0,)))
+        got = inputs.pair_cases('tail_shell', 0.5, exc, include_baseline=False)
+        assert len(got) == 2
+        assert all(c.second_delta > 0 for c in got)
+
+    def test_no_pair_moves_the_same_row_twice(self):
+        for kind in inputs.EXCURSIONS:
+            for case in inputs.pair_cases(kind, 1.0, include_baseline=False):
+                aliases = [a for a, _d in case.moves]
+                assert len(set(aliases)) == len(aliases)
+
+    def test_the_baseline_leads_so_the_control_is_built_first(self):
+        got = inputs.pair_cases('nose_cowl_shell', 1.0)
+        assert got[0].is_baseline
+        assert all(not c.is_baseline for c in got[1:])
+
+    def test_the_crowding_axis_comes_first_as_it_does_for_the_single_row_screen(self):
+        got = inputs.pair_cases('nose_cowl_shell', 1.0, include_baseline=False)
+        assert got[0].alias == inputs.EXCURSIONS['nose_cowl_shell'][0].alias
+
 
 # ----------------------------------------------------------------- the case list
 
@@ -478,6 +542,68 @@ class TestScreenCorpusDiscovery:
             (d / name).write_text('x')
         got = corpus.available(shapes_dir=str(d), results=str(tmp_path / 'none.jsonl'))
         assert [r.label for r in got] == ['tail_shell_U4.0_r3']
+
+    def test_the_pair_corpus_reads_its_own_directories_and_not_the_screens(self, tmp_path):
+        """**A third population, and the same collision risk as the first two.** A two-row wall
+        counted among the one-row screen's would make "the screen found no severed ring" cover an
+        axis it never scanned, which is the distinction OQ-DES-CW26's alternatives turn on."""
+        screen_dir, pair_dir = tmp_path / 'screen', tmp_path / 'pairs'
+        screen_dir.mkdir()
+        pair_dir.mkdir()
+        (screen_dir / 'nose_cowl_shell_U1.0_cut_len_hi.brep').write_text('x')
+        (pair_dir / 'nose_cowl_shell_U1.0_cut_len_hi__butt_angle_lo.brep').write_text('x')
+        none = str(tmp_path / 'none')
+        assert [r.case for r in corpus.screen(shapes_dir=str(screen_dir),
+                                              records_dir=none)] == ['cut_len_hi']
+        assert [r.case for r in corpus.pairs(shapes_dir=str(pair_dir),
+                                             records_dir=none)] == ['cut_len_hi__butt_angle_lo']
+
+    def test_an_absent_pair_corpus_is_empty_not_an_error(self, tmp_path):
+        assert corpus.pairs(shapes_dir=str(tmp_path / 'nope'),
+                            records_dir=str(tmp_path / 'nope')) == []
+
+
+class TestBuiltSingleNames:
+    """The filter that keeps an inherited refusal from being reported as an interaction."""
+
+    def _record(self, where, label, case, error=None):
+        payload = {'label': label, 'case': case}
+        if error:
+            payload['error'] = error
+        (where / ('%s.json' % label)).write_text(json.dumps(payload))
+
+    def test_a_refused_case_is_not_counted_as_built(self, tmp_path):
+        d = tmp_path / 'records'
+        d.mkdir()
+        self._record(d, 'nose_cowl_shell_U1.0_cut_len_hi', 'cut_len_hi')
+        self._record(d, 'nose_cowl_shell_U1.0_extrusion_width_hi', 'extrusion_width_hi',
+                     error='ValueError: the wall has no solids')
+        got = inputs.built_single_names('nose_cowl_shell', 1.0, records_dir=str(d))
+        assert got == {'cut_len_hi'}
+
+    def test_no_records_at_all_is_none_and_not_an_empty_set(self, tmp_path):
+        """`None` and `set()` must not be confused: filtering a pair list against an empty set
+        yields no cases, which would look like a screen with nothing to do."""
+        d = tmp_path / 'records'
+        d.mkdir()
+        assert inputs.built_single_names('nose_cowl_shell', 1.0, records_dir=str(d)) is None
+        assert inputs.built_single_names('nose_cowl_shell', 1.0,
+                                         records_dir=str(tmp_path / 'nope')) is None
+
+    def test_another_kinds_records_are_not_counted(self, tmp_path):
+        d = tmp_path / 'records'
+        d.mkdir()
+        self._record(d, 'tail_shell_U1.0_cut_len_hi', 'cut_len_hi')
+        assert inputs.built_single_names('nose_cowl_shell', 1.0, records_dir=str(d)) is None
+
+    def test_pairs_filtered_by_members_drop_any_pair_with_a_refused_row(self):
+        exc = (inputs.Excursion('extrusion_width', 0.2, 'mm', 'a'),
+               inputs.Excursion('cut_len', 0.02, 'mm', 'b'))
+        members = {'extrusion_width_lo', 'cut_len_lo', 'cut_len_hi'}   # extrusion_width_hi refused
+        got = inputs.pair_cases('nose_cowl_shell', 1.0, exc, include_baseline=False,
+                                members=members)
+        assert len(got) == 2
+        assert all(c.name.startswith('extrusion_width_lo__') for c in got)
 
     def test_a_soak_record_still_labels_itself_by_repeat(self):
         """The `case` field is additive: a wall without one labels itself exactly as before."""

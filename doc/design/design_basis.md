@@ -430,23 +430,23 @@ is the whole list rather than the part this document happens to derive.
 
 The statement: the solid exported for printing carries one closed contour per layer and **no
 interior geometry whatsoever**. Vase mode spirals a single continuous contour up the part, so a
-cowl given a modelled wall is no longer vase-mode printable. Decided in OQ-DES-CW6, where the
+cowl given a modeled wall is no longer vase-mode printable. Decided in OQ-DES-CW6, where the
 capability was kept; `cowl.md` states it as a constraint over the whole interior-surface
 section, because the interior surface serves the analysis use cases and **must not become what
 the print export produces**.
 
 **It reaches no parameter relation and nothing verifies it**, which is the same finding twice
 and is [OQ-DES-SR2](system_requirements.md#open-questions). It is also the one requirement in
-the set with a live, silent failure mode: a modelling change destroys the capability and the
+the set with a live, silent failure mode: a modeling change destroys the capability and the
 part still builds, still exports, and still measures correctly.
 
-### DES-13 — why the part is modelled standing the way it prints — **recorded**
+### DES-13 — why the part is modeled standing the way it prints — **recorded**
 
 *Cites AR-PRT-2 — layer orientation aligned to structural performance needs.* Added 2026-08-30
 under [OQ-DES-SR1](system_requirements.md#open-questions).
 
 **The orientation is recorded by construction, and that is the whole mechanism.** Every existing
-part is modelled in the orientation it prints in, with the **print bed as the x/y plane** and +z
+part is modeled in the orientation it prints in, with the **print bed as the x/y plane** and +z
 the build direction. There is no separate orientation field to go stale, and a part cannot be
 oriented wrongly in the file without being wrong geometry. `corner.md` reads the corner's load
 path against exactly this: the corner prints standing on end, layers stack along its length, and
@@ -618,7 +618,7 @@ of the definition, not tracings of a built solid** — the opposite of
 material is rasterized from `corner_middle_shape`'s own boolean expression**, not outlined by
 hand, and that is not a stylistic choice: the first version of these figures *was* hand-outlined
 and was wrong twice over — it drew a full quarter, filling material straight across the mouth,
-and it labelled `longeron_chamfer` on both branches when the panel branch's face is three times
+and it labeled `longeron_chamfer` on both branches when the panel branch's face is three times
 it. Both errors survived review and were found by drawing from the booleans instead. That the
 definition and the built solid agree is established separately, by `check_derived_geometry.py`
 measuring faces on the part.
@@ -1175,7 +1175,11 @@ the way they do.
 > so `OQ-DES-D7` and `OQ-DES-DV7` were different questions in different documents, distinguished
 > by a letter. The numbers did not change: `OQ-DES-DV3` is `OQ-DES-DB3`. Decided questions
 > elsewhere that still say `OQ-DES-DV` would be history rather than broken links, and there are
-> none — every reference moved.
+> none — every reference moved. The two sentences above name the old ids because a rename note
+> can only be written with them in it; `tools/doc_check.py` is told so by the marker below, and
+> flags a `DV` id anywhere else.
+
+<!-- doc_check: retired-series OQ-DES-DV -> OQ-DES-DB -->
 
 **The live questions are elsewhere.**
 [system_requirements.md](system_requirements.md#open-questions) holds OQ-DES-SR1, SR2 and SR3 —
@@ -1461,7 +1465,7 @@ documents and three modules, two section anchors changed, and `requirements.py`'
 `source` fields now read `section 5, INT-n`. Decided open questions elsewhere still name
 `derivation.md`, and that is history rather than a broken link.
 
-### OQ-DES-DB7 — Withdrawn 2026-08-30: the premise was false
+### OQ-DES-DB7 — Does `longeron_chamfer` chamfer anything? — WITHDRAWN 2026-08-30: the premise was false
 
 **The question asked whether `longeron_chamfer` should be renamed, because it chamfers nothing.
 It chamfers something. There was no question.**

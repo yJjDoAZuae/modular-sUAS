@@ -185,10 +185,10 @@ octant_tiled(unit_width, corner_radius)   //  = octant_to_full ∘ corner_transl
     → octant_to_full    : mirror_x ∘ mirror_y ∘ mirror_xy
 ```
 
-Everything is therefore drawn in the neighbourhood of **one corner**, in that corner's
+Everything is therefore drawn in the neighborhood of **one corner**, in that corner's
 local frame, and the diagonal `mirror_xy()` produces the second half of the corner. This
 is the single most important thing to know before reading the module: coordinates are not
-measured from the centre of the bulkhead, and `x` and `y` are interchangeable by
+measured from the center of the bulkhead, and `x` and `y` are interchangeable by
 construction.
 
 The octant is trimmed by `octant_mask()`, a half-plane polygon subtracted after
@@ -268,7 +268,7 @@ polygon([[0,0],
 ```
 
 **`greeble_opening_angle` is a half-angle.** The two vertices sit at 10° and 80°, so the
-wedge removed spans **70°**, centred on the 45° diagonal. The tube is pressed in sideways
+wedge removed spans **70°**, centered on the 45° diagonal. The tube is pressed in sideways
 through that mouth rather than threaded in axially, and snaps home.
 
 `GREEBLE_OPENING_ANGLE_DEG = 35` **was arrived at by experiment** (established 2026-08-06). It
@@ -455,6 +455,9 @@ unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of 
 | B6 | resolved 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
 | B7 | resolved 2026-08-06 | Does one snap angle work at the *small* end? |
 | B8 | **open** | Should `BulkheadType` be split to match the two families? |
+| B9 | decided 2026-08-08 | Is the morphological fillet the authority, or is a true fillet? — true fillets |
+| B10 | resolved 2026-08-08 — fixed | `greeble_bolt_web` is called with three arguments in the wrong order |
+| B11 | decided 2026-08-10 | How should the boom bulkhead's morphological rounding be built? — split by intent |
 | B12 | resolved 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
 | B13 | resolved 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
 | B14 | resolved 2026-08-16 — implemented | Nothing keeps the bolt-flange fillet center off the bolt axis |
@@ -496,7 +499,7 @@ that produced the answer.
 
 **OQ-DES-B1 — What sets `greeble_opening_angle = 35°`? — RESOLVED 2026-08-06.**
 It was **arrived at experimentally**, and what it does is let the longeron snap
-into the greeble's centre hole. See [the longeron snap](#the-longeron-snaps-into-the-greeble)
+into the greeble's center hole. See [the longeron snap](#the-longeron-snaps-into-the-greeble)
 above, which is written from that answer. It is a tuned value, not a derived one: do not
 replace it with a formula.
 
@@ -504,7 +507,7 @@ replace it with a formula.
 2026-08-06.** It is neither a relief nor a clearance: it is a **mass
 reduction**. The interconnect's flange is only full `2·bt` depth at the corners, where
 the longerons and the bolted joints put the load, and is narrowed to `1·bt` along the
-runs between them. See [the interconnect](#four-types) above, rewritten from that answer.
+runs between them. See [the interconnect](#the-only-true-peers-are-the-fastener-variants) above, rewritten from that answer.
 
 The question was posed badly — I had guessed it was clearance for the panel to pass
 between bays, which is wrong, and described it as a "relief cut", which named it after
@@ -691,7 +694,7 @@ anything later.
 
 **Decision.** The FreeCAD version uses **real fillets that make proper use of FreeCAD's
 capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
-it to hundredths of a millimetre**.
+it to hundredths of a millimeter**.
 
 **The stated premise was falsified 2026-08-10, and the decision needs re-confirming before
 the boom bulkhead is built.** Alternative 2 below was rejected partly on the ground that
@@ -722,7 +725,7 @@ inputs have changed:
 `boom_key_shape` is the exception and is a genuine corner round: `fillet_outer(r)
 fillet_inner(r)` over a circle unioned with a square.
 
-**The re-decision is [OQ-DES-B11](#oq-des-b11--how-should-the-boom-bulkheads-morphological-rounding-be-built) below**,
+**The re-decision is [OQ-DES-B11](#oq-des-b11--how-should-the-boom-bulkheads-morphological-rounding-be-built--decided-2026-08-10-split-by-intent) below**,
 decided 2026-08-10 as a split: true fillets on the key, the morphological chain for the
 region-wide remainder. This question stays decided for what it actually governed — the frame
 bulkhead's four named fillets and the chamfer, none of which reach `fillet_inner` — and B11
@@ -855,7 +858,7 @@ the call outright, at the driver's values *and* at a real swept variant:
 | U=4, hand driver | changes — the module contributes 1584.75 mm³ |
 
 So **no part printed at U=1 was affected**, at the swept parameters as well as the driver's.
-At U=4 the bolt sits 32 mm out and the diagonal web is no longer covered by its neighbours,
+At U=4 the bolt sits 32 mm out and the diagonal web is no longer covered by its neighbors,
 so the module does carry material and the correction moves roughly 0.1% of the part.
 
 So `greeble_bolt_web` is not dead code — it is dormant at small sizes and load-bearing at
@@ -867,7 +870,7 @@ easily was immune to it.
 #### B10's original analysis, as written on 2026-08-08 — superseded by the decision above
 
 **This is history, not an open question.** It is kept because it is what the decision was made
-against, and because its numbers were partly wrong in a way worth being able to recognise: it
+against, and because its numbers were partly wrong in a way worth being able to recognize: it
 was written at the hand driver's values, and the resolution above shows what the same call
 does at the derived ones. Nothing below is current. Its recommendation, its alternatives and
 its "porting in the meantime" note were all overtaken on 2026-08-08 — the call is fixed, and
@@ -975,7 +978,7 @@ as are extreme key widths approaching the diameter of **the hole the collet pass
 
 **None of the three is an arbitrary threshold; each is where the construction stops existing.**
 The width limit and the geometric singularity are one statement rather than two — the junction
-fillet centre sits at height `sqrt((cr + r)² − (w/2 + r)²)`, which goes imaginary at exactly
+fillet center sits at height `sqrt((cr + r)² − (w/2 + r)²)`, which goes imaginary at exactly
 `w = 2·cr`, where the tab spans the hole and the junctions being filleted no longer exist. The
 height rule is what holds the junction fillets clear of the cap fillets: the junction tangent
 point is at most `cr + r` and the cap starts at `cr + h − r`, and the first is below the second
@@ -1027,8 +1030,8 @@ the corner's own end section re-evaluated at different arguments. One of those a
 `bulkhead_thickness + 2*eps`, intended purely as cut overshoot. But `corner_end` also derives
 `greeble_nub_height = bulkhead_thickness / 3` and the four nub `z` levels from that same
 argument, so the overshoot silently inflated the snap rib as well — 2.00667 mm against the
-post's 2.00000 at U = 1.0. The `-eps` shift applied afterwards nearly cancelled the
-inflation, leaving the nub band centred on mid-thickness and only 0.00667 mm too tall, which
+post's 2.00000 at U = 1.0. The `-eps` shift applied afterwards nearly canceled the
+inflation, leaving the nub band centered on mid-thickness and only 0.00667 mm too tall, which
 is why it went unnoticed. The net effect was about 0.0033 mm of gap at each end of the snap.
 
 **Why it was worth fixing at 3% of a layer height.** Nothing printed is affected and nothing
@@ -1048,7 +1051,7 @@ only separating them fixes the cause rather than relocating the symptom.
 **Constraints attached to the choice**
 
 - The signature change touches every `corner_end` call site. The corner's own calls pass the
-  default and are unaffected in behaviour.
+  default and are unaffected in behavior.
 - Shipped geometry changes by 0.0067 mm on the rib, so the stored reference volumes for the
   greeble tool, the bulkhead section and the assembled bulkhead must be regenerated. This is
   mechanical — the values are produced by scripts already in the tree — but it is not free,
@@ -1064,7 +1067,7 @@ only separating them fixes the cause rather than relocating the symptom.
 "extends the extrusion only" is not sufficient. `corner_end` dimensions the greeble **bore**
 from the same thickness argument, so an overshoot that moved the body and not the bore would
 have quietly left the post's ends formed flush — preserving the appearance of the old
-behaviour while changing it. The argument reaches the extrusion and the bore, and nothing
+behavior while changing it. The argument reaches the extrusion and the bore, and nothing
 else; the four nub vertices stay dimensioned from the thickness.
 
 Outcome: socket rib 2.00667 → **2.000**, equal to the post's, and asserted equal on every run
@@ -1199,7 +1202,7 @@ Drawings of all of this, taken from the built solid rather than from the equatio
 IP-FC-59 working reference.
 
 
-### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis
+### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis — RESOLVED 2026-08-16: alternative 6 with 5 alongside, implemented
 
 **Resolution, 2026-08-16 — Alternative 6, with Alternative 5 alongside. Implemented.**
 

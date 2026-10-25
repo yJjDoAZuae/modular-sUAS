@@ -2,7 +2,7 @@
 
 **Scope:** Deduplication, interface, and robustness work on the OpenSCAD geometry
 modules and the Python that drives them, from a review of `src/Fuselage/scad/*.scad`
-and `fuselage_variants.py` on 2026-08-06. Every item is behaviour-preserving: the
+and `fuselage_variants.py` on 2026-08-06. Every item is behavior-preserving: the
 generated geometry must not change, and each item states how that is proven.
 
 This is roadmap [Phase 2](../roadmap.md) work — "Refactor and improve the OpenSCAD
@@ -137,7 +137,7 @@ p.nozzle_diameter = 0.6     # accepted in silence
 p.extrusion_width           # still 0.4
 ```
 
-That is the *dict* behaviour, verbatim. The conversion changed the syntax of the failure
+That is the *dict* behavior, verbatim. The conversion changed the syntax of the failure
 and not the failure.
 
 **How it surfaced, which is the part worth keeping.** IP-GEO-24 renamed
@@ -195,7 +195,7 @@ That gap is worth naming. `verify_drivers.py` covers the `.scad` drivers; the no
 third caller class with no coverage at all, and solid2's imported modules accept
 `(*args, **kwargs)`, so a wrong keyword is invisible until OpenSCAD runs. A static check
 comparing the notebook's keywords against the `.scad` signatures found all three call sites
-at once — see the note under *How each item is proven behaviour-preserving*.
+at once — see the note under *How each item is proven behavior-preserving*.
 
 **Verification.** The generated `.scad` text changes by construction, so the check is
 geometric: all seven drivers render warning-free with unchanged triangle counts, all 21
@@ -272,7 +272,7 @@ Closes OQ-DES-B6, and with it the refactor. `greeble_tolerance` was threaded pos
 through `bulkhead_section_full` → `_octant` → `bulkhead_section` and then thrown away:
 `greeble_tolerance_local = 0` was what reached `corner_end()`.
 
-**Chosen: drop the parameter, not honour it.** Both options were behaviour-identical
+**Chosen: drop the parameter, not honour it.** Both options were behavior-identical
 today, since every caller passed zero. The deciding argument is that *the greeble post is
 nominal* is an **invariant, not a setting** — all fit clearance lives on the corner's
 bore because splitting it makes the joint carry it twice. A module that accepts a
@@ -290,7 +290,7 @@ now sits at the `corner_end()` call with the invariant stated beside it.
 
 **Verification.** `scad_snapshot.py` cannot speak to this one — a signature change alters
 the generated text by construction — so the check is geometric, per
-*How each item is proven behaviour-preserving* below:
+*How each item is proven behavior-preserving* below:
 
 - `verify_drivers.py`: all seven drivers render warning-free, with **identical triangle
   counts** to before the change (`fuselage_bulkhead` 3,272; `fuselage_cowling_bulkhead`
@@ -419,7 +419,7 @@ once in the function that returns them. Converting those would mean asserting a 
 over data this code does not own.
 
 Two generic copy loops needed rewriting rather than translating. `for k in c["oml"]`
-became `for f in fields(c.oml)`, and the buttress loop the same. The behaviour is
+became `for f in fields(c.oml)`, and the buttress loop the same. The behavior is
 preserved exactly — a key missing from the JSON is still a `KeyError`, an extra key in
 the file is still ignored — but the schema being iterated is now the dataclass
 declaration rather than whatever the dict happened to have been initialised with.
@@ -459,7 +459,7 @@ provably altered no geometry.
 Two hazards this removed, both invisible positionally:
 
 - `nose` takes **no** `oml_length_m`, while `nose_cowl` and `tail_cowl` both do — so the
-  same conceptual argument list is off by one between neighbouring calls in the same
+  same conceptual argument list is off by one between neighboring calls in the same
   function, with every surrounding argument the same type.
 - `tail_cowl` carries eighteen buttress floats in four groups distinguished only by
   prefix (`side_`, `top_`, `bottom_`, `top_diag_`). Transposing two was a silent
@@ -614,7 +614,7 @@ Both verified with `verify_scad_change.py`: 10 parts, identical geometry.
 
 Two helpers in `shape_modifier_utils.scad`, replacing 11 raw multipliers:
 
-- `through_cut(extent) = 3 * extent` — length for a *centred* cutting solid that must
+- `through_cut(extent) = 3 * extent` — length for a *centered* cutting solid that must
   pass entirely through material of depth `extent`. 7 call sites.
 - `mask_reach(extent) = 2 * extent` — distance to place a mask vertex so it lies off
   the part. 4 call sites.
@@ -1081,7 +1081,7 @@ plausible numbers in the same units.
 
 ---
 
-## How each item is proven behaviour-preserving
+## How each item is proven behavior-preserving
 
 Three independent checks, cheapest first. Each covers something the others structurally
 cannot, so none of them substitutes for another.

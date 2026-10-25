@@ -32,7 +32,7 @@ So the workflows below are all built around *not* editing generated files in pla
 
 | You want | Output | Works today |
 | --- | --- | --- |
-| Printable meshes | `*.stl`, millimetres | **Yes** — this is the current system |
+| Printable meshes | `*.stl`, millimeters | **Yes** — this is the current system |
 | Native editable models | `*.FCStd` | Planned (IP-FC-14) |
 | Neutral solid models | `*.step` | Planned (IP-FC-15) |
 | Assemblies with joints | `*.FCStd` assembly | Planned (IP-FC-19) |
@@ -40,7 +40,7 @@ So the workflows below are all built around *not* editing generated files in pla
 | Mass properties, FEM | analysis models | Planned (IP-FC-20, IP-FC-23, IP-FC-24) |
 | Blender scenes, exploded views | `*.blend` | Partly — `blender/splode.blend` exists |
 
-Exported meshes and solids are **millimetres**, whatever the internal units.
+Exported meshes and solids are **millimeters**, whatever the internal units.
 
 ---
 
@@ -131,7 +131,7 @@ Your document must be saved to disk before a link to another document will resol
 
 ## Rules that will bite you
 
-These are FreeCAD behaviours, not project choices. Each was measured; each fails quietly.
+These are FreeCAD behaviors, not project choices. Each was measured; each fails quietly.
 
 **Do not type over a dimension that is driven by an expression.** The edit appears to work —
 the field accepts it and reads back your value — and the next recompute silently reverts it.

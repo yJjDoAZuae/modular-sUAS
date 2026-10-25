@@ -8,7 +8,7 @@ library itself is verified. It does not cover which geometry tests get written; 
 business of the design documents those tests check.
 
 **Status.** Written 2026-10-06, resolving
-[OQ-ARCH-22](freecad_migration.md#oq-arch-22-how-does-the-pytest-tier-reach-freecad-decided-2026-10-06-alternative-7)
+[OQ-ARCH-22](freecad_migration.md#oq-arch-22--how-does-the-pytest-tier-reach-freecad--decided-2026-10-06-alternative-7)
 in favor of its alternative 7. A throwaway prototype of every mechanism below was built and measured first;
 every number in this document was taken on this machine, and the measurements that contradicted
 the first draft of the design are called out where they did.

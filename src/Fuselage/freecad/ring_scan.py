@@ -319,12 +319,18 @@ def walls_of(family):
     fixed `U`. Kept separate because OQ-DES-CW26's remaining question is about that axis
     specifically, so a verdict has to be able to say which population it covered; a merged "the
     corpus" figure would mean a different thing depending on what had been built that week.
+
+    `pairs` is the two-input interaction corpus: walls that move two design rows at once, which
+    neither of the other two reaches. OQ-DES-CW26 names that axis as the one its alternative 1
+    still has open, so it is a third population and not more of the second.
     """
     if family == 'screen':
         return corpus.screen()
+    if family == 'pairs':
+        return corpus.pairs()
     if family == 'soak':
         return corpus.distinct()
-    raise SystemExit('unknown --family=%r -- soak or screen' % family)
+    raise SystemExit('unknown --family=%r -- soak, screen or pairs' % family)
 
 
 def main():
