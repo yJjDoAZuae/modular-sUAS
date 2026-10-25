@@ -512,7 +512,7 @@ fails the build is a requirement whether or not it has an id.
 | --- | --- | --- |
 | **H1** | **Containment.** The full extent of every dimension — text box, dimension line, arrowheads, witness lines, any leader — lies inside the view frame and inside the sheet's printable area. | A dimension partly off-sheet is not a dimension. |
 | **H2** | **Text does not touch text.** No two dimension text boxes intersect, and the clear gap between them is at least one text height. | A smaller gap reads as a single block of digits. |
-| **H3** | **Text does not touch geometry.** No text box intersects a visible edge, a hidden edge, a centre line, or a hatch region. | Text over a line is the most common way a digit is misread. |
+| **H3** | **Text does not touch geometry.** No text box intersects a visible edge, a hidden edge, a center line, or a hatch region. | Text over a line is the most common way a digit is misread. |
 | **H4** | **A witness line does not cross a dimension line.** Crossing another *witness* line is conventional and permitted. | At the crossing the reader cannot tell which extension belongs to which measurement. |
 | **H5** | **No structurally-zero dimension is placed at all.** | §2. A dimensioned zero asserts an inspectable coincident fit; where the joint is absent there is nothing to inspect. |
 
@@ -655,7 +655,7 @@ belong in its interface-conventions section, and what stays here is the drawing-
 **Chosen: alternative 2, plus alternative 5 as a companion rather than a competitor.**
 
 **The family drawing factors its table by axis.** One short table per size axis with each callout
-labelled by the axis it follows, plus a small matrix for each coupled field. The corner's 384-row
+labeled by the axis it follows, plus a small matrix for each coupled field. The corner's 384-row
 table becomes an 8-row `U` table, a 6-row `FX` table and an 8-row panel table — 22 rows — with an
 8 × 6 matrix for `corner.length` and an 8 × 8 matrix for `panel.offset`. The measurement that
 supports this is recorded in §5.1: across every part family in the sweep the entire coupled
@@ -1098,7 +1098,7 @@ gap**: no bulkhead sheet dimensions the panel's exposed span, so the completenes
 reports it on four families. That is the test doing its job, and closing it is
 [OQ-DES-D11](#open-questions). A second thing surfaced with it: `panel_offset` is demanded of
 bulkheads that have **no panel**, because it is not zero on them and so escapes the
-structural-zero rule — [OQ-DES-D12](#open-questions), decided 2026-09-06 in favour of dropping a row's parameters when its joint is absent.
+structural-zero rule — [OQ-DES-D12](#open-questions), decided 2026-09-06 in favor of dropping a row's parameters when its joint is absent.
 
 **No drawn sheet changed**, which was the part of the estimate that held. Every family's quantity
 column count, block count and row count is identical before and after, verified 2026-08-30.

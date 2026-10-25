@@ -24,7 +24,7 @@ item that precedes it in its own tier, or on nothing.
 two-test-tier rules this plan exists to satisfy), [doc/guidelines/python.md](../guidelines/python.md)
 (pytest mechanics and structure).
 
-**Last updated:** 2026-09-22
+**Last updated:** 2026-10-25
 
 ---
 
@@ -43,6 +43,7 @@ two-test-tier rules this plan exists to satisfy), [doc/guidelines/python.md](../
 | IP-TEST-9 | done | Triage the `spike_*.py` exploratory modules (`spike_eps.py`, `spike_offset2d.py`, `spike_derived_part.py`, `spike_assembly.py`, `spike_fillet.py`, `spike_techdraw.py`, `spike_partdesign.py`, `spike_csg_tree.py`, `spike_sketch_expr.py`, `spike_hand_edit.py`, `spike_link.py`): each is either promoted to covered production code or moved to `src/Fuselage/archive/` with a note on why, per [general.md's adoption-phase note](../guidelines/general.md#project-lifecycle-phase) — do not add coverage to code that turns out to be a discarded experiment | — | [general.md §Weigh a refactor against what replaces the code](../guidelines/general.md#weigh-a-refactor-against-what-replaces-the-code) |
 | IP-TEST-10 | done | Audit and add `check_*.py` coverage for remaining `src/Fuselage/freecad/` utility modules not covered above: `units.py`, `measure.py`, `solid_measure.py`, `mesh_to_brep.py`, `variants.py`, `preview.py`, `build_part.py`, `build_sheet.py`, `part_kinds.py`, `geometry_branches.py`, `pd_middle.py`, `pd_end.py`, `parameters.py` | — | [general.md §Two test tiers](../guidelines/general.md#two-test-tiers-because-two-python-interpreters-are-involved) |
 | IP-TEST-11 | done | Historical audit: walk every completed item in [freecad_migration.md](freecad_migration.md), identify which ones were verified only by narrative description or scratchpad scripts with no corresponding committed `check_*.py`/`tests/` entry, and add the missing regression for each. All ~141 rows read; two remaining full-sweep items and one stale cross-reference flagged for the project owner rather than chased -- see Notes | — | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd) |
+| IP-TEST-12 | done | **Check the documentation's own structural invariants by running something, because they were only ever checked by reading.** The design and implementation documents carry bookkeeping that is true by convention and was enforced nowhere: an open question's summary table should list exactly the questions still open, a blocked work item should name what blocks it and that thing should really be open, a link with an anchor should point at a heading that exists, a plan's header count should match its own table. Each of those drifts silently as the documents grow and was being found at random, one item at a time, long after it stopped being true. **Done 2026-10-25.** `tools/doc_check.py` carries seven checks -- links and images, open-question tables, work-item plans, the plan index, id references, and spelling -- with `tests/test_doc_check.py` (67 tests) pinning each rule against synthetic pages and one assertion, `test_the_real_documentation_tree_is_consistent`, against the tree. **The first run found 320 findings and 27 of them were the checker's own false positives**, each now a named test: a question reported resolved because its *title* contained the word "fixed", four dangling references that were deliberate rename notes, an ordering violation between two different id series, and a correct link reported broken because the slug function trimmed the space a stripped symbol leaves. The remaining 293 were real and are fixed -- 302 British spellings, 13 broken anchors, 16 statuses outside the vocabulary, 11 missing blocked-reason notes, 5 questions absent from their register, 2 stale blockers and one ordering violation. Spelling is the only class the tool will repair itself (`--fix-spelling`); every other finding needs a person to decide what the document should say. | — | [general.md §TDD](../guidelines/general.md#test-driven-development-tdd), [PLANS.md](PLANS.md) |
 
 ---
 
@@ -475,7 +476,7 @@ and a deliberately wrong reference.
 **Two real defects were found and fixed while deriving those expected values, both in this
 check itself rather than in `plane2d.py`** -- worth recording because they are exactly the
 kind of mistake this project's TDD push exists to catch before it reaches a committed
-assertion: (1) an outward offset's dilation was first modelled with sharp corners; OCCT's
+assertion: (1) an outward offset's dilation was first modeled with sharp corners; OCCT's
 `Part::Offset2D` rounds them (confirmed by the `offset` check two tests earlier in the same
 file), so the `erode_difference` expected value was wrong until the dilation term was
 corrected to include the same quarter-circle arcs. (2) `fillet_inner` was first tested
@@ -547,12 +548,12 @@ a polygon fused with a quarter-disk and cut by a fillet circle -- not simple box
 `flange_base`'s interconnect branch -- but three tangency identities that fall directly out of
 how `ic_x_center`/`ic_y_end`/`ic_x_end` are solved in the module's own docstring make it
 tractable by hand: (1) the polygon's closing vertex lies exactly on the ray from the origin
-through the fillet centre (by construction, it is that point scaled by
+through the fillet center (by construction, it is that point scaled by
 `ic_big_r / (ic_big_r + web_fillet_radius)`), so the polygon/quarter-disk overlap is exactly
 a circular sector; (2) `web_y_mid - step_y == web_fillet_radius` by definition, so the fillet
 circle is exactly tangent to the adjacent horizontal edge at the vertex before it, meaning
 that edge is a radius of the circle, not merely near it; (3) the same scale factor puts the
-polygon's closing vertex at exactly `web_fillet_radius` from the fillet centre too, so the
+polygon's closing vertex at exactly `web_fillet_radius` from the fillet center too, so the
 other edge leaving that vertex is also a circle radius. Both edges leaving the vertex being
 exact fillet-circle radii means the fillet cut removes exactly the sector spanning the
 polygon's own interior angle there, with nothing else to clip against. Closed form: `polygon
@@ -592,7 +593,7 @@ by contrast, were **already fully correct** -- real exit codes, already flushed,
 already. `bulkhead_full.py` and `bulkhead_section.py` need an external `params.json`
 (`export_parameters.py`'s output) to run at all; confirmed this is an established, accepted
 convention in this tier by checking `check_tangency.py`, which works the same way, so a bare
-`freecadcmd bulkhead_full.py` printing usage and exiting 0 is correct behaviour, not a gap.
+`freecadcmd bulkhead_full.py` printing usage and exiting 0 is correct behavior, not a gap.
 
 Two real branch-coverage gaps closed with lightweight **structural** checks (valid, single
 solid, nonzero volume -- not a full closed form) rather than more hand-derivation: the
@@ -797,7 +798,7 @@ lower `U` tried (0.5 through 2.5, both kinds). `rib_err` on these same three bui
 in this repository had run at `U` above 1 before this retest, so this is new information, not a
 regression. **Tracked as [IP-FC-143](freecad_migration.md), `active`** -- investigated further
 and confirmed a genuine, bounded geometric consequence of the rib-cut construction at the tail's
-shallow-angle diagonal buttresses, not a measurement artefact. [OQ-DES-CW21](
+shallow-angle diagonal buttresses, not a measurement artifact. [OQ-DES-CW21](
 ../design/cowl.md#open-questions) resolved: `cavity()`'s convergence loop is to be extended with
 a second pass that checks the finished, rib-cut wall, not only the pre-rib smooth surface it
 checks today -- decided, not yet implemented.

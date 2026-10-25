@@ -10,6 +10,17 @@ want of evidence rather than for want of a decision. This plan supersedes
 [IP-FC-151](freecad_migration.md#work-items), which named the problem and left "what to try
 instead" open.
 
+**That opening paragraph describes the position this plan was filed from, and it is no longer the
+position, as of 2026-10-25.** "Today nothing can" was true on 2026-10-10 and is kept because it is
+what the plan exists to answer. An instrument now exists: `candidates.corner_excluded_min` was
+selected against the five gates below, and IP-WTM-50 has since surveyed it over 24 stations at six
+spacings, where it settles at **24 of 24** against the incumbent's **6 of 24**. What is still open
+is not the instrument but what the acceptance gate should do with what it reads, which is
+OQ-DES-CW29 and OQ-DES-CW33, and whether the build should refuse on it, which is OQ-DES-CW26's
+alternative 3. The build-time check itself is not missing: `cavity` has measured the finished wall
+on every build all along, with a measure that does not converge and against the fit's own
+criterion rather than the wall's tolerance. That is IP-WTM-52.
+
 **Choosing the instrument needed no open question, by design.** The requirements on the instrument
 follow from `WALL_TOL` and from how a single-perimeter spiral-vase wall fails — they are not matters
 of taste — and they are written as the five pass/fail gates in the Notes below, fixed before any
@@ -20,14 +31,17 @@ tie-break is also pre-committed (cost).
 "this plan contains no open questions" and "nothing here is waiting on a design choice", which was
 true when the plan was filed and stopped being true as the measurements landed. **Six design
 questions have since been raised *by* this plan's own output — OQ-DES-CW28 through OQ-DES-CW33 —
-and six work items wait on them.** None is waiting on evidence about the wall; each is a trade whose
+and seven work items wait on them.** None is waiting on evidence about the wall; each is a trade whose
 terms are now measured and whose resolution belongs to the person who owns the design. The
 distinction the original wording was reaching for still holds and is worth keeping: *selecting* a
 measure was decidable from requirements, while *what the acceptance gate should do about what the
 measure found* is not.
 
-**Status, 2026-10-16: 42 items done, 1 `todo`, 6 blocked on open questions, 0 `active`.** The one
-`todo` is IP-WTM-49, which is a measurement and needs no decision.
+**Status, 2026-10-25: 44 items done, 1 `todo`, 7 blocked on open questions, 0 `active`.** The one
+`todo` is IP-WTM-49, which is a measurement and needs no decision. The two newest items close the
+testing work OQ-DES-CW26 named as outstanding in its alternatives 1 and 3: IP-WTM-50 surveys the
+selected measure's convergence at the breadth that rejected the incumbent, and IP-WTM-51 builds and
+scans the two-input interaction corpus.
 
 **Answered, 2026-10-10 — and the answer had to be corrected twice the same day, both times because
 of this plan's own instrument.** The measure is `candidates.corner_excluded_min`, which passes all
@@ -123,7 +137,7 @@ which this plan also produced and which bound how any in-plane figure above may 
 [OQ-DES-CW28 through OQ-DES-CW33](../design/cowl.md#open-questions),
 [`cowl_interior.WALL_TOL`](../../src/Fuselage/freecad/cowl_interior.py)
 
-**Last updated:** 2026-10-16
+**Last updated:** 2026-10-25
 
 ---
 
@@ -180,6 +194,21 @@ which this plan also produced and which bound how any in-plane figure above may 
 | IP-WTM-48 | blocked (OQ-DES-CW33) | Adopt the decided treatment of the in-plane measures' inclination bias in `check_cowl_interior` — a face-class filter ahead of a 3-D pass, the documented bias alone, or a bounded sample reported as a bound — through `wall_measure/normal_distance.py`, which already measures it and is verified against closed form. **The prerequisite CW33's alternative 2 named is done, 2026-10-16, and it refutes that alternative**: in-plane severity ranks the readings that are wall thicknesses *last* on every wall that has any (ranks 38–52 of 55, 48–58 of 62, 14–35 of 36, 12–87 of 88, 19–2 016 of 2 017), because an artifact is wrong by a slot width and a real reading only by the inclination factor, so a worst-`N` pass selects against the defect by construction — at `N` = 12 the first run re-measured 111 samples and found none of the 24 that mattered (§6.8.2.3) | IP-WTM-26 | [§6.8.2.2](../design/cowl_interior_surface.md#6822-the-wall-measured-perpendicular-to-itself-and-the-two-populations-it-separates), [§6.8.2.3](../design/cowl_interior_surface.md#6823-in-plane-severity-is-an-inverted-selector-measured), [cowl.md OQ-DES-CW33](../design/cowl.md#open-questions) |
 | IP-WTM-47 | blocked (OQ-DES-CW32) | Adopt the decided rib-dilation facet count in `cowl_interior.RIB_FACETS` — derived per tool from its own in-plane thickness and `t`, or raised to one larger fixed value — and re-run the three design-input cases it currently refuses, which are the holes IP-WTM-41's screen cannot fill. Separately, hoist the precondition above pass 1 if that part is accepted, since a refused configuration currently pays for a full interior fit first: 38–40 s on a nose and about 700 s on a tail | IP-WTM-41 | [cowl.md OQ-DES-CW32](../design/cowl.md#open-questions), [§4.2](../design/cowl_interior_surface.md#42-eroding-a-section) |
 | IP-WTM-49 | todo | Find why the fitted interior surface is inclined 21.5–30.8° to the layer plane exactly where the wall is thin, which is the one quantity in [§6.8.2.2](../design/cowl_interior_surface.md#6822-the-wall-measured-perpendicular-to-itself-and-the-two-populations-it-separates) that is measured and unexplained. The obliquity is not incidental to the defect, it **is** the defect: the wall measured along its own normal is thinner than the in-plane figure by exactly `1 / cos θ`, so a surface that met the layer plane squarely would be compliant at the same in-plane reading. Three candidate mechanisms are already distinguishable from the saved walls and need no build — that the inclination is the cone angle of the OML itself (predicting it tracks `cone_angle` and appears on both kinds), that it is the dilated rib tool’s ramp where a shallow-angle notch meets the interior (predicting it concentrates near `feature_stations` and is absent on a nose cell with no diagonals), or that it is the fit relaxing between widely spaced axial rows (predicting it tracks the local row interval, which [§6.8.3](../design/cowl_interior_surface.md#683-the-noses-u-trend-is-the-axial-seed-being-a-count-and-it-has-a-floor-underneath) already measures as bounding the error). `normal_distance.station_normals` reports the angle per sample today, and `locate.row_spacing_split` and `rib_proximity` are the two correlates to split it against. **Not blocked by OQ-DES-CW33 and able to moot it:** CW33 asks what the gate should do about the bias, and a mechanism that removes the inclination removes the bias rather than measuring around it — the same relationship IP-WTM-26 has to OQ-DES-CW28 | IP-WTM-26 | [§6.8.2.2](../design/cowl_interior_surface.md#6822-the-wall-measured-perpendicular-to-itself-and-the-two-populations-it-separates), [§6.8.3](../design/cowl_interior_surface.md#683-the-noses-u-trend-is-the-axial-seed-being-a-count-and-it-has-a-floor-underneath), [§6.7.1](../design/cowl_interior_surface.md#671-the-ribs-are-not-where-the-wall-is-thin), [cowl.md OQ-DES-CW33](../design/cowl.md#open-questions) |
+| IP-WTM-50 | done | **Survey the selected measure's convergence across a wall, not at the one station it was gated on.** C4 (`candidates.corner_excluded_min`) was selected by IP-WTM-9 against five gates, but G2 convergence is scored at a single station -- `nose_cowl_shell` at `U` = 1, `z` = -44.8421 -- while the incumbent it replaced was rejected on a 24-station survey, "still falling at 3840 samples at 17 of 24". Two verdicts taken on different breadths are not comparable, and [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions) alternative 3 turns on having a converged *local* measure, so the narrower evidence could not answer it. **Done 2026-10-25.** `density.convergence_survey` and `density.survey_verdict` run any set of measures over any station grid at the module's own six spacings, and `freecad/wall_convergence.py` drives them on a saved wall with no build. Measured on `nose_cowl_shell` at `U` = 1, both measures over the same 24 stations and the same spacings from 2.0 mm to 0.0625 mm: **the incumbent settles at 6 of 24 and C4 at 24 of 24.** The incumbent reproduces its own rejection, which is the control that makes the C4 figure readable. C4's largest thinness across the 24 is **0.003407 mm**, a third of `WALL_TOL`, so a gate at 0.01 mm would not refuse this wall. **Bound, stated rather than left implied:** one kind at one `U`. The survey is 8 minutes on a nose and the tool takes `--kind`/`--u`, so widening it is scheduling and not new work. | IP-WTM-9 | [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions), [cowl_interior_surface.md §6.1](../design/cowl_interior_surface.md#61-measurement-cautions), [tools/wall_measure/density.py](../../src/Fuselage/tools/wall_measure/density.py), [freecad/wall_convergence.py](../../src/Fuselage/freecad/wall_convergence.py) |
+| IP-WTM-51 | done | **Build and scan a two-input interaction corpus**, the axis IP-WTM-41 left open. That screen moves one design row at a time, so it covers each input's own axis and nothing about two moving together, and [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions) names that gap as what its alternative 1 still has open. **Done 2026-10-25.** `inputs.PairCase`/`pair_cases` generate the population, `corpus.pairs` reads it, `ring_scan.py --family=pairs` scans it, and `tools/run_input_screen.py` drives the builds -- **replacing the scratch PowerShell loop that drove the 2026-10-14 screen**, which meant that run could not be reproduced from the repository alone. On `nose_cowl_shell` at `U` = 1, nine rows give 128 pairs; **85 have both members building alone** and the other 43 contain one of the three rows the construction already refuses by itself (OQ-DES-CW32's facet floor), so they are refused for an inherited reason and are filtered out by `built_single_names` rather than counted as interactions. **Result: 86 walls built, 0 refused; 3 612 stations at 1 mm axially and 0.2 mm circumferentially, every one a healthy annulus -- 0 severed, 0 confirmed gaps, 0 `no_wall`, 0 kernel disagreements.** Non-vacuous by `inputs.unmoved` against the build fingerprints: no wall is identical to the baseline and raw volumes run 5 985.5 to 10 840.2 mm3 against the baseline's 9 722.4. Cost 60 min of builds and 89 min of scanning. **Bounds, stated rather than implied:** one kind at one `U`. The tail's twelve rows give 242 pairs at 629 s a case, about 42 hours of builds before scanning, so it is reported rather than run; an interaction with a large `U` is also unrun. | IP-WTM-41 | [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions), [tools/wall_measure/inputs.py](../../src/Fuselage/tools/wall_measure/inputs.py), [tools/run_input_screen.py](../../src/Fuselage/tools/run_input_screen.py), [freecad/ring_scan.py](../../src/Fuselage/freecad/ring_scan.py) |
+| IP-WTM-52 | blocked (OQ-DES-CW26, OQ-DES-CW29, OQ-DES-CW33) | **Give the build-time finished-wall check the decided measure and the decided threshold.** `cavity`'s post-cut loop already measures the finished wall on every build, through `_finished_wall_gap`, so [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions) alternative 3 does not need a check written — it needs the one that already runs to read the right quantity against the right number. Today it takes **a plain minimum with no corner exclusion**, which IP-WTM-50 measures as settling at 6 of 24 stations, and compares it to `TAU` = 0.05 mm rather than to `WALL_TOL` = 0.01 mm. On a `tail_shell` at `U` = 0.5 the two measures read **0.03763 and 0.01345 mm on the same section**, a factor of 2.80 that is essentially all corner exclusion rather than sampling, so setting `TAU` = `WALL_TOL` would not request a `WALL_TOL` wall. **Scope:** give `_finished_wall_gap` whichever measure OQ-DES-CW29 selects; give the post-cut acceptance test its own threshold, separate from the fit's convergence criterion, which is the conflation [§6.8.1](../design/cowl_interior_surface.md#681-tau-and-wall_tol-are-thresholds-on-two-different-measures) describes; and decide whether the result reports or refuses. **Verification needs no build for the verdict:** the twelve saved corpus walls already carry both measures' readings, so the change can be scored against them directly, and a build is needed only to confirm the cost, which `cavity` already pays once a station. | IP-WTM-42, IP-WTM-48 | [cowl.md OQ-DES-CW26](../design/cowl.md#open-questions), [cowl.md OQ-DES-CW29](../design/cowl.md#open-questions), [cowl.md OQ-DES-CW33](../design/cowl.md#open-questions), [§6.4](../design/cowl_interior_surface.md#64-which-measure-reads-the-wall-and-what-it-says-the-wall-is), [§6.8.1](../design/cowl_interior_surface.md#681-tau-and-wall_tol-are-thresholds-on-two-different-measures), [freecad/cowl_interior.py](../../src/Fuselage/freecad/cowl_interior.py) |
+
+> **IP-WTM-52 blocked reason:** three decisions stand in front of it and not one of them is a
+> measurement. OQ-DES-CW29 holds which of the two measures is authoritative, and this check cannot
+> adopt one while the external gate adopts the other. OQ-DES-CW33 holds what to do about both
+> measures being in-plane while the surface carrying the wall is inclined 21.5–30.8° to the section
+> plane — the difference between a gate reading 0.0135 mm and one reading 0.0943 mm on the same
+> wall. And OQ-DES-CW26 holds whether a build-time check should refuse at all. **The consequence is
+> measured, and it is why this is not a small change:** every `tail_shell` fails `WALL_TOL` at every
+> `U`, at 0.0134–0.0469 mm, so a build-time refusal at that tolerance refuses every tail build
+> today. That is a decision about what the project stops building. `TAU`'s own note in
+> `cowl_interior.py` already says not to close the gap to `WALL_TOL` without reading those
+> questions first.
 
 > **IP-WTM-42 blocked reason:** which measure gates is a judgment about what `WALL_TOL` means at a concave corner of a 0.6 mm wall, not a measurement — both measures are implemented, tested and run on real builds, and no further data separates them on accuracy. OQ-DES-CW29 is where it is filed. Switching the gate would turn a failing `nose_cowl_shell` into a passing one, which is the one change here that later evidence cannot undo, so it waits for the decision rather than for more evidence.
 
@@ -227,7 +256,7 @@ IP-WTM-3 and IP-WTM-4 are done, and the baseline run produced two results that c
 
 **The incumbent passes all four synthetic gates, cleanly.** On the fixtures it reads locality
 1.000041 of the patch depth, accuracy 0.000006 mm, discrimination 0.000006 mm of depth error
-located 0.021 mm from the patch centre, and convergence 0.000018 mm contracting about 4x a
+located 0.021 mm from the patch center, and convergence 0.000018 mm contracting about 4x a
 doubling. The measure the project is replacing is, on analytic geometry, excellent.
 
 **On a real saved wall the same measure does not converge at all.** `nose_cowl_shell` at `U` = 1,
@@ -239,9 +268,9 @@ one interior station, the minimum against sample count:
 | step, mm | — | +0.118652 | −0.004834 | −0.019808 | −0.004324 |
 
 Non-monotone, not contracting, and **still moving 0.0043 mm at 5 760 samples — 4.3x `WALL_TOL`**.
-That reproduces the behaviour recorded in §6.1 (0.0015 to 0.0079 mm per doubling) from a different
+That reproduces the behavior recorded in §6.1 (0.0015 to 0.0079 mm per doubling) from a different
 direction, on a wall built four days earlier, and it settles that the non-convergence is real and
-not an artefact of how it was first measured.
+not an artifact of how it was first measured.
 
 **So gate G2 cannot be screened synthetically, and that is a defect in this plan's own first
 design.** Concentric circular boundaries make a nearest-point distance exactly radial and exactly
@@ -257,7 +286,7 @@ thickness sat at 0.600076 to 0.600103 mm and moved by 2.7e-5 mm in total, agains
 nominal. The quantity that is unstable is the minimum, not the wall. That is consistent with the
 converged area-based mean reading 0.0033 mm from nominal where the incumbent reads 0.0534 mm, and
 it is the first independent hint that these walls may be compliant and the thin readings may be
-instrument artefacts. It is not evidence of compliance — a median cannot see a local thin spot, as
+instrument artifacts. It is not evidence of compliance — a median cannot see a local thin spot, as
 gate G1 exists to say — but it is a reason to expect IP-WTM-11 to matter.
 
 **Cost is not going to be the obstacle.** Loading a saved wall takes 0.2 s, and one station costs
@@ -286,7 +315,7 @@ the gate.
 **C1 did not fail the method, it failed my implementation of it.** It reports ≈0 thickness almost
 everywhere: median error 0.600000 against a 0.6 mm wall, and a "convergence" to 0.000000 that is
 the constant zero converging to itself. The inscribed-circle definition is the textbook one and the
-one a slicer's behaviour follows, so it remains a live candidate; the walk-along-the-normal search
+one a slicer's behavior follows, so it remains a live candidate; the walk-along-the-normal search
 in `candidates.inscribed_circle` is what is wrong. Re-opened as IP-WTM-16 rather than recorded as a
 negative result, because reporting "the inscribed circle does not work" off this run would be
 false.
@@ -301,7 +330,7 @@ directional. But 0.006784 mm is still two-thirds of `WALL_TOL`, and it fails acc
 
 **C4 passes all five gates and converges to exactly 0.600000 on a real wall — which is why it
 cannot be selected yet.** Dropping samples within 0.3 mm of a concave corner makes the real section
-read exactly nominal. That is either the answer (the corners were the whole artefact and the wall
+read exactly nominal. That is either the answer (the corners were the whole artifact and the wall
 was compliant all along, consistent with the stable median and with the converged area mean's
 0.0033 mm) or it is the failure this plan predicted in writing: *excluding the corners removes the
 very places a wall is thinnest.* **Nothing measured so far distinguishes those two**, because every
@@ -312,14 +341,14 @@ IP-WTM-17 was the decisive converse: a thin patch placed **at** a concave corner
 80% of the defect's depth that gate G1 asks on smooth wall, so a corner gets no easier standard.
 
 **Result, 2026-10-10: C4 is not blind.** On `corner_patch_tube` — a 0.15 mm deep patch one
-extrusion width wide, centred on the re-entrant corner a rib leaves in the bore — C4 reports
+extrusion width wide, centered on the re-entrant corner a rib leaves in the bore — C4 reports
 **100% of the defect's depth** from 2 819 surviving samples of 2 880; the exclusion discards 61.
 Every candidate sees it, the incumbent included, and the incumbent is the control here: it excludes
 nothing, so without it a universal pass would be unreadable.
 
 C4 therefore passes all five gates and the disqualifying converse, and the pre-committed tie-break
 selects it. **Two residuals are worth stating rather than leaving implied.** First, *how* C4 sees a
-defect centred on its own blind spot has not been traced — a surviving sample just outside the
+defect centered on its own blind spot has not been traced — a surviving sample just outside the
 exclusion zone can reach the recessed surface diagonally, which is the same cutting-across
 mechanism that makes the incumbent non-convergent, here landing on approximately the right answer
 because the thinning is real. That it works is measured; why it works is not. Second, a defect
@@ -351,9 +380,9 @@ Both measures over all 28 saved walls, on **identical** stations:
 | of those, meeting `WALL_TOL` = 0.01 mm | **0** | **0** |
 | worst | `tail_shell` `U` = 4.0 at 0.2765 mm | `tail_shell` `U` = 4.0 at 0.2136 mm |
 
-**The thin readings were not mostly instrument artefact.** That was the direction three separate
+**The thin readings were not mostly instrument artifact.** That was the direction three separate
 hints pointed — the stable median, the area mean's 0.0033 mm, C4 converging to exactly 0.600000 on
-one section — and the corpus refutes it. Removing the corner artefact does move the numbers:
+one section — and the corpus refutes it. Removing the corner artifact does move the numbers:
 `tail_shell` at `U` = 0.5 goes 0.0397 to 0.0142 mm. It never moves a fully measured wall inside the
 tolerance. At `tail_shell` `U` = 3.0 both measures report an **identical 0.1514 mm**, so that wall's
 worst point is not at a corner at all and no corner-based fix could reach it.
@@ -367,7 +396,7 @@ been carried over from the first sweep, whose nose rows were taken on a differen
 the nose showed the same rise with `U` the tail did — 0.0010 to 0.0050 mm at `U` ≤ 2 against
 0.0519 mm at `U` = 3.0 and 0.0701 mm at `U` = 4.0 — and took the agreement between kinds as evidence
 the break was a property of the construction. Both columns came from the same fixed-count sampling,
-so the rise is the instrument's; two readings sharing one artefact agree by construction. Measured
+so the rise is the instrument's; two readings sharing one artifact agree by construction. Measured
 at a fixed 0.125 mm spacing the nose reads **0.0011 to 0.0115 mm** across the whole `U` range, five
 of six inside `WALL_TOL`, with no break.
 
@@ -379,8 +408,8 @@ one is excluded for coverage, so no disagreement survives into the conclusion.
 **One figure is now doubly corrected.** `WALL_TOL`'s own note was changed on 2026-10-06 to point at
 the soak's 0.0067 mm for the nose at `U` = 3.0 as evidence the construction can reach the
 tolerance. Both instruments read **0.0519 mm** on that same wall when stations reach the thin
-region. The 0.0067 mm was a station-placement artefact of the body-based grid, not a compliant
-configuration — a different failure from the measure-artefact one that note was written to warn
+region. The 0.0067 mm was a station-placement artifact of the body-based grid, not a compliant
+configuration — a different failure from the measure-artifact one that note was written to warn
 about.
 
 **What this does not establish.** The grid is not the acceptance gate's own, so these are absolute
@@ -477,7 +506,7 @@ within 0.1 % at every density. The measure now takes its samples as given and ap
 along true arc length. **A test had asserted this invariant and passed only because the old data
 happened to comply.**
 
-**Where the corner artefact actually lives, which the corrected sweep shows cleanly.** On
+**Where the corner artifact actually lives, which the corrected sweep shows cleanly.** On
 `nose_cowl_shell` the incumbent reads 0.027–0.039 mm where C4 reads 0.0010–0.0115 mm, so its reading
 there is dominated by distances cutting across concave corners. On `tail_shell` the two agree
 closely and at some stations **exactly** — which, given the subset relationship, means C0's own worst
@@ -655,7 +684,7 @@ discretized polygon, which is the cheap case. If a candidate would be materially
 
 It does not change the construction. Whether the wall is thin and whether it is *measured* as thin
 are separate questions, and only the second was in scope. The answer came back the less convenient
-way — the wall is thin, the thin readings were not mostly instrument artefact, and three hints that
+way — the wall is thin, the thin readings were not mostly instrument artifact, and three hints that
 had pointed the other way were all real and all insufficient — so the construction work this plan
 hoped to shrink has instead been given a located boundary at `U` = 2 to start from. IP-WTM-20 and
 IP-WTM-21 are the measurements that remain; the construction change itself belongs to another plan.
@@ -757,7 +786,7 @@ nesting test is a proxy and has produced a false positive before.
   caution §6.1 already carries twice, and the worst-placed one: a nose wall at `U` = 4 has a box
   twice the length of the part, so half such a scan would land on empty space and be classified
   `no_wall`, a false positive in the one function meant to find a broken ring. It now takes the
-  sectioning extent, and is indexed by **axial spacing in millimetres** rather than a station
+  sectioning extent, and is indexed by **axial spacing in millimeters** rather than a station
   count, for the standing reason that the part's length scales with `U` and a defect's extent does
   not.
 * **`density.loop_lengths`' docstring said "outer first" while the function sorts by length** —
@@ -773,7 +802,7 @@ nesting test is a proxy and has produced a false positive before.
 **The result, on the configuration that matters most: 0 severed stations.** `tail_shell` at
 `U` = 3.0 — the wall this item's break was reproduced on — scanned at 1 mm axially across its real
 sectioning extent, 298 stations: **297 healthy annuli, 0 severed, and 1 `no_wall` that resolved as
-a slice artifact.** A break would have to be under a millimetre long in `z` to have hidden between
+a slice artifact.** A break would have to be under a millimeter long in `z` to have hidden between
 these stations, against the 93 mm of circumference the reproduced one spanned.
 
 **A fourth defect, in this scan's own confirmation step, and it would have reported a healthy wall
@@ -819,9 +848,9 @@ missed break.
 `U` = 3.0 had been scanned earlier the same day; it was re-run rather than having its figures copied
 into a result file, because a measurement artifact that no run produced is not evidence. It
 reproduced exactly: 298 stations, 297 annuli, 0 severed, and the same single `no_wall` at
-`z` = -293.98226487 to the last printed digit, with the same six neighbours all healthy annuli. **So
+`z` = -293.98226487 to the last printed digit, with the same six neighbors all healthy annuli. **So
 the slice artifact is deterministic, not an intermittent kernel flake** — which is what licenses the
-re-probe as a test, since an intermittent failure could in principle also strike a neighbour.
+re-probe as a test, since an intermittent failure could in principle also strike a neighbor.
 
 **Three changes were needed before the corpus run was affordable or trustworthy.**
 

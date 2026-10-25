@@ -111,13 +111,14 @@ def _write_json(path, payload):
         json.dump(payload, handle, default=str, indent=1)
 
 
-def list_cases(kind, u, out=None):
+def list_cases(kind, u, out=None, pairs=False):
     """Print the case names for one kind, one a line, for a driver loop to read."""
     out = out if out is not None else sys.stdout
-    for case in inputs.cases(kind, u):
+    rows = inputs.pair_cases(kind, u) if pairs else inputs.cases(kind, u)
+    for case in rows:
         out.write('CASE %s\n' % case.name)
-    for case in inputs.cases(kind, u):
-        out.write('#   %-28s %-24s %-9s %s\n'
+    for case in rows:
+        out.write('#   %-56s %-24s %-9s %s\n'
                   % (case.name, case.alias or '-',
                      '' if case.is_baseline else '%+g' % case.delta, case.why))
     out.flush()
@@ -283,7 +284,8 @@ def build_case(kind, u, case, want_hash=False, shapes_dir=None, out=None):
 
 def main():
     if _opt('list', ''):
-        return list_cases(_opt('list'), float(_opt('u', '0.5')))
+        return list_cases(_opt('list'), float(_opt('u', '0.5')),
+                          pairs=bool(_opt('pairs', '')))
     if _opt('check', ''):
         return check_cases(_opt('check'), float(_opt('u', '0.5')))
     if _opt('refingerprint', ''):
@@ -293,15 +295,23 @@ def main():
     name = _opt('case')
     if kind not in BUILDERS:
         raise SystemExit('unknown kind %r -- tail_shell or nose_cowl_shell' % kind)
-    case = inputs.find(kind, u, name)
+    # **`--pairs` selects a different population, not an option on the same one.** OQ-DES-CW26's
+    # alternative 1 leaves two-input interactions untested, and those walls are a third corpus
+    # beside the `U` soak and the one-row screen. They get their own case list, their own shapes
+    # and their own records, so a count taken across "the screen" keeps meaning what it meant.
+    pairs = bool(_opt('pairs', ''))
+    case = (inputs.find_pair(kind, u, name) if pairs else inputs.find(kind, u, name))
     if case is None:
-        raise SystemExit('unknown case %r for %s; --list=%s prints them' % (name, kind, kind))
+        raise SystemExit('unknown %s case %r for %s; --list=%s prints them'
+                         % ('pair' if pairs else 'screen', name, kind, kind))
 
-    records_dir = _opt('records', inputs.SCREEN_RECORDS)
+    records_dir = _opt('records', inputs.PAIR_RECORDS if pairs else inputs.SCREEN_RECORDS)
+    shapes_dir = _opt('shapes', inputs.PAIR_SHAPES if pairs else inputs.SCREEN_SHAPES)
     path = os.path.join(records_dir, '%s.json' % case.label)
     started = time.time()
     try:
-        record = build_case(kind, u, case, want_hash=bool(_opt('hash', '')))
+        record = build_case(kind, u, case, want_hash=bool(_opt('hash', '')),
+                            shapes_dir=shapes_dir)
     except Exception as exc:                                            # noqa: BLE001
         # **`build_s` on the failure path too.** What a refused configuration costs is a figure
         # OQ-DES-CW32 quotes, and the first version of this record did not carry it -- so the

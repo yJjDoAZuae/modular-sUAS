@@ -266,10 +266,10 @@ The source model **is** version-controlled — `src/Fuselage/cad/modular_sUAS_no
 — so the provenance exists. What does not exist is any automation between it and the
 meshes, and no check that the committed meshes were exported from the committed model.
 
-**The OML import is a third unit boundary, and the only metre-to-millimetre conversion in
+**The OML import is a third unit boundary, and the only meter-to-millimeter conversion in
 the OpenSCAD path.** `body_blank_full()` applies `scale([U/oml_scale_m_per_mm, …])` with
 `oml_scale_m_per_mm = 1e-3`, so the factor is `1000·U`: the exported mesh is in **meters** and the
-model is in millimeters. The companion values in the cowl JSON are metres too —
+model is in millimeters. The companion values in the cowl JSON are meters too —
 `oml_length_m = 0.050` for the nose, `0.1` for the tail. Worth stating plainly, because it
 is the one place the existing millimeter-throughout rule already meets SI data, and the
 port has to keep the conversion rather than discover it.
@@ -647,7 +647,7 @@ Three consequences:
 
 So the equivalence test is a one-time migration instrument, not a permanent fixture. What
 replaces it measures the geometry rather than proxies for it — a symmetric difference and a
-surface distance, in millimetres — and in that sense is more precise than anything available
+surface distance, in millimeters — and in that sense is more precise than anything available
 today. **But not uniformly so, and the exception is worth stating plainly:** an OpenSCAD part
 built twice is bit-identical and can be proved so by hash, and a FreeCAD part built twice
 cannot. The exact tier survives on the far side of the port and not on the near one.
@@ -753,6 +753,8 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-16 | decided 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
 | ARCH-17 | resolved 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
 | ARCH-18 | withdrawn 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
+| ARCH-19 | decided 2026-09-06 | What reproducibility is required of a generated solid? — **two thresholds, and a screen that cannot give a false negative.** Both measured and set about four times above what reproduction actually costs |
+| ARCH-20 | decided 2026-09-06 | Is a volume tolerance relative to volume, or to surface area? — **to surface area and part scale**, `\|Va − Vb\| / (A · 100U)`, dimensionless. A tessellated mesh's volume error goes as offset × area, so the denominator was the defect |
 | ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 
@@ -1221,7 +1223,8 @@ built from.
    fit between parts and inspection of what mates.
    *Drawbacks:* not a manufacturing drawing in the full sense.
    *Prerequisites:* agreement on what belongs to the interface, which
-   [overview.md](#relationship-to-overviewmd)'s interface-conventions section should own.
+   [dimension_scheme.md](../design/dimension_scheme.md#2-the-interface-register)'s
+   interface register should own.
 
 **Recommendation: alternative 3 first, then 1.** The interface dimensions are the ones
 that matter and the ones that are already named as shared conventions, so they are both
@@ -1463,7 +1466,7 @@ the right planes. That was the assumption doing the damage. Removing the overlap
 full part exactly eight times the octant, which proves the same thing more directly.
 
 Kept because the alternatives were correctly costed and the reasoning is sound given its
-premise — which is exactly why it is worth being able to recognise this shape again.
+premise — which is exactly why it is worth being able to recognize this shape again.
 
 ---
 
@@ -1651,7 +1654,7 @@ report a failure that is not real.
 
 **Extended 2026-08-18 to the FreeCAD-side checks, which had the same defect and had not been
 covered by this decision.** The rule here is about *any* tolerance on a length, not only the one
-in `compare_backends`: a part's coordinates are proportional to `U`, so a fixed millimetre figure
+in `compare_backends`: a part's coordinates are proportional to `U`, so a fixed millimeter figure
 means something four times stricter at `U` = 4 than at `U` = 1. Three had been left absolute —
 `check_tangency.TOL` and `SWEEP_TOL`, which measure how far a solved fillet center is from where
 its tangencies put it, and the branch guard inside `fillets._fillet_tangency_sketch()`. All three
@@ -2689,8 +2692,8 @@ both cowls rather than being a case the interior algorithm has to survive.
 
 **2. The cowl has no top or bottom skin to find an equivalent for.** Only the perimeters are
 printed, as is usual in spiral vase mode, and that holds at more than one perimeter too: the
-part is an open shell at both ends. A rule modelled on "the equivalent of a slicer's top and
-bottom solid layers" was modelling a feature this part does not have.
+part is an open shell at both ends. A rule modeled on "the equivalent of a slicer's top and
+bottom solid layers" was modeling a feature this part does not have.
 
 **The worst case is bounded, and it is comfortable.** The thinning is real and stays real —
 a horizontal inset `t` still leaves `t·cos α` of perpendicular wall — but α never reaches the
@@ -2715,7 +2718,7 @@ rather than leaving it as a property nobody wrote down:
 
 and the implementation **checks it** rather than assuming it. If a section ever appears whose
 local slope is shallower than `overhang_angle_from_bed`, that is a design violation upstream,
-and the right behaviour is to say so and stop — not to emit a knife edge that renders, exports,
+and the right behavior is to say so and stop — not to emit a knife edge that renders, exports,
 passes `isValid()`, and turns up later as a stress singularity in an FEM result nobody
 questions. A precondition that is asserted is a decision; one that is merely true today is an
 accident waiting to be inherited.
@@ -2960,7 +2963,7 @@ This only bites near the bar. The tail pair at `U` = 1 that calibrated the thres
 pair.** The gap threshold scales the allowed gap with `U`: 5.0e-5 × `100U` is 2.5 µm at
 `U` = 0.5, 5 µm at `U` = 1 and 20 µm at `U` = 4. If build-to-build disagreement is set by the
 fit's own **absolute** tolerance τ = 0.05 mm rather than by how big the part is, then the
-disagreement is roughly constant in millimetres and a `U`-normalised budget is hardest to meet
+disagreement is roughly constant in millimeters and a `U`-normalized budget is hardest to meet
 on the smallest parts. The one pair measured is consistent with that — the `U` = 0.5 nose uses
 100 % of its budget where the `U` = 1 tail used 26 % — and IP-FC-117's soak is exactly the
 evidence that would establish or refute it. **It should not be decided ahead of that run.**

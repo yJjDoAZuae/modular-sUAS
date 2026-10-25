@@ -59,7 +59,7 @@ sliding fit is a property of the printer and the tube, not of the airframe, and
 multiplying it by four for a 4U aircraft would make the joint loose. The same holds for
 `panel_tolerance` (0.1 mm) and the greeble tolerance.
 
-Dimensions in this file are millimetres and degrees. That is the OpenSCAD path, which is
+Dimensions in this file are millimeters and degrees. That is the OpenSCAD path, which is
 exempt from the project's SI standard — see
 [general.md](../guidelines/general.md#units--si-is-the-project-standard).
 
@@ -254,7 +254,7 @@ densest piece of design reasoning in the Python:
 5. Clamp to `√2 · corner_radius`, then round **up** to the next 0.25 mm.
 
 Step 5's rounding direction matters: rounding down would eat the clearance the previous
-four steps just established. Rounding up costs a quarter millimetre of panel width and
+four steps just established. Rounding up costs a quarter millimeter of panel width and
 guarantees the constraint holds.
 
 ## Validity
@@ -417,8 +417,8 @@ The original wording follows.
 
 ---
 
-**OQ-DES-C1 — Are `greeble_thickness` and `greeble_nub_thickness` intended to be
-independent?** They are computed by identical formulas from identical inputs and have
+**OQ-DES-C1 (as originally posed) — Are `greeble_thickness` and
+`greeble_nub_thickness` intended to be independent?** They are computed by identical formulas from identical inputs and have
 never differed in any swept variant. If they are meant to be one number, the pair is a
 latent inconsistency: changing one and not the other produces a nub that does not match
 its seat, and nothing would report it. If they are meant to be independent, no variation
@@ -485,7 +485,8 @@ The original wording of this question follows.
 
 ---
 
-**OQ-DES-C3 — Is the corner's dependence on `bulkhead_thickness` the right interface?**
+**OQ-DES-C3 (as originally posed) — Is the corner's dependence on
+`bulkhead_thickness` the right interface?**
 Three of the corner's `z` dimensions derive from a parameter that belongs to the bulkhead.
 It is correct — they mate — but it means the corner cannot be reasoned about alone, and
 the FreeCAD port will have to decide whether the joint is a first-class object with its
