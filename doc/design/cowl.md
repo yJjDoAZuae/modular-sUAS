@@ -779,7 +779,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 | ID | Question | Blocking |
 | --- | --- | --- |
-| OQ-DES-CW25 | Metric A takes the minimum in-plane distance to a whole buttress tool section, but only the tool’s cut floor bounds the finished wall and its flanks bound nothing; the measurement has now been taken and no flagged minimum lands on a cut floor, so whether the metric is kept at all is the remaining decision | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
+| OQ-DES-CW25 | Metric A reports the in-plane clearance between the interior surface and a dilated buttress tool, but §4.2 cuts that tool out of the cavity, so the two overlap and the clearance is zero at all 160 stations of a tool’s run; the metric estimates a quantity that does not exist, and the decision is whether to retire it or replace it with a cut-floor-to-outer-surface wall measurement | Not blocking (Metric A is opt-in and flag-only; it never fails a build) |
 | OQ-DES-CW26 | The rib cut can break the wall's cross-section ring over 93 mm while passing every existing check — one valid solid, healthy partition identity, mirror sewing closed, no exception — and the existing thickness check misreports the break as a 0.36 mm thickness. Reproduced and characterized; two checks are now identified that catch it, and which to adopt is the decision | **Blocking** for any claim that a completed `tail_shell` build's wall is verified |
 | OQ-DES-CW27 | FreeCAD caches a shape's triangulation, so `solid_measure.converged_volume` run a second time on the same shape object converges at once on the cached mesh and reports the coarsest deflection as the converged one; with `tol` = 0 the identical call raises and then succeeds. The volume returned is still correct — only the convergence claim is not. Whether to defeat the cache, and at what cost on a real cowl, is the decision | Not blocking (the production path measures at one fixed deflection on a freshly built shape, so no shipped number is affected) |
 | OQ-DES-CW28 | The interior fit's convergence criterion `TAU` = 0.05 mm is **five times looser than the acceptance tolerance** `WALL_TOL` = 0.01 mm the finished wall must meet, and the walls come out just inside the criterion they were converged to — 7 of the 12 distinct corpus walls are over tolerance, every `tail_shell` at every `U`. Tightening `TAU` works on a nose (`U` = 4 goes 0.01403 → 0.00378 mm at `TAU` = 0.02) but is now **measured not to build a tail at all, at two configurations**: at both 0.02 and 0.01 a `tail_shell` at `U` = 0.5 and again at `U` = 2.0 raises `Unconverged` against the 64-station patch budget, and pass 2's own worst gap is unchanged across the whole fivefold range both times, so on a tail `TAU` is not the lever. Pass 1 meanwhile converges to 0.0073 mm, inside `WALL_TOL`, and the finished wall is unmoved — because the two passes measure out to different exteriors, the un-notched OML and the notched one, which diverge by up to 26.5 mm. The two thresholds are additionally read by two different measures, 2.81x apart at `U` = 0.5. What to do instead — accept the wall as built, make the criterion adaptive, raise the refiner's limits, or remove the residual's mechanism — is the decision | **Blocking** for any claim that a build's wall meets `WALL_TOL`; not blocking any build, which fails nothing today |
@@ -3134,11 +3134,31 @@ row actually does; [§5](cowl_interior_surface.md) the refinement blind spot;
 
 ### OQ-DES-CW25 — Does Metric A measure the face that bounds the wall, and should it be kept at all?
 
+**Metric A is defined in
+[cowl_interior_surface.md §6.3 "Rib-cut clearance: what the scan measures, and what it does not"](cowl_interior_surface.md#63-rib-cut-clearance-what-the-scan-measures-and-what-it-does-not),
+which is its design authority.** That section carries the definition, the three containment states a
+reported figure can be in, the four roles a tool's faces play, and what the measurement below found.
+**It also carries two TechDraw cross-sections of the real geometry**, sectioned by the kernel from
+a real `nose_cowl_shell` build and projected by TechDraw, which are the quickest way to see what
+this question is about: at the worst flagged station, and at the one station the scan calls clear,
+the dilated tool has run through the fitted interior surface and is cutting into the cavity. Each
+sheet prints the figure the scan reports beside the statement that it is not a clearance. (An
+earlier revision carried three hand-drawn SVG figures instead, one of them 0.30 mm across. They
+are withdrawn, and the description of them here was stale until 2026-10-24.) Read that section
+first; this question is only the decision about whether the metric is kept. (Note that a bare "§6.3" elsewhere in
+*this* document means this document's own §6.3, "What the port should preserve", which is unrelated.)
+
 **Problem.** `cowl_interior.clearance_margin_scan` reports **Metric A**: the smallest in-plane
 distance, at a sampled axial station, between the fitted interior surface's cross-section and the
-cross-section of the nearest buttress cutting tool. `CLEARANCE_MARGIN_MM` = 0.01 mm is the value it
-is compared against. It ships opt-in (`clearance_check`, off by default, roughly an hour added to a
-build) and flag-only: it reports, and never fails a build.
+cross-section of the nearest **dilated** buttress cutting tool. `CLEARANCE_MARGIN_MM` = 0.01 mm is
+the value it is compared against. It ships opt-in (`clearance_check`, off by default, roughly an hour
+added to a build) and flag-only: it reports, and never fails a build.
+
+**The word "dilated" is load-bearing and this paragraph omitted it until 2026-10-17.** §4.2 forms the
+rib by removing `dilate(B, t)` from the cavity, so the tool the scan measures against is the
+buttress profile grown outward by the wall thickness `t`, not the buttress profile itself. That is
+why a tool is *supposed* to reach the surface, and it is the fact that reframed this whole question
+once the measurement was taken.
 
 [OQ-DES-CW24](#open-questions) retired its companion Metric B outright, and withdrew Metric A's
 description as a wall-thickness and print-accuracy signal. Across four stations measured both ways,
@@ -3147,13 +3167,17 @@ Metric A spans a factor of 2.5 (0.085222 to 0.213606 mm) while the real `wall_th
 Metric A has neither the largest nor the smallest real wall. What Metric A still plausibly measures
 is rib-cut clearance: how close the interior surface comes to a cutting tool.
 
-**What is not known, and is the whole question.** A buttress tool is a prism, and only one of its
-faces — the cut floor — bounds the finished wall. Its flanks bound nothing; the wall continues past
-them. Metric A takes the minimum distance to the *whole* tool section, so it cannot distinguish the
-two, and **nobody has measured which face the minimum actually lands on.** If it lands on the cut
-floor, the number says something about the wall and is worth keeping. If it lands on a flank, it is
-a distance to a surface that bounds nothing — which would also explain why it does not co-vary with
-the real wall thickness.
+**What is not known, and is the whole question.** A buttress tool is a slab, and only one of its
+four face roles — the **floor**, the cut's innermost reach — bounds the finished wall's thickness.
+The two **cheeks** bound the slit's side walls, the **ends** bound the slit's axial run, and the
+**outer** edge sits outside the blank and bounds nothing; §6.3's table is the authority on all four.
+Metric A takes the minimum distance to the *whole* tool section, so it cannot distinguish them, and
+**nobody has measured which face the minimum actually lands on.** If it lands on the floor, the
+number says something about the wall and is worth keeping. If it lands on anything else, it is a
+distance to a surface that bounds no wall thickness — which would also explain why it does not
+co-vary with the real wall thickness. (An earlier wording here said "flanks", collapsing cheek, end
+and outer into one word; the measurement turned on telling a cheek from a floor, so the four roles
+are the useful division.)
 
 The measurement is cheap relative to the scan that already exists: at each flagged station, record
 which face of the tool section carries the minimum and classify it. The stations to check are
@@ -3194,24 +3218,71 @@ mistake that let Metric B stand as long as it did, and this item should not repe
 the left. Work item: IP-FC-148.
 
 **The measurement called for by alternative 1 has been taken, 2026-10-04**, and is recorded in
-[cowl_interior_surface.md §6.3](cowl_interior_surface.md). On `nose_cowl_shell` at `U` = 1, of the 15
+[cowl_interior_surface.md §6.3](cowl_interior_surface.md#63-rib-cut-clearance-what-the-scan-measures-and-what-it-does-not). On `nose_cowl_shell` at `U` = 1, of the 15
 stations the scan flags under 0.01 mm, **none is a distance to a cut floor**: 7 land on a cheek,
 which bounds the rib rather than the wall, and 8 land on no face's own dilated surface at all. The
 worst figure the scan reports, 0.000081 mm, is a cheek contact. **A prior question the item did not
-anticipate was also answered: 14 of the 15 sit where the dilated tool has already crossed into the
-interior surface**, so there is no clearance at those stations to measure — and a dilated tool is
+anticipate was also answered: the dilated tool has already crossed into the interior surface at
+every one of the 15.** The scan itself reports 14 crossings and one `clear`; that last station,
+`z` = -8.0479, was sectioned and measured by the kernel on 2026-10-18 and the dilated tool reaches
+**0.191 mm** past the fitted surface there too, with 0.0606 mm² of its section inside. The scan
+missed it because its engagement sampler stands at four places covering 2.5 % of the tool's
+perimeter, leaving unsampled the end cap that penetrates — see
+[IP-FC-154](../implementation/freecad_migration.md#work-items). So there is no clearance at any of
+those stations to measure — and a dilated tool is
 *supposed* to cross, because that is how §4.2's identity gives the rib its `t` of material. On
 `tail_shell` at `U` = 1 the same pattern holds: 11 cheek contacts, 4 on no face's surface, zero on a
 cut floor. Separately, 8 of the nose's 15 figures are below the 0.0013 mm by which the 48-gon
 dilation falls short of the disc it approximates.
 
-**So alternatives 2, 3 and 4 are now the live set, and the choice among them is open.** Alternative 2
-(keep it, re-described) is harder to defend than it was: the metric has now been measured and does
-not measure what any of its descriptions claimed. Alternative 3 (retire it, remove `clearance_check`)
-and alternative 4 (replace it with a direct `wall_thickness()` measurement at the same stations) both
-remain available, and alternative 4 has acquired a second reason to be considered — see
+**The decisive finding, measured 2026-10-24: the clearance Metric A reports does not exist at any
+station, and cannot.** §4.2 forms a rib by cutting `dilate(B, t)` out of the cavity, so a tool
+doing any work must overlap the cavity, and overlapping regions have crossing boundaries with no
+clearance between them. Walking the whole 40 mm run of `nose_cowl_shell`'s tool at `U` = 1 in
+0.25 mm steps: of the 160 stations where both have a section, **160 cross and 0 are apart**. So the
+quantity is identically zero wherever it can be evaluated, every non-zero figure ever reported for
+it is error, and — since every station is therefore under the 0.01 mm threshold — the fifteen the
+scan names are simply the fifteen where the error was smallest.
+
+**A second finding explains why those figures are also arbitrary.** At `z` = -36.9470 the exact
+distance is zero — `distToShape` returns 0.000000000000 mm and `section` finds the two crossing
+points — and Metric A reports 0.000081 mm. It cannot report zero: it samples 200 points on one
+outline against a 400-segment chord approximation of the other, and no sample is a crossing point.
+Varying only that sampling, on geometry that never changes, the same station reads:
+
+| surface points / tool segments | Metric A | against the 0.01 mm flag |
+| --- | --- | --- |
+| 100 / 200 | 0.216054 mm | not flagged |
+| 150 / 300 | 0.118449 mm | not flagged |
+| **200 / 400** — as shipped | **0.000081 mm** | **flagged** |
+| 400 / 800 | 0.027226 mm | not flagged |
+| 2000 / 4000 | 0.015543 mm | not flagged |
+| 20000 / 40000 | 0.001161 mm | flagged |
+
+A factor of 2700, no convergence toward the exact zero, and the flag crossed in both directions.
+`z` = -8.0479 behaves the same, spanning 0.000163 to 0.292392 mm. Neither outline degenerates under
+`discretize` at any of these counts, so this is the sampling method itself and not a known defect of
+it. The detail is in
+[cowl_interior_surface.md §6.3.5](cowl_interior_surface.md#635-limits-on-the-instrument). An earlier
+account of this, that the figure was "the distance from the sampled station to a geometric
+crossing", is withdrawn — refining the sampling at a fixed station would then reproduce it, and it
+does not.
+
+**Alternative 2 is no longer defensible, and the choice is between 3 and 4.** Alternative 2 would
+keep Metric A under a corrected description, but there is no description to give it: the quantity
+is zero at every station by construction, so a re-described Metric A is a flag that should fire
+everywhere and in practice fires wherever its own arithmetic error is smallest. This is the same
+ground Metric B was retired on — "no cutoff on a quantity with no geometric meaning is sound" — now
+with a census behind it rather than an argument.
+
+Alternative 3 (retire it, remove `clearance_check`) and alternative 4 (replace it with a direct
+`wall_thickness()` measurement at the same stations) remain. Alternative 4 is the stronger of the
+two on the evidence, because the quantity it would measure — how close a tool's cut floor comes to
+the outer surface — is the one the metric was presumably reaching for, is the one §6.3.2 identifies
+as the only face that bounds the wall, and is already implemented. It has a second reason too: see
 [OQ-DES-CW26](#open-questions), where a wall 0.19 mm thin passes every check the construction has.
-That decision is not one this measurement settles.
+Fixing the sampling is **not** among the options: a correctly sampled Metric A would report
+0.000000 mm at every station, which is true and useless. That decision is still yours.
 
 ### OQ-DES-CW26 — The cut can break the wall's section ring and pass every check; which checks catch it?
 

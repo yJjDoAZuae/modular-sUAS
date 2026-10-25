@@ -243,9 +243,9 @@ CHECK_ARC = 0.20
 CHECK_MIN = 480
 CHECK_MAX = 6000
 
-#: How many directions the ribs are dilated in. See `dilated_notches`: the structuring element
-#: is a horizontal disc, and it is approximated by an inscribed regular polygon with this many
-#: sides.
+#: How many sides the dilation's structuring element has. See `dilated_notches`: the element is a
+#: horizontal disc of radius `t`, approximated by an inscribed regular polygon with this many
+#: sides, so a dilated slab's end cap is that polygon rather than a round end.
 #:
 #: **Chosen against the rib gap, which is the thing it has to get right.** Measured 2026-09-03
 #: on the tail's first side slab at U = 1, whose 0.1004 mm section the exact 2-D offset dilates
@@ -727,6 +727,16 @@ def _min_wire_distance(wires_a, wires_b):
     wire loops at a typical station, not one, and every clearance figure measured against it
     this way was retracted and re-measured once this was found. Each wire here closes correctly
     on its own, and only the per-wire minimum is finally reduced.
+
+    **This cannot return zero, so it must not be used where the two wires may intersect.** It
+    samples one wire to points and the other to chords and takes the least point-to-chord
+    distance; no sample is a crossing point, so on crossing wires it returns a leftover whose
+    size is set by where the samples fell. Measured 2026-10-24 on `nose_cowl_shell` at `U` = 1,
+    `z` = -36.9470, where `distToShape` gives exactly 0.0 and `section` finds two crossing
+    points, this function returns 0.000081 mm at the shipped 200/400 and anything from 0.000081
+    to 0.216 mm across 100/200 .. 20000/40000 -- no convergence, and `CLEARANCE_MARGIN_MM`
+    crossed in both directions. Use `distToShape` where the answer may be zero. The counts are
+    deliberately 200 and 400 rather than equal, so `_min_wire_contact` reproduces this exactly.
     """
     if not wires_a or not wires_b:
         return None
@@ -1317,9 +1327,12 @@ def dilated_notches(notches, t, report=None):
     # The shallowest angle is reported, not bounded -- see `FLAT_TOL`. A cut at theta leaves a
     # rib of `2*n_p*w + t_cut / sin(theta)`, so this number is the one to look at if a rib ever
     # measures wider than expected.
-    note('ribs: %d tools dilated by %.4f mm in %d directions; shallowest cut plane %.2f deg '
-         'from the layer plane' % (len(grown), t, RIB_FACETS,
-                                   min(angles) if angles else float('nan')))
+    # "in %d directions" was the wording here, and it misread as a smoothness setting on a round
+    # end. The %d translates are how a horizontal disc of radius t is approximated; the end cap
+    # they produce is a %d-gon, not an arc. Say polygon, so the number reads as what it is.
+    note('ribs: %d tools dilated by %.4f mm, as a %d-gon approximation of the disc; '
+         'shallowest cut plane %.2f deg from the layer plane'
+         % (len(grown), t, RIB_FACETS, min(angles) if angles else float('nan')))
     return grown
 
 
@@ -1519,11 +1532,17 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
     section's own sample points are tested against the interior candidate *solid*. Points all
     outside means the tool is clear there and the distance is a real clearance. Points on both
     sides means the tool's boundary crosses the surface at this station -- the true in-plane
-    distance is zero, the cut is actively removing material, and whatever small number the scan
-    reports is the distance from the sampled station to a geometric crossing rather than a
-    clearance. A dilated tool is *supposed* to cross: that is how the rib gets its `t` of material
-    (section 4.2's identity). The crossing has to be somewhere along every slot that enters the
-    wall band at all, so finding the scan's minima at one is a property of the sampling.
+    distance is exactly zero, confirmed by `distToShape` and by `section` finding the crossing
+    points, and the cut is actively removing material. Whatever small number the scan reports
+    there is a *sampling leftover*, not a clearance: `_min_wire_distance` measures 200 sampled
+    points on one outline to a 400-chord approximation of the other, and no sample is a crossing
+    point, so it cannot return the zero. Measured 2026-10-24 on `nose_cowl_shell` at `U` = 1,
+    `z` = -36.9470, that leftover spans 0.000081 to 0.216 mm as the sampling is varied from
+    100/200 to 20000/40000 on unchanged geometry, and crosses `CLEARANCE_MARGIN_MM` in both
+    directions -- so at a crossing the flag reports where the samples fell, not the part. A
+    dilated tool is *supposed* to cross: that is how the rib gets its `t` of material (section
+    4.2's identity), and the crossing has to be somewhere along every slot that enters the wall
+    band at all.
 
     **A face only bounds the wall where it lies inside the blank, so that is tested at the
     contact rather than assumed from the role.** Measured 2026-10-04 on `tail_shell`: the core

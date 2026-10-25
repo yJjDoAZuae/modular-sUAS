@@ -1049,33 +1049,142 @@ probe's silent sign-reversed swing.
 
 ### 6.3 Rib-cut clearance: what the scan measures, and what it does not
 
-`cavity()` can additionally run a **rib-cut clearance scan** (`clearance_margin_scan`, opt-in
-through `clearance_check`, off by default because it costs on the order of an hour). At each
-sampled station it reports the smallest in-plane distance between the fitted interior candidate's
-own section and the nearest **dilated** buttress tool's section, and flags any station under
-`CLEARANCE_MARGIN_MM` = 0.01 mm. It reports; it never fails a build.
+**What the quantity is.** Take a horizontal slice through the cowl at some height `z`. Two closed
+outlines appear in it. One is the **fitted interior surface**, the boundary of the hollow cavity
+inside the part. The other is the **dilated buttress tool**, the shape that gets cut away to leave
+the slot a rib stands in. **Metric A is the clearance between those two outlines: the shortest
+distance from any point of one to any point of the other, in millimeters.** `cowl.md` and the
+source both use that name, and this section is its design authority.
 
-**A figure from it has to pass two prior questions before it means anything, and the distance
-itself answers neither.**
+It is one number per station, not a dimension between two named features, so it has no arrow on a
+drawing. The two dimensions the figures below *do* carry — how far the tool reaches past the
+surface, and how far the slab stops short of it — are a different measurement on the same pair of
+curves, and §6.3.1 uses them to show why Metric A cannot be what it claims.
 
-**(1) Is it a clearance at all?** The scan measures wire to wire, which cannot distinguish a tool
-sitting just clear of the surface from one already cutting into it — both give a positive
-boundary-to-boundary distance. So each tool section's own points are tested against the interior
-candidate *solid*, giving three states rather than two:
+**Which direction is bad, and what the threshold is for.** A small gap would mean the tool passes
+very close to the cavity wall, leaving almost no material between the slot and the inside of the
+part — a thin spot, or in spiral-vase printing an open one. So small is the alarming direction, and
+any station reading under `CLEARANCE_MARGIN_MM` = 0.01 mm is flagged for someone to look at. The
+scan reports; it never fails a build. It is opt-in through `clearance_check` and off by default,
+because it costs on the order of an hour.
+
+**There is no such clearance, anywhere, and there cannot be.** §4.2 forms a rib by cutting
+`dilate(B, t)` out of the cavity, so a tool that does any work at all must overlap the cavity.
+Overlapping regions have crossing boundaries, and crossing boundaries have no clearance between
+them. Measured 2026-10-24, walking the whole 40 mm axial run of `nose_cowl_shell`'s tool at `U` = 1
+in 0.25 mm steps:
+
+| stations over the tool's run | |
+| --- | --- |
+| tool and surface both have a section | 160 |
+| of those, outlines **cross** — clearance is exactly zero | **160** |
+| of those, outlines **apart** — a real clearance exists | **0** |
+
+**So Metric A estimates a quantity that is identically zero at every station it can be evaluated
+at.** Every non-zero figure it has ever reported is error. The threshold follows: if the true value
+is zero everywhere, every station is under 0.01 mm and all of them should flag. The scan names only
+fifteen because at the rest the error happened to exceed 0.01 mm. **Its flag list is the list of
+stations where the arithmetic error was smallest**, which is why §6.3.4 finds the flagged stations
+in refinement-pass pairs and why §6.3.5 finds the figure moving by a factor of 2680 with sampling
+alone.
+
+That is the finding. §6.3.5's sampling measurements explain why the reported numbers are arbitrary;
+this explains why there are no right ones to report. The quantity someone would want — how close
+the tool's cut floor comes to the outer surface, which is the finished wall — is §6.3.2's
+distinction, and `wall_thickness()` already measures it.
+
+#### 6.3.1 The geometry, drawn from the model
+
+The scan flags fifteen stations on each cowl kind under 0.01 mm, the worst of them at 81 nm. Read
+off that list, a figure like 81 nm says the fitted interior surface comes within a tenth of a micron
+of a cutting tool: a part that only just survives its own construction.
+
+The two figures below are sections of the two stations that matter most to that reading — the worst
+figure reported, and the only station on either kind the scan calls a real clearance. Neither is a
+near miss. At both the tool has already crossed the fitted surface and is cutting into it, which is
+how a rib is formed. **Neither reported figure is a small clearance, because at neither station is
+there a clearance at all.** That is the finding these figures exist to support, and it is what
+OQ-DES-CW25 turns on.
+
+Reading them takes two facts about how a cavity is built. A cavity is built as a single 45° symmetry
+cell and then mirrored, so a horizontal section of one is a wedge with three sides: the fitted
+interior surface, and two radial planes where the cell was cut away from its neighbors. **Those two
+radial planes are not interior surface.** A buttress rib stands on one of them.
+
+Each sheet shows that wedge on the left. On the right, at 13:1, is a window around the point where
+the fitted surface meets the plane the rib stands on. Both sheets use the same window, so the
+surface sits at the same height in each and the tool is the only thing that moves between them.
+
+![TechDraw cross-section of a nose_cowl_shell at U = 1, station z = -36.9470, the station where the scan reports 0.000081 mm: the 45 degree symmetry cell on the left, and at 13:1 on the right the dilated buttress tool running through the interior surface and 4.251 mm past it into the cavity, with the 0.100 mm slab inside it reaching 3.651 mm in. The two outlines intersect, so the reported figure is not a clearance](img/cowl_rib_cut/cw25_section_crossing.png)
+
+*The worst station, `z` = -36.9470, where the scan reports 0.000081 mm.* The drawing is what is
+actually there. The dilated tool runs through the fitted surface and 4.251 mm past it, into the
+cavity; the 0.100 mm slab inside it reaches 3.651 mm in. That is correct geometry, not a defect:
+§4.2 forms a rib by removing `dilate(B, t)` from the cavity, so the tool belongs exactly where the
+drawing puts it, and the 0.600 mm between the two dimensions is `t`.
+
+What is wrong is the 81 nm. Asked for the exact distance between these two outlines, the kernel
+returns 0.000000000000 mm and finds two points where they cross. The true answer is zero, and the
+scan prints 0.000081 mm.
+
+It cannot print zero. Metric A measures 200 sampled points on the surface's outline against a
+400-segment chord approximation of the tool's, and no sample is a crossing point, so what it
+returns is the nearest sample's leftover. §6.3.5 measures that leftover against sampling density:
+on this geometry, at this station, it ranges from 0.000081 to 0.216 mm and does not converge.
+
+![TechDraw cross-section of the same cowl at station z = -8.0479, the station the scan calls clear: the buttress slab stops 0.409 mm short of the cavity so no rib forms, while the dilated tool's faceted end cap still dips 0.191 mm past the fitted interior surface, which is why no clearance exists here either](img/cowl_rib_cut/cw25_section_clear.png)
+
+*`z` = -8.0479, the one station on either kind the scan calls a real clearance.* It is not one. This
+station is the end of a rib's run: the slab stops 0.409 mm short of the cavity, so no rib forms
+here. But the dilated tool still crosses the fitted surface, by 0.191 mm, and the kernel puts
+0.0606 mm² of its section — 0.04 % — inside the surface. Two outlines that intersect have no
+clearance between them to report.
+
+So the two stations are not a crossing and a clearance. They are a rib and the end of a rib, and the
+dilated tool crosses the fitted surface in both. Across both kinds, 28 of the 30 flagged stations
+are crossings and not one of the 30 is a measured clearance, so what these two sections show is the
+normal case rather than two awkward exceptions.
+
+These are documentation figures rather than released drawings, so they carry no border, no title
+block and no revision block. They are PNG on white, because a TechDraw SVG export has no background
+of its own and renders black-on-black in a dark-themed viewer. Every number in a figure's note block
+is measured from the model by the script that draws it. What they do not yet carry is real
+`DrawViewDimension`s: the two dimension spines are annotation geometry built from the kernel's own
+coordinates, projected in the same view as the geometry they measure, so they are in register but
+are not driven by the projection. IP-FC-153 covers that.
+
+An earlier revision of this section carried hand-drawn SVG figures of the same sections, and they
+are withdrawn. They were polylines emitted from exported coordinates, which is a second
+implementation of projection and owns every error it makes. Two of those errors are worth keeping on
+record, because they are what the method invites. One figure was 0.30 mm across, which made the
+81 nm it claimed to show 0.12 of a pixel. And the TechDraw replacement's own first revision drew
+three overlaid views, each centered on its own extent, which put the three curves 4.2 mm out of
+position relative to each other. A drawing of a clearance that misplaces the things being compared
+is worse than no drawing.
+
+#### 6.3.2 Two questions a reported distance has to pass
+
+A distance from this scan means nothing until two questions are answered, and the distance itself
+answers neither.
+
+**The first is whether it is a clearance at all.** The scan measures outline to outline. That cannot
+tell a tool sitting just clear of the surface from one already cutting into it, because both give a
+positive boundary-to-boundary distance. So the scan also tests the tool section's own points against
+the interior candidate *solid*. That gives three states rather than two:
 
 | state | what the reported figure is |
 | --- | --- |
 | **clear** — no part of the tool's section is inside the surface | a real clearance |
-| **crossing** — part in, part out | zero. The reported figure is the distance from the sampled station to a geometric crossing: a property of where the sampling landed |
+| **crossing** — part in, part out | zero, exactly: the kernel finds the two boundaries intersecting. The reported figure is not that zero but a sampling leftover, and §6.3.5 measures it spanning a factor of 2700 on one station's own geometry |
 | **engulfed** — the whole section is inside the surface | zero, and the cut is removing material along the tool's entire section |
 
-**A dilated tool is supposed to cross.** §4.2's identity forms the rib by removing `dilate(B, t)`
-from the cavity, so a tool that reaches the wall band at all must cross the surface somewhere along
-its run, and every crossing is a station where this metric reads near zero by construction.
+A dilated tool is supposed to cross. §4.2's identity forms the rib by removing `dilate(B, t)` from
+the cavity, so any tool that reaches the wall band must cross the surface somewhere along its run.
+Every crossing is a station where this metric reads near zero by construction.
 
-**(2) If it is a clearance, does it bound the wall?** A buttress tool is a slab — a six-sided or
-rectangular profile extruded through `buttress_cut_thickness` — and only part of its boundary bounds
-the finished wall:
+**The second question is whether a real clearance bounds the wall.** A buttress tool is a slab: a
+six-sided or rectangular profile extruded through `buttress_cut_thickness`. Only part of its
+boundary bounds the finished wall.
 
 | Face | What it bounds |
 | --- | --- |
@@ -1084,41 +1193,47 @@ the finished wall:
 | **end** — the two axial caps | the ends of the slit's run |
 | **outer** — the profile's far edge | nothing. It sits outside the blank entirely and cuts no material |
 
-A floor bounds wall only **where it lies inside the blank**, which is not everywhere: the protected
-core (`cowl_tree.core`, the region the buttress cuts may not enter) splits each long diagonal tool's
-floor into an 8.4 mm² piece inside the blank and a 1.4 mm² piece outside it, and leaves sub-0.02 mm²
-slivers on three of the side tools whose normals read as floor while sitting outside the part
-entirely. Both are genuine faces of the real tool; neither bounds any wall where it sits. So this is
-tested per contact rather than inferred from the role.
+A floor bounds wall only where it lies inside the blank, and that is not everywhere. The protected
+core — `cowl_tree.core`, the region buttress cuts may not enter — splits each long diagonal tool's
+floor into an 8.4 mm² piece inside the blank and a 1.4 mm² piece outside it. Three of the side tools
+carry sub-0.02 mm² slivers whose normals read as floor while sitting outside the part entirely. Both
+are genuine faces of the real tool, and neither bounds any wall where it sits, so this is tested per
+contact rather than inferred from the face's role.
 
-There is a third possibility, and measurement says it is the common one: **the minimum lands on no
-face's own surface at all.** The dilated boundary reproduces each face's offset over that face's own
+There is a third possibility, and measurement says it is the common one: the minimum lands on no
+face's own surface at all. The dilated boundary reproduces each face's offset across that face's own
 extent, but near an edge of the original slab it is whatever the 48 translated copies bridge the
-corner with — so a contact there is not a distance to either adjacent face, and which of the two
-happens to be nearest is an accident of the bridge rather than a fact about the wall.
+corner with. A contact there is not a distance to either adjacent face, and which of the two happens
+to be nearest is an accident of the bridge rather than a fact about the wall.
 
-`tool_face_roles` labels the faces from the geometry rather than from the construction — the slab's
+#### 6.3.3 How each contact is attributed to a face
+
+`tool_face_roles` labels the faces from the geometry rather than from the construction. The slab's
 own normal gives the two cheeks, and the direction from the tool toward the part's `z` axis
-separates floor from far — and `clearance_face_scan` locates each reported minimum, attributes it to
-a face of the **undilated** tool, and answers all three questions above. **The attribution is
-self-checking, and that is what distinguishes a face contact from an edge contact.** Because §9.2's
-structuring element is a horizontal disc, a face with outward normal `n` moves out by exactly
-`t·hypot(n.x, n.y)`; a contact on that face's own dilated image reproduces the figure, and one on a
-bridging facet does not. Measured on the nose, cheek contacts reproduce it exactly — 0.6000 against
-0.6000 — while the contacts the role test called floor read 0.5490 to 0.5524 against a predicted
-0.5901, which is how the edge contacts were found. `FACE_IMAGE_TOL` = 1 % of `t` is the threshold,
-coarse against the section discretisation and twenty times finer than the 0.04 mm discrepancies an
-edge contact actually produces.
+separates floor from outer. `clearance_face_scan` then locates each reported minimum, attributes it
+to a face of the **undilated** tool, and reports which of the cases above the station falls into.
 
-**`Face.Orientation` cannot be used to find a face's outward normal on these tools.** Measured
-2026-10-04 on `tail_shell`'s eleven: every slab reports *both* of its cheeks as `Forward`, so
-flipping the surface normal on that flag returns the same direction for two opposite faces of one
-solid — impossible, and it labelled the cut floor as the far face on all eleven. The outward
-direction is read by stepping off the face and asking the solid which side the point is on, with the
-step kept well inside `buttress_cut_thickness` so it cannot cross to the opposite cheek.
+The attribution checks itself, and that is what separates a face contact from an edge contact.
+§9.2's structuring element is a horizontal disc, so a face with outward normal `n` moves out by
+exactly `t·hypot(n.x, n.y)`. A contact on that face's own dilated image reproduces that figure; a
+contact on a bridging facet does not. Measured on the nose, cheek contacts reproduce it exactly,
+0.6000 against 0.6000, while the contacts the role test called floor read 0.5490 to 0.5524 against a
+predicted 0.5901. That is how the edge contacts were found. The threshold is `FACE_IMAGE_TOL` = 1 %
+of `t`, which is coarse against the section discretization and twenty times finer than the 0.04 mm
+discrepancy an edge contact actually produces.
 
-**Measured 2026-10-04 on both kinds at `U` = 1. Of the 15 stations the scan flags under 0.01 mm on
-each, not one is a distance to anything that bounds the finished wall.**
+`Face.Orientation` cannot be used to find a face's outward normal on these tools. Measured
+2026-10-04 on `tail_shell`'s eleven, every slab reports *both* of its cheeks as `Forward`. Flipping
+the surface normal on that flag therefore returns the same direction for two opposite faces of one
+solid, which is impossible, and it labeled the cut floor as the outer face on all eleven. The
+outward direction is instead read by stepping off the face and asking the solid which side the point
+landed on, with the step kept well inside `buttress_cut_thickness` so it cannot cross to the
+opposite cheek.
+
+#### 6.3.4 What the measurement found
+
+Measured 2026-10-04 on both kinds at `U` = 1. Of the 15 stations the scan flags under 0.01 mm on
+each kind, not one is a distance to anything that bounds the finished wall.
 
 | | `nose_cowl_shell` | `tail_shell` |
 | --- | --- | --- |
@@ -1128,53 +1243,214 @@ each, not one is a distance to anything that bounds the finished wall.**
 | land on a cheek | 7 | 11 |
 | land on no face's own dilated surface | 8 | 4 |
 | **crossing** (no clearance exists) | **14** | **14** |
-| **clear** (a real clearance) | 1 | **0** |
+| **clear** *(as the scan reports it — see the sampling defect above)* | 1 | **0** |
 | **engulfed** (no clearance exists) | 0 | 1 |
 
+The last three rows of that table rest on only four sampled places, for the reason §6.3.5 gives, so
+read them one way and not the other. A point that tests inside really is inside, or within the
+1e-3 mm tolerance of the boundary, which is a tangency and not a clearance either. A reported
+`crossing` therefore stands. A reported `clear` is only the absence of evidence from four places,
+and a reported `engulfed` says only that all four are inside. The 28 crossings stand. The nose's
+single `clear` does not.
+
 - **Zero land on a cut floor, on either kind.** The cheek contacts bound the rib, not the wall. The
-  others have a floor as their nearest face but an offset that disagrees with that floor's own
-  dilated image — 0.5490 to 0.5524 mm against 0.5901 on the nose, 0.5213 to 0.5595 against 0.5560
-  and 0.6000 on the tail — so the contact is on the dilation's treatment of the floor-to-cheek
-  corner and not on the floor itself.
-- **The tail has no genuine clearance at all among the fifteen.** Its one non-crossing station,
-  `z` = -83.7372, is `engulfed`: 100 % of the tool's section lies inside the surface. The nose's one
-  non-crossing station, `z` = -8.0479 at 0.000611 mm, is the only real clearance measured on either
-  kind, and even that one is not a floor contact.
-- **What those contacts sit on is not established.** The offsets match neither the adjacent faces'
+  rest have a floor as their nearest face, but an offset that disagrees with that floor's own
+  dilated image: 0.5490 to 0.5524 mm against 0.5901 on the nose, and 0.5213 to 0.5595 against
+  0.5560 and 0.6000 on the tail. Those contacts sit on the dilation's treatment of the
+  floor-to-cheek corner, not on the floor.
+- **Neither kind has a genuine clearance among its fifteen.** The tail's one non-crossing station,
+  `z` = -83.7372, is `engulfed`: all four sampled places lie inside the surface. The nose's one
+  non-crossing station, `z` = -8.0479 at 0.000611 mm, was recorded here as the only real clearance
+  measured on either kind. It is not one. Sectioned and measured by the kernel — the second figure
+  above — the dilated tool there reaches 0.191 mm past the fitted surface, with 0.0606 mm² of its
+  section inside it. The scan calls it `clear` only because the four places its sampler stands on
+  all miss the end cap that penetrates. So zero of the thirty stations across both kinds is a
+  measured clearance, and none is a floor contact.
+
+  That 0.000611 mm is quoted here as the scan printed it, and it should not be read as a
+  measurement at all. The exact in-plane distance at `z` = -8.0479 is zero: the two boundaries
+  cross, at two points the kernel reports. Re-measured 2026-10-24 on a fresh build at exactly that
+  station, the scan's own method returns 0.000584 mm, and varying only its sampling returns
+  anything from 0.000163 to 0.292392 mm. The two published figures are the same leftover read
+  twice, not two measurements that disagree. §6.3.5 carries the sweep.
+- **What those contacts sit on is not established.** Their offsets match neither the adjacent faces'
   images nor an arc of radius `t` about the shared edge, which would read 0.6000, so the simple
-  corner-arc account of the 48-gon's envelope does not fit them either. What the measurement
-  establishes is the negative: a contact whose offset disagrees with its nearest face's predicted
-  image is not on that face. Identifying the surface they *are* on needs the dilated tool's own face
-  carrying each contact, which has not been recorded.
-- On the nose the flagged stations arrive in pairs about 0.027 mm apart with opposite gap-direction
-  sign — `z` = -34.5506/-34.5774, -39.3934/-39.3665, -27.5384/-27.5115, -36.9470/-36.9702 — which is
-  the refinement pass bracketing one crossing from both sides rather than finding four thin places.
-- **The figures are not reproducible between builds at the same station.** Two `tail_shell` builds
-  at `U` = 1, measured at the identical 15 stations, give 0.000068 and 0.000108 mm at
-  `z` = -66.1661 — 59 % apart — and 0.000282 against 0.000352 mm at `z` = -96.3180. The
-  non-reproducibility previously attributed to Metric B's own defect is present in Metric A too, and
-  follows from the same cause: near a crossing the figure is set by how close the station happens to
-  land, which a rebuilt surface moves.
+  corner-arc account of the 48-gon's envelope does not fit them either. The measurement establishes
+  a negative: a contact whose offset disagrees with its nearest face's predicted image is not on
+  that face. Saying which surface it *is* on needs the dilated tool's own face carrying each
+  contact, which has not been recorded.
+- **The flagged stations on the nose come in pairs**, about 0.027 mm apart and with opposite
+  gap-direction sign: `z` = -34.5506/-34.5774, -39.3934/-39.3665, -27.5384/-27.5115,
+  -36.9470/-36.9702. That is the refinement pass bracketing one crossing from both sides, not four
+  separate thin places.
 
-**Eight of the fifteen figures are smaller than the dilation's own approximation error.** §10 records
-that the 48-gon is inscribed in the disc at `t·cos(π/48)` = 0.99786 `t`, so the dilated boundary
-falls 0.0013 mm short of the true offset at each facet midpoint. The reported minima run from
-0.000081 mm to 0.006470 mm, and the first eight are below that 0.0013 mm: **the scan is resolving
-distances finer than the faceting of the tool it measures against**, which is independent of both
-questions above and true of the figures that pass them.
+#### 6.3.5 Limits on the instrument
 
-**One caution on the containment figure itself.** It is tested with a 1e-3 mm tolerance and boundary
-points counted as inside, so a station reading a few percent inside is at or very near the tangency
-rather than deep past it. That does not change the reading — at or near a crossing there is still no
-clearance to measure — but a `fraction_inside` of 0.8 % is not a 0.8 % bite.
+Four limits apply to every figure this scan reports. The first decides what the others are worth,
+and was found last, on 2026-10-24.
 
-**Not measured.** The single worst clearance on record, 60 nm at `z` = -134.498, came from a
-`tail_shell` build above `U` = 1 and is not re-measured here. The crossing mechanism is a property of
-§4.2's identity rather than of scale, so there is no reason to expect it to differ there — but that
-is an expectation, not a measurement.
+**1. At a crossing station the exact distance is zero, and the scan cannot return zero.** Asked
+for the distance between the two section boundaries at `z` = -36.9470, `Shape.distToShape` returns
+0.000000000000 mm, and `Shape.section` finds two points where they intersect. The same holds at
+`z` = -8.0479. Metric A instead samples: `_min_wire_distance` discretizes the surface's outline to
+200 points and the tool's to a 400-segment chord approximation, and takes the least point-to-chord
+distance. No sample is a crossing point, so the figure it returns is the nearest sample's leftover.
 
-Whether the metric is kept at all is [OQ-DES-CW25](cowl.md#open-questions), and §10 carries what
-remains unestablished about it.
+**That leftover does not converge, and it decides the flag.** Measured on one build, one station,
+with only the sampling changed:
+
+| surface points / tool segments | Metric A | against `CLEARANCE_MARGIN_MM` = 0.01 mm |
+| --- | --- | --- |
+| 100 / 200 | 0.216054 mm | not flagged |
+| 150 / 300 | 0.118449 mm | not flagged |
+| **200 / 400** — as shipped | **0.000081 mm** | **flagged** |
+| 250 / 500 | 0.039903 mm | not flagged |
+| 300 / 600 | 0.000557 mm | flagged |
+| 400 / 800 | 0.027226 mm | not flagged |
+| 600 / 1200 | 0.054105 mm | not flagged |
+| 1000 / 2000 | 0.039360 mm | not flagged |
+| 2000 / 4000 | 0.015543 mm | not flagged |
+| 5000 / 10000 | 0.008207 mm | flagged |
+| 20000 / 40000 | 0.001161 mm | flagged |
+
+**None of those eleven readings is correct.** The correct value is 0.000000 mm, and it appears
+nowhere in the column. 0.216054 is not right and 0.000081 is not right; they are wrong by 0.216 mm
+and by 81 nm respectively. A larger point count is less wrong, because the error falls roughly with
+the point spacing, but it never becomes right — the method cannot produce zero at all. So "the
+value changes with sampling" is not a precision complaint. It means there is no setting at which
+the number is the answer, and no way to tell from the number which setting produced it.
+
+The figure spans a factor of 2680 on geometry that never changed, crosses the threshold in both
+directions as sampling is refined, and shows no trend toward the exact zero. At `z` = -8.0479 the
+same sweep runs from 0.000163 to 0.292392 mm, a factor of 1792, and flips the flag the same way.
+**So a flagged station is not a fact about the part. It is a fact about where the sample points
+fell.**
+
+Two converses were tested and both come back negative, so the cause is the sampling itself and not
+a known defect of it. Neither wire degenerates under `discretize` at any count used here: the
+surface's 3-edge outline returns 199, 399, 1999 and 19999 distinct points covering 99.8 % to
+100.0 % of its 159.362 mm perimeter, and the tool's 100-edge outline returns 399, 799, 3999 and
+39999 distinct points covering 99.5 % to 100.0 % of its 214.301 mm. So this is not the `Number`
+= 120 degeneracy of limit 2. Nor is the shipped 200/400 reading merely coarse — it is the third
+*smallest* of the eleven, three hundred times below its neighbors, which is why it flags.
+
+**Is it simply too coarse near the buttress?** Next to the features it has to resolve, the sampling
+is coarse: the cavity outline is 159.362 mm around and gets 200 points, so **0.797 mm between
+points**, while the dilated tool is only **1.300 mm wide** — one or two point-gaps across the whole
+tool — and the 400 chords on the tool are 0.536 mm each against an end-cap facet of 0.0785 mm. But
+refining it does not rescue the metric, for two reasons, and the second is the one that settles it.
+
+The first is that no density reaches the answer. The figure falls roughly as the point spacing
+does, and at 20000/40000 it still reads 0.001161 mm against an exact zero.
+
+The second is that **the scan reports the smallest readings it can find, and at a crossing those
+are a scatter.** Walking 2.0 mm along a rib's run in 0.020 mm steps, 101 stations:
+
+| | |
+| --- | --- |
+| stations whose exact gap is zero | **101 of 101** |
+| Metric A across them | 0.000965 to 0.052888 mm, median 0.047232 |
+| under the 0.01 mm line | **8 of 101 — 8 %** |
+
+The tool is through the surface at every one of those stations, so the true answer is zero at every
+one. Metric A instead returns a spread of two orders of magnitude, and 8 % of it falls under the
+warning line by where the points landed. `clearance_margin_scan` then refines toward the minimum
+and reports the 15 smallest, which is a search for the luckiest sample rather than the tightest
+place: the eight smallest readings above all lie between `z` = -36.88 and -37.02, which is where
+the refinement pass went. That is also why §6.3.4's flagged stations come in pairs about 0.027 mm
+apart.
+
+**A withdrawn explanation.** Until 2026-10-24 this section and the figures said the reported figure
+was "the distance from the sampled station to a geometric crossing." That is refuted: if it were,
+refining the sampling at a fixed station would reproduce it, and instead it moves from 0.000081 to
+0.027226 mm between 200 and 400 points. Moving the station does change the figure smoothly —
+±0.05 mm gives 0.006218 and 0.006410 mm, ±0.00005 mm gives 0.000074 and 0.000087 mm — but that is
+the sample points moving with the section, not a distance to anything.
+
+**And even a perfect measurement would say nothing here.** A converged Metric A would read zero at
+all 28 crossing stations, which is already guaranteed by §4.2: the dilated tool has to pass through
+the surface or no rib forms. The metric asks how wide the gap is at places where, by construction,
+there is no gap.
+
+**The defect is contained to this scan.** `_min_wire_distance` and `_min_wire_contact` have two
+call sites between them, `tool_clearance_ranked` and `clearance_face_scan`, both inside the opt-in
+clearance scan. No build validity check reads either. `clearance_sheet.py` reproduces the sweep
+above from the library, so the numbers here are re-derivable rather than quoted.
+
+**2. The engagement sampler stands at four places, not at 120.** `clearance_face_scan` classifies a
+station by testing `wire.discretize(Number=CROSSING_SAMPLES)` points of the tool's section against
+the interior candidate solid. With `CROSSING_SAMPLES` = 120, on the dilated tool's section at
+`z` = -36.9470 — 100 edges, 214.301 mm around — that call returns 125 points standing at four
+places on one cheek. (Nine are distinct at 1e-5 mm resolution; the extras sit within 2 µm of those
+four.) Together they span 5.399 mm of the 214.301 mm perimeter: 2.5 % of it, at one end, on one
+side. The tool's two rounded end caps get nothing. The cap is the only part of the tool that
+penetrates at `z` = -8.0479, which is why that station reads `clear` while the kernel finds
+0.0606 mm² of it inside the surface.
+
+Those same four places also produce `fraction_inside`. Three of them are inside the surface at
+`z` = -36.9470, so the scan reports 94/125 = 75.2 %. Re-sampled by arc length at 0.010 mm the
+figure is 2.29 %, which agrees with the kernel's own area ratio, 2.673/137.246 = 1.95 %. The 75.2 %
+was published in an earlier revision of this section and is withdrawn, and so is the quantity:
+`fraction_inside` says where four points fell, not how much of the tool is inside. An older caution
+about it still holds and is now secondary — the test uses a 1e-3 mm tolerance and counts boundary
+points as inside, so even a sound reading of a few percent is a tangency rather than a deep bite.
+
+What causes the degeneracy is not established, and the obvious explanation is refuted. The first
+account recorded for it was that `discretize` allocates per edge and so lands most samples on the
+faceted end. That is wrong in its own predicted direction: no sample lands there at all. Nor is it a
+property of multi-edge wires. The converse was tested two ways. The same wire at `Number` = 200 and
+400 returns 199 and 399 distinct points spread over the whole perimeter, and a synthetic wire of the
+same shape — two long parallel sides, 48-facet end caps, 98 edges, no cowl involved — is healthy at
+120, 200 and 400. What is established is therefore narrower than "many short edges break
+`discretize`": this section, at this one `Number`, degenerates.
+
+*This* defect reaches the classification and not the distance. The three engagement states come
+from that `Number` = 120 call. Metric A's own figure comes from `_min_wire_contact`, which samples
+at `Number` = 200 and 400, both measured healthy on this wire. IP-FC-154 carries the repair. This
+paragraph used to end "so the reported distances are not affected", which was wrong and is
+withdrawn: the distances are affected, by limit 1, which is a different mechanism from this one.
+
+**3. Eight of the fifteen figures are smaller than the dilation's own approximation error.** §10
+records that the 48-gon is inscribed in the disc at `t·cos(π/48)` = 0.99786 `t`, so the dilated
+boundary falls 0.0013 mm short of the true offset at each facet midpoint. The reported minima run
+from 0.000081 mm to 0.006470 mm, and the first eight are below that 0.0013 mm. The scan is
+resolving distances finer than the faceting of the tool it measures against. That is independent of
+both questions in §6.3.2, and true of the figures that pass them.
+
+**4. The figures are not reproducible between builds at the same station.** Two `tail_shell` builds at
+`U` = 1, measured at the identical 15 stations, give 0.000068 and 0.000108 mm at `z` = -66.1661,
+which is 59 % apart, and 0.000282 against 0.000352 mm at `z` = -96.3180. The non-reproducibility
+previously attributed to Metric B's own defect is present in Metric A too, and follows from the same
+cause: near a crossing the figure is set by how close the station happens to land, and a rebuilt
+surface moves it.
+
+That is limit 1 seen from a different angle, and not a separate effect. A rebuilt surface moves the
+section a little; the sample points move with it; the leftover they produce changes. The same
+applies to the 0.000611 against 0.000584 mm in §6.3.4, which is one leftover read twice rather than
+two measurements that disagree.
+
+One figure has not been re-measured. The single worst clearance on record, 60 nm at `z` = -134.498,
+came from a `tail_shell` build above `U` = 1. The crossing mechanism is a property of §4.2's
+identity rather than of scale, so there is no reason to expect it to differ there, but that is an
+expectation and not a measurement.
+
+#### 6.3.6 Why the quantity is called "Metric A"
+
+The name is historical. The scan once reported two numbers side by side: Metric A, and a companion
+"Metric B" that was the ratio between the two nearest tools' clearances and was described as a
+crowding signal. Metric B was retired outright under [OQ-DES-CW24](cowl.md#open-questions), because
+it compared each tool's distance to the *surface* and never the tools' positions to each other, so
+it could not represent the idea it was named after. It no longer exists anywhere in the code, and
+`clearance_margin_scan` returns `(z, metric_a)` pairs. Only the `metric_a` key in the scan's own
+rows still carries the name.
+
+Read the name as a label for the quantity defined at the top of this section, and nothing more. In
+particular it is not a wall thickness. That description was withdrawn under
+[OQ-DES-CW24](cowl.md#open-questions), and §6.3.4 refutes it.
+
+Whether the metric is kept at all is
+[OQ-DES-CW25](cowl.md#oq-des-cw25--does-metric-a-measure-the-face-that-bounds-the-wall-and-should-it-be-kept-at-all),
+and §10 carries what remains unestablished about it.
 
 ### 6.4 Which measure reads the wall, and what it says the wall is
 
@@ -1672,9 +1948,9 @@ that `dilate(B, t)` is wrong where the diagonals cluster: a disc dilation rounds
 **Two parts of that are ruled out by arithmetic, before any measurement.**
 
 - **Faceting is 0.0013 mm.** `dilated_notches` builds the dilation as a union of `RIB_FACETS` = 48
-  translates on a circle of radius `t`, so a true offset point whose direction falls between two
-  translates is still covered unless the tool's own boundary turns away from it; at a sharp convex
-  corner the chord sags by `t(1 - cos(π/48))` = 0.00128 mm. That is twenty-five times smaller than
+  translates on a circle of radius `t` (§9.2), so a true offset point whose direction falls between
+  two translates is still covered unless the tool's own boundary turns away from it; at a sharp
+  convex corner the chord sags by `t(1 - cos(π/48))` = 0.00128 mm. That is twenty-five times smaller than
   the thinning. The *gross* faceting mode is a different thing and is guarded: at `RIB_FACETS` = 24
   adjacent copies stop overlapping, and the measured result was 0.1035 mm of wall where 0.6 was
   wanted, which `dilated_notches` now refuses with `PreconditionFailed`.
@@ -3125,10 +3401,35 @@ per station in two. The crease is then a boolean edge, which is what it is on th
 
 Following from §9.1: dilating a *solid* invites a solid offset, and a solid offset grows the
 notch by `t` in every direction including along the surface normal, which would take `t` of wall
-off the ends of every rib. The dilation is done by sweeping the notch solid around a **horizontal
+off the ends of every rib. The dilation instead moves the notch solid around a **horizontal
 circle** of radius `t`, so the growth is in the layer plane and nowhere else. Perimeter width is
 an in-plane measurement, so both halves of the identity have to be in-plane — this is the same
 requirement §6's first row states for the wall, applied to the tool.
+
+**The circle is sampled, not swept.** `dilated_notches` builds the dilated tool as the union of
+`RIB_FACETS` = 48 copies of the notch solid, each translated by `t` in a horizontal direction, at
+2π/48 intervals. Two consequences follow, and both are visible in §6.3's figures.
+
+Where the tool's boundary is flat, the copies overlap heavily and the union's boundary is simply
+the outermost translate. A face with outward normal `n` therefore moves out by exactly
+`t·hypot(n.x, n.y)`, which is the prediction §6.3.3 checks each contact against.
+
+Where the boundary turns through a sharp edge — the end of a slab, which is a derivative
+discontinuity — no single copy reaches past the corner. Each of the 48 copies instead puts its own
+corner at a different point on a circle of radius `t`, and the union's boundary runs through those
+48 points. **So the rounded end that a dilation is expected to produce comes out as a 48-sided
+polygon rather than an arc.** That is why the tool's end cap is visibly faceted in §6.3's detail
+view, and why a tool section carries about 49 sub-0.2 mm edges at each end against two cheeks of
+104.65 mm. The chord sags `t(1 − cos(π/48))` = 0.00128 mm inside the true arc.
+
+**48 is a solidity floor, not a smoothness setting.** Adjacent copies sit `2·t·sin(π/48)` =
+0.0785 mm apart, and their union is a connected solid only while that spacing is smaller than the
+slab's own in-plane thickness, which is 0.100 mm for an axial cut. At `RIB_FACETS` = 24 the
+spacing is 0.157 mm, the copies stop touching, and the dilated tool is a comb with gaps in it.
+Measured on the tail at `U` = 1, that built a wall of 22 348.60 mm³ against about 23 680, with two
+stations reporting 0.1035 mm of wall where 0.6 mm was wanted. `dilated_notches` now refuses that
+case with `PreconditionFailed` instead of building it. That refusal is what §6.2 and §10 mean when
+they say a configuration is unreachable: three of §10's own screening cases are turned away by it.
 
 ### 9.3 Fitting spacing and checking spacing are two different numbers
 
@@ -3623,7 +3924,14 @@ case is untried" — it says "the numbers you already have mean less than they a
   and at one reproduced failure both metrics pass. **Metric A** stays opt-in and flag-only at
   0.01 mm as a rib-cut clearance diagnostic, with its wall-thickness description withdrawn; whether
   it is kept at all depends on a measurement not yet taken, which is
-  [OQ-DES-CW25](cowl.md#open-questions).
+  [OQ-DES-CW25](cowl.md#open-questions). **And the engagement classification that qualifies every
+  reported figure is itself unsound** (IP-FC-154, measured 2026-10-18). Each station's
+  `clear`/`crossing`/`engulfed` state is decided by `discretize(Number=120)` on the tool's section,
+  which on that section returns 125 points standing at four places covering 2.5 % of its perimeter
+  with both end caps unsampled. The error is one-sided, so a reported `crossing` stands — but a
+  reported `clear` is only the absence of evidence from four points, and the one station recorded
+  as a real clearance is, measured by the kernel, a crossing. Metric A's own *distance* is not
+  affected: it is sampled at `Number` = 200 and 400, both measured healthy on the same wire.
 
 - **Every wall-thickness figure in this document is in-plane, and the wall is inclined to the
   plane** (IP-WTM-26, measured 2026-10-15). The acceptance gate, both of
