@@ -53,7 +53,7 @@ def revolve(points):
 def wedge(p):
     """The half-space that interrupts the snap groove, so the socket has a mouth.
 
-    A 2D polygon extruded centred on z, then rotated -45 degrees -- the same diagonal the
+    A 2D polygon extruded centered on z, then rotated -45 degrees -- the same diagonal the
     profile is mirrored across, so the mouth opens along the corner's plane of symmetry.
     """
     depth = through_cut(p.bulkhead_thickness)

@@ -186,7 +186,7 @@ module bulkhead_section(make_web, is_interconnect, is_cowling, unit_width, bulkh
         // Longeron opening cutout: the mouth the longeron snaps in through, which is
         // what makes the greeble a C rather than a closed ring. greeble_opening_angle is
         // a HALF-angle -- the vertices below sit at 45-a and 45+a, so a=35 removes 70
-        // degrees centred on the diagonal. The chord across that mouth is 57% of the
+        // degrees centered on the diagonal. The chord across that mouth is 57% of the
         // tube diameter, so the tube spreads the arms and snaps home rather than
         // dropping through. The angle was arrived at by experiment; it is tuned, not
         // derived. See doc/design/bulkhead.md.

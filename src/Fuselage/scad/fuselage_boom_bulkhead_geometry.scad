@@ -138,7 +138,7 @@ module boom_web_inner_shape(unit_width, corner_radius, panel_thickness, panel_to
 // and reading that pair is what makes the direct form obvious. `fillet_inner` is an *opening*
 // clipped to its input, so it rounds the tab's two **convex** top corners; `fillet_outer` is a
 // *closing* unioned with its input, so it fills the two **concave** junctions where the tab
-// side meets the collet. That is four arcs of one radius at four computable centres, and
+// side meets the collet. That is four arcs of one radius at four computable centers, and
 // nothing else. Written directly, the radius is a dimension rather than the by-product of six
 // chained offsets, and it does not degrade where features crowd.
 //
@@ -193,7 +193,7 @@ module boom_key_profile(collet_radius, key_width, key_height, radius) {
             square([key_width, y_top - radius], center=false);
         }
 
-        // those corners: the hull of the two arc centres is the rounded cap, exactly
+        // those corners: the hull of the two arc centers is the rounded cap, exactly
         hull() {
             translate([ a - radius, y_top - radius]) { circle(r = radius); }
             translate([-a + radius, y_top - radius]) { circle(r = radius); }
@@ -207,7 +207,7 @@ module boom_key_profile(collet_radius, key_width, key_height, radius) {
 // The gusset filling one tab-to-collet junction.
 //
 // The fillet arc is tangent to the collet externally and to the tab side, which puts its
-// centre at distance `collet_radius + radius` from the collet centre and `radius` clear of
+// center at distance `collet_radius + radius` from the collet center and `radius` clear of
 // the side — so at (a + radius, yc), with yc from Pythagoras. The gusset is everything in the
 // notch *outside* that arc.
 //

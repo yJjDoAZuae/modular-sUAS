@@ -1367,7 +1367,7 @@ def test_render_queue_refuse_records_an_unported_part_as_a_failure():
 
 
 def test_render_queue_refuse_does_not_raise_even_with_fail_fast_true(capsys):
-    """A refusal is expected, catalogued porting debt, not a build failure -- fail_fast
+    """A refusal is expected, cataloged porting debt, not a build failure -- fail_fast
     governs failed renders, not refusals, on purpose (see refuse()'s own docstring)."""
     q = fv.RenderQueue(workers=1, fail_fast=True)
     for i in range(3):

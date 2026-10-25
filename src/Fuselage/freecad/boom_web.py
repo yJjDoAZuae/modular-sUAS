@@ -1,7 +1,7 @@
 """IP-FC-12: the boom bulkhead's web spine and the shapes offset from it.
 
-`upper_boom_support_centerline_shape` is a **centreline**, not an outline -- the web is what
-you get by stroking it to `web_width`, exactly as a road is a centreline stroked to its width.
+`upper_boom_support_centerline_shape` is a **centerline**, not an outline -- the web is what
+you get by stroking it to `web_width`, exactly as a road is a centerline stroked to its width.
 So the port is one sketch and then offsets: `offset(+web_width/2)` gives the web, and
 `offset(-web_width/2)` gives the region inside it that later becomes lightening.
 
@@ -13,7 +13,7 @@ a function of the sheet. A fully constrained `Sketcher::SketchObject` with each 
 an expression-driven DistanceX/DistanceY is the parametric equivalent, and it is what
 `corner_tree._sketch` already does for the corner's profiles.
 
-**Its first two vertices coincide whenever the boom is on the centreline.** The source writes
+**Its first two vertices coincide whenever the boom is on the centerline.** The source writes
 `[0, z]` then `[y, z]`, which is a zero-length edge at `boom_y_position = 0` -- harmless in
 OpenSCAD, and an unsolvable sketch here. Two of the three swept boom types (`offset_single`,
 `center_single`) sit at `y = 0` and the third (`dual`) does not, so this is a real topology
@@ -69,19 +69,19 @@ def sheet(doc, seed=None):
     return build_sheet(doc, PARAMS, seed)
 
 
-def _on_centreline(doc):
+def _on_centerline(doc):
     """True when the spine's first two vertices coincide, so the sketch needs six not seven."""
     return abs(float(doc.getObject('Params').get('boom_y_position'))) < 1e-12
 
 
 def spine(doc, tag='', z=P + 'boom_z_position'):
-    """The seven-vertex centreline, fully constrained from the sheet.
+    """The seven-vertex centerline, fully constrained from the sheet.
 
     `z` is the one input the lower web changes -- the source evaluates it at
     `-boom_z_position`. The three `cl_*` turning values are frame dimensions and do not move
     with the boom, so they are read straight from the sheet in both evaluations.
     """
-    flat = _on_centreline(doc)
+    flat = _on_centerline(doc)
     y = P + 'boom_y_position'
     # (seed x, seed y, x expression, y expression)
     verts = [(0.0, 25.0, '0', z)]
@@ -147,7 +147,7 @@ def main():
     print('  %s' % ('all shapes agree' if ok else 'MISMATCH -- see checks above'))
     print('  spine vertices: %d (%s)'
           % (tips['centerline'].Shape.Wires[0].Edges.__len__(),
-             'boom on the centreline' if _on_centreline(doc) else 'boom offset in y'))
+             'boom on the centerline' if _on_centerline(doc) else 'boom offset in y'))
     return 0 if ok else 1
 
 

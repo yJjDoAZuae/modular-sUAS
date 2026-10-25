@@ -120,7 +120,7 @@ class TestTheHarnessRejectsWhatItShould:
 
     def test_a_drifting_measure_fails_convergence_even_with_small_steps(self, synthetic):
         """G2's second condition. A measure moving 0.0009 mm per doubling forever has small steps
-        and has not converged, which is the incumbent's actual behaviour."""
+        and has not converged, which is the incumbent's actual behavior."""
         fixtures, src = synthetic
         state = {'n': 0}
 

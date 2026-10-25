@@ -69,7 +69,7 @@ def encode(value):
 
     Dataclasses become dicts in *field declaration order*, not alphabetical: a field
     reordering is a real change to a positional cross-language contract, so it should
-    show up as a difference rather than be normalised away.
+    show up as a difference rather than be normalized away.
 
     Enums become "TypeName.MEMBER" rather than their value, so that renumbering an enum
     is visible and renaming a member is visible, which `repr()` alone would not give.

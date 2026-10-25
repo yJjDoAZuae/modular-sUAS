@@ -70,7 +70,7 @@ class TestTheTruthModel:
             got = t.true_thickness_at(r * math.cos(ang), r * math.sin(ang), 10.0)
             assert got == pytest.approx(0.45), r
 
-    def test_a_feature_not_centred_on_the_x_axis_is_still_found(self):
+    def test_a_feature_not_centered_on_the_x_axis_is_still_found(self):
         f = {'kind': 'thin', 'thickness': 0.45, 'depth': 0.15, 'surface': 'outer', 'delta': -0.15,
              'z_lo': 8.0, 'z_hi': 12.0, 'half_angle': 0.03, 'arc': 0.6,
              'angle': math.pi / 2.0, 'z_mid': 10.0}
@@ -235,8 +235,8 @@ class TestTheFixturesAreWhatTheyClaim:
         assert r_in[outside].max() == pytest.approx(truth.R_OUTER - truth.WALL, abs=2e-3)
 
     def test_the_patch_has_the_arc_length_it_claims(self, patched, App):
-        """Gate G1 is stated in millimetres along the section, so the fixture's arc has to be that
-        length in millimetres and not merely some angle."""
+        """Gate G1 is stated in millimeters along the section, so the fixture's arc has to be that
+        length in millimeters and not merely some angle."""
         f = patched.features[0]
         outer, _inner = sections.station_loops(patched.shape, f['z_mid'], 4000, App=App)
         r = np.hypot(outer[:, 0], outer[:, 1])

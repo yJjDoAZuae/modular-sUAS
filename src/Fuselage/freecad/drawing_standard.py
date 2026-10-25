@@ -151,7 +151,7 @@ TABLE_ROW_CLEARANCE_HEIGHTS = 0.25
 # The same requirement on the other axis, and it had the same hole. `column_width_mm` returned
 # exactly the width of the widest string a column prints, so the widest value in every column
 # ran from one rule to the other with nothing between: measured 2026-09-07, all thirteen
-# columns of the bulkhead table came out width == need, to the millimetre, and `0.75` in the
+# columns of the bulkhead table came out width == need, to the millimeter, and `0.75` in the
 # `U` column drew across its own left-hand rule. A cell needs white space beside it for the
 # same reason a row needs white space above it -- the rule is 0.76 mm of ink, and a gap
 # narrower than that does not read as a gap.
@@ -242,7 +242,7 @@ UNITS_PER_EM = 2048
 # Every width here is an advance in design units, and an advance is a fraction *of the em*.
 # Multiplying it by `h` therefore under-measures every string by that same 33% -- which is why
 # the first rendered sheets had a value table whose columns were a third too narrow for their
-# own contents, numbers lapping over the rules and headings running into their neighbours.
+# own contents, numbers lapping over the rules and headings running into their neighbors.
 # `osifont` declares no `sCapHeight`, so the ascender is the metric to use, and it is pinned
 # and re-checked like the advances beside it.
 TYPO_ASCENDER_UNITS = 1542
@@ -422,12 +422,12 @@ def frame_region_mm():
 # rules -- is narrow.
 #
 # **These are not properties of the drawing document, and that is the trap.** Line weight,
-# dimension text size and hole centre marks live on TechDraw's *view providers*, which are Gui
+# dimension text size and hole center marks live on TechDraw's *view providers*, which are Gui
 # objects. The sheets are built by `freecadcmd`, which has none, so an `.FCStd` from this
 # project carries no appearance at all and whatever opens it supplies the lot from compiled-in
 # defaults. Measured 2026-09-07, those defaults are: every view drawn at **0.7 mm** including
 # the value table's rules, dimension text at **5.0 mm** against the 3.5 this standard sets,
-# and `ArcCenterMarks` **off**, so not one hole on any sheet had a centre mark. None of that
+# and `ArcCenterMarks` **off**, so not one hole on any sheet had a center mark. None of that
 # was chosen; all of it was inherited. `freecad/render_pages.py` applies this table before it
 # builds the page scene, which is the only moment at which these objects exist.
 WIDE_LINE_MM = 0.5
@@ -461,7 +461,7 @@ def view_appearance(name=None):
             # **Off, and the marks are drawn instead.** `ArcCenterMarks` is one switch for the
             # whole view: it marks every arc the projection produced, which on a bulkhead means
             # every fillet and every lead-in as well as the four bores and the four bolts. A
-            # centre mark asserts an axis a feature is located from, and a fillet has no such
+            # center mark asserts an axis a feature is located from, and a fillet has no such
             # axis -- the marks on them are noise sitting exactly where the located features
             # are, which is the worst place for it. There is no per-arc control, so the switch
             # goes off and `sheet_annotations` names the axes that get one.
@@ -470,14 +470,14 @@ def view_appearance(name=None):
 
 
 # ---------------------------------------------------------------------------------------
-# Construction geometry: centre marks, centre lines, and the outlines of adjacent parts
+# Construction geometry: center marks, center lines, and the outlines of adjacent parts
 # ---------------------------------------------------------------------------------------
 #
 # **These are cosmetic edges, and a cosmetic edge carries its own format in the document.**
 # That is the whole reason this is possible headlessly. Line weight on a *view* is a
 # view-provider property and a document built by `freecadcmd` has none -- which is why
 # `view_appearance` above exists and has to be applied by the renderer. A cosmetic edge's
-# style, weight, colour and visibility live in the edge itself, in the saved file, so
+# style, weight, color and visibility live in the edge itself, in the saved file, so
 # construction geometry drawn here looks the same wherever the page is opened.
 #
 # Verified 2026-09-07 against FreeCAD 1.1.3: `CosmeticEdge.Format` is a dict with the keys
@@ -488,7 +488,7 @@ def view_appearance(name=None):
 LINE_CONTINUOUS = 1
 LINE_DASHED = 2
 LINE_DOTTED = 3
-#: Long-dash dotted: ISO 128 type G, the centre line.
+#: Long-dash dotted: ISO 128 type G, the center line.
 LINE_CENTER = 4
 #: Long-dash double-dotted: ISO 128 type K, which is what an adjacent part is drawn in.
 LINE_PHANTOM = 5
@@ -498,24 +498,24 @@ LINE_PHANTOM = 5
 #: a monochrome plot, and not by being grey, which does not.
 CONSTRUCTION_COLOR = (0.0, 0.0, 0.0, 1.0)
 
-#: How far a centre mark's arms reach past the feature they mark, as a fraction of its radius.
+#: How far a center mark's arms reach past the feature they mark, as a fraction of its radius.
 #: ISO 128 draws them a short way clear of the circle so the cross reads as belonging to it
 #: rather than as part of it.
 CENTER_MARK_OVERRUN = 1.35
 
-#: How far a centre line runs past the geometry it is an axis of, in text heights. Enough to
+#: How far a center line runs past the geometry it is an axis of, in text heights. Enough to
 #: read as a line rather than as a scratch, and short enough not to reach the frame.
 CENTER_LINE_OVERRUN_HEIGHTS = 1.5
 
 
 def center_mark_format():
-    """The format a centre mark's arms are drawn in.
+    """The format a center mark's arms are drawn in.
 
     **Continuous, not dash-dotted, and the reason is the scale the arms come out at.** A mark
     is a short cross -- a bore of R2.05 gives arms 2.77 mm long in the model, which at the
     bulkhead's 1:2 is 1.4 mm on the paper. A long-dash dotted pattern needs several
-    millimetres to read as a pattern; below that it renders as a dot, a gap, or nothing at
-    all, and a centre mark that sometimes disappears is worse than none. The long lines --
+    millimeters to read as a pattern; below that it renders as a dot, a gap, or nothing at
+    all, and a center mark that sometimes disappears is worse than none. The long lines --
     the symmetry axes, where the pattern is what distinguishes an axis from an edge -- get
     the dashes.
     """
@@ -779,7 +779,7 @@ def table_rows_available(text_height_mm=None):
 
     **Width, not depth, is where this sheet is actually tight**, and it is a cliff rather than
     a slope: the band placement needs `block + gutter + table` inside the frame, which leaves
-    **12.0 mm** of table width spare. Two millimetres past that the layout falls back to a
+    **12.0 mm** of table width spare. Two millimeters past that the layout falls back to a
     column and the view collapses from 75.4 % to **45.3 %**.
     """
     height = TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
@@ -873,7 +873,7 @@ def mm_from_units(units, text_height_mm=TEXT_HEIGHT_MM):
     `text_height_mm` is a **cap height**, which is what a drawing standard means by a text
     height and what TechDraw renders it as. An advance is a fraction of the *em*, and the em
     is `EM_PER_TEXT_HEIGHT` times taller than the cap, so that factor belongs here -- once,
-    at the single point where design units become millimetres, rather than at each of the
+    at the single point where design units become millimeters, rather than at each of the
     three callers that would each be a chance to forget it.
     """
     return units / float(UNITS_PER_EM) * text_height_mm * EM_PER_TEXT_HEIGHT

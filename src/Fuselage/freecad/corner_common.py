@@ -89,7 +89,7 @@ class Params(object):
 
 
 def through_cut(extent):
-    """Length for a *centred* cutting solid that must pass entirely through `extent`."""
+    """Length for a *centered* cutting solid that must pass entirely through `extent`."""
     return 3.0 * extent
 
 

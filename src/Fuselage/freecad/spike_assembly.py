@@ -106,7 +106,7 @@ def build(doc):
     # comes back empty, the function falls through to its whole-part branch and returns the
     # identity placement, so both joint coordinate systems sit at the part origins. The
     # solve then succeeds, reports convergence, and mates the two origins: a wrong answer
-    # that looks exactly like a right one. Naming the face twice selects its centre of
+    # that looks exactly like a right one. Naming the face twice selects its center of
     # gravity, which is what a scripted assembly wants, having no click to offer.
     #
     # Referenced as (part, [...]) and not (assembly, ['BoxA.Face2', ...]). The path form
@@ -114,14 +114,14 @@ def build(doc):
     # assembly -- "The graph must be a DAG", and the joint stays touched after every
     # recompute. The path form is for reaching into a nested sub-assembly.
     _joint(doc, assembly, 'FixA_B', 'Fixed',
-           (a, ['Face2', 'Face2']),       # +x face of the grounded box, at its centre
+           (a, ['Face2', 'Face2']),       # +x face of the grounded box, at its center
            (b, ['Face1', 'Face1']))       # -x face of the free box
     doc.recompute()
     return assembly, a, b
 
 
-def _face_centre(part, index):
-    """A face's centre in assembly coordinates -- the shape's own, with its placement on."""
+def _face_center(part, index):
+    """A face's center in assembly coordinates -- the shape's own, with its placement on."""
     return part.Shape.Faces[index].CenterOfGravity
 
 
@@ -139,8 +139,8 @@ def main():
     doc.recompute()
     after = b.Placement.Base
 
-    mated_a = _face_centre(a, 1)       # Face2
-    mated_b = _face_centre(b, 0)       # Face1
+    mated_a = _face_center(a, 1)       # Face2
+    mated_b = _face_center(b, 0)       # Face1
     gap = (mated_a - mated_b).Length
 
     print('SPIKE:: Assembly under freecadcmd')
@@ -149,7 +149,7 @@ def main():
     print('  BoxB placed at      %s' % (start.Base,))
     print('  BoxB after build    %s  (setJointConnectors solves)' % (after_build,))
     print('  BoxB after solve    %s' % (after,))
-    print('  mated face centres  %s  and  %s' % (mated_a, mated_b))
+    print('  mated face centers  %s  and  %s' % (mated_a, mated_b))
     print('  gap between them    %.9f mm' % gap)
 
     fail = []

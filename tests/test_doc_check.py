@@ -53,9 +53,9 @@ def test_slug_lowercases_and_drops_punctuation():
 # ------------------------------------------------------------
 
 def test_strip_code_blanks_spans_but_keeps_line_numbers():
-    text = 'one\n`artefact_fraction` two\nthree'
+    text = 'one\n`a_british_artefact_name` two\nthree'
     out = dc.strip_code(text)
-    assert 'artefact_fraction' not in out
+    assert 'a_british_artefact_name' not in out
     assert out.count('\n') == text.count('\n')
 
 
@@ -399,7 +399,8 @@ def test_fix_spelling_preserves_case():
 
 
 def test_fix_spelling_leaves_code_spans_alone():
-    assert dc.fix_spelling('`artefact_fraction` is a name') == ('`artefact_fraction` is a name', 0)
+    assert dc.fix_spelling('`a_british_artefact_name` here') == (
+        '`a_british_artefact_name` here', 0)
 
 
 def test_fix_spelling_handles_compounds_a_word_boundary_misses():
@@ -456,9 +457,10 @@ def test_a_british_spelling_in_prose_is_reported():
 
 
 def test_a_british_spelling_inside_a_code_span_is_left_alone():
-    # `density.artefact_fraction` is an identifier. Renaming it is a code change, not a
-    # documentation fix, so the prose checker must not demand it.
-    assert dc.check_spelling(pages_of(('design/a.md', 'see `artefact_fraction`\n'))) == []
+    # A name in backticks is a reference to code, so correcting it here would make the document
+    # cite a symbol that does not exist. Renaming the symbol is `source_spelling.py`'s job, and
+    # it shares this dictionary so the two cannot disagree.
+    assert dc.check_spelling(pages_of(('design/a.md', 'see `a_british_artefact_name`\n'))) == []
 
 
 def test_american_prose_is_silent():

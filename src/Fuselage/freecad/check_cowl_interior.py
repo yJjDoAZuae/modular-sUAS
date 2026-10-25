@@ -17,7 +17,7 @@ correct construction puts the inner contour exactly `t` from the outer one measu
 plane, at every station and all the way round. A 3-D normal offset -- the error this method
 exists to avoid, because it is what every "shell this solid" command does -- would put it `t`
 along the normal and therefore `t / cos(alpha)` in the plane, which on the shallowest surface
-the design permits is 0.6 / cos 55 = 1.05 mm, three quarters of a millimetre wide of the
+the design permits is 0.6 / cos 55 = 1.05 mm, three quarters of a millimeter wide of the
 answer and impossible to miss. Measuring the perpendicular distance instead would report
 `t * cos(alpha)` for the 2-D inset and `t` for the 3-D one, which is the same test read the
 other way round; this way needs no local surface normal to be estimated.
@@ -45,7 +45,7 @@ from wall_measure import candidates, sections
 #: Stations the wall is measured at.
 STATIONS = 12
 
-#: Circumferential spacing, in millimetres, each section is sampled at when the wall is measured
+#: Circumferential spacing, in millimeters, each section is sampled at when the wall is measured
 #: across it. **A spacing, not a count, and that is the whole of the change.**
 #:
 #: This was `AROUND` = 240 inner samples with the outer loop at `8 * AROUND`, fixed counts at every
@@ -370,8 +370,8 @@ def rib_gap(body, notches, z, t, t_cut):
     """The width the erosion leaves at each notch, against that notch's own in-plane width.
 
     Measured on the dilated notch rather than asserted from the arithmetic. The erosion removes
-    a `t`-neighbourhood of the notch from each side, so the gap it leaves is the notch's width
-    plus `2t`, and that gap *is* the rib. The rib is not modelled anywhere; it falls out of the
+    a `t`-neighborhood of the notch from each side, so the gap it leaves is the notch's width
+    plus `2t`, and that gap *is* the rib. The rib is not modeled anywhere; it falls out of the
     erosion, which is the confirmation that the erosion is the right operation (algorithm
     document section 4.2).
 
@@ -639,14 +639,14 @@ def main():
         bad += 1
     else:
         print('  _thin_stations removes a 0.0009 mm pair and keeps both ends')
-    # an end station must survive even when its neighbour crowds it
+    # an end station must survive even when its neighbor crowds it
     ends = ci._thin_stations([0.0, 1.0, 1.0 + 0.5 * floor], floor)
     if ends[-1] != 1.0 + 0.5 * floor or any(
             b - a < floor - 1e-12 for a, b in zip(ends, ends[1:])):
         print('  _thin_stations dropped or crowded the last station: %s  <-- FAIL' % (ends,))
         bad += 1
     else:
-        print('  _thin_stations keeps the last station, displacing its neighbour')
+        print('  _thin_stations keeps the last station, displacing its neighbor')
 
     # -- the face roles the clearance minimum is classified against (IP-FC-148, OQ-DES-CW25)
     #

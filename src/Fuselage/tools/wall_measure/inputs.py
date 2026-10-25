@@ -29,7 +29,7 @@ case here depends on it.
 **Eleven tools, and why the `side*` and `bottom*` placements get no case of their own.** Four of the
 excursions below -- `buttress_cut_thickness`, `buttress_r_inset`, `overhang_angle_from_bed` and
 `extrusion_width` -- move *every* tool at once: how wide each cuts, how far each is set in, how its
-dilation ramp leans, and how thick the wall it has to leave is. Crowding between neighbouring ribs
+dilation ramp leans, and how thick the wall it has to leave is. Crowding between neighboring ribs
 is what IP-FC-137's follow-up reproduced a pathological topology from, and those four change the
 crowding of all eleven. A case per placement would add eleven tail builds at about 1 000 s each to
 cover the same axis one rib at a time.
@@ -195,14 +195,14 @@ EXCURSIONS = {
         # Every tool at once: how wide it cuts, how far in it sits, how its ramp leans, how thick
         # a wall it must leave. The crowding axis, and the reason there is no case per placement.
         #
-        # **`buttress_cut_thickness` is absolute millimetres, not a fraction**, and it is the one
+        # **`buttress_cut_thickness` is absolute millimeters, not a fraction**, and it is the one
         # row on these sheets that looks like a fraction and is not: `cowl.py`'s own note says it
         # "is the *cut*, and it is deliberately 0.1 mm", and `cowl.py`'s absolute sheet carries the
         # same 0.1 where `cut_len` goes 0.06 -> 6.0 and `buttress_r_inset` 0.03 -> 3.0. So +-0.03
         # here is +-30 % of a 0.1 mm slot and not 3 mm of anything. Labeled wrongly in this
         # module's first draft and corrected by the screen's own first case.
         Excursion('buttress_cut_thickness', 0.03, 'mm',
-                  'how wide every rib tool cuts, so how much neighbours overlap'),
+                  'how wide every rib tool cuts, so how much neighbors overlap'),
         Excursion('buttress_r_inset', 0.02, 'fraction of unit_width',
                   'how far every tool is set in from the OML'),
         Excursion('overhang_angle_from_bed', 5.0, 'degrees',
@@ -227,9 +227,9 @@ EXCURSIONS = {
                   'how far out Top2Safe sits; a literal 0.0 on the sheet, so the step is absolute'),
     ),
     'nose_cowl_shell': (
-        # Absolute millimetres: see the note on the tail's row of the same name.
+        # Absolute millimeters: see the note on the tail's row of the same name.
         Excursion('buttress_cut_thickness', 0.03, 'mm',
-                  'how wide every rib tool cuts, so how much neighbours overlap'),
+                  'how wide every rib tool cuts, so how much neighbors overlap'),
         Excursion('buttress_r_inset', 0.01, 'fraction of unit_width',
                   'how far every tool is set in from the OML'),
         Excursion('overhang_angle_from_bed', 5.0, 'degrees',

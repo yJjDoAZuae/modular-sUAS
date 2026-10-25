@@ -7,7 +7,7 @@
 **What was missing.** `drawing_families.py` says which family sheets the set needs;
 `freecad/drawing.py` can build one; nothing joined them. The only end-to-end path was
 `check_drawing.py`, which draws one sheet for one kind from one variant and exports it under a
-checker's filename as evidence for its own assertions — so the artefact a reader would ask for
+checker's filename as evidence for its own assertions — so the artifact a reader would ask for
 existed only as a by-product, one at a time. This walks the families and writes the set.
 
 **Two interpreters, for the usual reason.** The families and the parameter resolution live in
@@ -122,9 +122,9 @@ SHEET_SUFFIXES = ('.FCStd', '.FCStd1', '.dxf', '.svg', '.pdf', '.png')
 
 
 def clear(stem):
-    """Remove a sheet's artefacts. Returns how many were there.
+    """Remove a sheet's artifacts. Returns how many were there.
 
-    **Because the artefact is the evidence, a stale one is a false pass.** This module reads
+    **Because the artifact is the evidence, a stale one is a false pass.** This module reads
     files rather than exit codes, `freecadcmd`'s being unreliable -- but a file only says a
     sheet was drawn if it could not have been drawn by an earlier run. Measured 2026-09-07:
     four sheets refused, their `.FCStd` from the previous run was still on disk, and the run
@@ -157,8 +157,8 @@ def draw(freecadcmd, params_path, families_path, kind, key, stem):
     done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     text = done.stdout.decode('utf-8', 'replace')
     # `freecadcmd`'s exit code is not a reliable signal -- it has been observed exiting 0 on a
-    # script that raised -- so the artefact is what says the sheet was drawn. `clear` above is
-    # what makes that true: without it the artefact only says a sheet was drawn *at some
+    # script that raised -- so the artifact is what says the sheet was drawn. `clear` above is
+    # what makes that true: without it the artifact only says a sheet was drawn *at some
     # point*, which is a different claim and a much weaker one.
     return os.path.isfile(stem + '.FCStd'), text
 

@@ -809,7 +809,7 @@ class TestCongruentIdentity:
         assert be.congruent_identity(a, b)['identical'] is True
 
     def test_a_refit_is_not_congruent_and_reports_its_magnitude(self):
-        """**The failure this is for.** A refit moves a pole relative to its neighbours, which no
+        """**The failure this is for.** A refit moves a pole relative to its neighbors, which no
         rigid motion can do, so the step lengths change by about the displacement."""
         out = be.congruent_identity(BSplineSurface(net()), BSplineSurface(refitted(net())))
         assert out['identical'] is False
@@ -1043,7 +1043,7 @@ class TestAnomalousEdges:
     def test_an_edge_the_kernel_will_not_describe_is_a_finding_not_a_free_boundary(self):
         """**The defect this classifier shipped with for ten minutes.** The geometry read sits in a
         broad `except`, and when it failed the code fell through to the ordinary branches and
-        labelled a zero-length edge `free_boundary` -- an exception turned into a confident
+        labeled a zero-length edge `free_boundary` -- an exception turned into a confident
         diagnosis. An unreadable edge now says so and counts as serious, because "we could not
         measure it" is not the same claim as "it is fine"."""
         class Unreadable(Edge):
@@ -1526,7 +1526,7 @@ class TestStageIdentity:
     def test_a_mirror_step_is_checked_for_congruence_not_pole_identity(self):
         """**The defect this caught on its own first run.** On a `nose_cowl_shell` at `U` = 1.0,
         which mirrors three times, the mirror-to-mirror transitions reported a worst pole
-        displacement of exactly 1.000e+02 mm and were labelled a refit. A mirror *moves poles* --
+        displacement of exactly 1.000e+02 mm and were labeled a refit. A mirror *moves poles* --
         after one, the shape carries the original and its image under the same parameterization
         key, so matching by key and comparing poles compares a copy against its own reflection.
         `congruent_identity` exists for exactly this and its docstring says so; the mistake was

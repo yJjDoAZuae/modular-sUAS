@@ -23,7 +23,7 @@ the *innermost* one is the fastener itself: `end_bolt` and `cowling_bolt` both r
 2.0000 mm there (`bolt_hole_radius`), `end_anchor` and `cowling_anchor` both read exactly
 2.7500 mm, and in both pairs the outer steps differ between the two types (cowling's flange
 needs a different boss than end's web) while the innermost bore does not. So "the fastener's
-size" is the smallest-radius cylinder centred on that axis, and the boss around it is
+size" is the smallest-radius cylinder centered on that axis, and the boss around it is
 implementation the requirement was never about.
 
 **The longeron is unambiguous by contrast** -- one radius, `longeron_radius +
@@ -63,7 +63,7 @@ from corner_common import is_entry_point
 
 #: How closely a position or radius has to land to count as the same feature. A kernel-
 #: agreement tolerance, matching `check_derived_geometry.py`'s `POSITION_TOL` -- these are
-#: modelling disagreements to catch, not manufacturing tolerances to allow.
+#: modeling disagreements to catch, not manufacturing tolerances to allow.
 POSITION_TOL = 1e-6
 RADIUS_TOL = 1e-6
 
@@ -96,7 +96,7 @@ def vertical_cylinders(shape):
 
 
 def longeron_bores(cyls, longeron_r):
-    """The four longeron bore centres, at the one radius the design derives for them."""
+    """The four longeron bore centers, at the one radius the design derives for them."""
     return sorted((round(x, 6), round(y, 6)) for r, x, y in cyls
                   if abs(r - longeron_r) <= RADIUS_TOL)
 

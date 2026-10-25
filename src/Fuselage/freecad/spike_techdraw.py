@@ -187,7 +187,7 @@ def main():
             # Not a failure -- a limitation, and the placer has to be built knowing it.
             if all(p.Length == 0.0 for p in parametric.getArrowPositions()):
                 print('  NOTE                arrow positions are all origin headless; '
-                      'the annotation extent has to be modelled, not measured')
+                      'the annotation extent has to be modeled, not measured')
 
         path = os.path.join(out, 'spike_techdraw_%s.dxf' % run)
         TechDraw.writeDXFPage(page, path)

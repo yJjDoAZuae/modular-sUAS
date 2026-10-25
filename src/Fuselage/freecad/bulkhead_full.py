@@ -1,7 +1,7 @@
 """IP-FC-9: `bulkhead_section_full` -- the octant translated to its corner and tiled.
 
 `octant_to_full()` is `mirror_x(mirror_y(mirror_xy(...)))`, three nested doublings about the
-fuselage centre. Each stage is a `Part::Mirroring` document object plus a fuse, so the tiling
+fuselage center. Each stage is a `Part::Mirroring` document object plus a fuse, so the tiling
 stays in the parametric tree: seven mirrors, seven fuses, no rebuilt geometry and nothing for
 a downstream edit to fall out of sync with.
 

@@ -19,7 +19,7 @@ corner_end() with two arguments that differ from the corner's own:
 with `bulkhead_thickness + 2*eps` and shifting the result down by eps -- but `corner_end`
 also derives `greeble_nub_height = bt/3` and every nub z level from that argument, so the
 socket's snap rib came out at 2.00667 mm against the post's 2.00000. The `-eps` shift nearly
-cancelled the inflation, leaving the band centred and only its height wrong, which is why it
+canceled the inflation, leaving the band centered and only its height wrong, which is why it
 went unnoticed: about 0.0033 mm of gap at each end of a snap the design requires to be
 nominal, and a second clearance on a joint whose whole rule is that clearance is carried once.
 
@@ -70,7 +70,7 @@ GREEBLE_TOOL_PARAMS = [
     ('gt_h', '=gt_bt + eps + gt_overshoot * 2'),
     ('gt_base_z', '=-gt_overshoot'),
     ('gt_nub_span', '=gt_bt + gt_overshoot * 2'),
-    # centred on z = 0 and three thicknesses tall, so it clears everything by 1.5 * bt
+    # centered on z = 0 and three thicknesses tall, so it clears everything by 1.5 * bt
     ('gt_cut_z0', '=-gt_through_cut / 2'),
     # dimensioned from gt_bt, never from the overshoot
     ('gt_nub_z1', '=gt_bt / 2 - gt_greeble_nub_height / 2 - greeble_nub_thickness'),

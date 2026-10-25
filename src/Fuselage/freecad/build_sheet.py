@@ -16,7 +16,7 @@ pointed at.
 **Why this exists next to `check_drawing.py` rather than inside it.** `drawing.py` can build a
 sheet and `drawing_families.py` says which sheets the set needs, and until now the only thing
 joining them was a *checker* -- `check_drawing.py` builds one sheet, for one kind, from one
-variant, and exports it under its own name as evidence for its own assertions. So the artefact
+variant, and exports it under its own name as evidence for its own assertions. So the artifact
 a reader would actually ask for existed only as a by-product. This is the builder half, with no
 assertions in it: it takes a family and writes its sheet.
 
@@ -28,8 +28,8 @@ the same function runs here on the parameters actually loaded, and a disagreemen
 rather than a sheet. Being told which family and working out which family are two different
 claims, and this writes a sheet only when they agree.
 
-**Two artefacts here, and two more from the renderer.** The `.FCStd` is the sheet itself and
-loses nothing; it is the artefact of record, and it is one file even when the drawing is more
+**Two artifacts here, and two more from the renderer.** The `.FCStd` is the sheet itself and
+loses nothing; it is the artifact of record, and it is one file even when the drawing is more
 than one page -- `drawing.build_sheets` puts every sheet of one drawing in one document, so a
 bulkhead's plan and its corner detail are `Page` and `Page2` of the same `.FCStd`, not two
 documents. The `.dxf` is for a reader with a CAD program, and **TechDraw's DXF export is

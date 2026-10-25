@@ -313,7 +313,7 @@ def panel(g, mirrored, title):
     b.append(line(v, fo, 0, fo, -0.95, 'ext'))
     # longeron_chamfer is the FLOOR on the chamfer's width, which the source says in as many
     # words -- "use longeron_chamfer as a minimum". The two are equal only when the bore branch
-    # governs. Labelling this longeron_chamfer unconditionally was an error in an earlier
+    # governs. Labeling this longeron_chamfer unconditionally was an error in an earlier
     # version of this drawing.
     chamfer = -fo - g['bore_r']
     if g['governs'] == 'bore':

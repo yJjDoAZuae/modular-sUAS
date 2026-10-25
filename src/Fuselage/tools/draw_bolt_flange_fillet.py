@@ -542,7 +542,7 @@ def fig_construction(g, cid, fixed=False):
     b.append(circle(v, cx, cy, ffr, 'relief'))
     b.append(circle(v, cx, cy, g['relief_r_low'], 'tool'))
 
-    # the two centers, labelled into the empty left margin
+    # the two centers, labeled into the empty left margin
     b.append(dot(v, bc, bc, 2.8, '#1c7a54'))
     b.append(txt(v, bc, bc, 'bolt center', 'xlbl', dx=-9, dy=4, anchor='end'))
     b.append(dot(v, cx, cy, 2.8, '#7a5ea8'))

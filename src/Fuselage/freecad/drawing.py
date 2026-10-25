@@ -117,7 +117,7 @@ def project(point, direction, x_direction, scale=1.0):
     Arithmetic on the point, not a question to the projection. That is the binding rule this
     module exists to keep.
 
-    **Not the view's origin, whatever this used to say.** A `DrawViewPart` centres its
+    **Not the view's origin, whatever this used to say.** A `DrawViewPart` centers its
     projection on its own `X, Y`, so the view's origin is the middle of the projected bounding
     box; this returns the model origin scaled, which is a different point on every part that is
     not symmetric about it. Both frames are needed -- the annotation sets are written from the
@@ -638,10 +638,10 @@ def construction_lines(construction, scale):
     """Every construction record as `(format, p1, p2)` model-space segments.
 
     One place turns the records into segments, and both the placer and the page read it. A
-    centre mark drawn in one geometry and measured in another is a mark that lands where
+    center mark drawn in one geometry and measured in another is a mark that lands where
     nothing checked it.
 
-    **`scale` is here for the centre lines' overrun and for nothing else.** How far an axis
+    **`scale` is here for the center lines' overrun and for nothing else.** How far an axis
     stands clear of the part is a distance on the paper -- it comes from the text height, like
     the lane pitch and the note spacing -- so in model space it is that distance divided by the
     scale. `sheet_annotations` gives the ends at the geometry's own extent, which is a fact
@@ -872,7 +872,7 @@ def place_views(page, tip, specs, direction, x_direction, regions,
     which view carries the circle saying where a detail was taken from. Both were read off
     `specs` and both were wrong the moment `build_sheets` started calling this one view at a
     time -- `construction_for`'s fallback is "the first view", so a sheet holding only the
-    detail became the first view and took all sixteen of the plate's centre marks, axes and
+    detail became the first view and took all sixteen of the plate's center marks, axes and
     panel outlines onto a 30 mm corner. Measured 2026-09-07: the detail refused at 2:1 and
     1:1 and came out at 1:2, a *detail* drawn at half size, and the plan lost its detail
     circle in the same stroke.
@@ -887,7 +887,7 @@ def place_views(page, tip, specs, direction, x_direction, regions,
         view = add_view(page, source, direction, x_direction, 1.0, region,
                         name='View' + (suffix if index == 0
                                        else '%s%d' % (suffix, index)))
-        # Measured at 1:1, where it is the projection's centre in model millimeters, and
+        # Measured at 1:1, where it is the projection's center in model millimeters, and
         # scaled from there. `origin_offset` asks the projection rather than predicting it.
         unit_offset = origin_offset(view)
         frame = frame_in_view(view, region, unit_offset)
@@ -977,7 +977,7 @@ def construction_for(spec, construction, others):
     """This view's share of the construction geometry.
 
     Assigned by where it *is*, unlike the dimensions and notes, which are assigned by what
-    they are about. A centre mark belongs to the axis it marks and a panel outline to the
+    they are about. A center mark belongs to the axis it marks and a panel outline to the
     panel; neither is a statement that could go on either view. So a record goes on the
     innermost view that contains all of it, and on the plan when no detail does.
 
@@ -1017,7 +1017,7 @@ def _record_inside(record, clip):
 
 
 def add_caption(page, view, region, text):
-    """The view's caption, centred under it inside its own region."""
+    """The view's caption, centered under it inside its own region."""
     doc = page.Document
     annotation = doc.addObject('TechDraw::DrawViewAnnotation',
                                'Caption' + view.Name)
@@ -1037,7 +1037,7 @@ def add_detail_marker(page, view, clip, scale, label=None):
     a region of it is enlarged elsewhere, and without it the detail is a picture of something
     the reader has to find.
 
-    **Labelled, because the detail is now on another sheet.** When both views shared a frame
+    **Labeled, because the detail is now on another sheet.** When both views shared a frame
     the circle and the enlargement were a hand's breadth apart and the reader joined them by
     looking. On separate sheets nothing joins them but the name, so the circle carries the
     same name the detail's caption does.
@@ -1168,17 +1168,17 @@ def origin_offset(view):
     `dimension_placement` is measured from the *model* origin -- the longeron axis on a corner,
     the airframe axis on a bulkhead -- because that is what the annotation sets are written
     from and what makes a dimension's two ends arithmetic on the parameters. A `DrawViewPart`
-    centres its projection on its own `X, Y`, so a child's `X, Y` is measured from the centre
+    centers its projection on its own `X, Y`, so a child's `X, Y` is measured from the center
     of the *projected bounding box*. Those coincide only for a part that happens to be
     symmetric about its own origin, and none of these are: the corner's box runs -4.75 to 7.50
-    in both axes, so its centre is 1.375 from the origin, which at 5:1 is **6.875 mm on the
+    in both axes, so its center is 1.375 from the origin, which at 5:1 is **6.875 mm on the
     paper** -- most of two text heights, in both directions at once.
 
     Every leader tip, every note line and every dimension label carried that offset. It is why
     the leaders pointed into space beside the features they name rather than at them, and it is
     not something the placer could have got right: it placed them correctly in its own frame.
 
-    **Measured, not predicted.** The obvious way to compute this is the centre of
+    **Measured, not predicted.** The obvious way to compute this is the center of
     `projected_bbox`, which is taken from the shape's vertices -- and the extreme point of a
     projected arc is not a vertex, so on a part whose silhouette is an arc between two vertices
     the two answers differ. Asking TechDraw where it put a known point cannot differ from where

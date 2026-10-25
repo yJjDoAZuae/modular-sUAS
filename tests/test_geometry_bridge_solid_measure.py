@@ -15,7 +15,7 @@ individually, and they run in the ordinary suite rather than on request.
 when the cut produces no slanted face (``(no slanted face on this cut -- skipped, not a
 failure)``). A test must not decide for itself that a missing precondition is acceptable, so here
 the slanted face is asserted to exist: if the wedge cut stops producing one, that is a change in
-behaviour worth hearing about, not something to pass over.
+behavior worth hearing about, not something to pass over.
 
 The script stays in place until this port is shown equivalent -- the plan's own condition for
 IP-GB-20 -- and `test_the_ported_script_still_exists` is what keeps that honest.
@@ -161,7 +161,7 @@ class TestTessellationIsCachedOnTheShape:
     correct — each deflection really is finer than the cache. A second run compares identical
     volumes and stops at once, reporting the coarsest deflection as the converged one.
 
-    These tests pin the behaviour rather than assert it is right. Whether `solid_measure` should
+    These tests pin the behavior rather than assert it is right. Whether `solid_measure` should
     defeat the cache, and at what cost on a real cowl, is [OQ-DES-CW27] in
     doc/design/cowl.md.
     """

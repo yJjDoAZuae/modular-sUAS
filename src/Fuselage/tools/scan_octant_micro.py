@@ -3,7 +3,7 @@
 IP-FC-67 was opened on two variants and claims the octant carries degenerate micro-geometry
 "at every parameter set". Whether that is still true is a question about the geometry as it
 stands, and the geometry has moved twice since -- IP-FC-58 changed where the bolt-flange
-fillet's block starts, and IP-FC-76 replaced its centre with a solved one. So this resolves
+fillet's block starts, and IP-FC-76 replaced its center with a solved one. So this resolves
 the variants, hands them to FreeCAD in one process, and reports the distribution.
 
 Cheap by the standards of this project: it builds octants only, never the full part, and

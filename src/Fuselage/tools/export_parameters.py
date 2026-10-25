@@ -29,7 +29,7 @@ bulkhead has never heard of. The families are described in `fuselage_variants.BU
 FAMILIES` and looked up here rather than restated -- see `render_variant.py` for the same
 lookup on the rendering side.
 
-Values are millimetres and degrees, as the OpenSCAD path uses them.
+Values are millimeters and degrees, as the OpenSCAD path uses them.
 """
 import re
 import json

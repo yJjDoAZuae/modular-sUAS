@@ -17,7 +17,7 @@ inferred from the file -- the file describes a *variant*, and a variant is two p
 
 **The `.FCStd` is written by default, beside the mesh.** It is the reason this backend exists:
 an editable, parametric document is the one thing the OpenSCAD path cannot produce, and every
-downstream use case -- UC-2, the modelled non-printed components in IP-FC-18, the family
+downstream use case -- UC-2, the modeled non-printed components in IP-FC-18, the family
 drawings in IP-FC-21 -- consumes the document, not the triangles. Saving it used to require an
 explicit `--fcstd`, which nothing passed, so every invocation built the document in memory and
 threw it away. `--fcstd=<path>` now only *relocates* it; there is no way to suppress it, and
@@ -139,7 +139,7 @@ COWL_KINDS = ('nose_cowl', 'nose_nose', 'tail', 'nose_cowl_shell', 'tail_shell')
 # Do NOT reach for `Mesh.Volume` to check any of this. It accumulates in single precision and
 # gets *worse* as the mesh gets finer: on the 173 408-facet mesh above it reports
 # 6921.9243164, which is 0.55 mm3 -- twenty times the real tessellation error -- below what
-# the same file measures at. That artefact reads exactly like a mesh too coarse to trust, and
+# the same file measures at. That artifact reads exactly like a mesh too coarse to trust, and
 # inverts the conclusion. Measure the written STL instead, which `measure.py` does in float64.
 
 
@@ -216,7 +216,7 @@ def build(doc, kind, params_path):
 
 
 def export_deflection(kind, seed):
-    """The linear deflection this part is exported at, in millimetres.
+    """The linear deflection this part is exported at, in millimeters.
 
     One place for the rule, because it is no longer a constant lookup: a cowl's figure scales
     with the part's `U` and every other kind's does not. See `COWL_LINEAR_DEFLECTION` above for
@@ -261,9 +261,9 @@ def parse(argv):
     """`--name=value` arguments, without argparse.
 
     **Each one has to arrive behind freecadcmd's `--pass`**, and that is not a style choice.
-    freecadcmd parses the command line itself before the script ever runs: an unrecognised
+    freecadcmd parses the command line itself before the script ever runs: an unrecognized
     `--flag` makes it print its own usage and stop, and a bare positional it does not
-    recognise it tries to *open as a document* -- which for a `.json` fails inside the FEM
+    recognize it tries to *open as a document* -- which for a `.json` fails inside the FEM
     mesh importer with "invalid literal for int() with base 10", an error that reads like a
     corrupt parameter file and has nothing to do with one. `--pass` is the documented escape,
     it takes exactly one argument, and it survives into `sys.argv` verbatim:

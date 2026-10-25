@@ -33,8 +33,8 @@ once it has one.
 # **`nose_cowl_shell` and `tail_shell` are the same two shapes as `nose_cowl` and `tail`, in
 # the other of the two representations cowl.md section 6.4 says a cowl has to be at once**
 # (IP-FC-17). The unshelled pair is what UC-1 prints -- vase mode spirals one contour per layer
-# and admits no interior geometry, so a modelled wall removes the capability outright -- and
-# the shelled pair is what UC-2, UC-3, UC-4, UC-7 and UC-8 analyse. They are four kinds rather
+# and admits no interior geometry, so a modeled wall removes the capability outright -- and
+# the shelled pair is what UC-2, UC-3, UC-4, UC-7 and UC-8 analyze. They are four kinds rather
 # than two kinds with a flag precisely so that a consumer cannot take one for the other; the
 # invariant that matters is that the print path keeps coming from the blank.
 KINDS = {

@@ -195,7 +195,7 @@ class TestChordSag:
         """The fix, stated as the converse -- and it is better than merely scale-free.
 
         At fixed spacing `s` the sag is `s^2 / (8R)`, so it *falls* as `1/R`: a larger part sampled
-        at the same millimetre spacing is measured **more** accurately, not equally. An earlier
+        at the same millimeter spacing is measured **more** accurately, not equally. An earlier
         version of this test asserted the two were equal, which was a guess at the algebra rather
         than a reading of it."""
         wall, spacing = 0.6, 0.5
@@ -251,18 +251,18 @@ class TestSummaries:
         ok, _value, last = density.settles_to(self.rows([0.25, 0.20, 0.15, 0.10]), tol=0.001)
         assert ok is False and abs(last) > 0.001
 
-    def test_the_artefact_fraction_is_how_much_refinement_removed(self):
+    def test_the_artifact_fraction_is_how_much_refinement_removed(self):
         """0.84 at tail `U` = 4 is the headline figure: most of the published reading was the
         instrument."""
-        assert density.artefact_fraction(self.rows([0.2136, 0.05, 0.035, 0.0347])) == \
+        assert density.artifact_fraction(self.rows([0.2136, 0.05, 0.035, 0.0347])) == \
             pytest.approx(1.0 - 0.0347 / 0.2136, rel=1e-6)
 
-    def test_the_artefact_fraction_is_none_when_the_coarse_reading_was_zero(self):
-        assert density.artefact_fraction(self.rows([0.0, 0.0])) is None
+    def test_the_artifact_fraction_is_none_when_the_coarse_reading_was_zero(self):
+        assert density.artifact_fraction(self.rows([0.0, 0.0])) is None
 
     def test_summaries_tolerate_a_station_that_read_nothing(self):
         rows = [{'spacing': 1.0, 'samples': 100, 'minimum': float('nan'), 'thin': float('nan'),
                  'median': float('nan'), 'perimeter': 200.0}]
         assert density.settles_to(rows) == (False, None, None)
-        assert density.artefact_fraction(rows) is None
+        assert density.artifact_fraction(rows) is None
         assert 'spacing' in density.table(rows)

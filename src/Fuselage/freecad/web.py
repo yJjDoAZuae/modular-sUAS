@@ -72,10 +72,10 @@ PARAMS = [
     # than a bolt, since an interconnect has none. `step_y` (`web_y_mid -
     # web_fillet_radius`) is the source's `y_center`, unchanged; `ic_x_center` is the same
     # point's x, solved so the fillet circle at (ic_x_center, step_y) sits exactly
-    # `web_fillet_radius` outside a circle of radius `ic_big_r` centred on the corner axis
+    # `web_fillet_radius` outside a circle of radius `ic_big_r` centered on the corner axis
     # -- Pythagoras given `step_y`, not a second tangency to solve for. `ic_x_end`/`ic_y_end`
     # are that same fillet's tangent point on the big arc, along the ray from the axis
-    # through the fillet centre, scaled by `ic_big_r / (ic_big_r + web_fillet_radius)` --
+    # through the fillet center, scaled by `ic_big_r / (ic_big_r + web_fillet_radius)` --
     # except `ic_y_end` is NOT scaled where `step_y` is already non-negative, which is the
     # source's own `max(...)` and is why the two are computed separately rather than both
     # from one scale factor.
@@ -151,7 +151,7 @@ def bulkhead_web_interconnect(doc):
 
     **The polygon needs a real sketch, unlike the rest of this port.** Every other profile
     here is a box clipped by half-planes because its non-axis-aligned edges are cuts at a
-    fixed or expression-bound angle. This one is different: the edge from the fillet centre
+    fixed or expression-bound angle. This one is different: the edge from the fillet center
     `(ic_x_center, step_y)` to its tangent point on the arc `(ic_x_end, ic_y_end)` is a ray
     from the corner axis, but the tangency is what places BOTH ends -- there is no box to
     clip, because the far end is not a corner this port can reach by clipping one. Every
@@ -235,7 +235,7 @@ def _interconnect_ref_area(P):
       polygon and the quarter-disk (radius `ic_big_r`) is exactly the circular SECTOR
       between the negative-x-axis and that radial line.
     - `web_y_mid - step_y == web_fillet_radius` by definition (`step_y = web_y_mid -
-      web_fillet_radius`), so the fillet circle (centred at vertex 5) passes exactly
+      web_fillet_radius`), so the fillet circle (centered at vertex 5) passes exactly
       through vertex 4 and is exactly tangent there to the horizontal edge above it -- the
       polygon's own edge 4-5 is a radius of the fillet circle, not merely near it.
     - vertex 6 sits at distance `ic_big_r` from the origin and at distance exactly

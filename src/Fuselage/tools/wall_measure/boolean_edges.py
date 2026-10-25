@@ -557,7 +557,7 @@ def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc=SAMPLE_ARC,
 #: the kernel's own 1e-7 mm resolution.
 #:
 #: **The resolution that buys is measured, not predicted.** `face_normal` returns the
-#: non-coplanarity of its snapped neighbours as a residual, and over 187 rib-edge samples on a
+#: non-coplanarity of its snapped neighbors as a residual, and over 187 rib-edge samples on a
 #: `nose_cowl_shell` cavity at `U` = 0.5 that residual ran 4e-20 to 7.7e-05 mm, median
 #: 1.9e-05 mm -- which over `h` = 0.05 mm is a **median 0.022 deg and a worst 0.088 deg**. So this
 #: resolves a normal difference of about a tenth of a degree and no better, which is ample for
@@ -757,7 +757,7 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
     `ancestorsOfType` returns *distinct* ancestors and so also answers "one face"; and
     `Face.Edges` was measured **not** to list a seam twice (a cylinder's lateral face lists its
     seam once, like any other edge), so the occurrence count cannot carry the distinction either.
-    `occurrences` is reported because it is cheap and would matter if that vendor behaviour ever
+    `occurrences` is reported because it is cheap and would matter if that vendor behavior ever
     changed, but no classification depends on it.
 
     A genuine open boundary on a *periodic* face is therefore indistinguishable from a seam by this
@@ -832,7 +832,7 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
             kind = EDGE_SEAM if periodic else EDGE_FREE
         else:
             # Two faces, but one of them carries the edge twice -- a seam on a face that also abuts
-            # a neighbour there. Named rather than lumped in with the ordinary two-faced edges.
+            # a neighbor there. Named rather than lumped in with the ordinary two-faced edges.
             kind = EDGE_SEAM
         kernel_faces = kernel_face_count(Part, shape, edge) if Part is not None else None
         if kernel_faces == 2 and kind in (EDGE_FREE, EDGE_NONMANIFOLD):
@@ -921,7 +921,7 @@ def mirror_families(shape, atol=KERNEL_TOL):
     `congruent_identity` on the poles, which never looks at the key.
 
     Returns one row a group: `size`, how many members are *exactly* equal to the representative,
-    the worst congruence mismatch in millimetres, and the pole counts. The `exact` count is what
+    the worst congruence mismatch in millimeters, and the pole counts. The `exact` count is what
     says the test is not vacuous -- a group where every member is pole-identical has not been
     mirrored at all, and congruence there is trivially true.
     """
@@ -1034,10 +1034,10 @@ def face_normal(Part, face, point, h=NORMAL_STEP, directions=NORMAL_DIRECTIONS):
     wrong by 2.411 mm on this very surface (`fitted_faces`), and a normal taken at a wrong
     parameter is wrong without being implausible. This instead offsets `point` along each of
     `directions`, snaps every offset back onto the face with `distToShape`, and takes the normal of
-    the plane those on-face neighbours span -- the smallest singular vector of their offsets.
+    the plane those on-face neighbors span -- the smallest singular vector of their offsets.
 
     Returns `(normal, residual, used)`: the unit normal, the singular value it came from (how far
-    the neighbours are from coplanar, in mm -- large means the step is too big for the local
+    the neighbors are from coplanar, in mm -- large means the step is too big for the local
     curvature), and how many offsets survived. `(None, nan, n)` when fewer than three survive,
     which happens at a point pinched between trim boundaries.
     """
@@ -1429,7 +1429,7 @@ def table(summary, agreement=None):
 #:
 #: **This constant exists because the first run of `stage_identity` got it wrong.** On a
 #: `nose_cowl_shell` at `U` = 1.0, which mirrors three times, the two mirror-to-mirror transitions
-#: reported a worst pole displacement of exactly **1.000e+02 mm** and were labelled a refit. That
+#: reported a worst pole displacement of exactly **1.000e+02 mm** and were labeled a refit. That
 #: is a reflection distance, not a refit: after a mirror the shape carries the original copy *and*
 #: its image, both with the same parameterization key and different pole coordinates, so matching
 #: by key and comparing poles can compare a copy against its own reflection. `congruent_identity`'s

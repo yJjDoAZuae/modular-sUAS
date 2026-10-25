@@ -168,6 +168,17 @@ because the slug function trimmed a space GitHub keeps. A finding is a place to 
 verdict. `--fix-spelling` is the one class it will repair on its own; everything else needs a
 person to decide what the document should say.
 
+`python src/Fuselage/tools/source_spelling.py` is the same rule for the code -- comments,
+docstrings, messages and **identifier names**, sharing the one dictionary so the two cannot
+disagree. A compound is renamed only if it is listed in its `RENAMES` map, because there is no
+word boundary before the `centre` in `_face_centre` and a bare replacement would reach a
+definition without reaching its call sites. **A British stem inside a longer token with no entry
+is reported, not changed** -- add the entry, do not widen the pattern. `--fix` applies it.
+
+Editing a comment in a geometry source is not free: `geometry_version` digests file bytes on
+purpose, so the next `--resume` sweep re-renders those parts. That is the cheap direction and
+the tool's own note says why.
+
 ### Capability belongs in the durable code, not the throwaway tool
 
 **A one-off script may orchestrate durable code. It must not be where the durable code

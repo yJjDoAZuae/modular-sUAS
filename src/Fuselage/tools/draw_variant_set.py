@@ -132,7 +132,7 @@ def draw_variant(freecadcmd, params_path, kind, stem):
             '--pass', 'kind=%s' % kind, '--pass', 'out=%s' % stem]
     done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     text = done.stdout.decode('utf-8', 'replace')
-    # freecadcmd's exit code is not trusted -- the artefact is, same reasoning as
+    # freecadcmd's exit code is not trusted -- the artifact is, same reasoning as
     # `draw_set.draw`.
     return os.path.isfile(stem + '.FCStd'), text
 
@@ -158,7 +158,7 @@ def build_set(u, panel, out_dir, freecadcmd, say=print):
         else:
             headline = next((l for l in text.splitlines() if l.startswith('REFUSED')), None)
             owed.append((label, headline or 'build_sheet.py did not write a sheet'))
-            say('  %-32s NOT DRAWN: %s' % (label, headline or '(no artefact; see log)'))
+            say('  %-32s NOT DRAWN: %s' % (label, headline or '(no artifact; see log)'))
 
     for label, reason in ALWAYS_OWED:
         owed.append((label, reason))

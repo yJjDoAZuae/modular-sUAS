@@ -137,7 +137,7 @@ DESCRIPTIONS = {
 # dimensions the bolt at one of four holes, on a plate that is symmetric about both axes and
 # both diagonals, has stated the bolt position once and said nothing about the other three --
 # and a reader has no way to tell whether the omission means "the same" or "not dimensioned".
-# Centre lines on the symmetry axes are the drafting convention that closes that gap, and they
+# Center lines on the symmetry axes are the drafting convention that closes that gap, and they
 # are the reason the marks and lines below are declared per part rather than switched on for
 # the view: which axes a part is symmetric about is a fact about the part.
 #
@@ -151,7 +151,7 @@ DESCRIPTIONS = {
 #     bulkhead   all four                  1.000000 each             full D4
 #
 # The corner's 5e-5 shortfall is 0.34 mm3 of 6781 and sits at the boolean tolerance; the
-# bulkhead's four are exact to six figures. So the corner gets one centre line and the
+# bulkhead's four are exact to six figures. So the corner gets one center line and the
 # bulkhead gets four, which is what the parts are rather than what looks tidy.
 #
 # A record is a plain tuple whose first element says which kind it is. Nothing here may
@@ -172,8 +172,8 @@ CENTER_MARK = 'center_mark'
 #: A symmetry axis: `(CENTER_LINE, (x1, y1), (x2, y2))`.
 #:
 #: **The endpoints are where the *geometry* ends, not where the line should be drawn to.** A
-#: centre line has to stand a few millimetres clear of the part to read as an axis rather than
-#: as an edge, and a few millimetres is a quantity on the *paper* -- like the text height it is
+#: center line has to stand a few millimeters clear of the part to read as an axis rather than
+#: as an edge, and a few millimeters is a quantity on the *paper* -- like the text height it is
 #: derived from, and unlike everything else in this module, which is the part. `drawing.py`
 #: adds the overrun, because it is the side that knows the scale.
 #:
@@ -204,7 +204,7 @@ REFERENCE_PART = 'reference_part'
 
 
 def center_marks(centers, radius):
-    """A centre mark on each of `centers`, all of one radius."""
+    """A center mark on each of `centers`, all of one radius."""
     return [(CENTER_MARK, (x, y), radius) for x, y in centers]
 
 
@@ -214,7 +214,7 @@ def rectangle(x0, y0, x1, y1):
 
 
 def axis_line(direction, reach):
-    """A centre line through the origin along `direction`, out to `reach` each way."""
+    """A center line through the origin along `direction`, out to `reach` each way."""
     dx, dy = direction
     return (CENTER_LINE, (-dx * reach, -dy * reach), (dx * reach, dy * reach))
 
@@ -253,7 +253,7 @@ def topology_phrase(condition, value):
         return ('' if value else 'NO ') + str(condition).replace('_', ' ').upper()
     # A valued condition is named by its value alone -- `END` rather than `TYPE END` -- once
     # the sheet is already headed by the kind. The block is measured against what is left of
-    # a strip beside the value table, and a word that adds nothing costs a real millimetre.
+    # a strip beside the value table, and a word that adds nothing costs a real millimeter.
     return str(value).upper()
 
 
@@ -329,7 +329,7 @@ def coverage_rows(family, variant, siblings=()):
 # plate is 50 mm across at U = 0.5 and the features that need dimensioning -- the bolt in its
 # boss, the greeble post and nub, the corner seat, the panel inset -- are all inside a 9 mm
 # radius of one longeron axis. Drawn on the plan at a scale that fits the plate, those are
-# four dimensions and five notes crowding a corner a few millimetres wide, and the plate has
+# four dimensions and five notes crowding a corner a few millimeters wide, and the plate has
 # to shrink to make room for the note bands: measured 1:2, with the view at 52.4 % of the
 # frame. The mold line half-width and the longeron offset are the opposite case -- they span
 # the plate and mean nothing magnified.
@@ -421,7 +421,7 @@ def description(field):
     """What `field` is, in words, for the dimension key.
 
     Falls back to the field's own name rather than raising. A quantity added without a phrase
-    should print something a reader can at least recognise -- `GREEBLE TOLERANCE` reads as an
+    should print something a reader can at least recognize -- `GREEBLE TOLERANCE` reads as an
     unfinished description, which is what it is, where a missing row reads as a letter that
     means nothing and a raise would cost the whole sheet.
     """
@@ -495,7 +495,7 @@ def corner_annotations(params, product=FAMILY):
     expression so they cannot drift.
 
     The corner's section is drawn looking down the bay axis, and its local origin is the
-    longeron axis -- the bore is centred there and the mold line is an arc of `corner_radius`
+    longeron axis -- the bore is centered there and the mold line is an arc of `corner_radius`
     about it, which is why every dimension below is taken from 0.
 
     **The bore and the pocket get quantities of their own even though neither is a parameter.**
@@ -687,8 +687,8 @@ def corner_annotations(params, product=FAMILY):
 
     construction = corner_construction(params, radius, bore, seat, thickness, extension,
                                        panelled)
-    # **One view, because the corner is already a detail.** It is a section a few millimetres
-    # across drawn at 5:1, and every quantity on it is about the same few millimetres -- there
+    # **One view, because the corner is already a detail.** It is a section a few millimeters
+    # across drawn at 5:1, and every quantity on it is about the same few millimeters -- there
     # is no pair of scales to separate. What crowds this sheet is the four multi-line notes,
     # which a second view would not thin out.
     views = [SheetView('SECTION',
@@ -698,14 +698,14 @@ def corner_annotations(params, product=FAMILY):
 
 
 def corner_construction(params, radius, bore, seat, thickness, extension, panelled):
-    """The corner's centre mark, its one symmetry axis, and the panels it seats.
+    """The corner's center mark, its one symmetry axis, and the panels it seats.
 
-    **One centre mark, because the corner has one located axis.** The longeron bore, the
+    **One center mark, because the corner has one located axis.** The longeron bore, the
     greeble socket and the lead-in are all about the same origin, so they share a mark; every
     other arc in the projection is a fillet, and a fillet is a blend rather than a feature a
     dimension is taken from.
 
-    **One centre line, on `y = x`, because that is the only mirror the part has.** Measured
+    **One center line, on `y = x`, because that is the only mirror the part has.** Measured
     2026-09-07 by reflecting the built solid and intersecting: `y = x` recovers 0.999950 of
     the volume and the other three candidates recover 0.54, 0.54 and 0.28. So the corner is
     *not* symmetric about its own axes -- the panel it laps and the panel it seats are the
@@ -728,7 +728,7 @@ def corner_construction(params, radius, bore, seat, thickness, extension, panell
 
     So the fit shows as a gap on both faces of the joint rather than as the panel lying on
     the pocket floor with all the slack outboard -- which is what this drew until 2026-09-07,
-    and which put the panel's outer surface a tenth of a millimetre *inside* the airframe's
+    and which put the panel's outer surface a tenth of a millimeter *inside* the airframe's
     own outer surface.
 
     It runs out past the part's end face because a panel does not stop there -- it spans the
@@ -748,8 +748,8 @@ def corner_construction(params, radius, bore, seat, thickness, extension, panell
 
     if panelled:
         # **How far past the part's end face the panel is drawn, and why it is short.** The
-        # outline goes into the bbox the dimension placer lanes around, so every millimetre of
-        # overhang is a millimetre the part loses on the sheet: drawn a full mold line radius
+        # outline goes into the bbox the dimension placer lanes around, so every millimeter of
+        # overhang is a millimeter the part loses on the sheet: drawn a full mold line radius
         # past the face it grew the corner's extent from 12.3 mm to 19.8 mm and cost a
         # preferred scale. Two panel thicknesses, or a third of the radius, is enough to read
         # as a part that continues and small enough not to be paid for.
@@ -829,7 +829,7 @@ def bulkhead_annotations(params, product=FAMILY):
     # An interconnect has no bolt at all -- `bulkhead_section.emit()` skips `bolt_positives`
     # outright, and `bulkhead_positive.flange_positive()` skips the bolt boss's two fillets
     # and the greeble web that would otherwise reach it, for the same `is_interconnect` this
-    # reads (it bolts to its neighbour rather than carrying a bolt of its own -- see
+    # reads (it bolts to its neighbor rather than carrying a bolt of its own -- see
     # `bulkhead_positive.flange_positive`'s docstring). `bolt_hole_radius`, `bolt_thickness`
     # and `bolt_offset` stay ordinary nonzero parameters for an interconnect row, the same way
     # `greeble_thickness` does for a cowling one, so without this gate the note printed a
@@ -967,10 +967,10 @@ def bulkhead_annotations(params, product=FAMILY):
     if panelled:
         # The setback from the mold line to the seating face, which is the panel and its fit.
         #
-        # **Taken at the longeron axis rather than on the plate's own centreline**, and the
+        # **Taken at the longeron axis rather than on the plate's own centerline**, and the
         # reason is where it gets drawn. The seating face is flat across the whole side, so
         # the distance is the same wherever it is measured -- but a dimension on the
-        # centreline belongs to no local feature, and the placer put its line out at the
+        # centerline belongs to no local feature, and the placer put its line out at the
         # frame's margin with an extension line running most of the sheet to reach a 1.1 mm
         # gap. Measured at the corner it sits inside the detail view with the bolt, the post
         # and the corner seat, which is where a reader looking at the panel joint is already
@@ -1057,12 +1057,12 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
     the plate -- the mold line half-width and where the longeron axis sits in it -- and they
     span it; magnified they would say nothing. Everything else is about one corner: the bolt
     in its boss, the greeble post and nub, the corner seat, the panel pocket. Those are
-    within a few millimetres of one axis on a plate up to 200 mm across, and on the plan they
+    within a few millimeters of one axis on a plate up to 200 mm across, and on the plan they
     are illegible whatever the layout does with them.
 
     One detail, not four, because the plate is symmetric about both axes and both diagonals --
     measured, see `bulkhead_construction` -- so the other three corners are the same corner
-    and the centre lines on the plan say so.
+    and the center lines on the plan say so.
 
     `nub_radius` still bounds the detail's clip radius even where `has_greeble` is false
     (IP-FC-132) -- it is a geometric extent the framing margin can use regardless of whether
@@ -1101,9 +1101,9 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
 
 def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat, thickness,
                           panelled, has_bolt=True):
-    """The bulkhead's centre marks, its four symmetry axes, and the panels it seats.
+    """The bulkhead's center marks, its four symmetry axes, and the panels it seats.
 
-    **Four centre lines, because the plate has four mirrors and every dimension on the sheet
+    **Four center lines, because the plate has four mirrors and every dimension on the sheet
     relies on it.** Measured 2026-09-07 by reflecting the built solid and intersecting it with
     itself: `x = 0`, `y = 0`, `y = x` and `y = -x` each recover 1.000000 of the volume, at two
     variants. That is full D4, and it is what makes one bolt dimension state four bolts. Until
@@ -1113,9 +1113,9 @@ def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat
     The two diagonals do double duty: `y = x` runs through the longeron axis at `(axis, axis)`
     **and** the bolt axis at `(bolt_axis, bolt_axis)`, because the part places the bolt along
     the diagonal from the longeron. So the same line is the symmetry axis and the hole
-    pattern's centre line, which is the relationship `bolt_offset` is measured along.
+    pattern's center line, which is the relationship `bolt_offset` is measured along.
 
-    **Centre marks on the located axes and nothing else** -- four longeron bores, and four
+    **Center marks on the located axes and nothing else** -- four longeron bores, and four
     bolt bosses where the type has one (`has_bolt`; an interconnect does not -- see
     `bulkhead_annotations`). Every other arc on this part is a fillet, a lead-in or a nub
     blend.
@@ -1185,14 +1185,14 @@ def boom_bulkhead_annotations(params, product=FAMILY):
     longeron bores sit at the same `(+/-axis, +/-axis)` the frame bulkhead's do, since
     `boom_oml.py` is the same octant-tiled construction shared with it (IP-FC-12).
 
-    **Only one mirror is real, and it is the only centre line drawn.** Measured 2026-09-09 by
+    **Only one mirror is real, and it is the only center line drawn.** Measured 2026-09-09 by
     reflecting the built solid and intersecting it with itself, at all three boom types: `x = 0`
     recovers 1.000000 of the volume in every case, and `y = 0` recovers 0.847 (`offset_single`),
     0.994 (`center_single`) and 0.769 (`dual`) -- close for `center_single` but not exact, because
     `boom_bulkhead.py`'s own docstring says why: the lower web is a **second, independent**
     evaluation of the web builder rather than a mirror of the upper one, and the two differ in
-    area even when the boom sits on the centreline (2888.83 against 2868.85 at `center_single`).
-    So a `y = 0` centre line would assert a mirror the part does not have, for any type, and is
+    area even when the boom sits on the centerline (2888.83 against 2868.85 at `center_single`).
+    So a `y = 0` center line would assert a mirror the part does not have, for any type, and is
     not drawn. The four longeron bores are still identically placed by construction -- the same
     tiling both mirrors -- so one `longeron_offset` dimension states all four, with a note saying
     so rather than a line implying it.

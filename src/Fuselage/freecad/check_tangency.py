@@ -52,11 +52,11 @@ import fillets
 import parameters
 from corner_common import is_entry_point, out_path, script_args
 
-# **Both tolerances are millimetre distances between a solved center and where its tangencies
+# **Both tolerances are millimeter distances between a solved center and where its tangencies
 # put it, so both scale linearly with `U`** -- the same rule and the same shape as
 # `compare_backends.bbox_tol()`. A part's coordinates are proportional to `U` (`unit_width` is
 # 100*U), and the residual a solver stops on is proportional to the magnitude of the numbers it
-# is working in, so a fixed millimetre figure means something four times stricter at U = 4 than
+# is working in, so a fixed millimeter figure means something four times stricter at U = 4 than
 # at U = 1. Stated per unit U and floored at U = 1, because scaling below 1 would only tighten
 # a threshold that has never been the binding one down there -- delete the `max` in `_scaled`
 # to make it purely proportional.

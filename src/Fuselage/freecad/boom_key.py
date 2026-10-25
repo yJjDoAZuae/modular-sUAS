@@ -27,11 +27,11 @@ Two constructions are worth naming because neither is obvious:
 
 **The cap is a stadium, not a hull.** OpenSCAD rounds the tab's top with `hull()` of two
 circles, and FreeCAD has no hull operation. The hull of two equal circles is exactly a
-rectangle spanning their centres plus the two circles, so it is written that way -- and the
+rectangle spanning their centers plus the two circles, so it is written that way -- and the
 rectangle's width is `2*(a - r) + 2*r = 2*a`, the tab width, exactly.
 
 **The gusset is a box that needs no clipping of its own.** The junction fillet arc is tangent to
-the collet externally and to the tab side, which fixes its centre at `(a + r, yc)`. The gusset
+the collet externally and to the tab side, which fixes its center at `(a + r, yc)`. The gusset
 is everything in the notch outside that arc, and the box `[a, a+r] x [ty, yc]` bounds it exactly:
 the box's right and top edges lie wholly inside the arc, its bottom edge lies inside the collet
 up to the tangent point and inside the arc beyond it, and its remaining corner is the junction
@@ -74,12 +74,12 @@ PARAMS = [
     ('key_y_top', '=collet_radius + boom_key_height'),
 
     # the concave junction fillet: tangent to the collet externally and to the tab side, so
-    # its centre is collet_radius + radius from the origin and radius clear of the side
+    # its center is collet_radius + radius from the origin and radius clear of the side
     ('key_yc', '=sqrt((collet_radius + boom_key_radius) ^ 2 '
                '- (key_a + boom_key_radius) ^ 2)'),
     ('key_ty', '=key_yc * collet_radius / (collet_radius + boom_key_radius)'),
 
-    # the convex cap: two arcs whose centres are one radius in from each tab side
+    # the convex cap: two arcs whose centers are one radius in from each tab side
     ('key_cap_half', '=key_a - boom_key_radius'),
     ('key_cap_base', '=key_y_top - 2 * boom_key_radius'),
 

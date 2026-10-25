@@ -51,7 +51,7 @@ FACE_BACK = (0xD2, 0x4B, 0x38)
 EDGE_COLOR = (0x14, 0x18, 0x1F)     # near-black, faintly cool so it sits in the blue
 
 # Floor of the diffuse term: a face pointing fully away still renders at this
-# fraction of its base colour. High enough that the darkest face stays clearly
+# fraction of its base color. High enough that the darkest face stays clearly
 # above the background, which is what keeps a silhouette readable where the part
 # curves away. Face-to-face separation is carried by the edge lines and the
 # occlusion rather than by driving the shading down towards black.
@@ -168,9 +168,9 @@ def _occlusion(
 ) -> np.ndarray:
     """Normal-oriented screen-space ambient occlusion.
 
-    A neighbour occludes this pixel only if it sits nearer than the pixel's own
+    A neighbor occludes this pixel only if it sits nearer than the pixel's own
     tangent plane predicts. Comparing raw depth instead -- the naive form -- counts
-    every sloped surface as self-occluding, because a neighbour 16 px away on an
+    every sloped surface as self-occluding, because a neighbor 16 px away on an
     inclined face is genuinely nearer; the result is a part uniformly darkened
     rather than shaded at its concavities. Using the normal removes that entirely,
     which is worth the extra buffer.
@@ -180,7 +180,7 @@ def _occlusion(
     far the feature sits from the camera.
 
     Samples are also bounded above. Without that, a silhouette -- where the
-    neighbour is a different surface far closer -- reads as maximum occlusion and
+    neighbor is a different surface far closer -- reads as maximum occlusion and
     paints a dark halo around the whole part.
     """
     solid = np.isfinite(zbuf)
@@ -239,18 +239,18 @@ def _edge_strength(
 
     up, down = _shift(z, 1, 0, 0.0), _shift(z, -1, 0, 0.0)
     left, right = _shift(z, 0, 1, 0.0), _shift(z, 0, -1, 0.0)
-    neighbours_solid = (
+    neighbors_solid = (
         _shift(solid, 1, 0, False) & _shift(solid, -1, 0, False)
         & _shift(solid, 0, 1, False) & _shift(solid, 0, -1, False)
     )
 
     laplacian = np.abs(4.0 * z - (up + down + left + right))
-    step = np.where(solid & neighbours_solid,
+    step = np.where(solid & neighbors_solid,
                     _smoothstep(laplacian, 0.6 * unit, 2.6 * unit), 0.0)
 
     # Silhouette: solid abutting background. A genuine discontinuity, so it takes
     # full strength -- its softening comes from supersampling, not from ramping.
-    silhouette = (solid & ~neighbours_solid).astype(np.float32)
+    silhouette = (solid & ~neighbors_solid).astype(np.float32)
 
     # Crease strength ramps in angle rather than in the dot product: the cosine
     # compresses near zero degrees, so equal steps in dot are not equal steps in
@@ -417,7 +417,7 @@ def _render_at(
 def _rasterize(
     image, zbuf, nbuf, sx, sy, depth, colors, normals, x0, x1, y0, y1, order
 ) -> None:
-    """Scatter triangles into the colour, depth, and normal buffers.
+    """Scatter triangles into the color, depth, and normal buffers.
 
     Loops in Python over triangles but vectorizes each triangle's pixel span, which
     is the right split here: parts average a few thousand covered pixels spread over

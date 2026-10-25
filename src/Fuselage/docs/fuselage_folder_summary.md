@@ -102,7 +102,7 @@ exact 4.7625 mm value.
   `cowling_anchor`, `interconnect`.
 - **greeble** — the interlocking detail where a corner registers onto a bulkhead. It is
   the **positive post on the bulkhead**, with a snap rib around it; the corner carries
-  the matching bore and groove, and the longeron snaps into the post's centre through a
+  the matching bore and groove, and the longeron snaps into the post's center through a
   70° mouth. Its wall is sized in extrusions (`2·√U·extrusion_width`, floored at two) so
   it prints crisply at any scale. See [bulkhead.md](../../../doc/design/bulkhead.md).
 - **web / flange / plate** — the internal stiffening structure of a bulkhead.

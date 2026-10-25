@@ -210,12 +210,12 @@ DESIGN = {
         cites=('AR-PRT-1',),
         rationale='decided in OQ-DES-CW6 and stated as a constraint over the whole interior-'
                   'surface section: vase mode spirals a single continuous contour up the part, '
-                  'so a cowl given a modelled wall is no longer vase-mode printable. The '
+                  'so a cowl given a modeled wall is no longer vase-mode printable. The '
                   'interior surface serves the analysis use cases and must not become what the '
                   'print export produces.',
         verifier=None, source='doc/design/cowl.md section 6.4, OQ-DES-CW6'),
     'DES-13': Requirement(
-        'a printed part is modelled in the orientation it prints in -- the print bed is the '
+        'a printed part is modeled in the orientation it prints in -- the print bed is the '
         'x/y plane and +z is the build direction -- and that orientation is chosen so the '
         'layer orientation carries the load the part is designed for',
         cites=('AR-PRT-2',),
@@ -224,7 +224,7 @@ DESIGN = {
                   'whether it builds without support. They interact -- the orientation that '
                   'prints most easily is often not the strongest -- and merging them would '
                   'hide that trade behind one id. **Orientation is recorded by construction**: '
-                  'every existing part is modelled in its print orientation, so the model IS '
+                  'every existing part is modeled in its print orientation, so the model IS '
                   'the record and there is no separate field that can go stale.',
         verifier='review',
         source='OQ-DES-SR1, 2026-08-30; doc/design/corner.md, where the corner is shown to '

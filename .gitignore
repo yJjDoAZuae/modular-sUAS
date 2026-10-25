@@ -10,7 +10,7 @@ __pycache__/
 #
 # Anchored to the repository root with a leading slash. Unanchored, these match at
 # every level, and this project has directories that collide: `parts/` silently hid
-# src/Fuselage/parts -- 122 files and 118 MB of hand-modelled and hardware geometry --
+# src/Fuselage/parts -- 122 files and 118 MB of hand-modeled and hardware geometry --
 # from git entirely. distutils writes all of these at the root, so anchoring keeps the
 # intent and drops the collisions.
 .Python

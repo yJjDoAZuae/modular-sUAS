@@ -6,7 +6,7 @@ the specification, and where the two disagree the document is right and this is 
 
 **What this produces is the solid representation, never the print export.** Cowls print in
 spiral vase mode, which spirals one contour per layer and admits no interior geometry at all,
-so a cowl given a modelled inner surface is no longer vase-printable (OQ-DES-CW6,
+so a cowl given a modeled inner surface is no longer vase-printable (OQ-DES-CW6,
 [cowl.md](../../../doc/design/cowl.md) section 6.4). The un-shelled notched blank stays what
 UC-1 exports. That is why the shelled cowls are separate *kinds* -- `nose_cowl_shell` and
 `tail_shell` -- rather than an improvement applied to `nose_cowl` and `tail`: two kinds cannot
@@ -65,7 +65,7 @@ import FreeCAD as App
 import Part
 
 
-#: Section 5: the tolerance on the **wall**, in millimetres, and **absolute at every `U`**.
+#: Section 5: the tolerance on the **wall**, in millimeters, and **absolute at every `U`**.
 #: The wall is `n_p * w` thick at every scale because extrusion width is a property of the
 #: machine, so a tolerance that scaled with `U` would be 2% of the wall at U=0.5 and 67% of it
 #: at U=4. The algorithm document states the reasoning and IP-FC-56 is the precedent for
@@ -99,7 +99,7 @@ import Part
 #: `WALL_TOL` without reading those two questions first.
 TAU = 0.05
 
-#: Section 6: the acceptance tolerance on the **finished wall's own thickness**, in millimetres.
+#: Section 6: the acceptance tolerance on the **finished wall's own thickness**, in millimeters.
 #:
 #: **One-sided, and five times tighter than `TAU`.** The failure mode this bounds is the slicer
 #: declining to lay a perimeter down at all: that decision is near-binary in the wall's measured
@@ -173,7 +173,7 @@ TAU = 0.05
 #: section at only 5 to 9 of 12 stations on the grid a saved wall permits and are **not judged**; on
 #: the stations that do section they read 0.0011 to 0.0115 mm, five of six inside this tolerance.
 #:
-#: **Where the corner artefact lives is a clean split between the kinds.** The corner-excluded
+#: **Where the corner artifact lives is a clean split between the kinds.** The corner-excluded
 #: measure takes its minimum over a subset of the incumbent's samples, so it can never report more
 #: thinness. On the nose the incumbent reads 0.027 to 0.039 mm where it reads 0.001 to 0.012, so the
 #: incumbent's reading there is dominated by distances cutting across concave corners. On the tail
@@ -184,7 +184,7 @@ TAU = 0.05
 #: **Three earlier versions of this note were wrong, and the third was the worst.** The first said
 #: the tolerance was unmet "at every `U` measured", overstating what the instrument could show. The
 #: second (2026-10-06) pointed at the soak's 0.0067 mm reading for the nose at `U` = 3.0 as evidence
-#: the construction can reach this tolerance; it is a station-placement artefact of the body-based
+#: the construction can reach this tolerance; it is a station-placement artifact of the body-based
 #: grid, and on stations that reach the thin region both instruments read **0.0519 mm** there. The
 #: third (2026-10-10) reported 0.1514 and 0.2136 mm at `U` = 3 and 4 and a defect worsening with
 #: `U`; those came from a fixed sample count and are withdrawn, as the paragraph above records.
@@ -210,7 +210,7 @@ WALL_TOL = 0.01
 #: make the axial pole track near-degenerate (OQ-DES-CW24, cowl_interior_surface.md section 4.1).
 MIN_INTERVAL = 0.20
 
-#: Circumferential spacing, in millimetres, for the grid the surface is **fitted through**,
+#: Circumferential spacing, in millimeters, for the grid the surface is **fitted through**,
 #: and the range the resulting count is clamped to.
 #:
 #: **This is set by the shape being fitted, and that shape is smooth.** The surface follows the
@@ -228,7 +228,7 @@ FIT_ARC = 1.0
 FIT_MIN = 120
 FIT_MAX = 1200
 
-#: Circumferential spacing, in millimetres, for **evaluating** the fitted surface against the
+#: Circumferential spacing, in millimeters, for **evaluating** the fitted surface against the
 #: wall tolerance, and the range that count is clamped to.
 #:
 #: **This is the one the rib sets.** A check that steps over a rib cannot see a wall violation
@@ -288,7 +288,7 @@ RIB_FACETS = 48
 #: rather than silent.
 FLAT_TOL = 1.0e-9
 
-#: How much dilated rib may remain inside the finished cavity, in cubic millimetres.
+#: How much dilated rib may remain inside the finished cavity, in cubic millimeters.
 #:
 #: **Zero is the right answer and the measured one.** `cavity` subtracts the dilated ribs from
 #: the smooth interior, so afterwards the two must not intersect at all: on a correct build,
@@ -368,11 +368,11 @@ FINISHED_PLANE_TOL = 0.5
 #: sharp local peak actually lives -- a notch tool's own boundary, not its interior. Measured
 #: 2026-09-25/26: even a 1 mm-spaced uniform scan alone landed 0.0453-0.0471 mm against the
 #: acceptance check's own 0.0531 mm at the one real flagged station measured this closely --
-#: consistently short by about the same amount a scan missing a sharp peak by a millimetre or
+#: consistently short by about the same amount a scan missing a sharp peak by a millimeter or
 #: two would be, not a difference in what is being measured (that question is settled: section 5
 #: now measures against `notched`'s real exterior, not `body`'s). Getting closer requires finer
 #: sampling exactly at the peak, not everywhere -- a uniform grid fine enough to guarantee that
-#: unaided (sub-millimetre, over a whole 300 mm patch) would multiply this pass's own cost by an
+#: unaided (sub-millimeter, over a whole 300 mm patch) would multiply this pass's own cost by an
 #: order of magnitude for resolution almost none of the patch needs.
 #: **The edge, not the notch's interior.** `feature_stations` already returns exactly the
 #: axial positions a rib's own ramp starts, ends, or meets the cut plane. The reason those are
@@ -381,7 +381,7 @@ FINISHED_PLANE_TOL = 0.5
 #: a crease in it and is not a patch boundary for it -- `_patches` is fed `body`'s creases, not
 #: these. The finished wall at a rib edge is therefore a boolean between a smooth surface and a
 #: dilated tool, and a rib edge is exactly where those two have the least in common. The window
-#: is centred on each one.
+#: is centered on each one.
 #: **Coarsened, 2026-09-27 (OQ-DES-CW22), now that the fit itself is front-loaded with these same
 #: edges.** At 2.0/0.25 this scan alone measured 373-442 points a patch -- more than the rib cut
 #: it was meant to be cheap next to -- and that was before OQ-DES-CW22 found the *uniform* scan
@@ -397,7 +397,7 @@ EDGE_SCAN_STEP = 0.5
 #:
 #: **Measured, not assumed (OQ-DES-CW22, 2026-09-26).** One properly-bisected insertion's effect
 #: on the finished wall's own thickness, on `tail_shell` `U` = 1.0: -0.023 to -0.024 mm within a
-#: millimetre of it, -0.005 to -0.01 mm by 9 mm, under +-0.005 mm by 14 mm, and at most
+#: millimeter of it, -0.005 to -0.01 mm by 9 mm, under +-0.005 mm by 14 mm, and at most
 #: +-0.0012 mm (2.4% of `TAU`) anywhere past 20 mm -- consistent with numerical noise at that
 #: range, not a continuing effect. 20 mm keeps a margin over the 14-15 mm the effect actually
 #: reached in that measurement.
@@ -425,12 +425,12 @@ POST_CUT_RESCAN_MARGIN = 20.0
 #: the curve's speed varies, which on a rounded-rectangle section is everywhere.
 DENSE_FACTOR = 3
 
-#: Stations seeded in a patch before section 5 refines it, per millimetre of patch length,
+#: Stations seeded in a patch before section 5 refines it, per millimeter of patch length,
 #: and the range that is clamped to. **The seed is deliberately thin and the criterion is the
 #: arbiter**, which is what "spacing is derived, not tuned" means: a patch seeded with two
 #: stations and left there is one where the midpoint check found the surface already within
 #: `TAU` of the erosion. Seeding six everywhere instead cost 23 minutes a part on a tail whose
-#: 59 feature stations make 60 patches, most of them a fraction of a millimetre long, and
+#: 59 feature stations make 60 patches, most of them a fraction of a millimeter long, and
 #: bought nothing the criterion did not already guarantee.
 #:
 #: **That cost figure is stale and must not be quoted again: it prices a construction this module
@@ -453,33 +453,33 @@ SEED_LONG_MM = 3.0
 SEED_MIN = 2
 SEED_MAX = 6
 
-#: Target spacing, in millimetres, for the uniform samples a section is refit through, and the
+#: Target spacing, in millimeters, for the uniform samples a section is refit through, and the
 #: range the resulting count is clamped to. See `eroded_body` for why the spacing has to be
 #: uniform and why there is a ladder above it.
 SAMPLE_SPACING = 0.25
 SAMPLE_MIN = 400
 SAMPLE_MAX = 3000
 
-#: How far a section may move when it is refit as one B-spline, in millimetres. A tenth of
+#: How far a section may move when it is refit as one B-spline, in millimeters. A tenth of
 #: `TAU`, because the refit is of the *exterior* the wall is measured from: an error here is
 #: not a fitting error to be refined away but a changed part, and it would show up in the
 #: wall-thickness check as a bias no station disagrees with.
 REFIT_TOL = 0.005
 
 #: Fuzzy tolerances tried, in order, for the one boolean that needs one: taking the dilated
-#: notches out of the eroded section. Millimetres. Unused since the ribs became a 3-D cut; see
+#: notches out of the eroded section. Millimeters. Unused since the ribs became a 3-D cut; see
 #: ladder climbed against the result rather than a single value.
 #:
 #: The ceiling is a fifth of `TAU`, which bounds the whole mechanism: whichever rung answers,
 #: the section cannot have moved by more than that, and `TAU` is itself a twelfth of the wall.
 CUT_FUZZ_LADDER = (1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2)
 
-#: Below this area, in square millimetres, a clipped notch section is a tangency artifact and
+#: Below this area, in square millimeters, a clipped notch section is a tangency artifact and
 #: not a notch. The narrowest notch the design has is `buttress_cut_thickness` = 0.1 mm wide,
 #: so even a 0.1 mm long one encloses 0.01 mm2 -- four orders above this.
 SLIVER_AREA = 1.0e-6
 
-#: Below this perimeter, in millimetres, a loop left by the notch subtraction is boolean debris
+#: Below this perimeter, in millimeters, a loop left by the notch subtraction is boolean debris
 #: rather than a hole. See `_one_region`, which records why the floor sits where it does and
 #: what it is checked against.
 SLIVER_LENGTH = 0.01
@@ -502,7 +502,7 @@ SLOPE_SLACK = 0.5
 
 #: Angular half-window, in bins of one degree, searched when measuring a point against a
 #: polyline. Both contours are star-shaped about the section centroid -- a 1.3 mm slot in a
-#: body tens of millimetres across leaves them so -- which makes the nearest segment a local
+#: body tens of millimeters across leaves them so -- which makes the nearest segment a local
 #: one and turns an O(n*m) scan into an O(n) one. 25 degrees is far wider than any nearest
 #: point observed and is what makes the pruning safe rather than merely fast.
 ANGLE_WINDOW = 25
@@ -643,7 +643,7 @@ class _Polyline(object):
     last point back to the first with `np.roll`, which is right for a full loop and wrong for
     an open one: it silently adds a chord straight across the two cut-plane ends, and a point
     near that end -- which is exactly where an eroded interior arc's own ends sit, by
-    construction -- then measures as a few nanometres from the *chord* rather than from the
+    construction -- then measures as a few nanometers from the *chord* rather than from the
     true exterior, reporting a wall gap of zero instead of `t`. Measured on the tail at
     `U` = 0.5: the worst wall error read exactly 0.6000 mm, unmoving across four refinement
     passes, because the check was seeing the chord, not the surface.
@@ -800,7 +800,7 @@ def smoothed(wire, n, tol=REFIT_TOL):
     tail -- and on the smaller forward sections the shortest of those is under 0.05 mm. OCC's
     2-D offset refuses that input: measured 2026-09-02 over 81 stations, 19 returned
     `makeOffset2D: result of offsetting is null!`, every one of them forward of z = -42.5 where
-    the section has shrunk enough to bring the fragments below a tenth of a millimetre. Neither
+    the section has shrunk enough to bring the fragments below a tenth of a millimeter. Neither
     join style, nor `intersection`, nor `removeSplitter`, nor a 1600-point polygon changed any
     of them; a single B-spline through the same points offset correctly on the first try.
 
@@ -809,7 +809,7 @@ def smoothed(wire, n, tol=REFIT_TOL):
     here is the fragmentation, so the fragmentation is what is fixed.
 
     **Every station is smoothed, not only the ones that fail.** Two constructions across a stack
-    of contours would put a systematic step between a station offset directly and its neighbour
+    of contours would put a systematic step between a station offset directly and its neighbor
     offset from a refit, and the path that runs on 62 stations of 81 is not the path that gets
     exercised when something breaks.
 
@@ -1371,8 +1371,8 @@ def tool_clearance_ranked(surf_shape, tool_shapes, z):
 CHEEK_DOT = 0.9
 
 #: How many points of a tool's own section to test against the interior candidate solid when
-#: deciding whether the two cross at a station. 120 around a section a few millimetres across
-#: resolves a crossing at a fraction of a millimetre, which is all this has to distinguish; the
+#: deciding whether the two cross at a station. 120 around a section a few millimeters across
+#: resolves a crossing at a fraction of a millimeter, which is all this has to distinguish; the
 #: in-plane distance itself is still measured at `_min_wire_distance`'s own 400.
 CROSSING_SAMPLES = 120
 
@@ -1401,7 +1401,7 @@ FACE_IMAGE_TOL = 0.01
 FLOOR_DOT = 0.5
 
 
-#: How far to step off a face to decide which way is out of the solid, in millimetres.
+#: How far to step off a face to decide which way is out of the solid, in millimeters.
 #:
 #: It has to stay well inside the thinnest dimension the solid has, which for a cutting tool is
 #: `buttress_cut_thickness` = 0.1 mm between its two cheeks: a step of half that or more would
@@ -1415,7 +1415,7 @@ def _outward_normal(face, solid, step=OUTWARD_STEP_MM):
     **Read by displacement, not from `Face.Orientation`.** The orientation flag does not survive
     the way these tools are built: measured 2026-10-04 on `tail_shell`'s eleven cutting tools,
     every slab reports *both* of its cheeks as `Forward`, so flipping on the flag returns the
-    same normal for two opposite faces of one solid -- impossible, and it mislabelled the cut
+    same normal for two opposite faces of one solid -- impossible, and it mislabeled the cut
     floor as the far face on every tool. Stepping off the face and asking the solid which side
     the point is on cannot be fooled that way.
 
@@ -1460,7 +1460,7 @@ def tool_face_roles(raw_tool):
         nothing. A minimum landing here would mean the measurement is reading a face the part
         does not have.
 
-    Labelled from the geometry rather than from the construction, so a tool built another way
+    Labeled from the geometry rather than from the construction, so a tool built another way
     still classifies. `e` is `slab_normal`: the slab's own thin direction. `a` is the direction
     from the tool toward the part's own z axis, projected perpendicular to `e` -- every buttress
     cut enters from outside the blank and reaches inward, so that is the direction the cut
@@ -1522,7 +1522,7 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
 
     **`second_role` is not redundant.** Where the two nearest faces are the same distance away,
     the contact is on the edge between them rather than on either face, which is the
-    near-tangency signature IP-FC-137 describes -- and a minimum of a few nanometres on a
+    near-tangency signature IP-FC-137 describes -- and a minimum of a few nanometers on a
     tool edge means something different from one on a tool face.
 
     **`crossing` is the field that decides what the whole metric is worth, and it is not a
@@ -1780,7 +1780,7 @@ def contour(face_or_wire, n, anchor=0.0):
     # sampling and not of the curve.** `makeOffset2D` hands back a wire whose edge list starts
     # wherever the kernel left it, and `Wire.discretize` allocates its points per edge, so a
     # rotated edge list slides every sample along the curve -- measured 2026-09-04 on the tail,
-    # up to 0.068 mm on a contour identical to 65 nanometres. An unweighted centroid moves with
+    # up to 0.068 mm on a contour identical to 65 nanometers. An unweighted centroid moves with
     # that, the anchor ray swings with the centroid, and the parameter origin slides. It showed
     # up as the two end rows of a patch differing between processes by 0.0570 and 0.0169 mm
     # with the mean equal to the maximum -- every point shifted by the same amount, which is a
@@ -1804,7 +1804,7 @@ def contour(face_or_wire, n, anchor=0.0):
     # x = -0.050..0.050 and y = -0.050..0.050 -- so anchoring on +x put the parameter origin
     # inside a dent. As the dent's depth ramps between stations the crossing jumps from one
     # side of it to the other, the arc-length parameterisation rotates by that much between
-    # neighbouring rows, and the fitted surface twists so badly that a z plane no longer cuts
+    # neighboring rows, and the fitted surface twists so badly that a z plane no longer cuts
     # it in one closed loop. The refinement then subdivides forever at a *measured gap of
     # zero*, because the intervals never reach the deviation test.
     #
@@ -1816,7 +1816,7 @@ def contour(face_or_wire, n, anchor=0.0):
     # the build reproducible.** `makeOffset2D` returns the eroded contour as a wire whose edge
     # list starts wherever the kernel left it: measured 2026-09-04 on the tail at z = -59.9996,
     # two processes produced the same ten edges with the same lengths and the same start points
-    # to nine decimals, rotated by one position. The curve is identical -- 65 nanometres between
+    # to nine decimals, rotated by one position. The curve is identical -- 65 nanometers between
     # the two point sets -- but `Wire.discretize` allocates its points per edge, and this wire's
     # edges run from 0.0417 mm to 151.9 mm, so the rotation slides every sample along the curve
     # by up to 0.068 mm.
@@ -2085,7 +2085,7 @@ def _thin_stations(zs, floor):
     **Both end stations are preserved exactly.** A patch boundary is a station the patches on
     both sides must sample at the same `z`, or their two approximations of it are separated by
     this filter rather than meeting (see `_seed`'s own note on `END_INSET`). The last station is
-    therefore restored even when the greedy pass would have dropped it, displacing its neighbour
+    therefore restored even when the greedy pass would have dropped it, displacing its neighbor
     instead.
     """
     if len(zs) < 2:
@@ -2124,7 +2124,7 @@ def _fit(rows):
     approximately once mirrored back together -- an approximation `removeSplitter` could not
     clean up, surfacing as a near-zero-area seam face and a `fuse`/cut that failed on it. An open
     fit has nothing to round, because the boundary it is asked to hold is a real edge of the
-    thing being fitted, not an artefact of how the loop was closed.
+    thing being fitted, not an artifact of how the loop was closed.
 
     The periodicity comes from curves that really have it, and is carried into the surface by
     `buildFromPolesMultsKnots`. Every row carries the same number of points and is given the
@@ -2531,7 +2531,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         same flat side. Measured directly: this gave `_finished_wall_gap` a 'thinnest' of
         0.006-0.09 mm (a 0.59-0.55 mm 'gap') at *every* station near the cell's open end on a
         `U` = 1.0 build previously always clean, because the closing chord passed within a tenth
-        of a millimetre of real, legitimate interior points nowhere near any actual notch.
+        of a millimeter of real, legitimate interior points nowhere near any actual notch.
         `outer_at` above never had this failure because `open_contour` already builds its
         polyline `closed=False` -- the same discipline, applied here without `open_arc`'s own
         chain-assembly step, which is what could not be reused in the first place.
@@ -3195,7 +3195,7 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
         # `RIB_CUT_FUZZ` applied to resolve a real near-tangency defect (see that constant),
         # left the cell-boundary cap as two adjacent faces (1857.29 + 151.93 mm2) instead of the
         # one contiguous face (2009.22 mm2) a plain cut produces -- same combined area, same
-        # plane, sharing an edge that is an artefact of the cut, not a real boundary. Extending
+        # plane, sharing an edge that is an artifact of the cut, not a real boundary. Extending
         # each piece separately would extrude a lateral wall along that shared edge twice, once
         # from each side, which is why the very first version of this fix produced a shell that
         # sewed but did not solidify validly. Coplanar faces fuse and merge cleanly -- unlike the

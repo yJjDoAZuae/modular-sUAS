@@ -58,7 +58,7 @@ def sheet(doc, seed=None):
 
 
 def _at(obj, x_expr, y_expr):
-    """Place a solid of revolution at the bolt centre."""
+    """Place a solid of revolution at the bolt center."""
     obj.setExpression('Placement.Base.x', x_expr)
     obj.setExpression('Placement.Base.y', y_expr)
     return obj
@@ -74,7 +74,7 @@ def bolt_positives(doc):
     """The boss, its chamfer and its web -- the three an ordinary bulkhead carries.
 
     Guarded by `if (!is_interconnect)` in the source, so an interconnect drops all three;
-    it bolts to its neighbour rather than carrying a bolt of its own.
+    it bolts to its neighbor rather than carrying a bolt of its own.
     """
     P = 'Params.'
     bx, by = P + 'bolt_x', P + 'bolt_x'

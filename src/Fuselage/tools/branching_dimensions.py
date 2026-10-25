@@ -169,7 +169,7 @@ def sweep():
 
 #: A relation whose body contains one of these branches without calling `max` or `min`, so the
 #: watcher above cannot see it. Matched on source text, which is a weak instrument and is
-#: labelled as one in the output.
+#: labeled as one in the output.
 CONDITIONAL = re.compile(r'\bif\b.*\belse\b|^\s*if\b', re.M)
 
 
@@ -196,7 +196,7 @@ def params_inputs(kind):
     """Exactly what `corner_common.Params` takes, per variant, read off the sweep.
 
     Every name here is a key the sweep actually carries -- checked 2026-09-06 rather than
-    assumed, because reconstructing a constructor's arguments from a neighbouring vocabulary
+    assumed, because reconstructing a constructor's arguments from a neighboring vocabulary
     is the kind of guess that produces a plausible wrong number.
     """
     const = cd.constants()

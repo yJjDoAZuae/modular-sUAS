@@ -15,7 +15,7 @@ Three shapes come out of the same octant, and all three have call sites:
     oml_outer_shape   the material before the bores -- an L of two rectangles plus the corner
                       disc, less the panel notch and the diagonal mask that trims it to its
                       wedge. `bulkhead_web.py` intersects against it.
-    oml_inner_shape   the bores alone: the longeron bore at the corner centre and the bolt
+    oml_inner_shape   the bores alone: the longeron bore at the corner center and the bolt
                       hole inboard of it. The assembly subtracts it.
     oml_shape         outer less bores, which is what the erosions start from.
 
@@ -67,7 +67,7 @@ PARAMS = [
     ('bolt_offset', '8.0'),
 
     # The diagonal mask's overlap past the mirror line, zero here and `eps` in the OpenSCAD
-    # source. Same row, same reason as `bulkhead_cuts.mask_eps` -- CGAL wants neighbouring
+    # source. Same row, same reason as `bulkhead_cuts.mask_eps` -- CGAL wants neighboring
     # octants to interpenetrate before it unions them, OCCT is harmed by it (IP-FC-49). Kept
     # named rather than dropped so a reader can see the source says `+ eps` on purpose.
     #
@@ -125,7 +125,7 @@ def outer_octant(doc, tag):
 
 
 def bores_octant(doc, tag):
-    """One eighth of the bores: the longeron at the corner centre, the bolt hole inboard."""
+    """One eighth of the bores: the longeron at the corner center, the bolt hole inboard."""
     return _union(doc, tag + 'OmlBores', [
         plane2d.disc(doc, tag + 'OmlLongeron', P + 'lon_r'),
         plane2d.disc(doc, tag + 'OmlBolt', P + 'bolt_hole_radius',
