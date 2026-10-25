@@ -148,8 +148,21 @@ def _log_handle():
     return open(path, 'w', encoding='utf-8', newline='\n')
 
 
-def raster(page, scene, path, say):
+#: Margin in mm around a documentation figure's content when it is cropped to it.
+FIGURE_MARGIN_MM = 4.0
+
+
+def raster(page, scene, path, say, figure=False):
     """Paint the page scene into a PNG. Returns True if a file came out.
+
+    **`figure=True` is for a documentation figure rather than a released sheet.** A figure has no
+    frame and no title block -- it is a picture in a document, not a drawing anyone signs -- so the
+    paper is the drawn content's own bounding rectangle plus a margin rather than a sheet size read
+    off a template. It still has a template, because a `DrawPage` cannot exist without one, and
+    that blank template's size still matters: a page's frame is itself an item in the scene, so the
+    crop can never come in tighter than the sheet, and the caller is expected to size the sheet to
+    the figure. Within that, cropping to the content is what stops a label placed past the frame
+    from being cut off -- there is no frame to fall outside of.
 
     **The white fill is not cosmetic.** A `QImage` starts transparent and TechDraw draws a
     drawing in black on nothing; saved as a PNG with an alpha channel, that is black-on-black
@@ -176,25 +189,64 @@ def raster(page, scene, path, say):
     """
     from PySide6 import QtCore, QtGui
 
-    template = getattr(page, 'Template', None)
-    if template is None:
-        say('    .png  the page has no template, so nothing states the sheet size')
-        return False
-    paper_mm = (float(template.Width), float(template.Height))
-    wide = paper_mm[0] / MM_PER_SCENE_UNIT
-    tall = paper_mm[1] / MM_PER_SCENE_UNIT
-    box = QtCore.QRectF(0.0, -tall, wide, tall)
-    if box.isEmpty():
-        say('    .png  the template reports a %g x %g mm sheet' % paper_mm)
-        return False
+    if figure:
+        box = scene.itemsBoundingRect()
+        if box.isEmpty():
+            say('    .png  the scene has no items, so there is nothing to crop to')
+            return False
+        # **The content rect is bounded by the sheet, because a figure is never bigger than the
+        # page it is on.** `itemsBoundingRect` is every object the scene carries, hidden ones
+        # and off-sheet ones included -- the note above says so for the released path -- and one
+        # such object made a 627 mm tall raster out of 166 mm of drawing. The obvious repair,
+        # uniting the visible items instead, cannot be used: iterating `scene.items()` and
+        # asking each for its `sceneBoundingRect` crashes the renderer outright (access
+        # violation, FreeCAD 1.1.3). Intersecting with the sheet needs no iteration.
+        template = getattr(page, 'Template', None)
+        if template is not None:
+            sheet = QtCore.QRectF(0.0, -float(template.Height) / MM_PER_SCENE_UNIT,
+                                  float(template.Width) / MM_PER_SCENE_UNIT,
+                                  float(template.Height) / MM_PER_SCENE_UNIT)
+            trimmed = box.intersected(sheet)
+            if not trimmed.isEmpty() and trimmed != box:
+                say('    .png  the scene reaches %.1f x %.1f mm; cropping within the %.0f x '
+                    '%.0f mm sheet' % (box.width() * MM_PER_SCENE_UNIT,
+                                       box.height() * MM_PER_SCENE_UNIT,
+                                       float(template.Width), float(template.Height)))
+                box = trimmed
+        margin = FIGURE_MARGIN_MM / MM_PER_SCENE_UNIT
+        box = box.adjusted(-margin, -margin, margin, margin)
+        say('    .png  figure crop: %.1f x %.1f mm of content'
+            % (box.width() * MM_PER_SCENE_UNIT, box.height() * MM_PER_SCENE_UNIT))
+    else:
+        template = getattr(page, 'Template', None)
+        if template is None:
+            say('    .png  the page has no template, so nothing states the sheet size')
+            return False
+        paper_mm = (float(template.Width), float(template.Height))
+        wide = paper_mm[0] / MM_PER_SCENE_UNIT
+        tall = paper_mm[1] / MM_PER_SCENE_UNIT
+        box = QtCore.QRectF(0.0, -tall, wide, tall)
+        if box.isEmpty():
+            say('    .png  the template reports a %g x %g mm sheet' % paper_mm)
+            return False
 
-    slack = SPILL_TOLERANCE_MM / MM_PER_SCENE_UNIT
-    spill = scene.itemsBoundingRect()
-    if not box.adjusted(-slack, -slack, slack, slack).contains(spill):
-        say('    .png  NOTE: something is drawn off the paper (items span %.1f x %.1f mm '
-            'against a %.1f x %.1f mm sheet)'
-            % (spill.width() * MM_PER_SCENE_UNIT, spill.height() * MM_PER_SCENE_UNIT,
-               box.width() * MM_PER_SCENE_UNIT, box.height() * MM_PER_SCENE_UNIT))
+        # **This warning can fire with every view on the sheet, so check before chasing it.**
+        # `itemsBoundingRect` is the Qt scene's, which holds more than the page's own views.
+        # Measured 2026-10-24 on the two CW25 figure pages: page 2 reported a 653.8 mm span
+        # against a 240 mm sheet, while every `DrawViewPart` and `DrawViewAnnotation` on it sat
+        # inside the sheet -- the two views spanning y 103.65..206.35 and 120..190, and no
+        # annotation outside 47..213. Page 1, structurally identical, reported 243.2. Nothing
+        # was clipped from either raster. So read the number as "the scene is bigger than the
+        # paper", which is a reason to go and measure the views, and not as "a view is off the
+        # sheet", which it does not establish. The source-extent check that settles it is
+        # `view.Source[0].Shape.BoundBox` scaled by `view.Scale` about `view.X/Y`.
+        slack = SPILL_TOLERANCE_MM / MM_PER_SCENE_UNIT
+        spill = scene.itemsBoundingRect()
+        if not box.adjusted(-slack, -slack, slack, slack).contains(spill):
+            say('    .png  NOTE: the scene spans %.1f x %.1f mm against a %.1f x %.1f mm sheet; '
+                'check the views before assuming one is off the paper'
+                % (spill.width() * MM_PER_SCENE_UNIT, spill.height() * MM_PER_SCENE_UNIT,
+                   box.width() * MM_PER_SCENE_UNIT, box.height() * MM_PER_SCENE_UNIT))
 
     pixels_per_unit = MM_PER_SCENE_UNIT * RASTER_DPI / MM_PER_INCH
     width = int(round(box.width() * pixels_per_unit))
@@ -280,7 +332,7 @@ def apply_appearance(obj, view_object, say):
     return applied, missing
 
 
-def show_everything(doc, say):
+def show_everything(doc, say, figure=False):
     """Turn on every view provider in the document, and give it the sheet's appearance.
 
     See the module docstring: a document written by `freecadcmd` has no view provider state,
@@ -299,6 +351,16 @@ def show_everything(doc, say):
     for obj in doc.Objects:
         view_object = getattr(obj, 'ViewObject', None)
         if view_object is None:
+            continue
+        # **A figure's template stays hidden.** A `DrawPage` cannot exist without a template,
+        # so a figure carries a blank one -- but TechDraw still draws that template's page
+        # rectangle, which lands in the figure as a stray empty box. It is furniture from an
+        # object that exists only to satisfy the page, so in figure mode it is not shown.
+        if figure and obj.isDerivedFrom('TechDraw::DrawTemplate'):
+            try:
+                view_object.Visibility = False
+            except Exception:                                           # noqa: BLE001
+                pass
             continue
         try:
             view_object.Visibility = True
@@ -350,7 +412,7 @@ def settle(scene, say):
     return time.time() - started
 
 
-def render_page(page, stem, say):
+def render_page(page, stem, say, figure=False):
     """Render one page to `stem.svg`/`.pdf`/`.png`. Returns the paths written.
 
     Split out of `render_one` so a multi-sheet drawing -- a bulkhead's plan and its corner
@@ -376,20 +438,20 @@ def render_page(page, stem, say):
     say('    %d scene item(s)%s'
         % (items, '  THIN' if items < THIN_SCENE else ''))
 
-    made = render(page, stem, say)
+    made = [] if figure else render(page, stem, say)
     if scene is not None:
         png = stem + '.png'
         if os.path.isfile(png):
             os.remove(png)
         try:
-            if raster(page, scene, png, say):
+            if raster(page, scene, png, say, figure=figure):
                 made.append(png)
         except Exception as exc:                                        # noqa: BLE001
             say('    .png  not written: %s: %s' % (type(exc).__name__, exc))
     return made
 
 
-def render_one(source, stem, say):
+def render_one(source, stem, say, figure=False):
     """Open one `.FCStd`, render every page in it, close it. Returns True if anything was written.
 
     **Every page, not the first.** `drawing.build_sheets` can put more than one page in a
@@ -404,7 +466,7 @@ def render_one(source, stem, say):
 
     doc = FreeCAD.openDocument(source)
     try:
-        say('    %d view provider(s) shown' % show_everything(doc, say))
+        say('    %d view provider(s) shown' % show_everything(doc, say, figure=figure))
         pages = [o for o in doc.Objects if o.isDerivedFrom('TechDraw::DrawPage')]
         if not pages:
             say('    no DrawPage in this document')
@@ -419,7 +481,7 @@ def render_one(source, stem, say):
             page_stem = sheet_naming.sheet_stem(stem, number)
             if len(pages) > 1:
                 say('  %s' % os.path.basename(page_stem))
-            made += render_page(page, page_stem, say)
+            made += render_page(page, page_stem, say, figure=figure)
         return bool(made)
     finally:
         FreeCAD.closeDocument(doc.Name)
@@ -442,12 +504,13 @@ def main():
     ok = 0
     for job in jobs:
         source, stem = job['fcstd'], job['stem']
+        figure = bool(job.get('figure'))
         say('  %s' % os.path.basename(stem))
         if not os.path.isfile(source):
             say('    no such document: %s' % source)
             continue
         try:
-            if render_one(source, stem, say):
+            if render_one(source, stem, say, figure=figure):
                 ok += 1
         except Exception:                                               # noqa: BLE001
             say('    EXCEPTION')

@@ -47,14 +47,20 @@ TIMEOUT_BASE = 120.0
 TIMEOUT_PER_SHEET = 30.0
 
 
-def jobs_for(out_dir, only=None):
+def jobs_for(out_dir, only=None, figure=False):
     """Every `.FCStd` in `out_dir` as a render job, sorted so a run is reproducible."""
     jobs = []
     for path in sorted(glob.glob(os.path.join(out_dir, '*.FCStd'))):
         stem = path[:-len('.FCStd')]
         if only and os.path.basename(stem) != only:
             continue
-        jobs.append({'fcstd': path, 'stem': stem})
+        job = {'fcstd': path, 'stem': stem}
+        if figure:
+            # A documentation figure: no frame, no title block, cropped to its own
+            # content and painted on white. PNG only -- an SVG export carries no
+            # background, which is black-on-dark in any viewer with a dark theme.
+            job['figure'] = True
+        jobs.append(job)
     return jobs
 
 
@@ -97,13 +103,18 @@ def render(jobs, out_dir, echo=print):
                 if line.strip():
                     echo('  ' + line)
 
+    # A figure writes only `.png`; a sheet writes `.svg`/`.pdf`. Checking the wrong one
+    # would report every figure as a failure.
     return [job['stem'] for job in jobs
-            if os.path.isfile(job['stem'] + '.svg') or os.path.isfile(job['stem'] + '.pdf')]
+            if (os.path.isfile(job['stem'] + '.png') if job.get('figure')
+                else (os.path.isfile(job['stem'] + '.svg')
+                      or os.path.isfile(job['stem'] + '.pdf')))]
 
 
 def main(argv):
     out_dir = DEFAULT_OUT
     only = None
+    figure = '--figure' in argv
     for i, arg in enumerate(argv):
         if arg == '--out' and i + 1 < len(argv):
             out_dir = argv[i + 1]
@@ -114,8 +125,9 @@ def main(argv):
         print('no such directory: %s' % out_dir)
         return 2
 
-    jobs = jobs_for(out_dir, only)
-    print('RENDERING %d sheet(s) with TechDraw' % len(jobs))
+    jobs = jobs_for(out_dir, only, figure=figure)
+    print('RENDERING %d %s with TechDraw'
+          % (len(jobs), 'figure(s)' if figure else 'sheet(s)'))
     done = render(jobs, out_dir)
     print('')
     print('  rendered %d of %d' % (len(done), len(jobs)))
