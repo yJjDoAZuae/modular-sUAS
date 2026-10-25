@@ -24,7 +24,7 @@ DES-12, a different requirement, and only cites `overhang_angle_from_bed` in com
 explaining why the nose's cap pieces are excluded from its own scope.
 
 **The bed is the x/y plane and +z the build direction (DES-13)**, so the test is a dot product
-against -z per face -- no orientation input is needed, because parts are modelled in their print
+against -z per face -- no orientation input is needed, because parts are modeled in their print
 orientation by construction. For a face's outward unit normal `N`, the angle from the bed is
 `degrees(acos(-N.z))`, valid where `N.z < 0` (a face with `N.z >= 0` faces level or upward and
 needs no support, so it is not evaluated): `N = (0,0,-1)`, a flat ceiling, gives 0 degrees;
@@ -132,7 +132,7 @@ def face_worst_angle(face):
 
 
 #: How close a face has to sit to the part's own base to count as bed contact rather than an
-#: overhang. Exact rather than generous, because every part in this project is modelled from
+#: overhang. Exact rather than generous, because every part in this project is modeled from
 #: closed-form expressions and a face that is genuinely on the bed sits there to the last bit
 #: of double precision -- a face merely *near* the base by this much is a real, if small,
 #: unsupported gap and should still be judged.
@@ -142,7 +142,7 @@ BED_CONTACT_TOL = 1.0e-6
 #: on the corner, checked at its own reference configuration: two flat downward facets, each
 #: about 0.16 mm square (0.0255 and 0.0273 mm2), sitting exactly at z = 6.0 and z = 11.99 --
 #: `bulkhead_thickness` and `2 * bulkhead_thickness - eps`, the corner's own section-boundary
-#: seams (IP-FC-55's axial overlap sites), not a modelled feature. Both are two orders of
+#: seams (IP-FC-55's axial overlap sites), not a modeled feature. Both are two orders of
 #: magnitude below a real dimensioned flat this project treats as significant -- the bulkhead
 #: seating flats OQ-DES-B13 measured losing are 3.15 mm2 each -- and an order of magnitude
 #: under a single nozzle's own footprint (0.4 mm extrusion width squared is 0.16 mm2), so a
@@ -157,7 +157,7 @@ def overhangs(shape, limit=LIMIT_DEG, slack=SLACK_DEG, min_area=MIN_AREA_MM2):
     """Every face shallower than `limit`, as (face index, worst angle, (u, v)).
 
     **A face resting on the bed is not an overhang, and is excluded before the angle is even
-    asked.** Every part in this project is modelled sitting on the bed at its own z minimum
+    asked.** Every part in this project is modeled sitting on the bed at its own z minimum
     (`EXPECT_BBOX` starts at 0.0 in every module that has one) -- printing that face is the
     first layer, not unsupported air. Found empirically: the boom bulkhead's own flat base, a
     face entirely at z = 0, reads as a 0-degree ceiling by the angle test alone, which is

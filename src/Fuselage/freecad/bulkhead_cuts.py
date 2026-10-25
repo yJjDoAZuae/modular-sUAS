@@ -80,7 +80,7 @@ PARAMS = [
     # have no way to know the OpenSCAD source says `mask_lo + eps` on purpose.
     ('mask_eps', '0.0'),
 
-    # through_cut(extent) = 3 * extent, centred; mask_reach(extent) = 2 * extent
+    # through_cut(extent) = 3 * extent, centered; mask_reach(extent) = 2 * extent
     ('through_h', '=3 * bulkhead_thickness'),
     ('through_z', '=-through_h / 2'),
     ('mask_reach', '=2 * corner_radius'),
@@ -209,7 +209,7 @@ def octant_mask(doc):
 
     Both shifts are `mask_eps`, which is 0 here and `eps` in the OpenSCAD source -- see the
     row for why the kernels want opposite things. At `mask_eps = 0` the octant stops one
-    plane short of overlapping its neighbour and meets it exactly instead, which is also
+    plane short of overlapping its neighbor and meets it exactly instead, which is also
     what makes the tiled part exactly eight times the octant rather than slightly less.
     """
     P = 'Params.'
@@ -236,7 +236,7 @@ def cuts(doc, is_cowling=False, is_interconnect=False):
     not mate with a corner through a greeble, so there is no socket to open or clean up.
 
     `BoltHole` is the other of the source's `if` gates, `if (!is_interconnect)` -- an
-    interconnect bolts to its neighbour rather than carrying a bolt hole of its own, and
+    interconnect bolts to its neighbor rather than carrying a bolt hole of its own, and
     `is_cowling`/`is_interconnect` never both hold, so the two conditions never conflict.
     """
     P = 'Params.'

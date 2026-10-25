@@ -92,7 +92,7 @@ def sweep(measures, Part, App, nominal, records=None, stations=corpus.STATIONS, 
     *body*-based station grid, and this corpus can only produce the *wall*-based one
     (`corpus.station_grid`), so differencing against the recorded column compares answers about
     different places. Measuring every instrument here, on these stations, is the comparison that
-    is actually valid. The recorded column is still carried, labelled as what it is.
+    is actually valid. The recorded column is still carried, labeled as what it is.
 
     Section extraction is the expensive step and is shared across measures, so a paired run costs
     barely more than a single one.

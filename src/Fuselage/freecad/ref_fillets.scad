@@ -14,8 +14,8 @@
 // result is a true fillet -- these are not the morphological fillet_inner.
 //
 // 3 and 4 differ from 0-2 in outline only: instead of an axis-aligned block they extrude a
-// polygon whose last vertex is the fillet centre pushed one radius along the ray from the
-// bolt centre, so bolt centre / fillet centre / end point are collinear by construction and
+// polygon whose last vertex is the fillet center pushed one radius along the ray from the
+// bolt center, so bolt center / fillet center / end point are collinear by construction and
 // the closing edge doubles back with zero area. Their outlines are quadrilaterals.
 $fa=1;
 $fs=0.05;

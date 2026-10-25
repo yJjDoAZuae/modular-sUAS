@@ -139,7 +139,7 @@ class TestLoadingAndStations:
         """**The defect that lost the nose its stations.** A bounding box on these solids is an
         outer bound only -- measured 2026-10-10, a `nose_cowl_shell` wall at `U` = 4 has a box
         spanning -400 to -12 where the part really spans -200 to -24, twice its length. A box-based
-        grid then places end stations in empty space. Modelled here with a stub whose box is
+        grid then places end stations in empty space. Modeled here with a stub whose box is
         deliberately twice its material."""
 
         class LooseBox(object):

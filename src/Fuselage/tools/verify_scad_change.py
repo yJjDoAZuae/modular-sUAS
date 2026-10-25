@@ -65,7 +65,7 @@ def openscad_binary():
 def sample_parts(output_dir: Path, per_kind: int) -> list[Path]:
     """A spread of parts per kind, taken across the range rather than adjacent.
 
-    Sampling neighbours would exercise one corner of the parameter space; striding
+    Sampling neighbors would exercise one corner of the parameter space; striding
     picks small and large U, which is where scale-dependent breakage shows up.
     """
     chosen: list[Path] = []

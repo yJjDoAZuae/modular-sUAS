@@ -51,7 +51,7 @@ NOSE_PLATE_SEEDS = {
 
 
 def _old_nose_tip_shape(seed):
-    """`cowl.nose_tip()` wants `cut_len`/`plate_diam` as absolute millimetres, not the
+    """`cowl.nose_tip()` wants `cut_len`/`plate_diam` as absolute millimeters, not the
     fractions `cowl_tree`'s sheet holds -- see `cowl_tree.nose_tip`'s own docstring for why
     the two builders disagree about that."""
     p = dict(seed)

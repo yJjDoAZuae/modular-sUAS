@@ -15,14 +15,14 @@ Two mechanisms are separable here and this tool is built to tell them apart:
    radius `t`, which rounds every convex edge by `t` and approximates the disc from inside. The
    scallop between adjacent translates is `t * (1 - cos(pi/48))` = 0.0013 mm at `t` = 0.6, an order
    of magnitude under what is observed -- so a simple faceting shortfall is already ruled out
-   arithmetically, and what would remain is the behaviour where two dilated envelopes **merge**.
+   arithmetically, and what would remain is the behavior where two dilated envelopes **merge**.
 2. **The thin spot is nowhere near a rib.** Then the ribs are not the cause whatever their
    dilation does, and the residual belongs to the smooth surface fit -- which is bounded only by
    `TAU` = 0.05 mm, the same order as the thinning, and which `tau_study.py` shows responds
    proportionally when `TAU` is tightened.
 
 So the measurement is simply: find the thinnest point at each station, and report its distance to
-every buttress tool by name, raw and dilated. A thin spot tens of millimetres from any notch
+every buttress tool by name, raw and dilated. A thin spot tens of millimeters from any notch
 refutes (1) directly. One sitting at a dilated envelope's boundary supports it.
 
 **Named tools, not a compound.** `shell.Notches` carries one object per tool -- `Side1Safe`,

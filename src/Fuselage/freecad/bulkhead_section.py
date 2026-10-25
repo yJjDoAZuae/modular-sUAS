@@ -183,7 +183,7 @@ def emit(doc, seed, rows=None, make_web=True):
         doc, is_cowling=is_cowling, is_interconnect=is_interconnect, make_web=make_web)
 
     # `simple_positives.bolt_positives` is the source's `if (!is_interconnect)` group --
-    # an interconnect bolts to its neighbour rather than carrying a bolt of its own.
+    # an interconnect bolts to its neighbor rather than carrying a bolt of its own.
     if not is_interconnect:
         positive = C._fuse(doc, 'SectionSimple', positive,
                            simple_positives.bolt_positives(doc))

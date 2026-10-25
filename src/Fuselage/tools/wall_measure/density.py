@@ -38,7 +38,7 @@ with `U` at all. A fixed sample count spends proportionally fewer samples on tho
 part grows, and `realized_spacing` is here because the mean spacing turned out to be the wrong
 number to reason from in the first place.
 
-This module measures a reading against spacing in millimetres, which is the form that is comparable
+This module measures a reading against spacing in millimeters, which is the form that is comparable
 across `U`. Nothing here imports a vendor module: `App` arrives as an argument.
 """
 import numpy as np
@@ -117,7 +117,7 @@ def section_perimeter(shape, z, App=None):
     """The longest closed loop's true arc length, or `None` when the station has no closed section.
 
     **Used to set a sample count, which is why longest rather than outermost is the right pick.**
-    The count has to buy a target spacing in millimetres on whichever loop is longest, because that
+    The count has to buy a target spacing in millimeters on whichever loop is longest, because that
     is the loop whose samples would otherwise be furthest apart. Anything needing the *outer* loop
     specifically must take it from `sections.station_loops`, which orders by enclosed area -- see
     `loop_lengths` on why those two orderings are not the same thing.
@@ -151,7 +151,7 @@ def prior_gate_spacing(perimeter, around=PRIOR_GATE_AROUND, outer_factor=PRIOR_G
     """What the gate achieved **before** IP-WTM-25, for reading figures published then.
 
     Returns `(inner_mm, outer_mm)`. This is the diagnostic that found the defect: at `U` = 1 the
-    figures are ordinary and at `U` = 4 they are several millimetres on a 0.6 mm wall, and nothing
+    figures are ordinary and at `U` = 4 they are several millimeters on a 0.6 mm wall, and nothing
     in the gate reported it. Both scale with the perimeter, which is the defect itself.
     """
     p = float(perimeter)
@@ -241,7 +241,7 @@ def worst_station(shape, zs, measure=None, App=None, spacing=LOCATE_SPACING, nom
 def trend(rows):
     """How the reading moves as spacing halves. Returns the deltas between successive rows.
 
-    A thinness that **falls** toward zero as the spacing refines is a discretization artefact: the
+    A thinness that **falls** toward zero as the spacing refines is a discretization artifact: the
     coarse outer polyline was cutting the corner. A thinness that holds is a real thin wall.
     """
     thin = [r['thin'] for r in rows]
@@ -314,7 +314,7 @@ def survey_verdict(rows, measure):
     return sum(1 for r in mine if r['settled']), len(mine)
 
 
-def artefact_fraction(rows):
+def artifact_fraction(rows):
     """How much of the coarsest reading the refinement removed, as a fraction of it.
 
     1.0 means the whole reading was discretization; 0.0 means none of it was. Returns `None` when

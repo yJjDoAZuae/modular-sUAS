@@ -51,7 +51,7 @@ _BINARY_OPS = (
 _UNARY_OPS = ('__neg__', '__pos__', '__abs__')
 
 #: The vendor's `NotImplemented` cannot cross as a value, so it arrives as a handle of this type.
-#: Recognising it is what lets Python's own operator fallback still work.
+#: Recognizing it is what lets Python's own operator fallback still work.
 _NOT_IMPLEMENTED_TYPE = 'NotImplementedType'
 
 

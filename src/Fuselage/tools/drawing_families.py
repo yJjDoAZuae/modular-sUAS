@@ -4,7 +4,7 @@
 *features*, and differ only in size. That rule produces the family sheets. OQ-DES-D1 then
 decided what carries the size variation on one of those sheets: not one row per variant --
 the corner would need hundreds -- but **one short table per size axis**, with each callout
-labelled by the axis its dimension follows, and a small two-dimensional table for each field
+labeled by the axis its dimension follows, and a small two-dimensional table for each field
 that genuinely depends on two axes at once.
 
 This module is both halves of that: it partitions the sweep into families, and it factors
@@ -17,10 +17,10 @@ virtualenv, and drawings are built under `freecadcmd`, whose Python cannot impor
     python drawing_families.py families.json      # ... and the data
 
 **The axis label is derived, not authored, and that is the point.** OQ-DES-D1's one real
-drawback was that a callout labelled with the wrong axis sends the reader to the wrong table
+drawback was that a callout labeled with the wrong axis sends the reader to the wrong table
 and yields a *plausible wrong number* -- a worse failure than a missing row. So no label is
 written by hand. For each field this asks which axes it is actually a function of, over the
-whole family, and takes the smallest such set. A field cannot be labelled with an axis its
+whole family, and takes the smallest such set. A field cannot be labeled with an axis its
 value does not follow, because nothing here is capable of saying so.
 
 **"Is a function of" is asked at the precision the sheet prints.** Two variants that differ
@@ -614,7 +614,7 @@ def written(value):
 def minimal_axes(members, field, axes, exact=False):
     """The smallest set of axes `field` is a function of, or None if it is not a function.
 
-    Tried smallest-first, so a field that follows one axis is labelled with one axis. The
+    Tried smallest-first, so a field that follows one axis is labeled with one axis. The
     empty set means the field is the same on every variant of the family, which is not a
     table row at all -- it is a value printed on the view.
 

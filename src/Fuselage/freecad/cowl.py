@@ -4,7 +4,7 @@ A cowl is the OML blank with material cut away: `oml_blank` supplies the blank a
 solid, this module supplies the cutting tools and the boolean tree. Nothing here builds a
 wall. **The cowls print in spiral vase mode and that capability is kept** (DES-12,
 doc/design/cowl.md section 6.4): vase mode spirals a single contour per layer and admits no
-interior geometry at all, so a cowl given a modelled inner surface is no longer vase-mode
+interior geometry at all, so a cowl given a modeled inner surface is no longer vase-mode
 printable, and nothing in the geometry would flag it -- the STL would look better and slice
 worse. The notched blank this module produces *is* the print representation. Shelling is a
 separate downstream operation for the other use cases (IP-FC-16), never a replacement.
@@ -22,7 +22,7 @@ nose is an octant taken out to the full shape; the tail is a half mirrored in y.
 Values in the cowl parameter files are fractions of `unit_width` -- `cut_len` of 0.06 is 6 mm
 at U = 1 -- with a short list of exceptions that are absolute or in other units entirely. The
 scaling is `derived_cowl_parameters()`'s job, not this module's: what arrives here is already
-in millimetres, except the three `oml.*_m` fields, which are metres and say so (OQ-DES-CW1).
+in millimeters, except the three `oml.*_m` fields, which are meters and say so (OQ-DES-CW1).
 """
 import math
 import os
@@ -89,8 +89,8 @@ def from_flat(seed):
     """The nested form the builders take, from the flat sheet the sweep exports.
 
     The OML fields are grouped because they travel together and because three of them are
-    metres while everything around them is millimetres -- keeping them under one key is what
-    makes `oml['offset_x_m']` read as metres at the point of use (OQ-DES-CW1).
+    meters while everything around them is millimeters -- keeping them under one key is what
+    makes `oml['offset_x_m']` read as meters at the point of use (OQ-DES-CW1).
     """
     p = {k: v for k, v in seed.items() if not k.startswith('oml_')}
     if any(k.startswith('oml_') for k in seed):
@@ -313,7 +313,7 @@ def body_blank_full(name, U, oml):
 
 
 def body_len_of(U, oml):
-    """`U * oml_length_m / oml_scale_m_per_mm` -- the blank's length in millimetres."""
+    """`U * oml_length_m / oml_scale_m_per_mm` -- the blank's length in millimeters."""
     return U * oml['length_m'] / oml['scale_m_per_mm']
 
 

@@ -115,7 +115,7 @@ def corpus():
             out.append((name, exc))
 
     for region, width, height in cdp.sheet_regions():
-        frame = cdp.centred_frame(width, height)
+        frame = cdp.centered_frame(width, height)
         for product, notes, valued in (('family sheet', cdp.NOTES_FAMILY, False),
                                        ('single-variant', cdp.NOTES_VARIANT, True)):
             label = '%s / %s' % (region, product)

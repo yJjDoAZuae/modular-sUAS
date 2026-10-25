@@ -623,18 +623,18 @@ def null_cowl_flange_parameters():
 
 @dataclass(slots=True)
 class OmlParameters:
-    """The OpenVSP import transform. Three of these are in METRES, not millimetres.
+    """The OpenVSP import transform. Three of these are in METERS, not millimeters.
 
     The suffixes are load-bearing (OQ-DES-CW1, resolved 2026-08-09). Everything else
-    in this generator is millimetres, so an unsuffixed `length` reads as 0.05 mm when
+    in this generator is millimeters, so an unsuffixed `length` reads as 0.05 mm when
     it means 0.05 m -- a factor of 1000, and the part still renders. `offset_x_m` is
-    worse than that, because it is applied *before* the scale, so it is metres in the
+    worse than that, because it is applied *before* the scale, so it is meters in the
     mesh's own frame; the tail's -0.25 is -250 mm at U = 1.
 
     `scale_m_per_mm` is a divisor, not a multiplier: `scale = U/scale_m_per_mm`. At
-    1e-3 that multiplies by 1000, converting metres to millimetres, which is the one
+    1e-3 that multiplies by 1000, converting meters to millimeters, which is the one
     reading the bare name `scale` did not suggest. The suffix states the ratio in the
-    order the division takes it -- metres of real airframe per millimetre of model.
+    order the division takes it -- meters of real airframe per millimeter of model.
 
     These field names are also the JSON keys: derived_cowl_parameters() copies them by
     `fields()`, so renaming here renames the schema, and both cowl files move with it.
@@ -920,11 +920,11 @@ def read_param_json(file_path):
 #     nose.flange_inset          -> nose_flange_inset  = 0.5    (DERIVED, see below)
 #     plate.tolerance     0.1    -> plate_tol          = 0.1    (unscaled)
 #     buttress.cut_thickness 0.1 -> buttress_cut_thickness = 0.1    (unscaled)
-#     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METRES)
+#     oml.length_m        0.05   -> oml_length_m       = 0.050  (unscaled, METERS)
 #     overhang_angle_from_bed    -> overhang_angle_from_bed = 35 (CONSTANT, see below)
 #
 # Two of the unscaled names are not merely "not multiplied by unit_width" but are in
-# different units entirely: the oml.*_m fields are metres (see OmlParameters), and
+# different units entirely: the oml.*_m fields are meters (see OmlParameters), and
 # the overhang angle is degrees from the print bed (OQ-DES-CW2). Being in this tuple
 # means only that unit_width does not touch them.
 #
@@ -967,12 +967,12 @@ def derived_cowl_parameters(U, FX, user_parameters, printer_settings):
 
     # Driven by the declared fields, not by whatever the JSON happens to carry:
     # a missing key is still a KeyError at this line, and an extra one in the
-    # file is still ignored -- the same behaviour the dict version had, now
+    # file is still ignored -- the same behavior the dict version had, now
     # stated by the dataclass rather than by the dict it was copied into.
     for f in fields(c.oml):
         setattr(c.oml, f.name, src["oml"][f.name])
 
-    # Absolute millimetres from the per-U variation table
+    # Absolute millimeters from the per-U variation table
     # (nose_size_variants.csv), NOT scaled by unit_width. These are set by the
     # printing process as much as by airframe size: a plate is a whole number
     # of layers thick and a flange a whole number of extrusion widths wide.
@@ -1271,7 +1271,7 @@ def boom_key_validity_check(dp):
 
     The hole is the one the collet passes through, not the boom itself: its radius is
     diameter/2 + collet_thickness + tolerance. The width limit and the geometric singularity
-    are the same statement here rather than two -- the junction fillet centre sits at height
+    are the same statement here rather than two -- the junction fillet center sits at height
     sqrt((cr + r)^2 - (w/2 + r)^2), which goes imaginary at exactly w = 2*cr, where the tab
     spans the hole and the two junctions it is filleting no longer exist.
 
@@ -1300,11 +1300,11 @@ def boom_key_validity_check(dp):
     return is_valid
 
 def bolt_flange_fillet_gap(dp):
-    """OQ-DES-B14: how far the bolt-flange fillet's centre lands from the bolt axis.
+    """OQ-DES-B14: how far the bolt-flange fillet's center lands from the bolt axis.
 
     The fillet between the bulkhead flange and the bolt boss is the circle of radius
-    `bulkhead_flange.fillet_radius` that touches both. Its centre is therefore determined,
-    not chosen. WHERE that centre lands relative to the bolt axis is not determined by
+    `bulkhead_flange.fillet_radius` that touches both. Its center is therefore determined,
+    not chosen. WHERE that center lands relative to the bolt axis is not determined by
     anything, and this returns that signed gap:
 
         gap   = (flange_inner_x - fillet_radius) - (-bolt_offset)
@@ -1316,7 +1316,7 @@ def bolt_flange_fillet_gap(dp):
     so it takes whatever value they happen to leave, including zero. `reach` is how far the
     two tangencies can be pulled apart before no such circle exists at all; `abs(gap) >=
     reach` has no solution, and the FreeCAD generator refuses to build it rather than
-    clamping to a plausible wrong centre.
+    clamping to a plausible wrong center.
 
     **Deliberately reported and not enforced.** This is Alternative 5 of OQ-DES-B14. A stated
     minimum was Alternative 2 and was rejected: every swept value builds correctly and there
@@ -1647,7 +1647,7 @@ class RenderQueue:
 
         **`fail_fast` deliberately does not apply.** It exists to stop a run whose renders are
         failing, so a broken sweep does not grind through hundreds of parts before saying so.
-        A refusal is not that: it is the catalogued, expected consequence of the port being
+        A refusal is not that: it is the cataloged, expected consequence of the port being
         incomplete, and every `--backend freecad` run will hit hundreds of them until IP-FC-12
         lands. Raising here would mean the FreeCAD sweep could never produce the documents it
         *can* produce, which is the opposite of the point.
@@ -1745,7 +1745,7 @@ class RenderQueue:
 
 
 # Module-level so the five sweep functions and their render helpers need no
-# plumbing. Serial by default, which is exactly the previous behaviour; main()
+# plumbing. Serial by default, which is exactly the previous behavior; main()
 # installs a parallel queue for the duration of a run.
 _RENDER_QUEUE = RenderQueue(workers=1)
 
@@ -2607,7 +2607,7 @@ def cowl_parameters(kind, U, dp):
     """
     # **The shelled kinds are the print kinds' parameter set plus the wall** (IP-FC-17). Same
     # shape, same rows, and two more: `cowl_n_perimeters` and `extrusion_width`, whose product
-    # is the horizontal inset. Those two are **absolute millimetres**, unlike every other
+    # is the horizontal inset. Those two are **absolute millimeters**, unlike every other
     # length here, which is a fraction of `unit_width` -- a nozzle does not scale with the
     # airframe, so the wall is 0.6 mm at U = 0.5 and 0.6 mm at U = 4.
     if kind in SHELLED_COWL_KINDS:
@@ -2629,7 +2629,7 @@ def cowl_parameters(kind, U, dp):
     # the JSON -- one place applies the scaling, and this is its inverse, not a second copy.
     #
     # The reason the sheet wants the fraction is editability: a document whose rows are
-    # absolute millimetres puts its ribs where they were built when someone changes U, which
+    # absolute millimeters puts its ribs where they were built when someone changes U, which
     # is the failure a parametric model exists to avoid. Verified 2026-08-31: at U = 2 both
     # cowls come out eight times the volume, to 0.05%.
     def frac(v):
@@ -2754,7 +2754,7 @@ def nose_render(U, dp, output_dir, filename, is_nose_cowl, is_nose_nose, is_nose
             overhang_angle_from_bed=overhang_angle_from_bed)
     elif is_nose_nose:
         # Note this one takes no oml_length_m -- the nose is cut to the plate rather
-        # than to a length. Easy to miss positionally, since every neighbouring
+        # than to a length. Easy to miss positionally, since every neighboring
         # argument is the same type.
         scadobj = cgeom.nose(
             U=U,
@@ -3025,7 +3025,7 @@ def main(workers=None, resume=False, previews=True, backend='openscad', output_d
     """Run all five sweeps, writing an STL and a preview PNG for every part.
 
     `workers` is the number of concurrent OpenSCAD renders; None picks a default
-    bounded by cores and free memory, and 1 restores strictly serial behaviour.
+    bounded by cores and free memory, and 1 restores strictly serial behavior.
     Override without editing code via FUSELAGE_RENDER_WORKERS.
 
     `resume` skips parts whose STL is already a complete mesh, so an interrupted

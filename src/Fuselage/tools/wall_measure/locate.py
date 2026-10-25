@@ -119,7 +119,7 @@ def station_detail(shape, z, measure=None, nominal=0.6, n_points=N_POINTS, App=N
     selected measure; `angle_deg` and `radius` are what this function is for.
 
     **Pass `spacing` rather than `n_points` on a large-`U` part.** With `spacing` the sample count is
-    derived from this station's own perimeter, so the discretization is the same in millimetres at
+    derived from this station's own perimeter, so the discretization is the same in millimeters at
     every `U`; with `n_points` it is not, and at `U` = 4 a 720-point default misclassified a healthy
     annulus as severed. `spacing` costs one extra section to measure the perimeter.
 
@@ -348,9 +348,9 @@ def nearby_states(shape, z, offsets=NEARBY_OFFSETS, App=None, spacing=None, n_po
 
 
 def is_slice_artifact(rows):
-    """Did the wall come back at a neighbouring plane? Then the `no_wall` was the slicer's.
+    """Did the wall come back at a neighboring plane? Then the `no_wall` was the slicer's.
 
-    Takes `nearby_states`' rows. `True` means at least one neighbour is a healthy annulus, so the
+    Takes `nearby_states`' rows. `True` means at least one neighbor is a healthy annulus, so the
     gap is an artifact of the exact plane; `False` means the wall is absent either side too, which
     is the reading that would matter.
     """
@@ -590,7 +590,7 @@ def row_spacing_split(shape, row_zs, zs, nominal=0.6, App=None, arc=0.125, margi
     §6.7.1 refuted the tail's diagonals acting through the *cut* -- ten of twelve thin spots sit
     more than 3`t` from any rib -- and left a refined hypothesis: that they act through the **fit**
     instead, because the fit's seed is front-loaded with every notch edge and `station_floor`
-    then drops five or six as too close to a neighbour, so the diagonals *crowd* the rows rather
+    then drops five or six as too close to a neighbor, so the diagonals *crowd* the rows rather
     than subdividing the domain.
 
     **That predicts the opposite sign from §6.8.3's nose result**, which is why both are worth

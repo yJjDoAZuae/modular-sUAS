@@ -151,7 +151,7 @@ def erode_difference(doc, tag, positive, negatives, radius):
     the IP-FC-52 rule. They are only ever `Part::Cut` operands, which removes the union of an
     overlapping compound correctly, and a merge is itself a boolean round trip -- the thing
     whose output OCCT's offset cannot always consume. Adding one here would risk reintroducing
-    the failure this function exists to route around, to normalise a shape nothing offsets.
+    the failure this function exists to route around, to normalize a shape nothing offsets.
     """
     node = offset(doc, tag + 'ErodePos', positive, '-(' + radius + ')')
     for i, negative in enumerate(negatives):

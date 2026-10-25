@@ -21,7 +21,7 @@ becomes part of what a definition *is*.
 **Deliberately over-sensitive.** The digest is over file bytes, so a comment or docstring
 edit re-renders parts whose geometry did not move. That is the safe direction and the cheap
 one: a false re-render costs minutes of CPU, a false skip ships a part that does not match
-its own source and is invisible until someone measures it. Normalising -- stripping
+its own source and is invisible until someone measures it. Normalizing -- stripping
 comments, parsing to an AST -- would trade a real guarantee for a fragile one.
 
 What it does not cover: assets referenced by *value* at render time rather than by source

@@ -9,7 +9,7 @@ the re-answer at corpus scale, and the parser that makes it reproducible.
 in the soak's own log, the real reading in the sweep's JSONL. Every test here is a parse plus
 arithmetic, so the whole file runs in the fast tier.
 
-The synthetic-log tests are the ones that pin the parser's behaviour; the corpus tests assert what
+The synthetic-log tests are the ones that pin the parser's behavior; the corpus tests assert what
 this project's own 28 builds say and skip when the artifacts are absent, since they are build output
 and are not in version control.
 
@@ -379,7 +379,7 @@ class TestTheCorpusAnswer:
         assert not bad, bad
 
     def test_the_corner_exclusion_matters_on_the_nose_and_not_on_the_tail(self):
-        """**Where the corner artefact actually lives, and it is one kind and not the other.** On a
+        """**Where the corner artifact actually lives, and it is one kind and not the other.** On a
         `nose_cowl_shell` wall the incumbent reads about 0.03 mm thin where the corner-excluded
         measure reads 0.001 to 0.012 mm, so its reading there is dominated by nearest-point
         distances cutting across concave corners. On the tail the two agree closely -- at some

@@ -1,7 +1,7 @@
 """IP-FC-17: the nose cowl's solid representation, as one kind `build_part.py` can build.
 
 **Not a better nose cowl -- a different one.** `nose_cowl` is the print representation and
-stays what UC-1 exports, because cowls print in spiral vase mode and a modelled inner surface
+stays what UC-1 exports, because cowls print in spiral vase mode and a modeled inner surface
 makes that mode unavailable (OQ-DES-CW6, cowl.md section 6.4). This kind is the shelled solid
 that UC-2, UC-3, UC-4, UC-7 and UC-8 need and that the blank cannot serve. Two kinds rather
 than a flag on one, so that nothing downstream can take the wrong one for the right one.

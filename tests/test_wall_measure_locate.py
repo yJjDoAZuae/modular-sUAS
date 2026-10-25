@@ -620,9 +620,9 @@ class TestSliceArtifact:
     """**The gap the first real scan fell into.** `Shape.slice()` can return nothing at one exact
     plane on a healthy wall -- section 6.1 records a wall giving no section at `z` = -141.0000 and
     a normal one 0.05 mm away. With zero wires the nesting test and `Part.makeFace` both say "not
-    an annulus" and agree, so the kernel cross-check confirms nothing. Only the neighbours can."""
+    an annulus" and agree, so the kernel cross-check confirms nothing. Only the neighbors can."""
 
-    def test_a_neighbour_returning_an_annulus_means_the_gap_was_the_slicers(self):
+    def test_a_neighbor_returning_an_annulus_means_the_gap_was_the_slicers(self):
         rows = [state_row(-293.98, locate.NO_WALL, loops=0),
                 state_row(-294.18, locate.NO_WALL, loops=0),
                 state_row(-293.93, locate.ANNULUS)]
@@ -634,13 +634,13 @@ class TestSliceArtifact:
                 state_row(-293.78, locate.NO_WALL, loops=0)]
         assert locate.is_slice_artifact(rows) is False
 
-    def test_the_station_itself_does_not_count_as_its_own_neighbour(self):
+    def test_the_station_itself_does_not_count_as_its_own_neighbor(self):
         """Row 0 is the station being questioned; if it were counted, a station that is an annulus
         would 'confirm' itself and the test would never fire."""
         assert locate.is_slice_artifact([state_row(-1.0, locate.ANNULUS)]) is False
 
-    def test_a_severed_neighbour_does_not_excuse_the_gap(self):
-        """Only a healthy annulus nearby shows the wall is there; a severed neighbour is a worse
+    def test_a_severed_neighbor_does_not_excuse_the_gap(self):
+        """Only a healthy annulus nearby shows the wall is there; a severed neighbor is a worse
         finding, not a reassuring one."""
         rows = [state_row(-1.0, locate.NO_WALL, loops=0),
                 state_row(-1.05, locate.SEVERED_MANY, loops=3)]
@@ -779,7 +779,7 @@ class TestOnARealWall:
     def test_fixing_the_spacing_instead_of_the_count_agrees_with_the_kernel(self, tail_u4, Part,
                                                                            App):
         """The fix: derive the count from the station's own perimeter so the spacing is the same in
-        millimetres at every `U`."""
+        millimeters at every `U`."""
         _rec, wall = tail_u4
         zs = locate.dense_grid(wall, 8)
         n = density.counts_for_spacing(density.section_perimeter(wall, zs[0], App=App),

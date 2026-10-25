@@ -2,7 +2,7 @@
 
 No FreeCAD here by design: the module receives coordinate arrays and emits markup, so everything
 it does is checkable against arithmetic. The three things worth testing are the coordinate flip
-(model y up, SVG y down), that the drawing really is to scale, and that a zoom window is centred
+(model y up, SVG y down), that the drawing really is to scale, and that a zoom window is centered
 where it claims to be -- a figure whose scale bar lies is worse than no figure.
 """
 import math
@@ -72,8 +72,8 @@ def test_nice_length_never_returns_zero_for_a_degenerate_span():
     assert nice_length(0.0) > 0.0
 
 
-def test_mm_switches_to_nanometres_below_a_micron():
-    """Several of these readings are tens of nanometres; "0.000081 mm" is a zero-counting
+def test_mm_switches_to_nanometers_below_a_micron():
+    """Several of these readings are tens of nanometers; "0.000081 mm" is a zero-counting
     exercise and the figure has to be read at a glance."""
     assert _mm(0.000081) == '81 nm'
     assert _mm(0.0785) == '0.079 mm'
@@ -101,7 +101,7 @@ def test_fit_of_a_degenerate_point_set_still_gives_a_usable_window():
     assert win.x_hi > win.x_lo and win.y_hi > win.y_lo
 
 
-def test_around_is_centred_and_square():
+def test_around_is_centered_and_square():
     win = Window.around((3.0, -4.0), 0.08, width_px=300.0)
     assert (win.x_lo + win.x_hi) / 2.0 == pytest.approx(3.0)
     assert (win.y_lo + win.y_hi) / 2.0 == pytest.approx(-4.0)
@@ -171,7 +171,7 @@ def test_scale_bar_is_exactly_as_long_as_it_says():
     assert drawn_px == pytest.approx(2.5 * 8.0, rel=1e-9)
 
 
-def test_legend_has_one_row_per_labelled_layer_only():
+def test_legend_has_one_row_per_labeled_layer_only():
     fig = SectionFigure(Window(0.0, 0.0, 10.0, 10.0, scale=4.0))
     fig.polyline(SQUARE, label='kept', stroke='#111111')
     fig.polyline(SQUARE, label=None, stroke='#222222')
@@ -243,7 +243,7 @@ def test_only_floor_is_described_as_bounding_the_wall():
         assert 'bounds the wall' not in ROLE_STYLE[role]['label']
 
 
-def test_every_engagement_state_has_a_distinct_colour():
+def test_every_engagement_state_has_a_distinct_color():
     assert sorted(ENGAGEMENT_FILL) == ['clear', 'crossing', 'engulfed']
     assert len(set(ENGAGEMENT_FILL.values())) == 3
 
@@ -283,7 +283,7 @@ def test_annotate_false_draws_the_segment_without_its_caption():
 
 def test_a_role_entirely_outside_the_window_gets_no_legend_row():
     """A buttress tool's `outer` face is ~100 mm from the contact; promising it is worse than
-    omitting it, because the reader then hunts for a colour that is not drawn."""
+    omitting it, because the reader then hunts for a color that is not drawn."""
     record = dict(metric_a=0.001, engagement='clear',
                   p_surf=(0.0, 0.0), p_tool=(0.001, 0.0), role='floor')
     edges = [dict(role='floor', points=[(-0.05, 0.0), (0.05, 0.0)]),

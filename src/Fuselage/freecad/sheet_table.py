@@ -357,7 +357,7 @@ def legend_table(pairs, columns=1, text_height_mm=None, pitch_mm=None):
     it moves to a strip of its own -- and that is a different rectangle with a different
     budget, so it is measured separately.
 
-    One heading over the whole key, not one per run: three boxes each labelled DIMENSION KEY
+    One heading over the whole key, not one per run: three boxes each labeled DIMENSION KEY
     read as three different keys.
     """
     height = std.TABLE_TEXT_HEIGHT_MM if text_height_mm is None else text_height_mm
@@ -579,7 +579,7 @@ def check_layout(table, text_height_mm=None):
     any other -- and a table is where they are easiest to get wrong, because a column is sized
     once against strings it is assumed to contain. A column measured against `1/16in` and
     printed as `1/16IN` passes every arithmetic check in this module and overlaps its
-    neighbour on the sheet.
+    neighbor on the sheet.
 
     The third question is the one this project owes: **is there a rule in every gutter**. The
     1.0 mm column gutter is 0.4 of the table's text height, which H2 would refuse outright on

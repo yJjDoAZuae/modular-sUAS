@@ -137,7 +137,7 @@ def converged(values, tol=CONVERGE_TOL, contraction=CONTRACTION):
 
     Two conditions, not one: the last step must be small **and** the steps must be contracting. A
     measure that moves 0.0009 mm per doubling forever has small steps and has not converged -- and
-    that is the incumbent's actual behaviour, so a gate that missed it would be worthless. Split out
+    that is the incumbent's actual behavior, so a gate that missed it would be worthless. Split out
     of the gate so the same verdict can be applied to a real wall's series and to a fixture's.
     """
     deltas = [abs(values[i + 1] - values[i]) for i in range(len(values) - 1)]
@@ -207,7 +207,7 @@ def discrimination_gate(measure, patch_truth, loops_at, level=LEVELS[-1]):
     miss = float(np.hypot(pts[k, 0] - want[0], pts[k, 1] - want[1]))
     ok = depth_err <= DEPTH_TOL and miss <= LOCATION_TOL
     return GateResult('G4 discrimination', ok, depth_err, DEPTH_TOL,
-                      'depth error %.6f mm, located %.3f mm from the patch centre (limit %.1f)'
+                      'depth error %.6f mm, located %.3f mm from the patch center (limit %.1f)'
                       % (depth_err, miss, LOCATION_TOL))
 
 

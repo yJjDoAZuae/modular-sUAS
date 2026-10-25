@@ -171,7 +171,7 @@ def nearest_point_min(outer, inner):
 
 def windowed_normal(outer, inner, window_mm=0.30, n_samples=None):
     """**Candidate C2.** Cast along a normal estimated over an arc-length window, not from
-    neighbours.
+    neighbors.
 
     The straightforward local-normal measure was tried and **oscillates**, by up to 0.0139 mm per
     doubling, because the tangent estimate at a crease is itself unstable: two adjacent samples
@@ -235,10 +235,10 @@ def _ray_to_polyline(origins, dirs, poly, max_t=5.0):
 def inscribed_circle(outer, inner, n_samples=None):
     """**Candidate C1.** Local thickness as the diameter of the largest circle inside the ribbon.
 
-    The textbook definition of local thickness, and the one a slicer's behaviour actually follows:
+    The textbook definition of local thickness, and the one a slicer's behavior actually follows:
     material is missing where no circle of the perimeter's width fits. Computed without rasterizing
     -- for each inner sample, the inscribed circle tangent to both boundaries along the inward
-    normal has radius `r` where the centre sits at distance `r` from this boundary and `r` from the
+    normal has radius `r` where the center sits at distance `r` from this boundary and `r` from the
     other, so `r` solves a one-dimensional problem along the normal and the diameter is `2r`.
 
     On an annulus this returns exactly the radial wall, so it agrees with every other definition on
@@ -260,7 +260,7 @@ def inscribed_circle(outer, inner, n_samples=None):
     flip = np.einsum('ij,ij->i', nrm, away) < 0.0
     nrm[flip] *= -1.0
 
-    # The inscribed circle's centre lies along that normal at the point where the distance to this
+    # The inscribed circle's center lies along that normal at the point where the distance to this
     # boundary and the distance to the other are equal; the diameter is twice that distance. Found
     # by walking the normal to the far boundary and taking the largest circle that fits, which is
     # a one-dimensional maximization and needs no solve.
@@ -338,7 +338,7 @@ def corner_excluded_min(outer, inner, reflex_margin_mm=0.30):
 def _within_arc_of(xy, marked, margin):
     """Which samples of a closed polyline lie within `margin` of a marked one, **along** the boundary.
 
-    Arc distance, not index distance, so the margin means millimetres on any sampling -- uniform or
+    Arc distance, not index distance, so the margin means millimeters on any sampling -- uniform or
     not. Each marked sample contributes an arc interval; the intervals are accumulated with a
     difference array and the wrap is handled by also placing each interval one perimeter either
     side. Linear in the samples and the marks, because a refined section carries tens of thousands
@@ -349,10 +349,10 @@ def _within_arc_of(xy, marked, margin):
     total = float(seg.sum())
     s = np.concatenate(([0.0], np.cumsum(seg)[:-1]))               # arc position of each sample
     delta = np.zeros(n + 1, dtype=np.int64)
-    centres = s[marked]
+    centers = s[marked]
     for shift in (-total, 0.0, total):
-        lo = np.searchsorted(s, centres + shift - margin, side='left')
-        hi = np.searchsorted(s, centres + shift + margin, side='right')
+        lo = np.searchsorted(s, centers + shift - margin, side='left')
+        hi = np.searchsorted(s, centers + shift + margin, side='right')
         np.add.at(delta, lo, 1)
         np.add.at(delta, hi, -1)
     return np.cumsum(delta[:-1]) > 0
@@ -365,7 +365,7 @@ def survives_erosion(Part, App, outer, inner, target):
     station" -- one boolean, sampling-free. The morphological argument is that a ribbon narrower
     than `target` somewhere comes apart when eroded by half of `target` from each side, so
     connectivity of the eroded region *is* the compliance test, with no sample spacing to converge
-    and no nearest-point artefact to suffer from.
+    and no nearest-point artifact to suffer from.
 
     IP-FC-151 closed this route against the **exact B-spline** section, where one
     `Face.makeOffset2D` call did not finish in six minutes, and left it explicitly open for a

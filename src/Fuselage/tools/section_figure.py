@@ -5,9 +5,9 @@
 severed" or "where are the ribs". It is the wrong instrument for a question about a *distance*: a
 raster view of two nearly-touching boundaries at 0.6 mm separation, inside a part 400 mm across,
 shows one line. OQ-DES-CW25 asks which face of a cutting tool carries a measured minimum, and that
-is a question about a few tenths of a millimetre on a specific face of a specific slab. It needs a
+is a question about a few tenths of a millimeter on a specific face of a specific slab. It needs a
 drawing with a known scale, the measured segment drawn where it was actually taken, and the faces
-labelled by what they bound.
+labeled by what they bound.
 
 **Why SVG, and why no plotting library.** A section is polylines, points and text, so the output is
 a few hundred lines of markup and needs nothing installed -- which matters because this repository's
@@ -21,7 +21,7 @@ FreeCAD-side driver extracted from a real build, and turns them into markup. Tha
 it be unit-tested without FreeCAD, and it is the same split `wall_measure` uses: the kernel produces
 sections, the library reasons about them.
 
-The units are millimetres throughout, and `scale` is px/mm. Model `y` grows up and SVG `y` grows
+The units are millimeters throughout, and `scale` is px/mm. Model `y` grows up and SVG `y` grows
 down, so `_project` flips it; that flip is the only coordinate subtlety here and it is tested.
 """
 import math
@@ -43,8 +43,8 @@ FONT_LABEL = 12.0
 FONT_TITLE = 14.0
 FONT_SMALL = 10.5
 
-#: Role colours. Deliberately not a rainbow: the whole point of OQ-DES-CW25 is that one role
-#: (`floor`) bounds the wall and the others do not, so `floor` is the only saturated colour and
+#: Role colors. Deliberately not a rainbow: the whole point of OQ-DES-CW25 is that one role
+#: (`floor`) bounds the wall and the others do not, so `floor` is the only saturated color and
 #: everything else is a grey or a muted tone.
 ROLE_STYLE = {
     'floor': dict(stroke='#c2410c', width=2.6, label='floor - bounds the wall'),
@@ -84,7 +84,7 @@ def _mm(value):
 
     A 0.0785 mm dilation chord and a 20 mm part cannot share a format string: "0.079 mm" is
     right for one and "20.000 mm" is noise for the other. Below 1 micron the figure switches to
-    nanometres, because several of these readings are tens of nanometres and "0.000081 mm" is
+    nanometers, because several of these readings are tens of nanometers and "0.000081 mm" is
     a number most readers have to count the zeros in.
     """
     v = abs(float(value))
@@ -100,7 +100,7 @@ def _mm(value):
 def nice_length(span, fraction=0.2):
     """A round length near `span * fraction`, from the 1-2-5 series, for a scale bar.
 
-    A bar labelled "11 mm" is a bar nobody reads off. The series is the one drafting and chart
+    A bar labeled "11 mm" is a bar nobody reads off. The series is the one drafting and chart
     axes both use, and the result is always strictly positive so a scale bar can never collapse.
     """
     target = abs(float(span)) * float(fraction)
@@ -117,8 +117,8 @@ def nice_length(span, fraction=0.2):
 class Window(object):
     """The model-space rectangle a figure draws, and the similarity that maps it to px.
 
-    Built either from geometry (`fit`) or from an explicit centre and width (`around`), which is
-    what a zoom inset needs: an inset has to be able to say "80 microns across, centred on the
+    Built either from geometry (`fit`) or from an explicit center and width (`around`), which is
+    what a zoom inset needs: an inset has to be able to say "80 microns across, centered on the
     contact" without reference to how big the rest of the part is.
     """
 
@@ -169,9 +169,9 @@ class Window(object):
         return cls(x_lo, y_lo, x_hi, y_hi, scale, pad, pad_top, pad_bottom)
 
     @classmethod
-    def around(cls, centre, width_mm, scale=None, width_px=300.0, pad=PAD_PX,
+    def around(cls, center, width_mm, scale=None, width_px=300.0, pad=PAD_PX,
                height_mm=None, pad_top=None, pad_bottom=None):
-        """A window `width_mm` across centred on `centre`, square unless `height_mm` is given."""
+        """A window `width_mm` across centered on `center`, square unless `height_mm` is given."""
         half = float(width_mm) / 2.0
         if half <= 0.0:
             raise ValueError('width_mm must be positive, got %r' % (width_mm,))
@@ -180,8 +180,8 @@ class Window(object):
             raise ValueError('height_mm must be positive, got %r' % (height_mm,))
         if scale is None:
             scale = float(width_px) / float(width_mm)
-        return cls(centre[0] - half, centre[1] - half_y,
-                   centre[0] + half, centre[1] + half_y, scale, pad, pad_top, pad_bottom)
+        return cls(center[0] - half, center[1] - half_y,
+                   center[0] + half, center[1] + half_y, scale, pad, pad_top, pad_bottom)
 
     @property
     def size_px(self):
@@ -330,7 +330,7 @@ class SectionFigure(object):
         return self
 
     def legend(self, origin_px=(14.0, 20.0), line_px=15.0, swatch_px=22.0, extra=()):
-        """Rows for every labelled layer, in the order they were added, then `extra` text rows."""
+        """Rows for every labeled layer, in the order they were added, then `extra` text rows."""
         x, y = origin_px
         for i, (label, stroke, width, dash) in enumerate(self._legend):
             yy = y + i * line_px
@@ -403,11 +403,11 @@ def draw_clearance_station(record, surface, dilated, raw_edges, window=None,
 
     `record` is one row of that scan. `surface` and `dilated` are lists of closed section
     polylines for the interior candidate and the dilated tool. `raw_edges` is the undilated
-    tool's section as role-tagged edges. Everything is in millimetres, in the model's own frame.
+    tool's section as role-tagged edges. Everything is in millimeters, in the model's own frame.
 
     **Only roles with geometry in the window get a legend row.** A buttress tool's `outer` face
-    sits a hundred millimetres away from the contact, so listing it on a 2 mm drawing promises a
-    colour that is not there -- which is worse than omitting it, because a reader then goes
+    sits a hundred millimeters away from the contact, so listing it on a 2 mm drawing promises a
+    color that is not there -- which is worse than omitting it, because a reader then goes
     looking. `annotate=False` draws the measured segment without its caption, for a figure whose
     scale makes a micron-level number meaningless.
     """
@@ -438,7 +438,7 @@ def draw_clearance_station(record, surface, dilated, raw_edges, window=None,
 
     p_surf, p_tool = record.get('p_surf'), record.get('p_tool')
     if p_surf and p_tool:
-        colour = ENGAGEMENT_FILL.get(engagement, '#111827')
+        color = ENGAGEMENT_FILL.get(engagement, '#111827')
         body = ('Metric A = %s' % _mm(float(record['metric_a']))) if annotate else None
-        fig.measure(p_tool[:2], p_surf[:2], body=body, stroke=colour)
+        fig.measure(p_tool[:2], p_surf[:2], body=body, stroke=color)
     return fig

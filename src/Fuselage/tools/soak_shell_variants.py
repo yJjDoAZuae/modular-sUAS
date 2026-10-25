@@ -84,7 +84,7 @@ def run_one(freecadcmd, kind, u, repeat, shapes_dir):
     neither line came back at all, a crash `soak_cowl_shell.py` could not report on itself --
     an error record made here, so that case is recorded rather than silently dropped.
     freecadcmd's exit code is not trusted for any of this, the same reasoning as
-    `draw_set.draw`: the artefact is what says whether the run worked."""
+    `draw_set.draw`: the artifact is what says whether the run worked."""
     argv = [freecadcmd, WORKER, '--pass', '--kind=%s' % kind, '--pass', '--u=%s' % u,
             '--pass', '--repeat=%s' % repeat, '--pass', '--out=%s' % shapes_dir]
     done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

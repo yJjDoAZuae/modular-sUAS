@@ -21,7 +21,7 @@ same output, byte for byte.
 
 **Unit regime: millimeters**, in *view* coordinates -- the space `DrawViewPart` reports its
 projected geometry in, which is page millimeters at the view's scale, origin at the view
-centre. Model values are carried alongside for magnitude ordering and never mixed in.
+center. Model values are carried alongside for magnitude ordering and never mixed in.
 """
 import itertools
 import os
@@ -370,8 +370,8 @@ def _route_leaders(placed_notes, placed, frame, text_height_mm):
     return routed
 
 
-def _text_box(centre, text_height_mm, text=None):
-    """The rectangle an annotation's text occupies, centred on a point.
+def _text_box(center, text_height_mm, text=None):
+    """The rectangle an annotation's text occupies, centered on a point.
 
     With `text` None this is the family sheet's uniform callout bound: every callout is one
     character from `CALLOUT_ALPHABET`, so the widest letter bounds all of them, and being
@@ -387,8 +387,8 @@ def _text_box(centre, text_height_mm, text=None):
              else std.text_width_mm(text, text_height_mm))
     half_w = width / 2.0
     half_h = text_height_mm / 2.0
-    return (centre[0] - half_w, centre[1] - half_h,
-            centre[0] + half_w, centre[1] + half_h)
+    return (center[0] - half_w, center[1] - half_h,
+            center[0] + half_w, center[1] + half_h)
 
 
 def place(dimensions, geometry_bbox, frame=None, geometry_edges=None, notes=(),
@@ -617,7 +617,7 @@ def _attempt(dimensions, geometry_bbox, frame, geometry_edges, notes, assignment
             # for one axis group -- which rank takes which side -- and nothing prefers the
             # first beyond it being the simplest to state. Measured 2026-09-07: a 1.1 mm
             # dimension nested outboard of an unrelated note's whole three-line band on its
-            # assigned side, an 87.65 mm witness line for a millimetre-scale feature, when the
+            # assigned side, an 87.65 mm witness line for a millimeter-scale feature, when the
             # other side of the same axis group had room for it beside its own feature. Trying
             # the swap and keeping whichever gives this axis group less total witness length
             # is the two candidates the rule already has, not a new search -- and the swap is
@@ -658,9 +658,9 @@ def _attempt(dimensions, geometry_bbox, frame, geometry_edges, notes, assignment
 def _note_side(anchor, geometry_bbox):
     """Which side of the view a note goes on: the one its anchor faces.
 
-    Taken from the anchor's direction out of the view centre, dominant axis first, so a note
+    Taken from the anchor's direction out of the view center, dominant axis first, so a note
     points outward from the feature rather than across it. The tie-breaks -- a diagonal
-    anchor going horizontal, an anchor exactly at the centre going left -- are arbitrary in
+    anchor going horizontal, an anchor exactly at the center going left -- are arbitrary in
     the sense that nothing prefers them, and fixed in the sense section 5.5 requires: the
     same input must produce the same sheet, and a tie decided by anything but a stated rule
     is a sheet that moves between runs.
@@ -764,7 +764,7 @@ def _text_positions(lo, hi, clearance):
 
     That was invisible on a family sheet, where a callout is 2.7 mm of letter and two lanes
     are 7.0 mm apart, and it is not invisible on a single-variant sheet, where the text is the
-    value. Two stacked vertical dimensions reading `7.60` and `20.00` centre 8.1 mm of digits
+    value. Two stacked vertical dimensions reading `7.60` and `20.00` center 8.1 mm of digits
     on lines 7.0 mm apart and collide by H2 -- which is why every drafted stack of dimensions
     staggers its text along the lines rather than lining it up in a column.
 
@@ -820,7 +820,7 @@ def _place_one(dimension, side, lanes, side_boxes, geometry_bbox, gap, pitch, cl
             witnesses = [((dimension.p1[0], dimension.p1[1]), (dimension.p1[0], line_y)),
                          ((dimension.p2[0], dimension.p2[1]), (dimension.p2[0], line_y))]
 
-            def centre_at(along):
+            def center_at(along):
                 return (along, line_y + text_height_mm * 0.6)
         else:
             line_x = (x_min - offset) if side == 'left' else (x_max + offset)
@@ -828,13 +828,13 @@ def _place_one(dimension, side, lanes, side_boxes, geometry_bbox, gap, pitch, cl
             witnesses = [((dimension.p1[0], dimension.p1[1]), (line_x, dimension.p1[1])),
                          ((dimension.p2[0], dimension.p2[1]), (line_x, dimension.p2[1]))]
 
-            def centre_at(along):
+            def center_at(along):
                 return (line_x, along)
 
         clear_span = not any(_spans_overlap((lo, hi), other) for _, other in lanes[index])
         if clear_span:
             for along in _text_positions(lo, hi, clearance):
-                text = _text_box(centre_at(along), text_height_mm, dimension.text)
+                text = _text_box(center_at(along), text_height_mm, dimension.text)
                 if any(_rects_overlap(text, other, clearance) for other in side_boxes):
                     continue
                 lanes[index].append((text, (lo, hi)))

@@ -664,7 +664,7 @@ def diag_buttress(doc, name, ang, z_expr):
 # The masks, and the parts
 # --------------------------------------------------------------------------------
 
-# `U * oml_length_m / oml_scale_m_per_mm` -- the cowl's length in millimetres. Written as an
+# `U * oml_length_m / oml_scale_m_per_mm` -- the cowl's length in millimeters. Written as an
 # expression rather than a number so a document rebuilt at another U follows it.
 BODY_LEN = '(%(p)sU * %(p)soml_length_m / %(p)soml_scale_m_per_mm)' % {'p': P}
 
@@ -889,7 +889,7 @@ def nose_tip(doc):
     means this sheet has to hold `cut_len` the same way. `cowl_parameters()`'s `nose_nose`
     export was changed to match (`fuselage_variants.py`, 2026-09-21): both are now divided by
     `unit_width` on the way out, the same as `nose_cowl`'s own `cut_len`, and multiplied back
-    out wherever this function needs the absolute millimetre value. `nose_flange_height`,
+    out wherever this function needs the absolute millimeter value. `nose_flange_height`,
     `nose_flange_inset`, `plate_thickness` and `plate_tol` are unaffected -- none of them come
     from the JSON shape file scaled by `unit_width` in the first place (see
     `cowl_parameters()`'s own comment for what each actually is).
@@ -925,7 +925,7 @@ def nose_plate(doc):
     the same order, now sheet-bound so the document recomputes when a value changes instead of
     holding a shape baked once in Python.
 
-    **Every dimension here is already absolute millimetres, not a fraction of `unit_width`.**
+    **Every dimension here is already absolute millimeters, not a fraction of `unit_width`.**
     `plate_thickness`, `plate_flange_width` and `plate_flange_height` are OQ-DES-CW18's own
     swept table values (cowl.md section 6.4's Open Questions), not derived from the cowl's JSON
     shape file the way `cut_len` or the buttress radii are -- so unlike every function above,
@@ -984,7 +984,7 @@ def tail_shell(doc):
 # The design values -- radii, end positions, the cut thickness -- come from the cowl's JSON
 # shape file, where they are fractions of `unit_width`. The sheet holds the fraction and the
 # geometry multiplies, which is what makes `U` alone sufficient: a document whose rows were
-# absolute millimetres would put its ribs where they were built when someone changed U.
+# absolute millimeters would put its ribs where they were built when someone changed U.
 #
 # The **placements** are relationships and are written as expressions, because the source
 # states them that way in the geometry itself (`translate([-unit_width*0.30, 0, 0])`). This is
@@ -1034,7 +1034,7 @@ PARAMS_NOSE_TIP = [
 ] + _OML_ROWS
 
 #: `nose_plate` shares none of `PARAMS_NOSE_COWL`/`PARAMS_TAIL`'s rows and needs no OML: it
-#: never touches the imported blank at all. Every value is already absolute millimetres (see
+#: never touches the imported blank at all. Every value is already absolute millimeters (see
 #: `nose_plate`'s own docstring), so unlike the two sheets above there is no `unit_width` row
 #: and no fraction to multiply out.
 PARAMS_NOSE_PLATE = [

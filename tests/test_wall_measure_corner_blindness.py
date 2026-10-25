@@ -5,7 +5,7 @@ samples within 0.3 mm of a concave corner, and on a real wall that makes the sec
 nominal — 0.600000 against a 0.6 mm wall. Two readings fit that result and no gate so far can tell
 them apart:
 
-* the corners were the whole artefact, the wall is compliant, and discarding them is the fix; or
+* the corners were the whole artifact, the wall is compliant, and discarding them is the fix; or
 * **the exclusion is blind exactly where a wall is thinnest**, so C4 would pass the screening and
   ship a part with a hole.
 

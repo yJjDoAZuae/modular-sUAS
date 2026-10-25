@@ -37,7 +37,7 @@ other seven -- had the sample missed it, nothing else in the toolchain would hav
 **Two tiers, per OQ-DES-B9.** The corner is exactly reproducible and held to `--tol`. Parts
 carrying real fillets are allowed a stated deviation, because a FreeCAD fillet is a true
 surface where OpenSCAD's is a tessellated approximation -- so agreement is bounded by mesh
-resolution rather than by modelling error. Interface dimensions are strict in both tiers,
+resolution rather than by modeling error. Interface dimensions are strict in both tiers,
 which is what the bounding-box check stands in for until IP-FC-36 enumerates them.
 """
 from __future__ import annotations
@@ -105,7 +105,7 @@ def _drivers_for(kinds: set[str] | None):
 
 # Volume agreement, as a fraction.
 #
-# **The floor is tessellation, not modelling, and it is computable.** Both sides are meshes.
+# **The floor is tessellation, not modeling, and it is computable.** Both sides are meshes.
 # OpenSCAD renders with $fa=1, which caps a circle at 360 segments, and an inscribed regular
 # n-gon under-measures its circle by 1 - (n/2pi)*sin(2pi/n):
 #
@@ -119,7 +119,7 @@ def _drivers_for(kinds: set[str] | None):
 # (IP-FC-10). The measured corner deltas sit under that bound and scale with how much of the
 # part is round: +0.00121% at U=1, +0.00222% at U=2.
 #
-# A tolerance tighter than the faceting floor does not detect modelling error, it detects
+# A tolerance tighter than the faceting floor does not detect modeling error, it detects
 # OpenSCAD's circle approximation -- which is what the first run of this tool did, failing a
 # corner at +0.00222%.
 TOL_EXACT = 6.0e-5          # 0.006% -- the 360-segment floor, with margin

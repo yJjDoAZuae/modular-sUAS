@@ -34,7 +34,7 @@ from corner_common import is_entry_point
 
 
 # A plain rectangular outline, the shape the corner and bulkhead both project to from the
-# front. Frame is the ANSI A sheet's printable area, centred on the view.
+# front. Frame is the ANSI A sheet's printable area, centered on the view.
 BBOX = (-30.0, -20.0, 30.0, 20.0)
 EDGES = [((-30.0, -20.0), (30.0, -20.0)), ((30.0, -20.0), (30.0, 20.0)),
          ((30.0, 20.0), (-30.0, 20.0)), ((-30.0, 20.0), (-30.0, -20.0))]
@@ -123,7 +123,7 @@ NOTES_VARIANT = (
     ('mold', (7.0, 7.0), ('R10.00 MOLD LINE',)),
 )
 
-# The corner's mid-bay section at U = 1 is 20 mm square. Drawn 1:1 and centred, which is the
+# The corner's mid-bay section at U = 1 is 20 mm square. Drawn 1:1 and centered, which is the
 # most generous scale a real sheet would use for it, so a refusal here is a refusal at every
 # scale that leaves the view readable.
 CORNER_BBOX = (-10.0, -10.0, 10.0, 10.0)
@@ -154,8 +154,8 @@ def corner_dimensions(valued):
     return out
 
 
-def centred_frame(width, height):
-    """A sheet region as the placer sees it: view coordinates, origin at the view centre."""
+def centered_frame(width, height):
+    """A sheet region as the placer sees it: view coordinates, origin at the view center."""
     return (-width / 2.0, -height / 2.0, width / 2.0, height / 2.0)
 
 
@@ -211,7 +211,7 @@ def narrowest_view_width(notes, valued, height_mm, step_mm=0.5):
     def places(width):
         try:
             dp.place(corner_dimensions(valued), CORNER_BBOX,
-                     centred_frame(width, height_mm), CORNER_EDGES,
+                     centered_frame(width, height_mm), CORNER_EDGES,
                      notes=corner_notes(notes))
             return True
         except dp.PlacementError:
@@ -275,7 +275,7 @@ def main():
 
     print('  --- OQ-DES-D2 callouts, the risk the decision recorded ---')
     for region, width, height in sheet_regions():
-        frame = centred_frame(width, height)
+        frame = centered_frame(width, height)
         for product, notes, valued in (('family sheet', NOTES_FAMILY, False),
                                        ('single-variant', NOTES_VARIANT, True)):
             label = '%s, %s' % (product, region)

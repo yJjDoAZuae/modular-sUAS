@@ -2,7 +2,7 @@
 
 **What this answers, and why it had to be asked.** `cowl_interior.cavity`'s second pass converges
 until the finished wall is within `TAU` of nominal, and the acceptance gate then asks whether the
-wall is within `WALL_TOL`. Both are millimetres of wall error, so `TAU` = `WALL_TOL` reads like a
+wall is within `WALL_TOL`. Both are millimeters of wall error, so `TAU` = `WALL_TOL` reads like a
 setting that makes the construction guarantee its own acceptance criterion
 (`cowl.md` OQ-DES-CW28, alternative 1).
 

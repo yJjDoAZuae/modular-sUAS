@@ -125,7 +125,7 @@ class TestCowlInteriorHelpers:
         assert near[0] == -300.0 and near[-1] == 0.0, 'both ends must survive'
         assert all(b - a >= floor - 1e-12 for a, b in zip(near, near[1:]))
 
-    def test_thin_stations_keeps_the_last_station_displacing_its_neighbour(self, ci):
+    def test_thin_stations_keeps_the_last_station_displacing_its_neighbor(self, ci):
         floor = ci.station_floor(0.6)
         ends = ci._thin_stations([0.0, 1.0, 1.0 + 0.5 * floor], floor)
         assert ends[-1] == 1.0 + 0.5 * floor

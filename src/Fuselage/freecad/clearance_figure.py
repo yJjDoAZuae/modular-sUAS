@@ -4,7 +4,7 @@
 smallest in-plane distance from the fitted interior candidate's section to the nearest *dilated*
 buttress tool's section, and which of the tool's four face roles that minimum lands on. Prose is
 not enough for it -- the quantity is a few tens of microns on a specific face of a 0.1 mm slab,
-inside a part hundreds of millimetres across, and the finding that matters (the minimum lands on a
+inside a part hundreds of millimeters across, and the finding that matters (the minimum lands on a
 cheek, and the tool has usually already crossed the surface) is a statement about *where* on the
 tool a distance was taken. This driver takes the sections off a real build and writes them as
 drawings with a scale bar.
@@ -52,17 +52,17 @@ from section_figure import (ENGAGEMENT_FILL, ROLE_STYLE, Window, _mm,
 #: the figure is a few hundred px wide, so this is already finer than the raster.
 SURFACE_POINTS = 900
 
-#: Points per *edge* of a tool section. Edges are tagged individually so the role colouring is
+#: Points per *edge* of a tool section. Edges are tagged individually so the role coloring is
 #: per face, which is the whole content of the figure; a straight cheek needs 2 and a dilation
 #: bridge arc needs more.
 EDGE_POINTS = 24
 
 #: Margin in mm around the tool's *near end* in the tool-scale figure.
 #:
-#: **The window is placed on the end of the tool, not centred on the contact, and that is the
+#: **The window is placed on the end of the tool, not centered on the contact, and that is the
 #: whole trick of this figure.** A buttress tool's section is a slab 0.1 mm thick and more than
-#: a hundred millimetres long -- measured on the nose at U = 1 it runs y 43.33 to 150.00 -- so
-#: the two cheeks are the only faces anywhere near the contact, and a box centred on the contact
+#: a hundred millimeters long -- measured on the nose at U = 1 it runs y 43.33 to 150.00 -- so
+#: the two cheeks are the only faces anywhere near the contact, and a box centered on the contact
 #: shows two parallel lines and nothing else. The floor is the 0.1 mm segment capping the near
 #: end, and it is what the question is about, so the window is fitted to the floor edge and the
 #: dilated outline around it. The `outer` face is at the far end and is correctly out of frame.
@@ -230,8 +230,8 @@ def capture(kind, u, out_dir, stations=None, tau=None):
 def _role_labels(fig, raw_edges, min_px=26.0):
     """Name each role on the drawing itself, next to the longest edge carrying it.
 
-    A legend makes the reader hold four colours in their head while looking at a slab 0.1 mm
-    thick. Labelling the geometry does not, and the roles are the content of the figure.
+    A legend makes the reader hold four colors in their head while looking at a slab 0.1 mm
+    thick. Labeling the geometry does not, and the roles are the content of the figure.
     """
     import math as _m
     best = {}
@@ -289,7 +289,7 @@ def _point_offscreen(fig, target, label, stroke, margin_px=18.0):
 
     Without this a reader cannot tell "the contact is not drawn here" from "the contact is one
     of these lines". With it, figure 2 shows the tool's end at a useful scale and still says, in
-    millimetres, where along the slab the measurement was actually taken.
+    millimeters, where along the slab the measurement was actually taken.
     """
     win = fig.window
     if win.contains(target):
@@ -316,7 +316,7 @@ def _point_offscreen(fig, target, label, stroke, margin_px=18.0):
 def _station_figures(payload, entry, out_dir, slug):
     """Stage two for one station: three drawings, at the part, tool and contact scales.
 
-    **Three, because one cannot work.** The part's section is tens of millimetres across, the
+    **Three, because one cannot work.** The part's section is tens of millimeters across, the
     slab is 0.1 mm thick, the dilation is 0.6 mm and the measured distance is a few microns --
     five orders of magnitude between the thing being measured and the thing it is measured on. A
     single window either shows the part and hides the measurement, or shows the measurement and

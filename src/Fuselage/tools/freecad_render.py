@@ -208,7 +208,7 @@ def build_command(kind, params_path, stl_path, fcstd_path=None):
     """The argv that builds one part.
 
     Every argument goes behind freecadcmd's `--pass`. freecadcmd parses the command line
-    before the script runs: an unrecognised `--flag` makes it print its own usage and exit
+    before the script runs: an unrecognized `--flag` makes it print its own usage and exit
     without ever calling the script, and a bare positional it tries to open as a document --
     which on a `.json` fails inside the FEM mesh importer with "invalid literal for int() with
     base 10", an error naming neither FreeCAD nor the file's real problem, of which it has

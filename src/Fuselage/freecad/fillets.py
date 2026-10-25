@@ -8,18 +8,18 @@ of a cylinder, a cone and a cylinder, where the step *is* the chamfer. None of t
 morphological `fillet_inner` of OQ-DES-B9, which the frame bulkhead never reaches.
 
 The last two extrude a five-vertex polygon rather than an axis-aligned block, but the fifth
-vertex carries no area: the source builds it as the fillet centre pushed one radius along
-the ray from the bolt centre, so bolt centre, fillet centre and end point are collinear by
+vertex carries no area: the source builds it as the fillet center pushed one radius along
+the ray from the bolt center, so bolt center, fillet center and end point are collinear by
 construction and the closing edge doubles back on the edge that reached it. The region is
 therefore the quadrilateral of the first four vertices, at any parameters -- this is a
-property of how the point is defined, not an artifact of one parameter set. Modelling the
+property of how the point is defined, not an artifact of one parameter set. Modeling the
 quad rather than the pentagon also sidesteps the case seen here at U = 1.0, where
-`x_corner_fillet_start` clamps to the bolt centre and two vertices coincide; a sketch would
+`x_corner_fillet_start` clamps to the bolt center and two vertices coincide; a sketch would
 need a zero-length edge, whereas the half-plane decomposition just degenerates to the
 triangle on its own.
 
 Each quad is convex, so it is a box clipped by the half-planes of its non-axis-aligned
-edges. The edge from the bolt centre to the fillet centre lies at no fixed angle, so its
+edges. The edge from the bolt center to the fillet center lies at no fixed angle, so its
 clipping box takes its rotation from an expression, `atan2(dy; dx)`, bound to
 `Placement.Rotation.Angle` -- the first node in the port whose orientation is parametric
 rather than a literal.
@@ -143,7 +143,7 @@ PARAMS = [
     ('chm_dy', '=(-chm_cut - far * 2) / 2'),
 
     # Both bolt fillets sit at distance flange_fillet_radius from the ring of material
-    # around the bolt hole, so their centres lie on this radius from the bolt centre.
+    # around the bolt hole, so their centers lie on this radius from the bolt center.
     ('bolt_c', '=-bolt_offset'),
     ('r_bolt_fillet', '=flange_fillet_radius + bolt_hole_radius + bolt_thickness'),
     # identical to simple_positives' row, so the merge keeps one of them (IP-FC-41)
@@ -250,7 +250,7 @@ def flange_chamfer(doc, is_interconnect=False):
 
 
 def _ray_halfplane(doc, name, angle_expr, x, y):
-    """The half-plane on the far side of the bolt-centre-to-fillet-centre edge. Its near
+    """The half-plane on the far side of the bolt-center-to-fillet-center edge. Its near
     edge lies along that ray and it extends to the side the quad is not on; the rotation
     comes from the sheet because the ray's angle moves with the parameters."""
     P = 'Params.'
@@ -266,7 +266,7 @@ def _ray_halfplane(doc, name, angle_expr, x, y):
 # keeps its `ocf_` / `gtw_` / `bbf_` / `wtb_` prefix.
 #
 # `/ 1mm` is not decoration. A sketch constraint is a Quantity carrying a length unit; every
-# row of this sheet is a bare number, because that is what the OpenSCAD source's millimetres
+# row of this sheet is a bare number, because that is what the OpenSCAD source's millimeters
 # port to. Mixing them fails at recompute with "Unit mismatch in minus operation", so the
 # unit is divided out here, once, rather than at each of the places these are used.
 SKETCH = 'FilletTangency'
@@ -473,7 +473,7 @@ def _fillet_tangency_sketch(doc):
     edits a parameter, and it is worst where the geometry is already ill-conditioned: that
     variant has the bolt-flange fillet 0.2 mm from the degeneracy `report_bbf_gap.py` tracks,
     where the center's y is extremely sensitive to any residual at all. 1.2e-7 mm is a tenth
-    of a nanometre on a printed part and every assembled volume is unchanged to six figures,
+    of a nanometer on a printed part and every assembled volume is unchanged to six figures,
     so this is recorded rather than treated as a defect -- but `check_tangency.py` reads the
     sweep after a bare recompute on purpose, so the tolerance there is set for the state a
     delivered file is actually in, not for the state the generator leaves.
@@ -629,10 +629,10 @@ def _fillet_tangency_sketch(doc):
     # forms are kept HERE, as a test of the solved positions rather than as their source,
     # because a wrong branch is geometry that builds happily and is simply in the wrong place.
     #
-    # Scaled with `U`, for the reason `compare_backends.bbox_tol()` gives: this is a millimetre
+    # Scaled with `U`, for the reason `compare_backends.bbox_tol()` gives: this is a millimeter
     # distance between two points whose coordinates are proportional to `U`, so a fixed figure
     # is four times stricter at U = 4 than at U = 1. Floored at U = 1. It is nowhere near
-    # binding either way -- a wrong branch moves a center by millimetres, not by 1e-7 mm -- but
+    # binding either way -- a wrong branch moves a center by millimeters, not by 1e-7 mm -- but
     # an absolute tolerance sitting among scaled ones is how these get written wrong.
     # `unit_width` is 100*U and is a row here; `U` itself is not, because the sheet carries
     # only the rows this octant is built from.

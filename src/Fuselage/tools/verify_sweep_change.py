@@ -158,7 +158,7 @@ def compare(reference: Path, scratch: Path, wanted: set[str], tol: float,
         print(f'  NOT PRODUCED  {name}')
 
     if mismatches or missing:
-        print('GEOMETRY CHANGED -- the refactor is not behaviour-preserving')
+        print('GEOMETRY CHANGED -- the refactor is not behavior-preserving')
         return 1
     print(f'IDENTICAL GEOMETRY across {len(wanted)} sampled part(s)')
     return 0

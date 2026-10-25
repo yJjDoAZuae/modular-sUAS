@@ -4,7 +4,7 @@
 // ref_boom_bulkhead.scad is `offset_single`. Three assignments differ here and no others,
 // all of them from `derived_parameters(1.0, 1.0, center_single, 3 mm)` rather than typed:
 //
-//     boom_z_position     25.0  ->  0.0     the boom sits on the centreline
+//     boom_z_position     25.0  ->  0.0     the boom sits on the centerline
 //     boom_make_vert_web  true  ->  false
 //     boom_make_lower_web false ->  true
 //

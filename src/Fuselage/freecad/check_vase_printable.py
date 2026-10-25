@@ -9,7 +9,7 @@ spirals a single continuous contour up the part, so the wall comes from the slic
 from the model ([cowl.md section 6.4](../../../doc/design/cowl.md)).
 
 **Why it needs a check at all, when every other requirement here is about a number.** The
-failure is silent in the strongest sense: a cowl given a modelled wall still builds, still
+failure is silent in the strongest sense: a cowl given a modeled wall still builds, still
 exports, still has one solid, still passes every acceptance test in
 `check_cowl_interior.py`, and produces an STL that looks *better*. Nothing in the geometry
 says the print capability is gone. The port has both representations in it already --
@@ -37,7 +37,7 @@ it.
 **The two criteria, and why the cheap one is not enough on its own.**
 
 - *Every sampled section is exactly one closed contour.* This is DES-12 restated. It catches a
-  modelled wall, a hollowed interior, a through hole -- anything that puts a second loop in a
+  modeled wall, a hollowed interior, a through hole -- anything that puts a second loop in a
   layer -- and it catches it at every z the offending feature spans.
 - *The solid has exactly one shell.* A shell is a closed connected boundary, so a second one
   is an **enclosed void**: interior geometry that touches no exterior face. That is the case
@@ -114,7 +114,7 @@ def kinds_in_scope():
 #: the coverage statement above is in terms of.
 PITCH_FRACTION = 1.0 / 200.0
 
-#: How far above and below a feature's z each pair of stations sits, in millimetres. Far enough
+#: How far above and below a feature's z each pair of stations sits, in millimeters. Far enough
 #: off the plane of a horizontal edge that the section is not degenerate, and near enough that
 #: a feature is bracketed rather than straddled. Absolute, because it answers to the kernel's
 #: tolerance rather than to the size of the part -- the same argument `cowl_interior.END_INSET`
@@ -255,7 +255,7 @@ def synthetic_controls(shape):
     **They did not miss it, and the reason is worth more than the expectation was.** Measured
     2026-09-06 on the nose cowl: caught by *both* criteria, on 3 of 211 sections. Cutting a
     void into a solid **creates vertices at the void's own boundary**, and the stations are
-    drawn from vertices -- so a modelled void generates the very stations that find it, at any
+    drawn from vertices -- so a modeled void generates the very stations that find it, at any
     thickness, however far it falls below the background pitch. The run now reports the
     background-only outcome alongside, which is the number that separates the two effects.
 

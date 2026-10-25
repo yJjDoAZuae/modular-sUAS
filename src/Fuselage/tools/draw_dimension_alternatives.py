@@ -386,7 +386,7 @@ def bulkhead_panel(section, params, bulkhead):
     bolt hole is a joint: something mates with it, so the rule that picks dimensions can see
     it, and it gets the callout OQ-DES-D2 decided on. The aperture is not a joint -- nothing in
     the model mates with the hole through the middle -- so the same rule says do not dimension
-    it, and it is drawn here in the reference colour to show what would be missing.
+    it, and it is drawn here in the reference color to show what would be missing.
     """
     outer = [tuple(q) for q in section['loops'][0]['points']]
     aperture = [tuple(q) for q in section['loops'][1]['points']]

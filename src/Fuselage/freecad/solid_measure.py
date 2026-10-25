@@ -67,7 +67,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
-#: Deflections tried in order, in millimetres, coarsest first.
+#: Deflections tried in order, in millimeters, coarsest first.
 #:
 #: The tail wall converges by the third: successive volumes 23726.383, 23735.043, 23737.997,
 #: with the step falling from 8.66 to 2.95 mm3, and the *difference between two builds* falling
@@ -207,8 +207,8 @@ def _area_sampler(shape, deflection=0.02):
 def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection=0.02):
     """The symmetric difference of two solids, estimated by sampling one's surface.
 
-    Returns `(estimate, standard_error, area, mean_gap, max_gap)`, all in millimetres and cubic
-    millimetres.
+    Returns `(estimate, standard_error, area, mean_gap, max_gap)`, all in millimeters and cubic
+    millimeters.
 
     **Why this exists: the boolean symmetric difference does not work between two solids that
     were built independently.** Measured 2026-09-06 on two `tail_shell` builds from identical

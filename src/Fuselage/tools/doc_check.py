@@ -59,9 +59,11 @@ CLOSED_WORDS = ('RESOLVED', 'DECIDED', 'WITHDRAWN', 'CLOSED', 'SUPERSEDED', 'ANS
 #: `CLOSED_WORDS` as one case-sensitive, word-bounded pattern.
 CLOSED_RE = re.compile(r'\b(%s)\b' % '|'.join(CLOSED_WORDS))
 
-#: British spellings, with the American form to use. Checked outside code spans only, because an
-#: identifier keeps whatever spelling it was defined with -- `density.artefact_fraction` is a
-#: name, not prose, and renaming it is a code change rather than a documentation fix.
+#: British spellings, with the American form to use. Checked outside code spans only: a name in
+#: backticks is a reference to code, so correcting it here would make the document cite a symbol
+#: that does not exist. Whether the symbol itself should be renamed is a separate question, and
+#: `source_spelling.py` is what answers it -- it shares this dictionary and renames the
+#: identifiers across the source tree in one change, so the two never disagree.
 BRITISH = {
     'behaviour': 'behavior', 'behaviours': 'behaviors',
     'centre': 'center', 'centred': 'centered', 'centres': 'centers',
@@ -79,6 +81,14 @@ BRITISH = {
     'labelled': 'labeled', 'labelling': 'labeling',
     'cancelled': 'canceled', 'travelled': 'traveled',
     'behavioural': 'behavioral',
+    # Inflections found by the source pass. They were reported rather than guessed at: each one
+    # turned up as a British stem inside a longer word that no entry covered.
+    'unrecognise': 'unrecognize', 'unrecognised': 'unrecognized',
+    'colouring': 'coloring', 'mislabelled': 'mislabeled', 'mislabelling': 'mislabeling',
+    'catalogued': 'cataloged', 'cataloguing': 'cataloging',
+    'organising': 'organizing', 'recognising': 'recognizing',
+    'normalising': 'normalizing', 'analysing': 'analyzing',
+    'favouring': 'favoring', 'favours': 'favors',
     # The compounds are listed individually because a word boundary does not fall before the
     # `-metre` in `millimetre`, so `metre` alone matches neither it nor `nanometre`. These are
     # the forms the tree actually holds, counted rather than guessed.
@@ -725,8 +735,7 @@ def fix_spelling(text):
 
     Driven off `strip_code`'s mask rather than off the text itself, and the mask is the same
     length as the text, so a match's offsets in the mask are its offsets in the original. That
-    is what keeps `density.artefact_fraction` -- an identifier, in backticks -- untouched while
-    the prose around it is corrected.
+    is what keeps a backticked identifier untouched while the prose around it is corrected.
     """
     pattern = re.compile(r'\b(%s)\b' % '|'.join(sorted(BRITISH)), re.I)
     masked = strip_code(text)

@@ -34,7 +34,7 @@ from conftest import requires_freecad                                       # no
 
 pytestmark = requires_freecad
 
-#: Outer radius, wall and height of the test tube, in millimetres. The wall is the cowl's own
+#: Outer radius, wall and height of the test tube, in millimeters. The wall is the cowl's own
 #: 0.6 mm so the numbers read on the same scale as the real part's.
 R_OUTER = 10.0
 WALL = 0.6
@@ -123,7 +123,7 @@ class TestWallThickness:
 
     def test_the_sample_count_comes_from_the_section_not_from_a_constant(self, cci, Part):
         """IP-WTM-25. A tube ten times round gets ten times the samples, so the spacing in
-        millimetres -- the thing the 0.6 mm wall is measured in -- stays put."""
+        millimeters -- the thing the 0.6 mm wall is measured in -- stays put."""
         small = (Part.makeCylinder(20.0, HEIGHT).cut(Part.makeCylinder(20.0 - WALL, HEIGHT)))
         large = (Part.makeCylinder(200.0, HEIGHT).cut(Part.makeCylinder(200.0 - WALL, HEIGHT)))
         n_small = cci.wall_thickness(small, HEIGHT / 2.0, WALL, 0.01)[0]
@@ -353,7 +353,7 @@ class TestStationMeasures:
         a nearest-point distance taken *at* a concave corner; its own docstring says it fails
         informatively if excluding them removes the places a wall is thinnest. Here it does not:
         the thinning sits at the notch floor's ends, where the outer surface curves away, which is
-        a real wall and not a corner artefact -- so both measures report it, and that matches the
+        a real wall and not a corner artifact -- so both measures report it, and that matches the
         corpus result that the tail's thin spot is not at a corner and no corner-based fix reaches
         it.
         """

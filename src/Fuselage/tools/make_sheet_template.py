@@ -219,7 +219,7 @@ def build():
                         % (x, top, x, top + height, LINE_MM))
 
         if field is None:
-            # A fixed statement, centred in its cell rather than captioned -- it is not a
+            # A fixed statement, centered in its cell rather than captioned -- it is not a
             # label for something else, it is the thing itself.
             body.append(text(x + PAD_MM, top + height / 2.0 + VALUE_MM * 0.35,
                              VALUE_MM, caption, None, 'bold'))

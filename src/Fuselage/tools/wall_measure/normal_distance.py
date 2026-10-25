@@ -40,7 +40,7 @@ that guesses at a junction would be answering the question it was built to settl
 * `on_crease` -- more than one face contains `p` within tolerance, so `p` is on an edge where two
   surfaces meet and has no single normal. These are precisely the samples at issue, so they are
   named rather than silently assigned one of the two answers.
-* `no_normal` -- `face_normal` found fewer than three usable neighbours, which happens at a point
+* `no_normal` -- `face_normal` found fewer than three usable neighbors, which happens at a point
   pinched between trim boundaries.
 * `not_entered` -- neither `+n` nor `-n` puts the probe inside the solid at the entry step, so `p` is
   not on the boundary of this solid or the step overshoots a wall thinner than it.

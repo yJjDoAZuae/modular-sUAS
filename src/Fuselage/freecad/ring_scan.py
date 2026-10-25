@@ -95,7 +95,7 @@ Usage, one `--pass` per argument (see `tau_study.py` for why)::
 
 The whole corpus, tails before noses and descending `U` within a kind -- the order the walls were
 scanned in on 2026-10-11, and deliberate: the break was reproduced on a tail, and `U` = 4 is where
-the acceptance grid is coarsest in millimetres, so an interrupted run leaves the walls that matter
+the acceptance grid is coarsest in millimeters, so an interrupted run leaves the walls that matter
 most already finished. Skipping a wall that already has a result makes it resumable::
 
     for w in tail_shell_U4.0 tail_shell_U1.5 tail_shell_U2.0 tail_shell_U1.0 tail_shell_U0.5 \
@@ -285,9 +285,9 @@ def confirm_no_wall(wall, rows, out=None):
 
     **That station is the only one in the corpus, and it is deterministic.** Across 1 704 stations on
     all twelve distinct walls it is the single `no_wall`, and the wall was scanned twice hours apart
-    in separate processes: identical `z` to the last printed digit, identical six healthy neighbours.
+    in separate processes: identical `z` to the last printed digit, identical six healthy neighbors.
     So the re-probe is a sound test rather than a lucky one -- an intermittent slicer failure could
-    in principle also strike a neighbour, a deterministic one cannot.
+    in principle also strike a neighbor, a deterministic one cannot.
     """
     out = out if out is not None else sys.stdout
     gaps = [r['z'] for r in rows if r['state'] == locate.NO_WALL]

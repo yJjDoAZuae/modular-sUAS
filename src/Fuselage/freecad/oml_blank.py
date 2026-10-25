@@ -38,7 +38,7 @@ OML_DIR = os.path.join(os.path.dirname(HERE), 'oml')
 # What one OpenVSP model unit measures, and what the STEP file's header claims it measures.
 #
 # OpenVSP is dimensionless: the model holds bare numbers and every consumer declares its own
-# interpretation. This project's convention is that one model unit is one metre, which is what
+# interpretation. This project's convention is that one model unit is one meter, which is what
 # the OpenSCAD path applies as `scale = U / oml_scale_m_per_mm` at `oml_scale_m_per_mm = 1e-3`.
 # The STEP exporter must nonetheless write *something* into the header and writes FOOT, so a
 # reader applies 304.8 mm per unit where the convention means 1000. Neither number is wrong;
@@ -456,9 +456,9 @@ def blank(name, U, scale_m_per_mm, offset_x_m, reversed_):
 
     and OpenSCAD applies those innermost first, so the offset is added in the *mesh's own
     frame* before anything scales it. That ordering is the whole reason `offset_x_m` carries
-    a metre suffix (OQ-DES-CW1): the tail's -0.25 is -250 mm at U = 1, not -0.25 mm, and
-    applying it after the scale puts the tail a quarter of a millimetre from where it belongs
-    instead of a quarter of a metre.
+    a meter suffix (OQ-DES-CW1): the tail's -0.25 is -250 mm at U = 1, not -0.25 mm, and
+    applying it after the scale puts the tail a quarter of a millimeter from where it belongs
+    instead of a quarter of a meter.
 
     The surface arrives in the STEP's own units rather than the mesh's model units, so the
     offset is converted into them and the scale carries the reciprocal. At U = 1 with the

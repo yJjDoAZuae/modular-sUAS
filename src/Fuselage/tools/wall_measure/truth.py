@@ -33,7 +33,7 @@ doc/implementation/wall_thickness_measure.md.
 """
 import math
 
-#: Default tube geometry, in millimetres. `WALL` is the cowl's own wall -- `cowl_n_perimeters` *
+#: Default tube geometry, in millimeters. `WALL` is the cowl's own wall -- `cowl_n_perimeters` *
 #: `extrusion_width` = 1 * 0.6 -- so readings here are on the same scale as the real part's.
 R_OUTER = 10.0
 WALL = 0.6
@@ -176,7 +176,7 @@ def thin_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     True thickness is `wall - depth` inside the patch and `wall` outside it, both exactly, because
     the patch's outer surface is a cylinder of radius `r_outer - depth` concentric with the bore.
 
-    `arc` is the patch's extent **along the section**, in millimetres, and defaults to one extrusion
+    `arc` is the patch's extent **along the section**, in millimeters, and defaults to one extrusion
     width (0.6 mm) -- the shortest thin spot the slicer can act on, and therefore the shortest one
     gate G1 requires a measure to see. `depth` defaults to 0.15 mm, 15x `WALL_TOL`, so a measure
     that reports the patch at all reports it unambiguously.
@@ -210,7 +210,7 @@ def ribbed_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     established cause of the incumbent measure's non-convergence. A measure that reads `wall`
     correctly on the flank right beside a crease has survived the thing that defeats the incumbent.
 
-    Reproduces the real part's behaviour, where the wall legitimately reads *more* than nominal over
+    Reproduces the real part's behavior, where the wall legitimately reads *more* than nominal over
     a rib because the inner contour dips with the notch.
     """
     tube = uniform_tube(Part, App, r_outer, wall, height).shape
@@ -239,11 +239,11 @@ def corner_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     IP-WTM-17. Candidate C4 passes every other gate by *excluding* samples within 0.3 mm of a
     concave corner, and on a real wall that makes the section read exactly nominal. There are two
     readings of that and no gate so far can tell them apart: either the corners were the whole
-    artefact and the wall is compliant, or **the exclusion is blind precisely where a wall is
+    artifact and the wall is compliant, or **the exclusion is blind precisely where a wall is
     thinnest**, in which case C4 passes the screening and ships a part with a hole.
 
     This fixture separates them. A rib on the bore puts a re-entrant corner at a known angle; a
-    thin patch on the outer surface is then centred on that same angle, one extrusion width wide,
+    thin patch on the outer surface is then centered on that same angle, one extrusion width wide,
     so the defect lies inside any plausible corner-exclusion zone. A measure that drops
     corner-adjacent samples cannot see it; a measure that sees it has shown the exclusion is not
     hiding real thinness.
@@ -256,7 +256,7 @@ def corner_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     z_hi = z_lo + band
     rib_half = rib_arc / (2.0 * r_outer)
     patch_half = arc / (2.0 * r_outer)
-    # The rib spans [-rib_half, +rib_half]; its corner is at +rib_half, and the patch is centred
+    # The rib spans [-rib_half, +rib_half]; its corner is at +rib_half, and the patch is centered
     # there, so half the patch lies over the rib and half over plain wall.
     corner = rib_half
 

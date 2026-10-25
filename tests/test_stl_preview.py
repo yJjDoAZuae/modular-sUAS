@@ -223,7 +223,7 @@ def test_occlusion_is_fully_lit_where_nothing_is_solid():
 
 def test_occlusion_is_fully_lit_across_a_flat_uniform_depth_solid():
     """A flat region at constant depth with a constant normal: the occlusion prediction
-    exactly matches every neighbour's actual depth (gap == 0 everywhere), so nothing should
+    exactly matches every neighbor's actual depth (gap == 0 everywhere), so nothing should
     be darkened."""
     zbuf = np.full((20, 20), 5.0)
     nbuf = np.zeros((20, 20, 3), dtype=np.float32)
@@ -235,7 +235,7 @@ def test_occlusion_is_fully_lit_across_a_flat_uniform_depth_solid():
 def test_occlusion_darkens_a_concave_step():
     """A near region beside a far region, both facing the camera dead-on (nz = 1, ny ~ 0):
     the far side's prediction (its own depth) is unchanged by the step, but the near side
-    sees a genuinely closer neighbour once the step is within range, so at least part of the
+    sees a genuinely closer neighbor once the step is within range, so at least part of the
     buffer must come out darkened."""
     zbuf = np.zeros((20, 20), dtype=np.float32)
     zbuf[:, 10:] = 2.0   # right half sits nearer the camera (smaller z)

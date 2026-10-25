@@ -35,13 +35,13 @@ font already resolved. It is the format to put in front of a person on a screen;
 the one to print from.
 
 **The sheet's appearance is applied here, because here is where it can be.** Line weights,
-dimension text size and hole centre marks are properties of TechDraw's *view providers*, which
+dimension text size and hole center marks are properties of TechDraw's *view providers*, which
 are Gui objects that `freecadcmd` does not have -- so an `.FCStd` from this project carries no
 appearance and whatever opens it supplies all of it from compiled-in defaults. Those defaults
 are not the drawing standard: measured 2026-09-07, every view came out at 0.7 mm including the
-value table's rules, dimension text at 5.0 mm against the 3.5 the standard sets, and centre
+value table's rules, dimension text at 5.0 mm against the 3.5 the standard sets, and center
 marks off, so no hole on any sheet had one. `drawing_standard.view_appearance` and its
-neighbours say what those should be; this applies them, before the scene is built, for the same
+neighbors say what those should be; this applies them, before the scene is built, for the same
 reason the visibility below has to happen first.
 
 **Everything has to be made visible first, and that is not a detail.** The sheets are built
@@ -83,14 +83,14 @@ finished and saved; there is nothing to bring up to date, and this module opens 
 
 **It has to be killed rather than asked to leave.** This is the real GUI with a real event
 loop; `getMainWindow().close()` returns to that loop rather than ending the process, and the
-first run of this script sat until its 180 s timeout with every artefact already correctly on
+first run of this script sat until its 180 s timeout with every artifact already correctly on
 disk. So the log is flushed and closed and then `os._exit` is called, deliberately. Nothing
-here needs an orderly shutdown -- the documents are read-only inputs and the artefacts are
+here needs an orderly shutdown -- the documents are read-only inputs and the artifacts are
 already written and verified by the time it happens.
 
 **The exit code says nothing** -- see the log instead. That is not a quirk of the hard exit:
 `freecadcmd`'s exit code is unreliable in this project already, and the driver has always read
-artefacts rather than codes. `render_sheets.py` reads `$RENDER_LOG` and the files themselves.
+artifacts rather than codes. `render_sheets.py` reads `$RENDER_LOG` and the files themselves.
 """
 import json
 import os
@@ -128,15 +128,15 @@ SETTLE_POLL_S = 0.05
 #: the item count pauses between views as each projection lands.
 SETTLE_STABLE_POLLS = 12
 
-#: How far past the paper something may reach before it is worth reporting, in millimetres.
+#: How far past the paper something may reach before it is worth reporting, in millimeters.
 #: Not zero: the template draws the sheet border *on* the paper edge, and half of that
 #: stroke's width therefore falls outside it -- measured at 0.1 mm each side on every sheet
 #: here, which as a bare `contains` test made every render cry off-paper about its own frame.
 SPILL_TOLERANCE_MM = 0.5
 
-#: Millimetres per unit of TechDraw's page scene. **Not one.** The scene is in tenths of a
-#: millimetre: an ANSI B page, 279.4 mm wide, has a `sceneRect` 2794 units across, which is
-#: also the `viewBox` the SVG export writes. Assuming millimetres here produced a raster ten
+#: Millimeters per unit of TechDraw's page scene. **Not one.** The scene is in tenths of a
+#: millimeter: an ANSI B page, 279.4 mm wide, has a `sceneRect` 2794 units across, which is
+#: also the `viewBox` the SVG export writes. Assuming millimeters here produced a raster ten
 #: times too large in each direction before anything else was wrong with it.
 MM_PER_SCENE_UNIT = 0.1
 
@@ -423,7 +423,7 @@ def render_page(page, stem, say, figure=False):
     # demand, and a document merely opened has not needed one yet. `getSceneForPage` is what
     # forces it; without the scene, an export writes a page-sized empty file rather than
     # raising. Reporting the item count makes an empty one visible here rather than in the
-    # artefact.
+    # artifact.
     import TechDrawGui
     try:
         scene = TechDrawGui.getSceneForPage(page)

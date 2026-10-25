@@ -64,7 +64,7 @@ module fuselage_corner(U, unit_length, bulkhead_thickness, corner_radius, panel_
 // every nub z level, so the socket's snap rib came out at 2.00667 mm against the corner
 // post's 2.00000 -- about 0.0033 mm of gap at each end of a snap the design requires to be
 // nominal. The design carries all greeble clearance once, on the corner's bore; this was a
-// second, unasked-for clearance, and it was invisible because the -eps shift re-centred the
+// second, unasked-for clearance, and it was invisible because the -eps shift re-centered the
 // nub band and left only its height wrong.
 //
 // So: one argument, one meaning. bulkhead_thickness is the thickness and sizes the rib.

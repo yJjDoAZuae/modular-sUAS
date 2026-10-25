@@ -70,7 +70,7 @@ class TestBump:
     def test_a_unit_width_fraction_keeps_its_expression_form(self):
         """A case must stay portable across `U`: the coefficient moves, the relationship does not.
 
-        A cell rewritten as an absolute millimetre literal would be a different design at every
+        A cell rewritten as an absolute millimeter literal would be a different design at every
         `U`, which is the exact thing `cowl_tree.PARAMS_TAIL`'s own comment says the fraction
         convention exists to prevent.
         """

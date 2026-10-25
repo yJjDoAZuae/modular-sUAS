@@ -7,8 +7,8 @@
 // across four files each declared their own `eps = 0.01` before this existed.
 function geometry_eps() = 0.01;
 
-// Length for a *centred* cutting solid that must pass entirely through material of
-// depth `extent`. A centred cut reaches half this each way, so the factor leaves 50%
+// Length for a *centered* cutting solid that must pass entirely through material of
+// depth `extent`. A centered cut reaches half this each way, so the factor leaves 50%
 // clearance beyond `extent` on both sides -- a cut that lands flush on a face produces
 // a zero-thickness shell rather than a clean hole.
 //

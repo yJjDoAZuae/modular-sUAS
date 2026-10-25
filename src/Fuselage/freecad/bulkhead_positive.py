@@ -70,7 +70,7 @@ def flange_positive(doc, is_cowling=False, is_interconnect=False, make_web=True)
 
     `is_interconnect` and `make_web` are independent of it and of each other:
     `is_interconnect` picks the base profile (two stacked boxes, no diagonal, and no bolt
-    fillets or greeble web -- an interconnect bolts to its neighbour rather than carrying a
+    fillets or greeble web -- an interconnect bolts to its neighbor rather than carrying a
     bolt of its own) and `make_web` is which of an interconnect's two mirrored halves this
     is (the chamfer and the boss's flared foot belong to the half that has the web).
     """
