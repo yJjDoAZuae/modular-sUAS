@@ -779,7 +779,6 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 | ID | Question | Blocking |
 | --- | --- | --- |
-| OQ-DES-CW26 | The rib cut can break the wall's cross-section ring over 93 mm while passing every existing check — one valid solid, healthy partition identity, mirror sewing closed, no exception — and the existing thickness check misreports the break as a 0.36 mm thickness. Reproduced and characterized; two checks are now identified that catch it, and which to adopt is the decision | **Blocking** for any claim that a completed `tail_shell` build's wall is verified |
 | OQ-DES-CW27 | FreeCAD caches a shape's triangulation, so `solid_measure.converged_volume` run a second time on the same shape object converges at once on the cached mesh and reports the coarsest deflection as the converged one; with `tol` = 0 the identical call raises and then succeeds. The volume returned is still correct — only the convergence claim is not. Whether to defeat the cache, and at what cost on a real cowl, is the decision | Not blocking (the production path measures at one fixed deflection on a freshly built shape, so no shipped number is affected) |
 | OQ-DES-CW28 | The interior fit's convergence criterion `TAU` = 0.05 mm is **five times looser than the acceptance tolerance** `WALL_TOL` = 0.01 mm the finished wall must meet, and the walls come out just inside the criterion they were converged to — 7 of the 12 distinct corpus walls are over tolerance, every `tail_shell` at every `U`. Tightening `TAU` works on a nose (`U` = 4 goes 0.01403 → 0.00378 mm at `TAU` = 0.02) but is now **measured not to build a tail at all, at two configurations**: at both 0.02 and 0.01 a `tail_shell` at `U` = 0.5 and again at `U` = 2.0 raises `Unconverged` against the 64-station patch budget, and pass 2's own worst gap is unchanged across the whole fivefold range both times, so on a tail `TAU` is not the lever. Pass 1 meanwhile converges to 0.0073 mm, inside `WALL_TOL`, and the finished wall is unmoved — because the two passes measure out to different exteriors, the un-notched OML and the notched one, which diverge by up to 26.5 mm. The two thresholds are additionally read by two different measures, 2.81x apart at `U` = 0.5. What to do instead — accept the wall as built, make the criterion adaptive, raise the refiner's limits, or remove the residual's mechanism — is the decision | **Blocking** for any claim that a build's wall meets `WALL_TOL`; not blocking any build, which fails nothing today |
 | OQ-DES-CW29 | The acceptance gate now reports two wall-thickness measures side by side, and on a real `nose_cowl_shell` build they disagree about whether the part complies: the incumbent nearest-point minimum reads 0.0376 mm under nominal at 9 of 12 stations and fails the build, while the measure selected against five pre-committed gates reads 0.0031 mm and passes it with three times the margin. The incumbent is known not to converge; the selected measure is known to exclude samples near concave corners, which is where the incumbent's minima sit on a nose. Which of the two gates a build — and therefore whether a nose cowl is shippable today — is the decision | **Blocking** for any pass/fail verdict on a `nose_cowl_shell`; not blocking a `tail_shell`, where both measures agree the wall is over tolerance |
@@ -787,6 +786,7 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW31 | The interior fit's axial seed is a fixed **count** — `SEED_MAX` = 6 stations for any stretch over 3 mm — while a `nose_cowl_shell`'s stretch runs 22 mm at `U` = 0.5 and 176 mm at `U` = 4.0, so the axial spacing grows from 2.44 to 17.60 mm and the finished wall's error tracks it to within ±13 %, from 0.00189 to **0.01530 mm** against `WALL_TOL` = 0.01. **This is why `U` = 4.0 is the only failing nose configuration**, confirmed by its converse: raising `SEED_MAX` to 12 at fixed `U` = 4 takes the wall to 0.00733 mm, passing, at no measurable build cost. **Two premises corrected 2026-10-14.** The apparent 0.0071 mm "floor" is `TAU`, not the construction: `_refine` stops at the first subdivision inside it, and at `TAU` = 0.02 the same nose reaches 0.00268 mm — so **either lever alone makes the nose compliant** and the real floor under both is 0.00268 mm, 3.7x inside tolerance. And the 23-minutes-a-part cost objection prices the superseded 60-patch construction; every current build is `patch 1/1`, and generous seeding measures **+23 % on a nose and +33 % on a tail**. The tail prerequisite is measured too: it buys 12 %, leaving the tail 3.3x over tolerance while pass 1 improves 4.9x. So the decision is no longer a build-time trade — it is whether to adopt a correct seeding rule that fixes the nose knowing it does nothing for the tail, and whether `TAU` should do that job instead | **Blocking** a compliant `nose_cowl_shell` at `U` = 4.0; not blocking any tail, which fails for separate reasons |
 | OQ-DES-CW32 | The rib dilation is a union of `RIB_FACETS` = 48 translated copies on a circle of radius `t`, so it is a solid only while `in_plane / t > 2·sin(π/48)` = 0.130806 — a fixed **count** standing against a ratio that two design rows move. The parameter sheet sits at 0.16667, **1.274× the floor**, and a single-parameter excursion crosses it in either direction: measured 2026-10-14, `buttress_cut_thickness` 0.1 → 0.07 mm, `extrusion_width` 0.6 → 0.8 mm and `cowl_n_perimeters` 1 → 2 are each refused by the precondition, needing 55, 52 and 77 facets. So the bounds are `buttress_cut_thickness` > 0.0785 mm and `cowl_n_perimeters × extrusion_width` < 0.7644 mm, and **a two-perimeter cowl does not build at all**. The same three are refused on a `tail_shell` at `U` = 0.5, where the binding tool is an axial slab reading 0.1004 mm in-plane rather than the nose's exact 0.1000. Whether to derive the count per tool, raise it to one larger fixed value, or document the region and leave it, is the decision | Not blocking any shipped wall — every value on the parameter sheet builds, with 27 % margin in the ratio; it blocks a two-perimeter cowl and bounds how far IP-WTM-41's input screen can reach |
 | OQ-DES-CW33 | Every wall-thickness measure in this subsystem is **in-plane**, and a plane cutting a slab inclined at θ reads `thickness / cos θ` — always thicker than the slab is. Measured with a new 3-D normal-distance measure verified first against closed-form fixtures: across four saved walls, **66 readings on the fitted interior surface, every one confirmed thin and thinner than the plane said, none exonerated**. Real worst deficits **0.0943 mm (tail `U` = 0.5), 0.0790 (nose `U` = 4.0) and 0.0645 (tail `U` = 1.0) — six to nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and 0.0226, understating by 2.9–7.0×. The surface is inclined 21.5–30.8° there and `normal / cos θ` reproduces every in-plane figure to 0.0037 mm; the in-plane column independently reproduces IP-WTM-45's 0.01345 and OQ-DES-CW28's 0.01403. **Not localized**: on the tail at `U` = 1.0, 1 954 of one station's 4 267 samples are thin on the fitted surface, 46 % of the circumference. **No measure the gate has or is choosing between can see any of it**, and in-plane severity is measured to rank the real readings *last*, so a cheap worst-`N` confirmation pass selects against the defect. Whether to filter by face class and measure, document the bias and leave the gate in-plane, or something else, is the decision | **Blocking** any claim that an in-plane pass means a wall meets `WALL_TOL`; not blocking a build, and an in-plane *failure* is still evidence of a defect |
+| OQ-DES-CW35 | `cowl_interior.py` carries a **test-only seam in production code**. A module-level `_probe`, `None` in every build, is read at two call sites through two identity accessors, so a measurement can reach the two decisions `cavity` makes for itself and nothing outside can otherwise touch: the eroded cross-section each fit row is built from, and the minimum station separation `station_floor(t)` = 0.600 mm at the current wall. It is about **eight lines of a 3 541-line module**, neither entry point's signature mentions measurement, and `_probe is None` is the only state any build has had — so no shipped geometry depends on the answer. What it costs is a reader of the construction seeing two calls that do nothing, one further accessor per future question asked, and a later edit being able to route *around* the accessor and silently disable a measurement rather than fail it, which is the exact fault that has already produced two convincing null results in this subsystem. Removing it means decomposing `cavity`: **847 lines, eight named nested functions, 21 captured names**, and the kernel's reproducibility floor makes a passing regression weak evidence that a decomposition changed nothing. Whether to keep the seam, decompose, substitute the production functions by name instead, or promote the seam to a designed extension point, is the decision | Not blocking (the seam is inert — no build, measurement or recorded figure changes whichever way this goes) |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -3188,403 +3188,71 @@ argument.
 - **IP-FC-154 is superseded by this**, since it repaired the engagement sampling inside the scan
   being removed.
 
-### OQ-DES-CW26 — The cut can break the wall's section ring and pass every check; which checks catch it?
+### OQ-DES-CW26 — The rib cut can break the wall's section ring; which checks catch it — RESOLVED 2026-10-28
 
-**Problem.** The cowl's printed wall is a fixed real-world dimension —
-`cowl_n_perimeters * extrusion_width`, 0.600 mm at the parameter sheet's current values — and it is
-held to **0.01 mm** (`cowl_interior.WALL_TOL`), not to the 0.05 mm that governs the surface fit's own
-convergence. The reason is the slicer: its decision to lay a perimeter down at all is near-binary in
-the measured wall thickness, and a cowl prints in spiral-vase mode with a single perimeter and no
-second wall behind it (§7), so a wall materially under `n_p·w` does not print thin — it prints open.
-The wall is produced by cutting a fitted interior solid out of the buttress-notched blank
-(`notched.cut(inside)`), and the construction checks that result five ways: §4.2's rib residue
-against `RIB_RESIDUE` = 0.01 mm³, the cavity's connectivity, the cut returning exactly one solid,
-the cut and its complement re-adding to the blank within `PARTITION_TOL` = 2.0e-3, and the mirrored
-result sewing into exactly one closed shell.
+**Resolved 2026-10-28, on alternative 2: run the annulus identity on the finished wall's own
+sections at build time.** At each checked station, slice the mirrored wall and hand the wires to
+`Part.makeFace(wires, 'Part::FaceMakerBullseye')` — one face with two wires is a continuous ring,
+several one-wire faces mean it is broken into that many arcs.
 
-**Measured 2026-10-04 and characterized 2026-10-05 on `tail_shell` at `U` = 3.0: all five pass on a
-wall with a 93 mm hole in it.** Displacing one row of the fit's input contours by 0.03 mm at the
-station `z` = -283.9951339 — a legitimate conditioning probe, since that station's nearest
-neighboring row is 0.4311 mm away and the displacement is 7 % of that gap — breaks the wall's
-cross-section ring at `z` = -217.7261 into a 1293 mm arc and a 213 mm arc, with **93.2 mm of the
-1600 mm ring absent**. Both arcs measure 0.612 and 0.613 mm across, against 0.600 nominal: the wall
-is the right thickness and simply missing over part of its circumference. Rib residue reads
-0.000000 mm³, the cut returns one valid solid, the partition slip reads 2.396e-05 against a healthy
-build's 2.831e-05, and the mirror sews to one closed shell. **No exception is raised anywhere.**
+**The rationale, and it is narrower than it was when this question was opened.** This item was
+built on a wall with a 93 mm hole in it passing all five construction checks with no exception
+raised — measured on `tail_shell` at `U` = 3.0 on 2026-10-04. **That premise no longer holds.**
+Re-run on 2026-10-28 at the same station, on the same unfiltered 32-station set, δ = 0.030 mm makes
+section 5's post-cut pass report the wall closed to 0.0001 mm and the build **raises**. So the
+failure is reproducible and the silence is not, and alternative 2 is no longer the only thing that
+would notice. It is adopted on what survives that:
 
-**The existing thickness check reports the break as a thickness**, which is how it read as a 0.19 mm
-thinning for a day. `check_cowl_interior.wall_thickness` sorts a section's closed loops by enclosed
-area, takes the two largest, and measures the distance from the second to the first — correct for an
-outer/inner pair, meaningless for two disjoint arcs, where it measures the gap between the broken
-ends and returns 0.355705 mm. That is a defect in the check, independent of this question's own:
-nothing asks whether the section is the annulus the measure presumes. Full evidence, including the
-dose series and the arithmetic on the surface fit, is
-[cowl_interior_surface.md §7.1](cowl_interior_surface.md).
+- **It names the failure.** The existing catcher raises `Unconverged` — a convergence criterion
+  reporting that more stations did not help. A reader gets "section 5's second pass wanted more
+  than 64 stations", not "the wall has a hole in it", and a build that fails unintelligibly is one
+  somebody will try to force through.
+- **It does not depend on the gap being large.** The existing catcher fired because a hole drives
+  the finished-wall gap to `t` itself, 0.5999 of 0.600, far above `TAU` = 0.05 mm. A break leaving
+  that minimum inside `TAU` would pass it. One closed loop or two is a topological fact, whatever
+  the break's width.
+- **It is cheap and uncalibrated**: 0.6 s on a slice already being paid for, an identity with no
+  threshold to tune per `U`, and it tests the property that makes the part a shell, so it catches
+  any break rather than this one.
 
-Three measured properties bound what any answer has to cope with:
+**Caveats attached to the choice.** It does not measure thickness, so it would not catch a uniform
+thinning — that is `_finished_wall_gap`'s job and is
+[OQ-DES-CW29](#open-questions)'s and [OQ-DES-CW33](#open-questions)'s question, not this one. A
+slot's end cap may legitimately break the annulus at some stations, so the false-positive rate
+across both kinds and the swept `U` range must be surveyed before it can refuse a build. And this
+is cheap insurance against a specific gap in a catcher that already works, not the difference
+between catching and shipping a broken part — it should be funded as the former.
 
-- **The construction is linear and well behaved right up to the break, so there is no early warning
-  in the numbers.** Displacements of 0.001, 0.003 and 0.01 mm give changes of +0.000408, +0.001225
-  and +0.004084 mm — a gain of 0.408 mm per mm at every one, to three figures, and all three pass
-  every check with a 0.000000 mm³ rib residue. Extrapolating that line to 0.03 mm predicts
-  +0.0123 mm; the measured value is -0.190851 mm. **The failure is a discontinuity, bracketed
-  between δ = 0.01 mm and δ = 0.03 mm**, not a trend a tighter tolerance would have caught sooner.
-- **The dose series is not ordered by severity.** δ = 0.1 mm severs the wall into five solids and is
-  caught; δ = 0.03 mm, a third of it, passes everything and is wrong. A check calibrated on severity
-  will not order these correctly.
-- **Whether the fit carries the displacement is open.** An earlier version of this question argued
-  it could not, on the grounds that the measured station is 66 mm from the perturbed row and the fit
-  attenuates about 3.7× per station. But the linear regime measures a gain of 0.408 mm per mm at
-  that same distance, which implies about 1.12× per station — so the attenuation figure understates
-  the measured sensitivity by three orders of magnitude and cannot be used to rule the fit out. That
-  discrepancy is itself unexplained.
+**What was established while answering it**, all of which lives in the body rather than here:
 
-**What is not known.** Whether any *unperturbed* build reaches this state has not been shown. Every
-occurrence comes from the row-nudge probe, which no real build performs. So this may be a reachable
-failure mode or an artifact of a synthetic input, and that distinction is the main thing separating
-the alternatives below.
+- The failure's own characterization, the dose series and the 93 mm ring-length shortfall:
+  [cowl_interior_surface.md §7.1](cowl_interior_surface.md#71-the-cut-can-break-the-walls-section-ring-and-nothing-catches-it).
+- **The mechanism, identified 2026-10-28: the rib cut, not the fit.** At δ = 0.030 the fit leaves
+  0.367073 mm of wall while the finished rib-cut wall closes to 0.0001 mm, so the cut removes what
+  the fit left, and the step is inside `cavity` rather than among `shell_solid`'s three booleans.
+  [§4.4](cowl_interior_surface.md#44-the-surface).
+- **How the displacement travels**: the fit is an interpolation, so a one-row nudge is amplified by
+  1 / an adjacent station pair's gap, verified against the kernel to 0.997–0.999 and corroborated
+  on real geometry at a gain of 7.62 mm per mm against the floored set's 1.4719. [§4.4].
+- **Reachability, searched on four axes and empty on all of them**: 1 704 dense stations across the
+  twelve `U`-varying corpus walls, 1 638 across 36 single-input walls, 3 612 across 86 two-input
+  walls on the nose, and 336 acceptance-grid readings — every station a healthy annulus. The
+  per-wall table is
+  [wall_thickness_measure.md](../implementation/wall_thickness_measure.md#the-whole-corpus-at-1-mm-and-what-it-took-to-be-worth-running-ip-wtm-40).
+- **The seeding axis, closed across 266 tail configurations**: all 242 two-row combinations plus 23
+  single-row cases seed the same single station pair, 0.0003433 mm between the same two stations,
+  so no design input moves the crowding the amplification needs.
+  [§4.1](cowl_interior_surface.md#41-stations).
+- The annulus identity's own measured separation, 7 of 7 against 5 of 7, and its two limits:
+  [§4.4](cowl_interior_surface.md#44-the-surface).
 
-**Three of the four bounds on that evidence are now closed by measurement** (see the evidence
-below). Along `U`: every distinct corpus wall scanned at 1 mm axially, 1 704 stations, not one
-severed ring. Along the **design inputs**: a second corpus built one input off the sheet per wall,
-36 walls over two kinds, 1 638 stations, every one a healthy annulus. Along **two inputs together**:
-a third corpus of 86 walls on `nose_cowl_shell` at `U` = 1, 3 612 stations, every one a healthy
-annulus and none refused. So no legitimate configuration yet built — at any `U`, at any single-input
-excursion from the sheet, or at any of 85 two-input interactions on the nose — is in the severed
-state. What is left is an interaction on the **tail** or with a **large `U`**, and **what the switch
-actually is**.
-
-**Alternatives:**
-
-1. **Measure whether an unperturbed build can reach it, then decide.** Characterize what the switch
-   actually is — which boolean decision changes — and whether any legitimate variation of the design
-   inputs lands on the other side of it. *Benefits:* the only option that establishes whether this
-   needs catching at all; every other alternative either pays for a check against a possibly
-   unreachable state or accepts a possibly real one. *Drawbacks:* open-ended, and the switch has
-   resisted three refuted predictors already (nearest-tool clearance, the crowding ratio, row
-   spacing). *Prerequisites:* none; IP-FC-146's characterization is the start of it. **This splits
-   in two, and the reachability half is now done on three axes:** whether any saved unperturbed
-   wall is in the severed state is measured — 1 704 dense stations across all twelve distinct
-   walls on the `U` axis, 1 638 across 36 walls on the design-input axis, **3 612 across 86 walls
-   on the two-input interaction axis**, none severed, plus the 336 acceptance-grid readings —
-   while *what the switch is* remains unmeasured. So choosing this alternative now means
-   committing to the switch alone.
-
-   **The interaction axis, measured 2026-10-25.** The single-input screen moves one design row at
-   a time, so it says nothing about two moving together, and no number of one-row cases reaches an
-   interaction. `inputs.pair_cases` builds that population: both rows set to values the sheet could
-   carry, so each is a legitimate configuration and a severed ring in one would be a reachable
-   failure rather than a probe artifact. On `nose_cowl_shell` at `U` = 1, nine design rows give 128
-   pairs, of which **85 have both members building on their own** — the other 43 contain one of the
-   three rows the construction already refuses alone (the facet floor of
-   [OQ-DES-CW32](#open-questions)), so they are refused for that inherited reason and would report
-   an interaction that is not there. The population's construction and that filter are
-   [cowl_interior_surface.md §6.2](cowl_interior_surface.md#62-conditioning-the-row-nudge-probe-and-what-it-can-establish),
-   which is where this axis sits beside the row-nudge probe it is the complement of.
-
-   | | |
-   | --- | --- |
-   | pair walls built, plus the baseline | 86 |
-   | refused by the construction | **0** |
-   | stations scanned, 1 mm axially / 0.2 mm circumferentially | 3 612 |
-   | healthy annulus | **3 612** |
-   | severed, confirmed gaps, `no_wall`, kernel disagreements | **0, 0, 0, 0** |
-
-   **Every pair changed the wall**, checked rather than assumed by `inputs.unmoved` against the
-   build fingerprints: none is identical to the baseline, and raw volumes run 5 985.5 to
-   10 840.2 mm³ against the baseline's 9 722.4. So this is coverage of 85 interactions and not the
-   baseline scanned eighty-six times. Cost: 60 minutes of builds and 89 minutes of scanning.
-   `tools/run_input_screen.py --pairs=1` and `freecad/ring_scan.py --family=pairs` reproduce it.
-
-   **What this axis does not cover**, stated rather than implied: one kind at one `U`. The tail's
-   twelve rows give 242 pairs at the screen's measured 629 s a case, which is about 42 hours of
-   builds before any scanning, so it is reported rather than run. An interaction between an input
-   and a **large `U`** is also untested, and `U` = 3.0 on a tail — the configuration the break was
-   reproduced on — remains covered along the `U` axis alone.
-2. **The annulus identity on the finished wall's own sections, asked of the kernel.** At each
-   checked station, slice the mirrored wall and hand the wires to
-   `Part.makeFace(wires, 'Part::FaceMakerBullseye')`, which resolves the nesting itself: **one face
-   with two wires means the ring is continuous; several one-wire faces mean it is broken into that
-   many arcs.** `Face.Area` on the result is the material area directly. *Benefits:* it is an
-   **identity, not a tolerance**: a closed shell's
-   transverse section *is* an annulus, so there is no threshold to calibrate and nothing to tune per
-   `U`. Measured on this failure it separates absolutely — across seven stations on each wall, the
-   healthy one reads **annulus at 7 of 7** and the damaged one reads **broken into 2 arcs at 5 of
-   7**, the two that pass being stations the perturbation did not reach, where both walls return
-   bit-identical areas and boundary lengths. The ring-length shortfall (93.2 mm of 1600) and
-   material-area shortfall come from the same slice as corroboration. It needs no boolean and no new
-   geometry: the slice costs about 7 s on a 2464-face wall, which every existing measurement already
-   pays, and the classification adds **0.6 s**. It also catches a class, not an instance: any break
-   in the wall fails it, however caused. *Drawbacks:* it does not
-   measure thickness, so it would not catch a genuine uniform thinning; and a slot's end cap may
-   legitimately break the annulus at some stations, so the false-positive rate across both kinds and
-   the swept `U` range has to be surveyed before it can refuse a build. *Prerequisites:* that
-   survey. **Half of this is already built and verified, 2026-10-05**: `section_regions` classifies
-   the wires and `wall_thickness` returns `None` for a section that is not an annulus, which both
-   its callers already count as a failure. On the two walls this question was characterized against,
-   the healthy one returns thicknesses at all six spot-checked stations and the broken one returns
-   `None` at five of six — so **the external check now catches this failure**, where before the fix
-   it reported it as a 0.355705 mm thickness. What is *not* built is the build-time half: nothing in
-   `shell_solid` runs it, so a build still completes silently.
-3. **A finished-wall thickness check at `WALL_TOL` — which needs an instrument this project does not
-   have.** *Benefits:* measures the quantity the requirement is actually about. **The cost objection
-   an earlier version of this item raised is withdrawn**: `shell_solid` has already built and
-   mirrored the real wall, so the boolean is paid for and what remains is slicing.
-   *Drawbacks, and they are the substance:* the measure available does not converge. Measured
-   2026-10-05 on `nose_cowl_shell` at `U` = 1, `wall_thickness`'s nearest-point minimum was still
-   falling at 3840 samples at **17 of 24 stations**, drifting up to 0.0079 mm per doubling, because a
-   nearest-point distance at a concave corner crosses the corner rather than the wall and this
-   section has such a corner at every slot mouth. Measuring along the contour's local normal
-   oscillates instead, by up to 0.0139 mm. The **area-based mean** does converge — 0.5993 mm from
-   the kernel's own `Face.Area`, 0.0007 mm from nominal — but a mean cannot see a local thin spot,
-   which is the thing the slicer responds to, and it is only trustworthy where the section's two
-   loops are near-equal in length. *Prerequisites:* a converged *local* thickness measure. The
-   erosion guard that stood here as the candidate is refuted — eroding the section face by
-   `(n_p·w − WALL_TOL)/2` and requiring it to stay connected is sampling-free and exact on clean
-   geometry, and on a 0.6 × 100 mm polygon ribbon `makeOffset2D` gives 1.9884 mm² at d = 0.290,
-   0.0000 at 0.300 and raises at 0.310, the transition landing precisely at the half-width, but
-   **one call against the real section's convoluted B-spline boundary did not finish in six
-   minutes**, against 0.6 s for the whole face classification.
-
-   **This prerequisite is now met, 2026-10-25, and alternative 3 is no longer blocked on an
-   instrument.** `wall_thickness_measure.md` selected C4,
-   `wall_measure.candidates.corner_excluded_min` — the incumbent with samples within 0.30 mm of a
-   concave corner dropped — against five pre-committed gates on 2026-10-10, and it passed the
-   disqualifying converse that a corner-blind measure would fail, reporting 100 % of a defect's
-   depth on a thin patch centered on a re-entrant corner. **But it was selected on the convergence
-   gate at one station while the incumbent was rejected on twenty-four, so the two were not
-   comparable evidence.** `freecad/wall_convergence.py` closes that: both measures over the same
-   24-station grid on `nose_cowl_shell` at `U` = 1, at the same six spacings from 2.0 mm down to
-   0.0625 mm.
-
-   | measure | settles / stations |
-   | --- | --- |
-   | incumbent nearest-point minimum | **6 / 24** |
-   | selected corner-excluded minimum (C4) | **24 / 24** |
-
-   The incumbent reproduces its own rejection and C4 settles everywhere, with the largest
-   thinness reading across the 24 stations at 0.003407 mm — a third of `WALL_TOL`, so gating this
-   wall at 0.01 mm would not refuse it. The method, the settle criterion and what the survey does
-   *not* establish are in
-   [cowl_interior_surface.md §6.4](cowl_interior_surface.md#64-which-measure-reads-the-wall-and-what-it-says-the-wall-is),
-   which is the authoritative account of this instrument.
-
-   **What remains for this alternative is neither the instrument nor the plumbing.** `cavity`'s
-   post-cut loop already measures the finished wall on every build, through `_finished_wall_gap`,
-   so the check runs and its cost is already paid. What it lacks is the decided measure and the
-   decided threshold: it takes a plain minimum with no corner exclusion — the measure that settles
-   at 6 of 24 stations above — and holds it to `TAU` = 0.05 mm rather than `WALL_TOL` = 0.01 mm.
-   Those two choices are [OQ-DES-CW29](#open-questions). And adopting `WALL_TOL` here carries a
-   measured consequence nobody has accepted: **every `tail_shell` fails `WALL_TOL` at every `U`**,
-   at 0.0134–0.0469 mm, so a build-time refusal at that tolerance would refuse every tail build
-   today. That is a decision about what the project stops building, not an implementation detail.
-4. **Accept it and document it as a limit of the construction.** Record that a completed build's
-   wall is verified by the external `check_cowl_interior` run and not by the build itself, and
-   require that run before a part is used. *Benefits:* no new build cost; honest about where the
-   verification actually lives. *Drawbacks:* leaves a failure mode that produces a usable-looking
-   part, and the external check is not run by the normal build path. **Its other drawback has been
-   repaired rather than accepted:** as of 2026-10-05 the external check does now catch this case,
-   where before the annulus guard it reported the break as a 0.355705 mm thickness — so this
-   alternative is stronger than it was that morning, though it still rests on a check nobody is
-   obliged to run. *Prerequisites:* none.
-
-**Recommendation: adopt alternative 2 now, and treat alternative 3 as the work it actually is.**
-
-Alternative 2 is the answer to "what catches this reliably", and it earns that on three grounds
-rather than on its separation alone. It is an identity, so it needs no threshold — this thread has
-spent three metrics (Metric A, the crowding ratio, row spacing) on thresholds calibrated against
-single observations, and the two checks that have ever caught anything here, the partition identity
-and the rib residue, are both identities. It separates by containment, 200/200 against 0/200, with no
-margin to erode. And it generalizes: it tests the property that makes the part a shell, so it catches
-any break rather than this one.
-
-Alternative 3 remains the only thing that measures the requirement, and it should be built. When
-this was written it was not a small task, because the project had no converged local thickness
-measure at 0.01 mm and the one in use reported a broken ring as a thickness. **Both of those
-prerequisites are now done.** `wall_thickness` refuses a disjoint section rather than mismeasuring
-it, through `section_regions`, as of 2026-10-05; and the converged local measure exists and is
-surveyed — C4 settles at 24 of 24 stations where the incumbent settles at 6, measured 2026-10-25
-and recorded under alternative 3 above.
-
-**What is left is not implementation, and an earlier version of this paragraph said it was.** The
-check already runs: `cavity`'s post-cut loop calls `_finished_wall_gap` on the finished wall on
-every build. What is wrong with it is which measure it uses and which number it is held to. It
-takes a plain minimum with no corner exclusion — the measure that settles at 6 of 24 stations —
-and compares it to `TAU` = 0.05 mm rather than to `WALL_TOL` = 0.01 mm. On a `tail_shell` at
-`U` = 0.5 those two measures read 0.03763 and 0.01345 mm on the same section, a factor of 2.80, so
-setting `TAU` = `WALL_TOL` would not ask for a `WALL_TOL` wall. Both halves of that are
-[OQ-DES-CW29](#open-questions), and `TAU`'s own note in the source says not to close the gap
-without reading it. So alternative 3 is blocked after all — not by this question, but by CW29 and
-by [OQ-DES-CW33](#open-questions)'s finding that both candidate measures are in-plane while the
-surface carrying the wall is inclined 21.5–30.8° to the section plane. The work item is
-[IP-WTM-52](../implementation/wall_thickness_measure.md#work-items).
-
-Alternative 1 is no longer the recommendation it was. It was chosen on the principle that
-characterization precedes any new check, and that principle still holds for a *predictor* — a check
-calibrated to fire before a failure. It does not apply to alternative 2, which is not a predictor: it
-detects the broken part itself, after the fact, by a property that is true of every healthy build by
-construction. Characterizing the mechanism is still wanted, and is [IP-FC-146](../implementation/freecad_migration.md#work-items),
-but no longer gates the check.
-
-**What is still unmeasured, and what it would change.** Whether an *unperturbed* build can reach this
-state is unknown — every occurrence comes from §6.2's row-nudge probe, which no real build performs.
-Three axes have now been searched for it and come back empty: 1 704 dense stations across the twelve
-`U`-varying corpus walls, 1 638 across 36 walls that each move one design input off the parameter
-sheet, and 3 612 across 86 walls that move two inputs at once on the nose — every station a healthy
-annulus. **That strengthens rather than weakens the case for alternative 2**, read the right way
-round: a check with nothing to catch is the cheap-insurance reading of it, and the three scans make
-that reading more likely while leaving the tail's interactions, the large-`U` interactions and the
-mechanism untested. It does not change the recommendation, because the check costs a second a station
-and needs no calibration; it does make alternative 3 less urgent than it looked.
-
-**Evidence on that question, 2026-10-10, reported from
-[wall_thickness_measure.md](../implementation/wall_thickness_measure.md).** Two findings bear on this
-item, and they point in opposite directions.
-
-**No unperturbed build has been caught in this state, across 336 station readings.** The annulus
-guard described in alternative 4 was added on 2026-10-05; the 28-build soak ran on 2026-10-06, with
-the guard active, and recorded `missing_stations` = 0 for every build — 28 builds at 12 stations
-each, every one a genuine annulus with the inner loop inside the outer. Since the guard returns
-`None` on a non-annular section and the soak counts that a missing station, a broken ring at any
-sampled station would have shown up as a non-zero count. None did. **That evidence was bounded by
-the axial sampling, and the bound is now closed rather than argued:** 12 stations across a tail of
-roughly 300 mm is about 25 mm apart, and while the reproduced break spanned 93 mm of the ring's
-*circumference*, its extent in `z` was never measured, so an axially short break could have fallen
-between stations. The dense scan reported below is what closes it.
-
-**That scan is built, and it is not "a file read" — an earlier version of this paragraph said it
-was, and the number refuting that was already in this item.** Alternative 2 above records that "the
-slice costs about 7 s on a 2464-face wall", and a dense axial scan is one slice a station.
-`freecad/ring_scan.py` drives `locate.state_profile` over the saved walls with no build; **measured
-2026-10-11** on `tail_shell` at `U` = 3.0 at 1 mm axially and 0.2 mm circumferentially, it runs at
-**16.3 s a station**, 298 stations, about **81 minutes for that one wall** — and all twelve distinct
-walls at that density is some 1 700 stations and several hours of machine time. So closing this
-bound fully was a real expense to be scheduled rather than a free check, which is
-[wall_thickness_measure.md](../implementation/wall_thickness_measure.md) IP-WTM-40. **It has since
-been scheduled and paid: 3 h 4 min for the twelve walls, 2026-10-11**, at 1.2 to 2.2 s a station on
-a `nose_cowl_shell` and 5.2 to 9.2 s on a `tail_shell` — the per-station cost tracking the face
-count (536 against 2 464) far more strongly than `U`, which moves it only 1.8× across an eightfold
-range on either kind. The 16.3 s figure above halved to 8.1 s on the same wall once the scan stopped
-slicing twice a station. None of this changes this item's recommendation — alternative 2 was chosen
-on grounds independent of whether the failure is reachable.
-
-**A second finding reported here on 2026-10-10 is withdrawn, and its withdrawal is good news for
-this item.** It said the large-`U` thickness readings had moved into the range this item's own
-misreading occupied — 0.1514 and 0.2136 mm against the 0.355705 mm a broken ring was misreported as
-— so that at large `U` a thickness figure could no longer distinguish a thin wall from a broken one.
-Those readings were the instrument: discretized at a fixed sample count, which scales with `U`. At a
-fixed 0.125 mm spacing the same walls read **0.0469 and 0.0347 mm**
-([§6.6](cowl_interior_surface.md#66-sampling-density-a-fixed-sample-count-on-a-part-that-scales)),
-nowhere near 0.355705 mm. A thickness figure and a severed ring remain an order of magnitude apart,
-so the worry that they had become confusable does not stand.
-
-**The axial bound is now closed, on every distinct wall the corpus holds, 2026-10-11.**
-`freecad/ring_scan.py` scanned all **twelve** saved walls — both kinds at `U` = 0.5, 1.0, 1.5, 2.0,
-3.0 and 4.0 — at **1 mm axially**, 25 times finer than the acceptance grid on a tail, each across
-its own real sectioning extent, classifying the ring at every station from that station's own
-section loops at 0.2 mm circumferentially:
-
-| wall | stations | healthy annulus | severed | `no_wall` |
-| --- | --- | --- | --- | --- |
-| `nose_cowl_shell` `U` = 0.5 | 20 | 20 | **0** | 0 |
-| `nose_cowl_shell` `U` = 1.0 | 42 | 42 | **0** | 0 |
-| `nose_cowl_shell` `U` = 1.5 | 64 | 64 | **0** | 0 |
-| `nose_cowl_shell` `U` = 2.0 | 86 | 86 | **0** | 0 |
-| `nose_cowl_shell` `U` = 3.0 | 130 | 130 | **0** | 0 |
-| `nose_cowl_shell` `U` = 4.0 | 174 | 174 | **0** | 0 |
-| `tail_shell` `U` = 0.5 | 48 | 48 | **0** | 0 |
-| `tail_shell` `U` = 1.0 | 98 | 98 | **0** | 0 |
-| `tail_shell` `U` = 1.5 | 148 | 148 | **0** | 0 |
-| `tail_shell` `U` = 2.0 | 198 | 198 | **0** | 0 |
-| `tail_shell` `U` = 3.0 | 298 | 297 | **0** | 1, a slice artifact |
-| `tail_shell` `U` = 4.0 | 398 | 398 | **0** | 0 |
-| **total** | **1 704** | **1 703** | **0** | 1 |
-
-**So no severed station exists anywhere in the corpus at 1 mm resolution.** A break would have to be
-shorter than about a millimeter in `z` to have hidden between these stations, against the 93 mm of
-circumference the reproduced one spanned. The nesting test and the kernel were asked to disagree and
-did not, at the one station where there was anything to disagree about — and the escalation-only
-policy costs less here than it looks, because **whether a ring is severed is decided by the kernel's
-own wire topology and not by the sampling**: a break leaves the section either one closed loop or two
-non-nested ones, and the loop count comes straight from `Shape.slice()`. The 0.2 mm discretization
-enters only the nesting decision between loops, where under-sampling's known failure direction is a
-false positive rather than a missed break.
-
-**What this closes, and what it does not.** It closes the *axial* bound this item set itself: the
-remaining uncertainty is no longer where between two gate stations a short break might sit. What
-remained was the **input-space** bound, a different and larger thing — those twelve walls vary in
-`U` alone, with every other design input at the parameter sheet's values, so that scan said nothing
-about a configuration the corpus does not contain.
-
-**That bound is now measured too, 2026-10-14, and it is the same answer.** IP-WTM-41 built a second
-corpus in which one design input is moved off the sheet per wall, at a fixed `U`, and scanned it at
-the same 1 mm axially and 0.2 mm circumferentially: **36 walls across two kinds, 1 638 stations, 0
-severed, 0 confirmed gaps, 0 kernel disagreements.** The two populations are reported separately
-rather than folded together, because they answer different questions:
-
-| population | cases | built | refused | scanned | stations | severed |
-| --- | --- | --- | --- | --- | --- | --- |
-| `nose_cowl_shell` at `U` = 1.0 | 18 | 15 | 3 | 15 | 630 | **0** |
-| `tail_shell` at `U` = 0.5 | 24 | 21 | 3 | 21 | 1 008 | **0** |
-
-That is **14 excursion cases over 8 design rows on the nose and 20 over 11 rows on the tail**, each
-row moved both ways except where one direction is refused or is not a design: how wide every rib tool
-cuts, how far in every tool is set, how its dilation ramp leans, the wall thickness itself, and — on
-the tail — where the diagonal buttresses start, how deep and at what angle they run, and where the
-two top placements sit. Four of those rows move **all eleven** tools at once, which is how the
-`side*` and `bottom*` placements are covered without a build each. **Every excursion changed the
-built wall** —
-checked, not assumed, by a fingerprint of solids, faces, edges, bounding box and raw volume, with
-volumes running 3936 to 6352 mm³ on the tail against the baseline's 5851 — so this is coverage of
-those inputs and not the baseline scanned thirty-six times. The baseline is a control in its own
-right: the nose's hashes to the same value as all five of the 2026-10-06 soak repeats, so the harness
-builds what that corpus built.
-
-Three cases on each kind are **refused by the construction** rather than scanned, and all six are
-the same cause: `RIB_FACETS` = 48 is a fixed facet count and the dilation is only a solid above a
-floor that two design rows cross. That is [OQ-DES-CW32](#open-questions), and those three points of
-the input space stay uncovered until it is answered.
-
-This supersedes the 21-case design-input sweep of 2026-09-30 as the evidence on this axis. That
-sweep tested construction *validity* on the round-0 construction and saved nothing, so it could not
-be asked about the ring at all.
-
-**What still remains, 2026-10-25.** The two-input interaction this paragraph used to name as
-untested has been measured on the nose — 86 walls, 3 612 stations, 0 severed, recorded under
-alternative 1 above. Three gaps are left. The **tail's** interactions are unrun, at about 42 hours
-of builds for its 242 pairs before any scanning. An interaction with a **large `U`** is unrun, and
-`U` = 3.0 on a tail, the configuration the break was reproduced on, is still covered along the `U`
-axis alone. And the mechanism is still uncharacterized: what the switch between δ = 0.01 mm and
-δ = 0.03 mm actually is remains
-[IP-FC-146](../implementation/freecad_migration.md#work-items).
-
-**The single `no_wall` reading is a slice artifact, and distinguishing it needed a step the scan did
-not have at first.** At `z` = -293.98226487 the slice returned no closed wire at all. The kernel
-*agreed* with that — and the agreement was worthless, because with zero wires the nesting test and
-`Part.makeFace` both say "not an annulus" for the same empty input. What settles it is the second
-caution in [cowl_interior_surface.md §6.1](cowl_interior_surface.md#61-measurement-cautions):
-`Shape.slice()` can return nothing at one exact plane on a healthy wall. Re-probed at six offsets,
-**every one returns a 2-loop annulus** — `z` -0.200, -0.050, -0.010, +0.010, +0.050 and +0.200 mm,
-each with about 5 742 samples on a ~1 150 mm perimeter. The wall is continuous through that plane
-and the gap belongs to the sectioning, not to the part. `locate.nearby_states` and
-`is_slice_artifact` now do this automatically for any `no_wall`, because a scan that cannot tell an
-artifact from a hole would have reported this wall as defective.
-
-**That artifact is deterministic, and the whole-corpus run is what shows it.** The `U` = 3.0 wall was
-scanned twice, hours apart in separate processes, and the second run reproduced the first to the last
-printed digit: the same `z` = -293.98226487, no closed wire there either time, and all six neighbors
-a 2-loop annulus both times. So this is a property of that plane against that geometry, not an
-intermittent kernel flake — which matters, because an intermittent one could appear at a station the
-re-probe happens to call healthy. It is also **rare**: one station in 1 704 across both kinds and the
-whole `U` range, and the only one in the corpus.
-
-What remains for this item is therefore narrower than it was: no unperturbed build has been caught
-in the severed state across 336 acceptance-grid readings **plus 6 954 dense readings over 134
-scanned walls** — the twelve that vary `U`, the 36 that each move one design input off the parameter
-sheet, and the 86 that move two at once — at an axial resolution 25 times finer than the gate's. That
-strengthens the existing recommendation rather than altering it — alternative 2 was chosen on grounds
-independent of whether the failure is reachable, and it remains the thing that would catch a break
-arising from a configuration outside the corpus.
+**What remains open, and is not this question.** Whether an unperturbed build can reach the severed
+state is still unproven rather than disproven — every occurrence comes from the row-nudge probe, and
+the dose series displaces one notch edge of 27 per configuration. The tail's 242 interaction *walls*
+are unbuilt, at about 42 hours. Large-`U` interactions are untested. And *where* along `z` the
+finished wall closes is unrecorded, which `worst_finished_z` now carries. Those are
+[IP-FC-146](../implementation/freecad_migration.md#work-items), and the build-time check itself is
+[IP-FC-152](../implementation/freecad_migration.md#work-items).
 
 ### OQ-DES-CW27 — A shape's triangulation is cached, so a repeated convergence run converges on nothing
 
@@ -4792,6 +4460,215 @@ that it measures to a different exterior.
 They decide whether the gate can see a defect that is now measured at 0.065–0.094 mm on both kinds;
 what to do about the defect itself is not this question, and nothing in this plan has yet explained
 why the interior surface is inclined 21–31° where the wall is thin.
+
+### OQ-DES-CW34 — Nothing outside `cavity` could drive the booleans after the fit — RESOLVED 2026-10-25, revised 2026-10-28
+
+**This question is closed and nothing about it is pending.** It asked how the booleans after the
+fit could be driven from outside, since they could not be. They can be now, and they have been — at
+`U` = 0.5 and again at `U` = 3.0, with the results in
+[cowl_interior_surface.md §4.4](cowl_interior_surface.md#44-the-surface). What the closure leaves
+behind is a *different* question about how `cowl_interior` is structured, filed as
+[OQ-DES-CW35](#open-questions) rather than left open here; the last paragraph of this note says why
+the two are not the same decision.
+
+**Revised 2026-10-28: the probe is no longer a parameter.** The decision below was taken on a cost
+approval and recorded as reversible "if the production parameter is judged unacceptable". It was —
+measurement-only features should live in a measurement interface, not in the signature of the
+subsystem's production entry point. `cavity` and `shell_solid` take no measurement arguments at all
+now. What replaced them is **one private module-level seam**, `cowl_interior._probe`, inert when
+`None` and read through two one-line accessors, with the whole measurement vocabulary moved to
+`tools/wall_measure/probe.py`: what a probe is, what it may change, and a context manager that
+installs one and removes it whether the build returns or raises. It refuses to nest, because two
+probes installed at once would mean one is silently ignored, and this subsystem has already
+produced two convincing null results from measurements that were quietly not happening.
+
+A reader of `cavity` now sees the construction and nothing else, and
+`tests/test_wall_measure_probe.py` pins what that rests on: that the seam is inert, that it is
+always removed, that it cannot nest, and that neither entry point's signature mentions measurement.
+
+**What this closure does not settle is a separate question, not a loose end in this one.** A
+test-only seam still exists *in* the production module, just not in its interface — about eight
+lines, inert in every build. Whether the module should carry one at all, against decomposing
+`cavity` so that a harness composes the pipeline and no seam is needed, is
+[OQ-DES-CW35](#open-questions). It is filed separately because the decision is of a different kind
+and has a different cost: this question was whether the post-fit booleans can be measured, which
+is answered and built; CW35 is how `cowl_interior` is laid out, which is a refactor of the
+subsystem's most delicate code that no measurement forces and that nobody has priced.
+
+**The superseded decision, kept because the reasoning behind the hook's placement still holds:
+alternative 1, an optional probe parameter on `cavity`, forwarded by `shell_solid`.**
+The wall is produced in two stages, and the severance [OQ-DES-CW26](#open-questions) reproduced is
+in the second one: `cavity` fits the interior surface and cuts the ribs, then `shell_solid` extends
+the cavity across each cell plane, cuts it out of the notched blank and mirrors the result. The fit
+alone is measured not to produce the severance
+([cowl_interior_surface.md §4.4](cowl_interior_surface.md#44-the-surface)), and those three
+booleans had never been measured under a perturbation because there was no way to feed one in —
+`cavity` derives its own stations and returns only a finished solid, and the functions that
+assemble that solid are closures inside it.
+
+**The basis for the decision, recorded because it was not a formal closure.** The cost of the dose
+series was approved at about two hours, and this alternative was the recommendation; the choice was
+taken on that approval rather than on a separate instruction, so it is reversible if the production
+parameter is judged unacceptable. Alternative 2, promoting `cavity`'s closures to module level, was
+judged the better end state and was not done first because refactoring the subsystem's most
+delicate code to enable one measurement inverts the cost, and the kernel's reproducibility floor
+makes a passing test weak evidence there. Alternative 3 was refused on the evidence this subsystem
+already carries about duplicate implementations. **That judgment now belongs to
+[OQ-DES-CW35](#open-questions), and its scope was understated here**: the note called it "the three
+closures", and `cavity` holds eight named nested functions capturing 21 names from its scope.
+
+**What was built.** `cowl_interior.cavity` and `shell_solid` took `contour_probe=None` until the
+revision above removed it, and `freecad/sever_doses.py` was then and remains now its only caller.
+**The hook is on the eroded contour, not on the
+converged rows**, and that placement is the whole of what made it work: section 5's second pass
+rebuilds its rows from `fit_at` after the rib cut, so a perturbation applied downstream of
+`_refine` is discarded on the first post-cut round. Both placements were tried and the wrong one
+produced a convincing null result — §4.4 records the numbers that exposed it, along with a second
+fault in which the target station was selected by an absolute height belonging to a different `U`
+and landed on a pinned boundary row.
+
+**The measurement it enabled, and its limit.** At `U` = 0.5, displacing an interior notch-edge row
+by 0.03 mm leaves every check passing and all 24 sampled stations continuous annuli, with the
+perturbation verified to have taken effect by a 9.584 mm³ change in wall volume. That is a negative
+result at that configuration and not a general one. The series was later run at `U` = 3.0 as well,
+and the severance was then reproduced through this seam at the station the production floor drops,
+by declining to drop it rather than by forcing it in — all of it in §4.4, and all of it work this
+question made possible.
+
+### OQ-DES-CW35 — Should the interior-surface construction carry a test-only seam at all?
+
+`src/Fuselage/freecad/cowl_interior.py` builds a cowl's interior cavity and its finished wall. It
+has two entry points: `cavity`, which fits the interior surface and cuts the printed ribs out of
+it, and `shell_solid`, which extends that cavity across the cell boundary planes, cuts it from the
+notched blank and mirrors the result. Neither takes any measurement argument, and no build
+configures either of them.
+
+Measuring what the construction does to a deliberately perturbed interior surface requires reaching
+two decisions `cavity` makes for itself and returns no handle on. The first is the **eroded
+cross-section** each fit row is built from — the curve the interpolating surface passes through,
+which is what a perturbation has to be applied to if every row the construction later builds is to
+carry it. The second is the **station floor**, `station_floor(t)` = `max(t, MIN_INTERVAL)`, 0.600 mm
+at the current wall, which is the minimum axial separation two fit stations may have; overriding it
+to 0.0 restores the unfiltered station union a build seeded before that filter existed. `cavity`
+derives both internally and returns only a finished solid.
+
+**What exists today is a seam.** A module-level `_probe` is `None` in every build and is read at
+exactly two call sites through two one-line accessors, `_probe_contour(z, pts)` and
+`_probe_floor(default)`, each the identity when `_probe is None`. All the measurement vocabulary —
+what a probe is, what it may change, and the context manager that installs one and removes it
+whether the build returns or raises — is in `src/Fuselage/tools/wall_measure/probe.py`, which
+`cowl_interior` never imports. That is about **eight lines of production code in a 3 541-line
+module**, and `_probe is None` is the only state any build has ever had, so **no shipped geometry,
+recorded figure or acceptance verdict depends on how this question is answered.** The seam's own
+design, and the measurements it has carried, are
+[cowl_interior_surface.md §4.4](cowl_interior_surface.md#44-the-surface).
+
+**The cost of leaving it is not the eight lines.** It is three things. *First*, a reader of the
+construction meets two calls that do nothing, in the one function every wall figure in this
+subsystem comes from. *Second*, the seam reaches exactly two decisions, so measuring a third would
+add a third accessor: it grows one hook per question asked, and four accessors would be an
+interface nobody designed. *Third*, and the one that matters, a later edit to the fit or the floor
+can route *around* an accessor and silently stop a measurement rather than fail it. That is not a
+hypothetical fault in this subsystem — it has produced two convincing null results already, one
+from a hook placed on the rows `_refine` returns (discarded when section 5's second pass rebuilds
+them from `fit_at` after the rib cut) and one from a target station chosen as "nearest to" a height
+that did not exist at that `U` (it collapsed onto a pinned patch boundary row and moved the wall by
+0.006 mm³ out of 5 851). `tests/test_wall_measure_probe.py` pins that the seam is inert, that it is
+always removed, that it cannot nest and that neither signature mentions measurement; no test can
+pin that a future call site still reads through it.
+
+**The structural alternative is larger than it has been described.**
+[OQ-DES-CW34](#open-questions) called it "promoting the three closures to module level". Measured
+on the compiled module rather than estimated: `cavity` is **847 lines** and holds **eight named
+nested functions** — `key`, `body_arc`, `fit_at`, `outer_at`, `finished_outer_at`,
+`assemble_patch`, `fuse_smooth` and `cut_and_check` — capturing **21 distinct names** from its
+scope between them, including `body`, `notched`, `planes`, `t`, `tool`, `report` and three separate
+position caches. The contour seam sits inside `fit_at` and the floor seam inside the patch loop, so
+a decomposition that removes the seam has to lift the fit sources as well as the assembly trio, and
+all 21 captured names have to become explicit arguments or a context object.
+
+#### Alternatives
+
+1. **Keep the seam as it is.** Change nothing; the eight lines stay, inert, with their tests.
+   *Benefits:* no cost and no risk, and the seam is greppable — two accessors with one name
+   between them, so a reader asking "where can a measurement reach in" has a complete answer in one
+   search. *Drawbacks:* all three costs above stand. *Prerequisites:* none.
+
+2. **Decompose `cavity` so the pipeline can be composed from outside, and delete the seam.** Lift
+   the eight nested functions to module level, passing the 21 captured names explicitly or through
+   a context object, so a harness builds the fit, the rib cut and the assembly in sequence itself
+   and substitutes its own contour source and station set without the production module knowing a
+   measurement exists. *Benefits:* removes the seam entirely rather than hiding it; makes each
+   stage independently testable, which today it is not; and any future measurement needs no
+   production change at all, which is what stops the hook count growing. *Drawbacks:* it refactors
+   the most delicate code in the subsystem to serve a measurement, which inverts the cost; and the
+   kernel's reproducibility floor means a passing before/after regression is weak evidence that
+   nothing moved, because the same source already gives different bytes near a degenerate
+   configuration. *Prerequisites:* a bit-comparison of built walls before and after on both kinds
+   across the swept `U` range, with the reproducibility floor accounted for in how its result is
+   read.
+
+3. **Delete the seam and let a harness substitute the production functions by name.** No seam is
+   needed to reach either decision: `station_floor` is already a module-level function, and the
+   contour the seam intercepts is `_resample_open(eroded_arc(...))`, both also module level. A
+   harness could replace either by name for the duration of a build. *Benefits:* removes every
+   inert line from the production module today, at no risk to `cavity`, and the vocabulary stays
+   where it already is in `wall_measure.probe`. *Drawbacks:* those functions have callers outside
+   `cavity` — `check_cowl_interior` calls `eroded_arc` twice and `station_floor` once, and
+   `wall_vanish`, `station_gaps` and `fit_amplification` each call `station_floor` — so a
+   substitution applies to every caller in the process, and a measurement meaning "one row"
+   becomes "every row through this function" unless the replacement filters by `z` itself. Worse,
+   it pins the harness to internal names *and* to where they are called, with nothing left to
+   grep for: if `fit_at` stopped going through `eroded_arc`, the measurement would silently stop
+   happening, which is cost three above with the seam's one advantage removed.
+   *Prerequisites:* none.
+
+4. **Promote the seam to a designed production extension point.** Make supplying a contour source
+   and a station floor a supported feature of the subsystem rather than test apparatus, documented
+   and specified. *Benefits:* the inert code stops being inert, and the floor override becomes
+   reachable without a measurement module at all. *Drawbacks:* nothing in the design calls for
+   either to be configurable. The station floor is a property of the wall being built, not an
+   input to it, and a configurable contour source has no design purpose whatsoever — so this
+   dignifies test apparatus as a specification, which this project has an explicit rule against.
+   *Prerequisites:* a design purpose for the configurability, which does not exist.
+
+#### Recommendation
+
+**Alternative 1: keep the seam, and revisit when a third hook is wanted.** Two accessors is a seam;
+four would be an interface nobody designed, and that is the trigger to come back to this.
+
+Three reasons. The trade is eight inert lines against an 847-line refactor of the function every
+wall figure in this subsystem comes from, and the refactor serves no build. The refactor also
+cannot be cheaply verified: the kernel's reproducibility floor means a passing before/after
+comparison is weak evidence a decomposition changed nothing, so alternative 2's prerequisite is
+real work and not a formality. And alternative 3, which looks like the cheap version of removing
+the seam, is a regression on the property that makes the current seam tolerable — it trades one
+named, greppable, tested interception point for an implicit one that a refactor of `fit_at` would
+silently break, which is the failure mode this subsystem is worst at detecting.
+
+Alternative 2 remains the better end state on structural grounds and should ride along the next
+time `cavity` is opened for a reason of its own, rather than being the reason for opening it.
+
+**Recorded on instruction, 2026-10-29: alternative 2 is written into the plan as IP-FC-156
+([freecad_migration.md](../implementation/freecad_migration.md)), deferred rather than queued.** An
+earlier version of this recommendation said it should not be scheduled at all, reasoning that
+scheduling it would amount to deciding this question. That is overruled, and the arrangement now in
+place is the better one: the work is written down with its measured scope and its verification
+prerequisite so it cannot be lost or re-derived, the item's status is `blocked (OQ-DES-CW35)` so
+nobody reads it as ready work, and **the conditions that bring it back are stated rather than left
+to judgment** — any one of a third hook being wanted, `cavity` being opened for a reason of its
+own, a measurement needing a whole stage rather than a value, or the seam being found bypassed.
+Two are named as explicitly *not* conditions: a passing test suite, and tidiness. A deferral with
+named triggers is a decision; one that depends on nobody writing it down is drift.
+
+**Why this question stays open rather than closing on that instruction.** What is settled is the
+disposition — keep the seam now, decompose later, on these triggers — and that is recorded here and
+in IP-FC-156. What is not settled is the question itself: no trigger has fired, the before/after
+comparison that would make alternative 2 safe has not been done, and nobody has committed to doing
+it. Closing this and leaving the plan item blocked on a resolved question would be the same fault
+[OQ-DES-CW34](#open-questions) carried until 2026-10-29, where a live decision sat inside a closed
+note. It closes when a trigger fires and the decomposition is either done or declined on its own
+evidence.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

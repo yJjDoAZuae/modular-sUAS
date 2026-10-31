@@ -48,9 +48,12 @@ populations can be scanned and reported separately rather than merged into one f
 OQ-DES-CW23 asked how to handle a "small residual gap" between `cavity()`'s post-cut prediction
 and the real cut. Measured, that gap is at most 0.0039 mm — small, as the item said — and knowing
 its size is what finally let its four alternatives be scored. It was missing information rather
-than a design choice. OQ-DES-CW26 stays open, because which check to adopt against a broken
-section ring genuinely is a choice; the plan reported its evidence there and delivered
+than a design choice. OQ-DES-CW26 stayed open longer, because which check to adopt against a broken
+section ring genuinely was a choice; the plan reported its evidence there and delivered
 IP-FC-152's named prerequisite survey of 336 station readings with no false positive.
+**It is resolved 2026-10-28 on the annulus identity as a build-time refusal**, and what finally let
+it be decided is that the break is no longer silent: section 5's post-cut pass refuses the
+reproduced failure, so the adopted check is for *naming* a broken ring rather than for catching one.
 
 **Its own instrument was the biggest thing it found, and that cost two withdrawn findings.** The
 plan's first corpus figures fixed the sample *count* at 1 440 a loop. A cowl scales with `U`

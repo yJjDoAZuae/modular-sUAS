@@ -818,7 +818,9 @@ def main(argv=None):
             print('    %r' % f)
     if not quiet:
         print('')
-        print('%d finding(s) across %d check(s)' % (len(found), len(groups)))
+        ran = [n for n, _f in CHECKS if not only or n in only]
+        print('%d finding(s) from %d check(s): %s'
+              % (len(found), len(ran), ', '.join(ran)))
     return 1 if found else 0
 
 

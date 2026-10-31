@@ -591,7 +591,33 @@ class PreconditionFailed(Exception):
 
 
 class Unconverged(Exception):
-    """Section 5's floor was reached with the deviation still above `TAU`."""
+    """Section 5's floor was reached with the deviation still above `TAU`.
+
+    **A refusal carries the shape its own measurement was taken on.** Measured 2026-10-29: the
+    post-cut pass refused a `tail_shell` at `U` = 3.0 reporting the finished wall closed to
+    0.0001 mm at `z` = -73.1818, and the cut cavity that reading came from was destroyed as the
+    exception propagated -- so the one question the refusal raises, what the geometry actually
+    looks like there, needed another 1.94 hour build to ask. `shape` is that shape and `z` is the
+    station the worst reading was at, both `None` where a refusal has neither to offer.
+
+    **Nothing is written to disk from inside the construction.** A reference costs nothing and a
+    caller that wants the evidence kept exports it -- the same division `shell_solid`'s `stages`
+    already uses, and the reason this is not a parameter: a refusal has the shape whether or not
+    anyone asked in advance, which is the whole point, since nobody predicts which build refuses.
+    `wall_measure.refusals` is the writing side.
+
+    The shape is the one the message is about, never a copy and never rebuilt for the occasion:
+    the cut cavity for the rib-cut and post-cut refusals, the sewn compound for a mirror or
+    extension that would not close, the finished wall for `shell_solid`'s own two checks, and the
+    fitted surface for the pre-cut station budget.
+    """
+
+    def __init__(self, message, shape=None, z=None):
+        Exception.__init__(self, message)
+        #: The shape the refusal's measurement was taken on, or `None`. A reference, not a copy.
+        self.shape = shape
+        #: The station the worst reading was at, or `None` when the refusal is not about one.
+        self.z = z
 
 
 # --------------------------------------------------------------------------------
@@ -2077,10 +2103,27 @@ def _thin_stations(zs, floor):
 
     **This is the filter the per-patch union never had.** `feature_stations()` already
     deduplicates its own output, and `_patches()` already refuses a patch shorter than
-    `MIN_INTERVAL`, but the uniform seed stations and the notch edges are independent sets:
-    neither contains a close pair on its own, and their union can. That is how the real
-    `tail_shell` fit at `U` = 3.0 reached a station pair 0.0009 mm apart -- 670 times finer than
-    the wall -- from two individually legitimate stations.
+    `MIN_INTERVAL`, but both of those guards are set at `MIN_INTERVAL` = 0.20 mm while the floor
+    applied here is `station_floor(t)` = 0.60 mm at the current wall. So a pair between 0.20 and
+    0.60 mm is legitimate to every upstream guard and still too close to fit through, and the
+    seed stations and the notch edges are independent sets besides, so their union can be closer
+    than either.
+
+    **Measured 2026-10-25 on the real seed union, by `station_gaps.py`, which needs no cavity.**
+    `tail_shell` at `U` = 3.0 puts 32 stations in the union and keeps 27: **seven gaps fall under
+    the 0.60 mm floor**, and they are not one phenomenon. Six are notch-edge to notch-edge at
+    0.22 to 0.51 mm -- legal under `MIN_INTERVAL`, under the floor -- and one is the union case
+    proper, a seed station at -60.0003433 against a notch edge at exactly -60.0000000, **0.0003433
+    mm apart, 1748 times finer than the wall**. `U` = 1.0 and `U` = 4.0 read 0.0004578 mm, 1311
+    times the wall. An earlier version of this note said "neither contains a close pair on its
+    own", which the six notch-edge pairs refute, and quoted the union pair as 0.0009 mm and 670
+    times the wall. **That was a misrecording, not a change in the geometry**: every other figure
+    around it reproduces bit-exactly, 32 stations to 27 and a tightest remaining gap of 0.6516115
+    mm, so nothing has moved.
+
+    **The nose has none of this**, which is the converse and is worth stating: at `U` = 1.0 it
+    puts 10 stations in the union, keeps all 10, and its tightest gap is 1.9983671 mm -- three
+    times *wider* than the wall. Four notch edges against the tail's 22 to 26 is why.
 
     **Both end stations are preserved exactly.** A patch boundary is a station the patches on
     both sides must sample at the same `z`, or their two approximations of it are separated by
@@ -2292,7 +2335,7 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
                 'into one closed loop (%s). Subdividing does not fix that second kind, so if '
                 'it dominates here the station count is a symptom and not the problem.'
                 % (budget, rows[0][0], rows[-1][0], worst, tau, unsliceable, len(wanted),
-                   '; '.join(sorted(set(shapes))) or 'none'))
+                   '; '.join(sorted(set(shapes))) or 'none'), shape=surf)
         for offset, (i, z_m) in enumerate(wanted):
             rows.insert(i + 1 + offset, (z_m, fit_at(z_m)))
 
@@ -2343,6 +2386,31 @@ def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHE
 # --------------------------------------------------------------------------------
 # The wall
 # --------------------------------------------------------------------------------
+
+#: **The one measurement seam in this module, inert in every build.** `None` means the
+#: construction behaves exactly as it ships. A measurement installs a probe here through
+#: `wall_measure.probe.installed`, which is where the whole vocabulary of what a probe is and what
+#: it may change lives -- deliberately not here, and deliberately not in `cavity`'s signature.
+#:
+#: It replaced `contour_probe` and `station_floor_mm` parameters on `cavity` and `shell_solid`
+#: (OQ-DES-CW34, revised 2026-10-28): those worked, but they advertised measurement-only features
+#: in the signature of this subsystem's production entry point. A reader of `cavity` should see the
+#: construction and nothing else.
+#:
+#: Read through `_probe_contour` and `_probe_floor` rather than directly, so the two places the
+#: construction consults it are one line each and greppable.
+_probe = None
+
+
+def _probe_contour(z, pts):
+    """The eroded contour at `z`, as the construction should use it. Identity in every build."""
+    return pts if _probe is None else _probe.contour(z, pts)
+
+
+def _probe_floor(default):
+    """The floor to thin a per-patch union with. `default` in every build."""
+    return default if _probe is None else _probe.station_floor(default)
+
 
 def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None,
            clearance_check=False, exterior_split=None):
@@ -2478,12 +2546,31 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     n_fit = fit_samples(widest)
     n_check = check_samples(widest)
 
+    # The station floor this loop applies, and the contour every row is built from, are both read
+    # through `_probe_floor` and `_probe_contour`. Both are the identity in every build. What a
+    # measurement may do with them, and why the floor override is not a way to force a station in,
+    # is `wall_measure.probe`.
+
     def fit_at(z):
-        """The eroded cell arc at `z`, at fit resolution: one row of the grid."""
+        """The eroded cell arc at `z`, at fit resolution: one row of the grid.
+
+        **The measurement seam is applied here, and here is the only place it works
+        (OQ-DES-CW34).** An earlier version of the hook transformed the rows `_refine` returned,
+        which looked equivalent and is not: section 5's second pass re-fits with
+        `new_rows = [(z, fit_at(z)) for z in new_zs]`, so it rebuilds its rows from this function
+        and a perturbation applied downstream of `_refine` is discarded on the first post-cut
+        round. Measured, that showed as a cavity whose first fuse differed per dose -- 36399.76,
+        36401.90 and 36409.40 mm3 against a 36398.69 control -- and whose *second* fuse came back
+        at the control's 36398.64 for every dose, so the finished wall was unperturbed and the
+        series read as a null result. Hooking the contour source instead makes every row the
+        construction ever builds carry the perturbation, which is what "a different candidate
+        interior surface" means.
+        """
         k = key(z)
         if k not in fits:
             arc, p_start, p_end, flip = body_arc(z)
-            fits[k] = _resample_open(eroded_arc(arc, t, z, p_start, p_end, flip), n_fit)
+            pts = _resample_open(eroded_arc(arc, t, z, p_start, p_end, flip), n_fit)
+            fits[k] = _probe_contour(z, pts)
         return fits[k]
 
     def outer_at(z):
@@ -2673,10 +2760,17 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # themselves but never against each other, so two individually legitimate stations
         # can land arbitrarily close. Measured: this costs no accuracy -- same worst wall
         # error, 0.0496 mm, at 30 rows instead of 36 and 416.9 s instead of 539.8 s.
-        kept = _thin_stations(zs, station_floor(t))
+        default_floor = station_floor(t)
+        floor = _probe_floor(default_floor)
+        kept = _thin_stations(zs, floor)
         if len(kept) != len(zs):
             note('    patch %d: %d stations -> %d on the %.3f mm floor'
-                 % (index, len(zs), len(kept), station_floor(t)))
+                 % (index, len(zs), len(kept), floor))
+        if floor != default_floor:
+            # Printed whenever a measurement is in force, dropped stations or not, so a log can
+            # never be read as a production build's station set when it is not one.
+            note('    patch %d: %d stations, floor overridden to %.3f mm from %.3f (measurement)'
+                 % (index, len(zs), floor, default_floor))
         zs = kept
 
         # P1 over the patch, on the un-notched cell body, before anything is fitted. The two
@@ -2794,7 +2888,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 'and the wall will be thin or missing wherever that rib should have been -- '
                 'and since the ribs are what bridge the buttress slots, the wall comes out in '
                 'pieces. Nothing downstream catches this: the cavity is a valid closed solid '
-                'either way.' % (left.Volume, len(left.Solids)))
+                'either way.' % (left.Volume, len(left.Solids)), shape=cut)
         if len(cut.Solids) != 1:
             if report is not None:
                 report.update(disconnected_pieces=[(s.Volume, s.BoundBox) for s in cut.Solids],
@@ -2807,7 +2901,8 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 'checked separately from the residue above because a rib can be volumetrically '
                 'fully removed and still fail to bridge -- disconnection is a topology defect, '
                 'not a volume one, and a disconnected result is refused at any `U`, never '
-                'accepted as one more shape mirroring has to handle.' % len(cut.Solids))
+                'accepted as one more shape mirroring has to handle.' % len(cut.Solids),
+                shape=cut)
         note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
         return cut, left.Volume
 
@@ -2890,9 +2985,11 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # distance beyond which one insertion's own effect is indistinguishable from noise.
     current_scan = round0_scan_by_patch
     worst_finished = 0.0
+    worst_finished_z = None
     for round_ in range(POST_CUT_ROUNDS + 1):
         insertions = {}                                   # (ei, i) -> worst gap seen in that interval
         worst_finished = 0.0
+        worst_finished_z = None
         for ei, entry in enumerate(patch_entries):
             rows = entry['rows']
             i = 0
@@ -2909,7 +3006,15 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 gap = _finished_wall_gap(solid, z, t, finished_outer_at, planes, n_check)
                 if gap is None:
                     continue
-                worst_finished = max(worst_finished, gap)
+                if gap > worst_finished:
+                    worst_finished = gap
+                    # **Where, not only how much.** Measured 2026-10-28: a dose that drives this
+                    # pass to 0.5999 mm against t = 0.600 -- the wall closed to 0.0001 mm -- left
+                    # no record of the station it happened at, because the `note` below prints
+                    # only the magnitude and the per-station note fires only for an interval too
+                    # narrow to split. The z is what identifies the mechanism, and recovering it
+                    # cost a 1.9 hour rebuild that is now unnecessary.
+                    worst_finished_z = float(z)
                 if exterior_split is not None and round_ == 0:
                     # **IP-WTM-26: the same measure, the same section, the two exteriors.**
                     # `_refine` converges the wall out to `outer_at` -- `body`'s un-notched OML,
@@ -2949,13 +3054,19 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         if round_ == POST_CUT_ROUNDS:
             raise Unconverged(
                 'section 5\'s second pass wanted more stations after %d round(s) of re-cutting '
-                'the finished wall, worst measured gap %.4f mm against %.3f, in %d interval(s). '
-                'The smooth surface passes its own criterion already -- this is the rib cut '
-                'removing measurably more material than the smooth offset predicts, near a '
-                'shallow-angle notch boundary, and more stations have not closed it.'
-                % (POST_CUT_ROUNDS, worst_finished, tau, len(insertions)))
-        note('    post-cut refine: round %d, worst finished-wall gap %.4f mm over %.3f, '
-             'inserting %d station(s)' % (round_ + 1, worst_finished, tau, len(insertions)))
+                'the finished wall, worst measured gap %.4f mm against %.3f at z = %s, in %d '
+                'interval(s). The smooth surface passes its own criterion already -- this is the '
+                'rib cut removing measurably more material than the smooth offset predicts, near '
+                'a shallow-angle notch boundary, and more stations have not closed it.'
+                % (POST_CUT_ROUNDS, worst_finished, tau,
+                   'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z,
+                   len(insertions)),
+                shape=solid, z=worst_finished_z)
+        note('    post-cut refine: round %d, worst finished-wall gap %.4f mm over %.3f at '
+             'z = %s, inserting %d station(s)'
+             % (round_ + 1, worst_finished, tau,
+                'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z,
+                len(insertions)))
         by_patch = {}
         for (ei, i) in insertions:
             by_patch.setdefault(ei, []).append(i)
@@ -2966,10 +3077,19 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             midpoints = [0.5 * (rows[i][0] + rows[i + 1][0]) for i in indices]
             new_zs = sorted(set([z for z, _pts in rows] + midpoints))
             if len(new_zs) > budget:
+                # The worst gap and where it was is the diagnosis, and this message had neither.
+                # Measured 2026-10-28: a 0.5999 mm gap against t = 0.600 is the wall closed to
+                # 0.0001 mm, which no amount of budget fixes -- a reader needs the magnitude to
+                # tell that from an ordinary tolerance miss, and the z to find the cause.
                 raise Unconverged(
                     'section 5\'s second pass wanted more than %d stations in the patch z '
-                    '%.4f..%.4f, driven by the finished wall rather than the smooth surface.'
-                    % (budget, entry['p_lo'], entry['p_hi']))
+                    '%.4f..%.4f, driven by the finished wall rather than the smooth surface. '
+                    'Worst finished-wall gap %.4f mm against %.3f at z = %s; a gap approaching '
+                    't itself is material absent, not a tolerance miss, and more stations will '
+                    'not close it.'
+                    % (budget, entry['p_lo'], entry['p_hi'], worst_finished, tau,
+                       'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z),
+                    shape=solid, z=worst_finished_z)
             new_rows = [(z, fit_at(z)) for z in new_zs]
             surf2 = _fit(new_rows)
             main2, extra2 = assemble_patch(surf2, new_rows, entry['is_lo_end'],
@@ -3218,18 +3338,18 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
     if not shells:
         raise Unconverged(
             'extending the cell result past its own boundary plane %s did not close into any '
-            'shell at all' % normal)
+            'shell at all' % normal, shape=sewn)
     if len(shells) != 1:
         raise Unconverged(
             'extending the cell result past its own boundary plane %s produced %d disconnected '
             'shells, not one -- `solid` was already more than one piece, which is refused '
             'upstream, or this extension broke a connection that was there before it.'
-            % (normal, len(shells)))
+            % (normal, len(shells)), shape=sewn)
     solid = Part.Solid(shells[0])
     if not solid.isValid():
         raise Unconverged(
             'extending the cell result past its own boundary plane %s produced a closed shell '
-            'that did not solidify validly' % normal)
+            'that did not solidify validly' % normal, shape=solid)
     return solid
 
 
@@ -3321,20 +3441,21 @@ def mirror_across_cell(cell_result, normal):
     if not shells:
         raise Unconverged(
             'mirroring the cell result about %s produced no closed shell at all, from %d '
-            'faces -- the two open halves did not sew together anywhere.' % (normal, len(faces)))
+            'faces -- the two open halves did not sew together anywhere.' % (normal, len(faces)),
+            shape=sewn)
     if len(shells) != 1:
         raise Unconverged(
             'mirroring the cell result about %s produced %d disconnected shells, not one. A '
             'mirrored part is never legitimately more than one piece -- this is new evidence of '
             'a defect at the seam itself, not a shape to solidify piece by piece and pass '
-            'along.' % (normal, len(shells)))
+            'along.' % (normal, len(shells)), shape=sewn)
     solid = Part.Solid(shells[0])
     if not solid.isValid():
         raise Unconverged(
             'mirroring the cell result about %s produced a closed shell that did not solidify '
             'validly. The two open shells should meet exactly along their shared edge -- the '
             'same curve, mirrored onto itself -- so a failure here means that edge is not as '
-            'exact as section 4.5 assumes.' % normal)
+            'exact as section 4.5 assumes.' % normal, shape=solid)
     return solid
 
 
@@ -3395,6 +3516,9 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     cannot change the result (`notched` has no material past its own cell boundary to begin with)
     but does stop the two operands from sharing an exact face at all.
     """
+    # Nothing about measurement is passed down: the seam is a module-level one that `cavity` reads
+    # for itself, so this function neither forwards nor mentions it (OQ-DES-CW34, revised
+    # 2026-10-28). What a measurement installs, and how, is `wall_measure.probe`.
     inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report,
                      clearance_check=clearance_check, exterior_split=exterior_split)
     # **`stages`, opt-in, off by default (IP-WTM-38).** IP-WTM-37 established that the rib cut
@@ -3418,7 +3542,7 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
             'the cell wall came out as %d disconnected solids, not one, even though its cavity '
             'did not. There is no scale or condition under which a disconnected wall is '
             'legitimate: refused here rather than mirrored piece by piece into a part that is '
-            'missing a piece.' % len(wall.Solids))
+            'missing a piece.' % len(wall.Solids), shape=wall)
     kept = notched.common(inside)
     total = wall.Volume + kept.Volume
     slip = abs(total - notched.Volume) / notched.Volume
@@ -3434,7 +3558,7 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
             'it returned is not the cell. Section 6 would not catch it -- a wall that is mostly '
             'missing still measures %.3f mm thick wherever it survives.'
             % (wall.Volume, kept.Volume, total, notched.Volume,
-               abs(total - notched.Volume), 100.0 * slip, t))
+               abs(total - notched.Volume), 100.0 * slip, t), shape=wall)
 
     for normal in mirrors:
         wall = mirror_across_cell(wall, normal)
