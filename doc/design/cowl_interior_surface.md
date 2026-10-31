@@ -186,10 +186,40 @@ is actually seeded with are the union
     _seed(p_lo, p_hi)  ∪  {notch edges strictly inside the patch}
 
 and **that union applies no separation filter at all.** The uniform seed stations and the notch
-edges are independent sets, so a seed station can land arbitrarily close to a notch edge even
-though neither set contains a close pair on its own. That is how the real `tail_shell` fit at
-`U` = 3.0 ends up with a pair **0.0009 mm** apart — 220 times finer than the floor, and 670 times
-finer than the wall it is building — from two stations that are each individually legitimate.
+edges are independent sets, so a seed station can land arbitrarily close to a notch edge. That is
+how the real `tail_shell` fit at `U` = 3.0 ends up with a pair **0.0003433 mm** apart — 583 times
+finer than the floor, and **1 748 times finer than the wall it is building** — from two stations
+that are each individually legitimate: a seed station at `z` = -60.0003433 against a notch edge at
+exactly `z` = -60.0000000.
+
+**That figure was recorded as 0.0009 mm and 670 times the wall until 2026-10-25, and the correction
+is a misrecording rather than a change in the geometry.** `station_gaps.py` recomputes the seed
+union directly, and every other figure in this subsection reproduces bit-exactly — 32 stations to
+27 on the floor, tightest remaining gap 0.6516115 mm — so nothing has moved; the pair itself was
+written down wrong.
+
+**The union is not the only source of a sub-floor pair, which an earlier version of this subsection
+denied.** It said neither set contains a close pair on its own. Measured, `tail_shell` at `U` = 3.0
+has **seven gaps under the 0.60 mm floor and six of them are notch-edge to notch-edge**, at 0.22 to
+0.51 mm — legal under `feature_stations`'s own `MIN_INTERVAL` = 0.20 mm dedupe and still too close
+for the fit. Only the seventh is the seed-against-edge case. So the two guards being set at 0.20 mm
+while the filter runs at 0.60 mm is as much the source as the union is.
+
+**The tail has this at every `U` measured and the nose has none of it**, which is the sharpest
+split in this subsection:
+
+| | notch edges | union | kept | gaps under the floor | tightest gap |
+| --- | --- | --- | --- | --- | --- |
+| `nose_cowl_shell` `U` = 1.0 | 4 | 10 | 10 | **0** | 1.9983671 mm |
+| `tail_shell` `U` = 1.0 | 22 | 28 | 23 | 5 | 0.0004578 mm |
+| `tail_shell` `U` = 3.0 | 26 | 32 | 27 | **7** | 0.0003433 mm |
+| `tail_shell` `U` = 4.0 | 26 | 32 | 27 | 6 | 0.0004578 mm |
+
+The nose's tightest gap is three times *wider* than the wall; every tail configuration carries one
+1 311 to 1 748 times finer. Four notch edges against 22 to 26 is the reason. **This matters for
+reading §4.4's amplification result**, whose precondition is exactly a near-duplicate pair beside
+the displaced row: the precondition is present on the tail at every `U` and absent on the nose,
+and every reproduction of the severed ring has been on a tail.
 
 Two rows that close carry very nearly the same eroded contour, so the fit is asked to interpolate
 a near-duplicate, and the axial pole track through them is near-degenerate (§4.4, §6.2).
@@ -204,7 +234,56 @@ the same `z`; the filter displaces a crowding neighbor rather than the end.
 It costs no accuracy, as measured and then confirmed on the rebuilt part: at `tail_shell`
 `U` = 3.0 the station set goes 32 to 27 on the floor and refines to **30 rows at worst wall error
 0.0496 mm**, against 36 rows at the same 0.0496 mm before — with the tightest remaining gap
-0.6516 mm, and `z` = -60.0000 no longer present beside `z` = -60.0009.
+0.6516 mm, and `z` = -60.0000000 no longer present beside the seed station at `z` = -60.0003433.
+
+**Which stations the floor drops is now on record rather than counted**, measured 2026-10-25 by
+`station_gaps.py`: at `tail_shell` `U` = 3.0 the five dropped are `z` = -294.1530459, -293.9311806,
+**-283.9951339**, -60.0000000 and -8.7062734. The third of those is the row
+[OQ-DES-CW26](cowl.md#open-questions)'s probe displaces, so **the station that question's only
+reproduced failure was produced at does not exist in a current build's fit at all.** §7.1's
+`production` arm said as much from the other direction — "the station is thinned away entirely and
+the nearest surviving row is 0.4311 mm off target" — and this is that statement checked against the
+seed union directly.
+
+**The pair is a fixed feature of the tail's geometry, not something a design input tunes.** Measured
+2026-10-26 over **266 configurations** of `tail_shell` at `U` = 3.0 — the baseline, 23 single-row
+cases, and all **242 two-row combinations** of the twelve inputs `wall_measure.inputs` screens —
+every one of them seeds its tightest gap at **0.0003433 mm between the same two stations**,
+`z` = -60.0003433 and `z` = -60.0000000. One distinct station pair in 266 of 266. No case seeds a
+tighter gap than the baseline, and every one of the 242 pair verdicts is *inherited*: there is no
+two-row combination that produces a spacing neither of its rows produces on its own.
+
+That is the answer to the half of [OQ-DES-CW26](cowl.md#open-questions) alternative 1 that was
+still open, and it is a negative one. The amplification precondition §4.4 measures cannot be
+designed away by moving these rows, in any combination of them, because none of them moves it. What
+removes it is the floor.
+
+**The floor was exercised across its range and left nothing under it.** `extrusion_width` and
+`cowl_n_perimeters` are both screened and both set `t`, so `station_floor(t)` was itself a
+different number case to case — **0.400 mm to 1.200 mm** — and the number of sub-floor gaps it had
+to drop varied by 2.75×, from 4 at `extrusion_width_lo__top1_angle_hi` to 11 at
+`overhang_angle_from_bed_lo__cowl_n_perimeters_hi`. In **zero of 266** did a gap under that
+configuration's own floor survive thinning. This is a materially stronger statement about
+[IP-FC-144](../implementation/freecad_migration.md#work-items) than the single baseline reading
+supported, and it is the reason each case is judged against its own floor rather than the
+baseline's: comparing a 0.400 mm-floor case to the baseline's 0.600 mm would report breaches that
+are not there and miss ones that are.
+
+**What it measures and what it does not, stated rather than implied.** It measures the seeded
+station spacing, which is the precondition §4.4's amplification needs. It does **not** measure
+whether the wall severs: §4.4's own dose series through the real booleans found the fit does not
+produce the severance on its own, so a clean station set is not a sound wall. This closes one axis
+of the question and leaves the mechanism unidentified.
+
+The whole screen cost **3.5 hours** — 11 774 s for the 243 pair cases and 734 s for the 24
+single-row ones, one cowl tree each and no `cavity`. The same coverage by building and densely
+scanning each wall was priced at 114 to 175 hours, and that method would also have been searching
+for a signature nobody can yet define. The station set is derived from the cowl tree alone, which is
+what makes the population affordable at all. `wall_measure.station_sets` reads the records back
+(`python -m wall_measure.station_sets --kind=tail_shell --u=3`); it recomputes which two stations
+form the tightest gap from each record's own station list rather than trusting the summary figure,
+because the figure alone cannot say *where*, and where is what separates a fixed property of the
+seeding from something a design row moved.
 
 ### 4.2 Eroding a section
 
@@ -326,10 +405,405 @@ measured sensitivity — measured 2026-10-04, it understates it by three orders 
 Displacing one row of the input contours and measuring the real cut wall 7.5 station intervals away
 gives a gain of **0.408 mm per mm**, reproduced to three figures at δ = 0.001, 0.003 and 0.01 mm
 (§7.1). That implies about 1.12× attenuation per station where the coefficient decay predicts 3.7×.
-Whatever closes that gap — the cut geometry, the lids and side caps rebuilt from the changed
-surface, or something else — is not the tridiagonal solve, and is not established. **So a
-perturbation response reaching far down the part is not by itself evidence against the fit**, and an
-earlier version of this paragraph which said it was has been withdrawn.
+**So a perturbation response reaching far down the part is not by itself evidence against the fit**,
+and an earlier version of this paragraph which said it was has been withdrawn.
+
+**The gap is closed, measured 2026-10-25, and it is the tridiagonal solve after all — under one
+condition. A sentence here which said "is not the tridiagonal solve, and is not established" is
+withdrawn.** The 3.7× figure above is correct and incomplete: it is the decay for *uniform* knots,
+which is the case it is derived for and not the case this subsystem is in. Squeeze one station pair
+next to the displaced row and the same interpolation **amplifies**, with a gain inversely
+proportional to the pair's gap. Measured on `cowl_interior._fit` itself, 21 stations over 300 mm, a
+0.001 mm nudge read 7.5 station intervals away:
+
+| pair gap beside the nudged row | gain, mm per mm | against the uniform mesh |
+| --- | --- | --- |
+| 15 mm (uniform, the control) | 0.0000471 | 1.0× |
+| 1.5 mm | 0.000412 | 8.7× |
+| 0.15 mm | 0.00401 | 85.2× |
+| 0.015 mm | 0.0400 | 850× |
+| **0.0015 mm** | **0.400** | **8 497×** |
+
+**A 0.0015 mm pair reproduces the measured 0.408 mm per mm to 2 %.** Each decade of tightening buys
+a decade of gain, so this is a law and not a reading at one magnitude. The mechanism is that a row
+displaced by δ beside a neighbor ε away forces a slope of δ/ε on every pole track, and the C² fit
+carries that slope across the patch; ε, not the station count, is what sets the range.
+
+**The crowding has to sit beside the nudged row, which is the converse and is what makes this a
+cause rather than a coincidence.** The same 0.0015 mm pair placed at other intervals of the same
+mesh leaves the gain at the uniform control's 0.0000471 to within 5 %, and placed just *past* the
+nudge it suppresses the response to 1.4e-8, 3 400× below the control. Only the two intervals
+flanking the displaced row amplify, at 8 497× and 2 277×.
+
+**Two unrelated instruments agree to 0.997 at every magnitude.** The prediction is the interpolating
+spline's cardinal function, computed as a `numpy` tridiagonal solve in
+`wall_measure.fit_response.cardinal`; the measurement re-fits with OCC's own
+`BSplineCurve.interpolate` through `_fit` and compares the two surfaces at matched parameters. The
+ratio of measured to predicted is 0.997 across four decades of pair gap, and the `numpy` system is
+well conditioned there (condition number 13.4, residual 2.3e-10), so the amplification is a property
+of the interpolation operator and not of either solver's arithmetic. `freecad/fit_amplification.py`
+reproduces the table in under a second, with no boolean and no build.
+
+**What this says about the pairs this subsystem actually contains.** At the same 7.5-interval offset
+**of the same synthetic uniform mesh** — not of a real one, which is the distinction the withdrawal
+below turns on — the three near-duplicate gaps on record give very different gains:
+
+| pair gap | gain | what it is |
+| --- | --- | --- |
+| 0.4310898 mm | 0.0014 | the real notch-edge neighbor gap, nothing forced (§6.1) |
+| 0.0009433 mm | **0.636** | the pair IP-FC-144 exists to remove |
+| 0.0000338812 mm | **17.7** | the pair an earlier harness manufactured by unioning a four-decimal printing of a notch edge into the seed set |
+
+So the 0.408 gain is three orders of magnitude above what a clean 0.43 mm neighbor gap produces and
+squarely inside the range a near-duplicate pair produces.
+
+**A ceiling was claimed here from that, and it was wrong. Measured against the real mesh the same
+day and withdrawn.** The claim was that because the gain goes as 1 / gap and `station_floor(t)` =
+0.6 mm floors the gap, the gain is bounded at **0.00101 mm per mm, 403× below the 0.408 on record**,
+so the condition behind that reading was no longer reachable. Both figures are real; the inference
+from them is not. They were taken at 7.5 intervals of a **uniform 21-station** synthetic mesh, and
+the real tail's mesh is nothing like uniform.
+
+**What the real mesh does, and it is not what either the ceiling or "the mesh is coarse" said.**
+A second explanation was tried here — that the real mesh is merely coarse, so 66 mm is few station
+intervals — and it is also withdrawn: a *uniform* mesh of the real station count and span decays
+exactly as the 3.7× figure says, 0.268 per span, and carries almost nothing 66 mm. What the real
+tail actually has is an extreme **gap ratio**. `tail_shell` at `U` = 3.0 keeps 27 stations over
+300 mm with gaps running **0.6516 mm to 60.00 mm — a ratio of 92:1** (§4.1), and on a mesh like that
+the cardinal function **overshoots above 1** before it decays. Peak |cardinal| inside each
+inter-knot span past the displaced row, sampled between knots because at a knot it is exactly zero:
+
+| spans past the displaced row | real floored mesh | uniform, same count and span |
+| --- | --- | --- |
+| 0 | 2.608 | 0.999 |
+| 1 | **3.194** | 0.137 |
+| 2 | 1.658 | 0.0366 |
+| 3 | 0.056 | 0.0098 |
+| 5 | 0.0046 | 0.00070 |
+
+**Above 1 means the surface moves further than the row that was displaced.** The real mesh swings to
+**3.19× the displacement** one interval out, stays above 1 for three spans — about 95 mm, since those
+spans are 9.7, 33.9 and 60.0 mm wide — and only then collapses, falling below 0.06 by three
+intervals. The uniform column is the clean 0.268-per-span decay and is the 3.7× figure confirmed. So
+the per-station decay is right for the mesh it describes, and the real mesh is not that mesh.
+
+**Measured gain against distance on the two real meshes:**
+
+| distance from the displaced row | seed union, 32 stations | after the floor, 27 stations |
+| --- | --- | --- |
+| 50 mm | 2.07 | 0.91 |
+| **66 mm** | **3.96** | **1.65** |
+| 73.6 mm | 3.56 | **1.47** |
+
+So **the floor is worth about a factor of 2.4 at 66 mm, not 403**, and **the 0.408 gain on record is
+smaller than what this mesh produces unaided** — no near-duplicate pair is needed to reach that
+magnitude. Widening only the two gaps flanking the displaced row to the mean, leaving the rest of
+the mesh alone, drops the gain at 73.6 mm by a factor of **5.0**, so the adjacent gap contributes
+part of the overshoot and the mesh's overall ratio contributes the rest.
+
+**That prediction is confirmed against real geometry to 0.999**, which is a second and more
+important check on the response model than the synthetic agreement above.
+`freecad/wall_vanish.py` perturbs one row of the real floored station set and measures the thinnest
+wall the fitted surface leaves anywhere, using §5's own first-pass distances. Over δ = 0.014 to
+0.030 mm the minimum falls 0.509801 to 0.486251 mm at `z` = -209.998 — a measured gain of **1.4719
+mm per mm** against the cardinal prediction of **1.4735** for that exact mesh.
+
+**The record's own "7.5 station intervals" does not survive this either.** Measured on the seed
+union, the 66 mm from `z` = -283.9951339 to the target station is **3.37 intervals**. `_refine` adds
+rows, and the historical build is recorded as converging to 36 against the seed's 32, so the true
+count lies between about 3.4 and the 7.5 claimed and cannot be pinned without that build's converged
+list. It matters little: everywhere in that range the gain on a real mesh is between about 0.4 and 4.
+
+**What stands from the crowding result.** The law itself — gain ∝ 1 / the gap of a pair *adjacent*
+to the displaced row, with the converse that the same pair elsewhere does nothing — is measured,
+reproduced against OCC, and unaffected. What is withdrawn is its promotion into an explanation of
+the 0.408 reading and into a bound on reachability.
+
+**And the dose series says the fitted wall does not vanish, up to δ = 0.1 mm.** The same run scans
+the whole part at 10 mm axially at each dose and reports the thinnest wall the fit leaves anywhere.
+On the real floored station set, perturbing the surviving station nearest the historical one
+(`z` = -283.5640440, neighbors 0.945 and 9.714 mm away):
+
+| δ, mm | 0 | 0.010 | 0.014 | 0.022 | 0.030 | 0.050 | 0.100 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| thinnest fitted wall, mm | 0.512454 | 0.512454 | 0.509801 | 0.498026 | 0.486251 | 0.456814 | 0.338927 |
+
+**Nothing approaches zero**, and the response is smooth and monotonic across the whole range,
+including the (0.01, 0.03] bracket where the severance is reported. So on this mesh the fit alone
+does not predict a severed ring at any dose tested, and whatever severs the wall is either
+downstream of the fit or needs a station set this one does not have. Two readings of the table are
+worth keeping apart: up to δ = 0.01 the minimum does not move at all and sits at `z` = -39.998,
+75 mm the other side of the part, which is the unperturbed thin spot; from δ = 0.014 the minimum
+moves to `z` = -209.998 and starts tracking the nudge, which is where the 1.4719 gain is read.
+
+**The unperturbed figure is itself worth recording: 0.512454 mm against `t` = 0.600**, so the fitted
+pre-rib surface is already 0.0875 mm thinner than nominal somewhere before any perturbation or any
+rib cut. That is not comparable with the finished-wall figures in §6.4 — different surface,
+different exterior reference, no corner exclusion — and it is not the acceptance measure. It is
+recorded because §5's first pass converges against `TAU` = 0.05 mm and this is 1.75× that.
+
+**The booleans after the fit are now measurable, and at `U` = 0.5 they do not sever.** The fit
+measurements above stop at the surface; `freecad/sever_doses.py` carries a dose through the whole
+pipeline — `cavity`, the extend, `notched.cut(inside)` and `mirror_across_cell` — through the
+measurement seam of [OQ-DES-CW34](cowl.md#open-questions). **That seam is not in the
+construction's interface**, revised 2026-10-28: `cavity` and `shell_solid` take no measurement
+arguments, and what a measurement may change lives in `wall_measure.probe`, which installs an inert
+module-level hook for the duration of one build and removes it whether that build returns or
+raises. Whether the production module should carry that hook at all, rather than being decomposed
+so a harness composes the pipeline and needs none, is [OQ-DES-CW35](cowl.md#open-questions) — a
+question about this module's structure, not about any wall it builds. Displacing an interior **notch-edge** row of a `tail_shell` at `U` = 0.5, `z` = -27.5433:
+
+| δ, mm | outcome | solids | partition slip | rib residue | annulus / 24 | wall, mm³ |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.000 | built | 1 | 3.639e-06 | 0.0000 | **24** | 5850.922 |
+| 0.030 | built | 1 | 3.575e-06 | 0.0000 | **24** | 5841.338 |
+
+**The perturbation is checked to have taken effect rather than assumed**, which is the discipline
+§6.2's `inputs.unmoved` applies to the pair corpus and which this measurement needed twice over: the
+wall volume moves 9.584 mm³ and the partition slip moves in the fourth figure. So this is a real
+negative result at this configuration and not a probe that failed to fire.
+
+**The same series at `U` = 3.0 — the configuration the severance was reproduced on — does not sever
+it either, and the station it could not test is the one the floor drops.** Six doses, 8.54 hours,
+scanned at 2.0 mm so the station count follows the part (151 stations over 300 mm, against 24 at
+`U` = 0.5). The row displaced is `z` = -165.0433013, an interior notch edge, nudged once per dose:
+
+| δ, mm | outcome | solids | partition slip | rib residue | annulus / 151 | wall, mm³ | Δ vs control |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.000 | built | 1 | 2.833018e-05 | 0.0000 | **151** | 213888.367 | — |
+| 0.010 | built | 1 | 2.827196e-05 | 0.0000 | **151** | 213804.130 | -84.237 |
+| 0.020 | built | 1 | 2.824587e-05 | 0.0000 | **151** | 213683.318 | -205.048 |
+| 0.030 | built | 1 | 2.826394e-05 | 0.0000 | **151** | 213554.011 | -334.356 |
+| 0.050 | built | 1 | 2.562689e-05 | 0.0000 | **151** | 213573.045 | -315.321 |
+| 0.100 | **`Unconverged`** — 4 disconnected solids where the cavity should be one | — | — | — | — | — | — |
+
+**No dose that built broke the ring**, at any magnitude, with zero unreadable stations — and the one
+that fails, 0.100 mm, fails *loudly*, through the cavity's own connectivity check. That is the safe
+mode, not the silent one this question is about.
+
+**Three independent instruments change character in the same interval, (0.030, 0.050] mm.** The wall
+volume falls -84.2, -120.8 then -129.3 mm³ per step and then **reverses, +19.0**. The partition slip
+sits at 2.8246 to 2.8330e-05 across the first four doses — a spread of 0.3 % — and then drops to
+2.5627e-05, a 9.3 % move, thirty times that spread. And the build itself goes from 5 406 to 5 540 s
+for doses 0 through 0.030 and then **7 294 s** at 0.050, 32 % longer. So the construction is doing
+something different there, consistently by three measures that share no arithmetic, and the outright
+failure lies beyond it in (0.050, 0.100]. None of that produces a broken ring.
+
+**What that series cannot test is the station itself.** `z` = -283.9951339 is one of the five the
+floor drops at this `U` (§4.1), so it displaces a different notch edge. That does not mean the
+original station is untestable, and an earlier version of this subsection wrongly said so: it
+conflated *forcing a manufactured station in*, which is the trap §6.1's sixth caution records, with
+*declining to drop stations the construction derived for itself*. The second is just the station set
+this code seeded before IP-FC-144, every member of it legitimate.
+
+**Run on that set, at that station, the silent severance does not reproduce — it is caught.**
+A measurement can override the station floor through the seam described above, and `0.0` restores
+the unfiltered union. The configuration matches the 2026-10-04 `edge` arm, which is the check that
+it is the right one: **32 stations seeded**, against that arm's own "32 stations, 35 rows". The
+perturbation fired on the station to full precision, `z` = -283.99513388124126. The refined row
+count is per dose and is **39 at δ = 0.030**, measured 2026-10-29; the 35 on record is the figure
+quoted for the configuration, and the run that produced it did not record which dose it belongs to.
+
+| δ, mm | outcome | solids | slip | annulus / 151 | incumbent at `z` = -217.7261 | s |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.000 | built | 1 | 2.836450e-05 | **151** | 0.563655 mm | 5 693 |
+| 0.030 | **`Unconverged`** — section 5's second pass wanted more than 64 stations in the patch, driven by the finished wall rather than the smooth surface | — | — | — | — | 6 900 |
+
+So at the one station and station set where the **silent** mode has ever appeared, current code
+either builds a clean wall or **raises**. The dose that returned a broken ring with six checks
+passing in 2026-10-04 now exhausts section 5's refinement budget and is refused. That is consistent
+with §4.4's amplification law, since the displaced row is flanked by 0.5141136 and 0.4310898 mm gaps
+and a surface amplified there is what the second pass cannot fit within `TAU` at 64 stations.
+
+**The failure reproduces; the silence does not — and that distinction is the result.** The gap
+`_finished_wall_gap` reports is how much *thinner than `t`* the finished wall gets, so 0.5999 mm
+against `t` = 0.600 is the wall **closed to 0.0001 mm**: a hole, at the historical station on the
+historical station set. What current code does with it is refuse.
+
+**The budget is not what bounds it, and the trace says so without another run.** The gap reads
+0.5999 mm in round 1 while 19 stations are inserted and **0.5999 mm again** in round 2 while 46
+more go in — flat to four decimals across 65 added stations, where the control moved 0.0510, 0.0576,
+0.0570, 0.0520, 0.0531 and converged at 0.0496. A plateau is not a convergence waiting for
+headroom, and more stations cannot close a hole. So raising `budget` above 64 would fail later and
+more expensively; the experiment was proposed, then withdrawn on this evidence rather than run.
+
+**Where the wall closes — measured 2026-10-29, and it is not one place.** `worst_finished_z` was
+added to both `Unconverged` messages and the round note on 2026-10-28 and had never been exercised.
+Re-running the single δ = 0.030 dose on the same unfiltered set reports it, and reproduces the
+earlier run exactly — 0.5999 mm with 19 insertions in round 1, 0.5999 mm with 46 in round 2, raising
+at 6 982 s against 6 900 — so these locations belong to the same phenomenon and not to a new one.
+The two rounds' worst stations are **130.2 mm apart**:
+
+| round | worst gap, mm | at `z` | seed span it sits in | nearest notch edge | from the displaced row |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0.5999 | -203.3548 | 60.000 mm | -165.0433, **38.3 mm** away | 80.6 mm |
+| 2 | 0.5999 | -73.1818 | 5.357 mm | -70.5031, **2.7 mm** away | 210.8 mm |
+
+**The wall does not close at a notch edge.** Round 1's worst station is 38.3 mm from the nearest of
+this build's 26 notch edges, and it is a uniform 1.007 mm scan point rather than one of the 130
+edge-focused ones the scan adds precisely because the defect was expected there. `cavity`'s own
+`Unconverged` text says the mechanism is the rib cut "near a shallow-angle notch boundary", and
+every reproduction of this failure has been *at* a notch edge — but the station where the wall
+actually closes is neither one nor adjacent to one. Round 2's is 2.7 mm from an edge, which is near,
+so the claim that survives is the negative one only: a notch edge is not where the worst reading is.
+
+**The deficit is distributed rather than a single hole.** Round 1 flagged **19 of its 38 intervals**
+over tolerance, round 2 flagged 46 of 57, and the two worst readings share nothing but their value —
+different spans (60.000 against 5.357 mm), different proximity to a notch edge, and 80.6 against
+210.8 mm from the perturbation. So the plateau recorded above is not one unreachable point that
+subdivision cannot bracket; it is the same reading recurring wherever the pass looks. That supports
+the budget conclusion by a different route than the one it was argued on.
+
+**The 210.8 mm reading is the one that does not fit the fit.** `_finished_wall_gap` returns
+`max(0, t − d)` for `d` the minimum distance from the cavity's section loop to the exterior, so
+0.5999 mm is the cavity passing **within 0.0001 mm of the outside** — not a thin wall, a cavity that
+has reached the exterior. §4.4's cardinal function stays above 1 for about 95 mm past the displaced
+row and then collapses, so a 0.030 mm nudge at `z` = -283.9951 producing that at `z` = -73.18,
+211 mm away on a 300 mm part, is outside what the law predicts. Two readings are consistent with it
+and **neither is established**: the fit is one C² surface across the whole patch, so a displaced row
+changes it everywhere and the 95 mm window may understate the tail; or round 1's own 19 insertions
+re-fit the surface, so round 2 measures a *different* surface and the insertions are themselves part
+of what produced the second reading. Separating those needs the per-interval list, which the trace
+does not carry.
+
+**What this run could not answer, and the instrumentation that fixed it the same day.** The pass
+raises before `shell_solid` returns a wall, and `_save_wall` only ever sees a finished wall — so the
+geometry reading 0.0001 mm was discarded at the moment of refusal. Recording *where* was
+2026-10-28's fix; recording *what it looks like there* is IP-FC-157's, and a refusal now carries the
+shape its own measurement was taken on. **Answered on the re-run: the cavity at refusal is a single
+valid solid of 7 978 911.95 mm³ in 547 faces, and the wall it would have produced comes apart into
+three pieces — the same two strips every reproduction of this failure has shed, running the whole
+300 mm.** That is §7, and it explains these two stations directly: a defect along the full length
+is why the worst reading sits 130.2 mm from where it sat a round earlier.
+
+**What catches it is section 5's post-cut refinement, not IP-FC-144's floor.** The floor was
+overridden to zero here, so it played no part. The pass that measures the *finished, rib-cut* wall
+rather than the smooth surface is what sees the deficit and raises — which answers
+[OQ-DES-CW26](cowl.md#open-questions)'s own complaint that nothing in `shell_solid` runs such a
+check and a build completes silently. One build-time pass does.
+
+**The wall is lost in the rib cut, not in the fit.** Measured on the same unfiltered 32-station set,
+at the same station, by `wall_vanish --row=unfloored` — a fit, no boolean:
+
+| δ, mm | thinnest fitted wall, mm | at `z` |
+| --- | --- | --- |
+| 0.000 to 0.010 | 0.511112 | -37.9984 |
+| 0.014 | 0.488992 | -259.9984 |
+| 0.022 | 0.428032 | -259.9984 |
+| **0.030** | **0.367073** | -259.9984 |
+| 0.050 | 0.214675 | -259.9984 |
+| 0.100 | 0.000010 | -257.9984 |
+
+At δ = 0.030 the **fit leaves 0.367073 mm** of wall — linear in the dose at a gain of **7.62 mm per
+mm**, smooth, and not near zero; it only reaches zero around δ ≈ 0.08. At that same dose the
+**finished wall closes to 0.0001 mm**. The rib cut removes the 0.367 mm the fit left. So the
+mechanism is in `cut_and_check`'s rib cut inside `cavity`, upstream of `shell_solid`'s three
+booleans — which is where this investigation had repeatedly looked. The construction's own
+`Unconverged` message has asserted exactly this for weeks ("the rib cut removing measurably more
+material than the smooth offset predicts"); these two measurements are the first to quantify it.
+
+That gain also corroborates §4.4's amplification law on real geometry: 7.62 mm per mm on the
+unfiltered union against **1.4719** on the floored set, a factor of 5.2, where the cardinal-function
+prediction for the two meshes differs by 3.96 to 1.65 — a factor of 2.4 — in the same direction.
+
+**Still not proof the silent mode is unreachable, for a specific reason.** The original harness,
+`cw24_review_rowgap_test.py`, is not in the repository, so what was reproduced is its station set
+and its station through *current* `shell_solid`, not its code path. And **where** the finished wall
+closes is not on record: the post-cut pass printed only the magnitude, because its per-station note
+fires only for an interval too narrow to split. `worst_finished_z` is now carried into both
+`Unconverged` messages and the round note, so the next dose run reports it — at the cost of a
+rebuild, which is why it is instrumentation rather than a result.
+
+**One figure does not match the record and is unresolved.** The healthy wall reads **0.563655 mm**
+at the break station where §7.1 records 0.546556 mm across five fresh builds and 0.546559 mm on
+IP-FC-144's set — 0.0171 mm apart. The leading explanation is this measure's own documented defect:
+`worst_low` is a nearest-point minimum that does not converge (§6.1), and the sampling became an
+arc-length spacing rather than a fixed count (IP-WTM-25), with 12 815 samples taken here.
+`wall_thickness` exposes `arc` precisely so that can be checked — but it needed the control wall,
+which this harness did not save, because only broken walls were kept. It saves the control now. The
+figure is recorded as a discrepancy rather than explained away.
+
+**Two harness faults were found by that check and both produced convincing false results first.**
+The hook was initially placed on the rows `_refine` returns, and section 5's second pass rebuilds
+its rows from `fit_at` after the rib cut, so the perturbation was discarded on the first post-cut
+round — the cavity's first fuse differed per dose (36399.76, 36401.90, 36409.40 mm³ against a
+36398.69 control) while its second returned the control's value every time. And the target station
+was selected as "nearest to `z` = -283.9951339", which belongs to a 300 mm `U` = 3.0 tail; at
+`U` = 0.5 the part is 50 mm, so it collapsed onto the patch's first station — a boundary row §4.5
+pins — and moved the wall volume by 0.006 mm³ out of 5851. Both read as clean null results.
+
+**The scan is a spacing now, and as a count it was about to mislead.** `sever_doses` sampled a fixed
+24 stations, which is 2.1 mm apart on the 50 mm `U` = 0.5 tail above and **12.5 mm apart on a 300 mm
+`U` = 3.0 one** — the same error that put a 6× figure in this document once before (§6.6). It scans
+at `SCAN_MM` = 2.0 instead, the spacing `wall_vanish` uses, with the count derived per part and the
+widest actual spacing recorded beside the result. A clean scan therefore means *no break longer than
+the spacing*, and `ring_breaks.missable_mm` prints that number rather than leaving it to be
+inferred.
+
+**The axial extent of a break is measured when one appears, because the one on record cannot be
+measured at all.** The figure this subsystem has is circumferential — 93 mm of a 1600 mm ring, at
+one station — and says nothing about how far the break runs along the axis, which is what sets the
+spacing any future scan needs. That cannot be recovered from the 2026-10-04 reproduction: **the
+severed wall's shape was discarded**, the script that built it was never in the repository, and all
+150 saved walls (28 soak, 36 screen, 86 pair) are healthy. So `break_extent` now resolves both ends
+by bisecting between the last continuous station and the first broken one, on the wall already in
+memory, and the wall is written to BREP — about three slices an end, against another full build at
+the `U` it happened on. The logic is `wall_measure.ring_breaks`, which takes the classifier as an
+argument so it can be tested against a synthetic break of known extent; a real wall cannot provide
+that test, because the extent is the unknown.
+
+**The instrument is checked against a wall known to be good, at the spacing and the configuration
+that matter.** The soak's saved `tail_shell` at `U` = 3.0 — 2 464 faces, the configuration the
+severance was reproduced on — reads **151 of 151 continuous annuli** at 2.0 mm over its full 300 mm,
+with no broken and no unreadable station. That is the densest axial scan of this configuration on
+record and it is clean, so the measure does not manufacture breaks on healthy geometry. Cost
+measured at the same time: **6.79 s a station**, so 1 025 s a scan at `U` = 3.0 against a 4 170 s
+build.
+
+**What none of this establishes.** Both configurations are now measured and neither severs, but
+three bounds remain and none of them is narrowed by running more doses at these two. The historical
+**station** cannot be tested at all, because the floor drops it, so every dose above displaces some
+*other* notch edge. Only **one** notch edge was displaced per configuration, out of 27 stations at
+`U` = 3.0, and §4.4's own amplification result says the response depends on which gaps flank the
+displaced row — so one station is not the station set. And a break shorter than the scan spacing
+would fall between stations, which is why that spacing is recorded beside every result. The fit
+measurements above are the fit alone, and a wall with
+material left can still come apart for reasons a surface measurement cannot see —
+`shell_solid`'s solid-count and partition checks exist because the boolean fails in ways no surface
+measurement anticipates. One scan station per dose in the fit-only series would not section into a
+single open arc and is excluded from those minima rather than folded in, since "no section" and "no
+wall" are different failures. And whether the `tail_shell` `U` = 3.0 **converged** station set
+carried a sub-floor pair is still unmeasured, since no saved artifact holds that list — only its
+seed union is (§4.1).
+
+**The annulus identity is the decided check for a broken ring, and this is its measured basis**
+([OQ-DES-CW26](cowl.md#open-questions), closed 2026-10-28 on alternative 2). At each checked
+station, slice the mirrored wall and hand the wires to
+`Part.makeFace(wires, 'Part::FaceMakerBullseye')`, which resolves the nesting itself: **one face
+with two wires means the ring is continuous; several one-wire faces mean it is broken into that
+many arcs.** `Face.Area` on the result is the material area directly.
+
+It is an **identity, not a tolerance** — a closed shell's transverse section *is* an annulus — so
+there is no threshold to calibrate and nothing to tune per `U`. That matters here specifically:
+this subsystem has spent three metrics on thresholds calibrated against single observations
+(Metric A, the crowding ratio, row spacing) and the two checks that have ever caught anything, the
+partition identity and the rib residue, are both identities.
+
+Measured on the reproduced failure it separates absolutely: across seven stations on each wall the
+healthy one reads **annulus at 7 of 7** and the damaged one **broken into 2 arcs at 5 of 7**, the
+two that pass being stations the perturbation did not reach, where both walls return bit-identical
+areas and boundary lengths. The ring-length shortfall, 93.2 mm of 1600, and the material-area
+shortfall come from the same slice as corroboration. Cost: the slice is about 7 s on a 2 464-face
+wall, which every existing measurement already pays, and the classification adds **0.6 s**.
+
+Two limits, recorded rather than left to be discovered. It does not measure thickness, so it would
+not catch a genuine uniform thinning — that is `_finished_wall_gap`'s job and a different question
+([OQ-DES-CW29](cowl.md#open-questions)). And a slot's end cap may legitimately break the annulus at
+some stations, so the false-positive rate across both kinds and the swept `U` range has to be
+surveyed before it can refuse a build. The external half is built: `section_regions` classifies the
+wires and `wall_thickness` returns `None` for a section that is not an annulus, which both its
+callers already count as a failure. The build-time half is
+[IP-FC-152](../implementation/freecad_migration.md#work-items).
 
 **Patch boundaries are hard stops.** Patches are split at the *body's* own creases, each is fit
 separately, and adjacent patches are made to pass through their shared station exactly — which is
@@ -3184,6 +3658,54 @@ with **two signatures that are not the same failure**:
 **Both are caught** — the solid-count check catches both and the partition check independently
 catches the second (§6).
 
+**A third reproduction, 2026-10-29, at a third station and a third dose — and it detaches the same
+two pieces.** The refusal artifact (IP-FC-157) made this measurable without paying for a rebuild:
+the cut cavity `cavity` refused on is now written to BREP, and `freecad/refused_wall.py` ran the
+three booleans after it, one at a time, in **90 seconds**. `tail_shell` at `U` = 3.0 on the
+unfiltered 32-station union refined to 39 rows, δ = 0.030 mm at `z` = -283.9951339:
+
+| step | result |
+| --- | --- |
+| `_extend_across_cell` | 1 solid, 8 119 856.92 mm³, 3 s |
+| `notched.cut(inside)` | **3 solids: 92 704.4570, 4349.3071, 718.2009 mm³**, valid, 68 s |
+| `mirror_across_cell` | **`Unconverged`** — 5 disconnected shells |
+
+**The two small pieces are the pieces already on record.** 4349.3071 mm³ in **ten faces** against
+the 4349.3, 4349.266 and 4349.504 mm³ in ten faces above, and 718.2009 mm³ against 718.2. So the
+detaching pieces are reproduced across **three** perturbations — `z` = -294.1530 and `z` = -60.0000
+at δ = 0.01, and `z` = -283.9951 at δ = 0.030 — at three stations, two doses and two different
+station sets. **Where the wall is perturbed does not decide which pieces let go.** That agrees with
+what sampling the 4349 piece's own faces established: four of its ten lie on buttress slot cuts, so
+it is the wall region the slots very nearly isolate already, and a perturbation only decides whether
+the remaining connection survives.
+
+**The pieces run the full length of the part, which is what §4.4's two station readings were
+saying.** All three solids span `z` = -300.0000 to 0.0000. The 4349.3071 mm³ piece therefore
+averages 14.50 mm² in section — about 24 mm of arc at the 0.600 mm wall — and the 718.2009 mm³ one
+2.39 mm², about 4 mm of arc. They are long narrow strips, not local holes. The two worst
+finished-wall stations in that run, `z` = -203.3548 and `z` = -73.1818, are **130.2 mm apart** and
+read the same 0.5999 mm: a defect running the whole 300 mm is why the worst station can be anywhere
+along it, and why 65 added stations never closed the gap.
+
+**The mirror failure follows from the cut rather than being separate.** The sewn compound that
+refusal carries holds five shells: one main body at 184 625.5557 mm³ in 1 360 faces, then
+**+4349.3071 and −4349.3073**, and **+718.2009 and +718.2010**. The negative is a mirrored copy's
+reversed orientation, not a physical quantity. One main shell sewing across the seam plus two strips
+on each side is exactly five, so "5 disconnected shells" is the three-piece cut restated after
+mirroring and not a second independent defect.
+
+**What no production build reaches, and why that is the point.** In the build this cavity came from,
+§5's post-cut pass refused *inside* `cavity`, before `notched.cut(inside)` was ever called — so the
+three-solid cut above is what **would** have happened, and no amount of logging from a production
+run could have shown it. That is the whole value of the artifact: a refusal's shape lets the steps
+it prevented be run deliberately, once, outside the build.
+
+**One measurement caution, recorded rather than quoted around.** The three solids sum to
+97 771.9650 mm³ while the compound's own `Volume` reads **97 746.5724** — 25.39 mm³ apart, 0.026 %.
+Nothing above depends on which is right, since the comparison uses the piece volumes and those match
+the record to four decimals, but neither figure should be quoted as the severed wall's volume until
+the difference is explained.
+
 **The wall's own volume drops in both, but that drop is not material the boolean lost, and the
 figure itself is not trustworthy.** Measured again 2026-10-04 on a fresh build at `z` = -294.1530:
 the partition identity holds at **2.409e-05**, and the blank's two shares move by the same amount in
@@ -3222,8 +3744,10 @@ Three properties of this failure are measured and worth knowing when diagnosing 
   is perturbed instead (§7.1), so the location is a property of the geometry rather than of the
   perturbation. **This was previously argued from §4.4's attenuation instead — that the fit could
   not propagate 0.01 mm that far — and that argument is withdrawn**, because the measured
-  station-to-station gain is three orders of magnitude larger than the coefficient decay predicts.
-  The conclusion stands on the repeated-piece evidence, which does not depend on it.
+  station-to-station gain is three orders of magnitude larger than the coefficient decay predicts,
+  and §4.4 now has the reason: beside a near-duplicate station pair the fit amplifies rather than
+  attenuates, by 1 / the pair's gap. So the fit propagates it easily. The conclusion stands on the
+  repeated-piece evidence, which does not depend on either argument.
 - **The detached piece is the same piece in both signatures** — volumes 4349.266 and 4349.504 mm³,
   areas 14723.0 and 14723.1 mm², centers of mass agreeing to 0.0025 mm, 12 of 16 vertices
   bit-identical.
@@ -3318,15 +3842,20 @@ the same δ. Both are recorded; neither is treated as the outcome. δ = 0.03 mm,
 reproduced at **0.355705 mm in three independent processes**, and §6.1's note on the kernel
 reproducibility floor is where that distinction belongs.
 
-**Whether the fit carries the displacement is now open rather than settled.** This section
-previously argued it could not: the measured station is 66 mm from the perturbed row, about 7.5
-station intervals, so §4.4's 3.7× per-station attenuation would deliver a 0.03 mm displacement as
-roughly 4e-6 mm, against 0.19 mm measured. But the *linear* regime refutes the same argument.
-A gain of 0.408 mm per mm at that distance implies an attenuation of about **1.12× per station**, not
-3.7×, so §4.4's figure understates the station-to-station sensitivity actually measured here by
-three orders of magnitude. **The attenuation argument therefore cannot be used to rule the fit out**,
-and why the measured gain is so much larger than the per-station decay predicts is itself
-unexplained.
+**The fit does carry the displacement, settled 2026-10-25.** This section previously argued it
+could not: the measured station is 66 mm from the perturbed row, about 7.5 station intervals, so
+§4.4's 3.7× per-station attenuation would deliver a 0.03 mm displacement as roughly 4e-6 mm, against
+0.19 mm measured. The *linear* regime already refuted that argument — a gain of 0.408 mm per mm at
+that distance implies about **1.12× per station**, not 3.7× — and §4.4 now has the mechanism rather
+than only the discrepancy. The 3.7× figure is the uniform-station decay. **Beside a near-duplicate
+station pair the same interpolation amplifies, by 1 / the pair's gap**, measured on `_fit` itself and
+agreeing with the closed-form cardinal function to 0.997 across four decades: a 0.0015 mm pair gives
+0.400 mm per mm against this item's 0.408, and the pair IP-FC-144 removes, 0.0009433 mm, gives 0.636.
+The converse holds — the same pair moved elsewhere in the mesh leaves the gain at the uniform
+control. So the attenuation argument is not merely unusable here, it is backwards: at a crowded
+station the fit is the most plausible carrier, not the least. **What remains unmeasured** is whether
+this build's own converged station set carried such a pair beside `z` = -283.9951339, which no saved
+artifact records.
 
 **The same region detaches regardless of which station is perturbed.** The 4349–4370 mm³ piece and
 the 718.17–718.19 mm³ piece appear in the severed results at `z` = -283.9951339 and at
