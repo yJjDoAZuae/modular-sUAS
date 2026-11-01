@@ -376,7 +376,7 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
 
         # 2. Is the ring broken, and where?
         w_lo, w_hi = ci.z_extent(wall)
-        s_lo, s_hi = w_lo + ci.END_INSET, w_hi - ci.END_INSET
+        s_lo, s_hi = w_lo + ci.END_INSET_M, w_hi - ci.END_INSET_M
         n_scan = rb.station_count(s_lo, s_hi, SCAN_MM, rb.MIN_STATIONS, rb.MAX_STATIONS)
         # Said *before* the scan, not after. It is a quiet quarter of an hour otherwise, and the
         # whole point of this line is that silence should be expected rather than diagnosed.

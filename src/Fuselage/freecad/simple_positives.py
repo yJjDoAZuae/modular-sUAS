@@ -27,10 +27,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import build_sheet, is_entry_point
+from corner_common import build_sheet, is_entry_point, report
 
-REF_VOL = 1090.6367096
-EXPECT_BBOX = (-16.0000, -16.0000, 0.0000, 6.0000, 10.0000, 6.0000)
+REF_VOL_M3 = 1.0906367096e-6                # 1090.6367096 mm3, OpenSCAD
+EXPECT_BBOX_M = (-0.016, -0.016, 0.0, 0.006, 0.010, 0.006)      # mm: -16, -16, 0, 6, 10, 6
 
 PARAMS = [
     ('bulkhead_thickness', '6'),
@@ -138,31 +138,9 @@ def main():
     """
     doc = App.newDocument('simple_positives')
     tip = emit(doc)
-    s = tip.Shape
-    d = s.Volume - REF_VOL
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
-
-    print('PART:: CSG tree -- bulkhead simple positives')
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, faceted)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / REF_VOL))
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-
-    fail = []
-    if not s.isValid():
-        fail.append('invalid shape')
-    if len(s.Solids) != 1:
-        fail.append('%d solids' % len(s.Solids))
-    if abs(d) / REF_VOL > 1e-3:
-        fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
-        fail.append('bounding box moved')
-    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    return 1 if fail else 0
+    ok = report('CSG tree -- bulkhead simple positives', tip.Shape, REF_VOL_M3, tol=1e-3,
+                expect_bbox_m=EXPECT_BBOX_M)
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):

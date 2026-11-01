@@ -30,6 +30,7 @@ import boom_key
 import boom_web
 import corner_tree as C
 import plane2d
+from plane2d import Ref2D
 from corner_common import build_sheet, is_entry_point, merge_params
 
 V = App.Vector
@@ -37,8 +38,10 @@ P = 'Params.'
 
 # ref_boom_bulkhead.scad modes 6 and 7
 REFS = {
-    'outer': (1899.6654770, (-43.0, 11.8002, 43.0, 46.9)),
-    'inner': (411.5218898, (-33.8288, 30.9520, 33.8286, 40.9)),
+    # 1899.6654770 mm2, bbox [-43, 11.8002, 43, 46.9] mm
+    'outer': Ref2D(0.001899665477, (-0.043, 0.0118002, 0.043, 0.0469)),
+    # 411.5218898 mm2, bbox [-33.8288, 30.952, 33.8286, 40.9] mm
+    'inner': Ref2D(0.0004115218898, (-0.0338288, 0.030952, 0.0338286, 0.0409)),
 }
 
 OWN = [
@@ -136,8 +139,9 @@ def main():
           % ('shape', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
     ok = True
     for name in ('outer', 'inner'):
-        ref, bbox = REFS[name]
-        ok &= plane2d.report(doc, name, tips[name].Shape, ref, 'webs_reach', bbox)
+        ref = REFS[name]
+        ok &= plane2d.report(doc, name, tips[name].Shape, ref.area_m2, 'webs_reach',
+                             ref.bbox_m)
     print('')
     print('  %s' % ('both shapes agree' if ok else 'MISMATCH -- see checks above'))
     return 0 if ok else 1

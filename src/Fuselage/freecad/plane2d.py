@@ -7,15 +7,35 @@ top. These are the pieces that construction needs, shared by `boom_key.py` and `
 
 Everything here is an ordinary Part:: document object driven by the parameter sheet, so the
 editability the port exists to preserve holds in the plane exactly as it does in space.
+
+**Unit regime: the constructors are sheet expressions, the measurements are SI (IP-FC-160).**
+`disc`, `rect`, `union` and the offset helpers take *expression strings* naming cells on the
+parameter sheet, which FreeCAD evaluates in millimeters -- nothing in them is a stored number.
+`area_m2`, `enclosed_m` and `report` are the other direction: they read the kernel and so return
+meters, and the one sheet value read back into Python converts where it is read.
 """
+import collections
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import corner_tree as C
+import si
 
 P = 'Params.'
+
+#: One recorded 2D reference. A `namedtuple` rather than a bare tuple because its three members
+#: are three different quantities, and the field names are where their units live: a table named
+#: `REFS` cannot carry one suffix that describes an area, a bounding box and a dimensionless
+#: tolerance at once, while `REFS[label].area_m2` states its unit on the line that reads it.
+#:
+#:     area_m2   the reference area in square meters
+#:     bbox_m    the recorded bounding box in meters, as `(xmin, ymin, xmax, ymax)`
+#:     tol       the *relative* area tolerance, so dimensionless. The default is the faceting
+#:               floor `report` documents; a table overrides it only for small circles.
+Ref2D = collections.namedtuple('Ref2D', 'area_m2 bbox_m tol')
+Ref2D.__new__.__defaults__ = (6.0e-5,)
 
 
 def face(doc, name, *sources):
@@ -236,44 +256,71 @@ def fragmented(shape):
     return sum(len(f.Edges) for f in shape.Faces) > len(shape.Edges)
 
 
-def area(shape):
-    return sum(f.Area for f in shape.Faces) if shape.Faces else float('nan')
+def area_m2(shape):
+    """A profile's area in square meters, summed over its faces.
+
+    Summed rather than taken from `si.area_m2(shape)` for one reason worth keeping: a profile
+    here is legitimately several disjoint faces (`boom_web_inner_shape` is two islands), and an
+    *empty* shape must come back `nan` rather than 0.0 so that a truncated union fails its
+    reference comparison instead of agreeing with a reference of zero.
+    """
+    return sum(f.Area for f in shape.Faces) / si.MM2_PER_M2 if shape.Faces else float('nan')
 
 
-def enclosed(doc, shape, reach_alias):
-    """Margin between the shape and the rectangle `union` complements against.
+#: A margin at or below this counts as no margin -- `enclosed` returning zero is the signal that
+#: the union was truncated. One nanometer, so it rejects only an exact or negative overlap and
+#: never a real clearance. Was `1e-9` while this function returned millimeters; it is the figure
+#: that has to cross with the quantity it bounds, or the check silently loosens by a thousand.
+ENCLOSURE_FLOOR_M = 1.0e-12
+
+#: How far a measured bounding box may sit from its recorded one, in meters. 0.5 micron -- the
+#: same figure as the `5.0e-4` mm this check used before the conversion.
+BBOX_TOL_M = 5.0e-7
+
+
+def enclosed_m(doc, shape, reach_alias):
+    """Margin in meters between the shape and the rectangle `union` complements against.
 
     Positive means the union was not truncated. Zero or negative means it was, silently.
+
+    `reach_alias` names a cell on the parameter sheet, which is millimeters -- it is seeded from
+    `derived_parameters()`, the exempt OpenSCAD path -- so the read crosses into SI here.
     """
-    reach = float(doc.getObject('Params').get(reach_alias))
-    bb = shape.BoundBox
-    return min(reach - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
+    reach_m = si.m(float(doc.getObject('Params').get(reach_alias)))
+    bb = si.bbox_m(shape)
+    return min(reach_m - abs(v) for v in (bb.XMin, bb.XMax, bb.YMin, bb.YMax))
 
 
-def report(doc, label, shape, ref, reach_alias, expect_bbox=None, tol=6.0e-5):
+def report(doc, label, shape, ref_area_m2, reach_alias, expect_bbox_m=None, tol=6.0e-5):
     """One measured shape against its OpenSCAD reference, with the 2D invariants checked.
+
+    `ref_area_m2` and `expect_bbox_m` are SI, like everything else stored in the port. The line
+    this prints is millimeters, because a reader checking a profile against a drawing of a
+    printed part wants the units the drawing carries.
 
     `tol` defaults to the faceting floor for a circle capped at 360 segments by `$fa = 1`,
     which is what almost every shape here is limited by. A shape whose area is mostly small
     circles is limited by `$fs = 0.1` instead and needs a looser floor -- see `boom_oml.REFS`.
-    Raise it only for that reason, and say which circles and at what radius.
+    Raise it only for that reason, and say which circles and at what radius. It is a *relative*
+    tolerance and so has no unit; it does not change with this conversion.
     """
-    got = area(shape)
-    d = got - ref
-    bb = shape.BoundBox
+    got_m2 = area_m2(shape)
+    d_m2 = got_m2 - ref_area_m2
+    bb = si.bbox_m(shape)
     checks = []
     if fragmented(shape):
         checks.append('FRAGMENTED faces=%d sharing edges -- any offset downstream is wrong'
                       % len(shape.Faces))
-    if enclosed(doc, shape, reach_alias) <= 1e-9:
+    if enclosed_m(doc, shape, reach_alias) <= ENCLOSURE_FLOOR_M:
         checks.append('TRUNCATED -- %s does not enclose it' % reach_alias)
-    if abs(d) / ref > tol:
+    if abs(d_m2) / ref_area_m2 > tol:
         checks.append('OVER TOLERANCE')
-    if expect_bbox is not None:
-        want = expect_bbox
+    if expect_bbox_m is not None:
         real = (bb.XMin, bb.YMin, bb.XMax, bb.YMax)
-        if max(abs(a - b) for a, b in zip(real, want)) > 5.0e-4:
-            checks.append('BBOX [%.4f, %.4f, %.4f, %.4f]' % real)
+        if max(abs(a - b) for a, b in zip(real, expect_bbox_m)) > BBOX_TOL_M:
+            checks.append('BBOX [%s] mm'
+                          % ', '.join('%.4f' % si.mm(v) for v in real))
     print('  %-22s %13.7f %13.7f %+10.5f%%  %s'
-          % (label, got, ref, 100 * d / ref, ' '.join(checks) if checks else 'ok'))
+          % (label, got_m2 * si.MM2_PER_M2, ref_area_m2 * si.MM2_PER_M2,
+             100 * d_m2 / ref_area_m2, ' '.join(checks) if checks else 'ok'))
     return not checks

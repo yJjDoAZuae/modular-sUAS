@@ -22,7 +22,7 @@ Three outcomes are all informative and the experiment is written not to prefer a
 `shell_solid` without a `tau` argument, so a build always uses the module default. This builds the
 tree once to get the cell shapes -- `Base`, `Body`, the notches, the inset, the overhang and the
 mirrors, exactly what `execute` passes -- and then calls `shell_solid` directly per `TAU`. Nothing
-here mutates `cowl_interior.TAU`, so a failure cannot leak into a later build in the same process.
+here mutates `cowl_interior.TAU_M`, so a failure cannot leak into a later build in the same process.
 
 **Cost, measured from the 2026-10-06 soak, because this has to be bounded before it is run.** A
 `nose_cowl_shell` builds in 38 to 117 s and a `tail_shell` in 727 to 4 525 s. Start on the nose: it
@@ -92,7 +92,7 @@ with_u = soak.with_u
 SPACING = 0.125
 
 #: The criterion values to try, coarsest first so the baseline is reproduced before anything is
-#: tightened. The first should be `cowl_interior.TAU` itself.
+#: tightened. The first should be `cowl_interior.TAU_M` itself.
 DEFAULT_TAUS = (0.05, 0.02, 0.01)
 
 
@@ -175,7 +175,7 @@ def measure(solid, t, spacing=SPACING, stations=cci.STATIONS):
         'worst_thin': worst['worst_thin'] if worst else None,
         'worst_z': worst['z'] if worst else None,
         'worst_angle_deg': worst['angle_deg'] if worst else None,
-        'over_tolerance': sum(1 for r in readable if r['worst_thin'] > ci.WALL_TOL),
+        'over_tolerance': sum(1 for r in readable if r['worst_thin'] > ci.WALL_TOL_M),
         'states': locate.states(rows),
         'gate_spacing_mm': density.gate_spacing(
             density.section_perimeter(solid, zs[len(zs) // 2], App=App) or 0.0)[0],
@@ -188,7 +188,7 @@ def study(kind, u, taus=DEFAULT_TAUS, spacing=SPACING, out=None):
     doc, shell = build_cell(kind, u)
     t = float(shell.Inset)
     out.write('tau_study %s U=%s, wall t = %.4f mm, WALL_TOL = %.3f, module TAU = %.3f\n'
-              % (kind, u, t, ci.WALL_TOL, ci.TAU))
+              % (kind, u, t, ci.WALL_TOL_M, ci.TAU_M))
     out.flush()
     rows = []
     for tau in taus:

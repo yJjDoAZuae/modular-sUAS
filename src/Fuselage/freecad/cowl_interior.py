@@ -82,7 +82,7 @@ import si
 #:
 #: **They are not the same number, and an earlier version of this note said they were.**
 #: Corrected 2026-10-05: this is the *convergence criterion* for the fit -- how close the
-#: construction has to get before `_refine` stops subdividing -- and `WALL_TOL` below is the
+#: construction has to get before `_refine` stops subdividing -- and `WALL_TOL_M` below is the
 #: *acceptance tolerance* on the finished wall. Measuring one quantity does not make one
 #: threshold serve both purposes: a convergence criterion may be as loose as the construction's
 #: own budget allows, but the acceptance tolerance is set by what the slicer does with a thin
@@ -96,14 +96,14 @@ import si
 #: reads the same 0.0601 mm worst gap at 0.05, 0.02 and 0.01, and raises `Unconverged` at both
 #: tightened values against its 64-station patch budget. And what this criterion is compared
 #: against -- `_finished_wall_gap`, a plain minimum with no corner exclusion -- read 0.03763 mm on
-#: the wall where the acceptance gate's own measure read 0.01345 mm, so `TAU` = `WALL_TOL` would
-#: not request a `WALL_TOL` wall (OQ-DES-CW29). Do not change this constant to close the gap to
-#: `WALL_TOL` without reading those two questions first.
-TAU = 0.05
+#: the wall where the acceptance gate's own measure read 0.01345 mm, so `TAU_M` = `WALL_TOL_M` would
+#: not request a `WALL_TOL_M` wall (OQ-DES-CW29). Do not change this constant to close the gap to
+#: `WALL_TOL_M` without reading those two questions first.
+TAU_M = 5.0e-5                               # 0.05 mm
 
 #: Section 6: the acceptance tolerance on the **finished wall's own thickness**, in millimeters.
 #:
-#: **One-sided, and five times tighter than `TAU`.** The failure mode this bounds is the slicer
+#: **One-sided, and five times tighter than `TAU_M`.** The failure mode this bounds is the slicer
 #: declining to lay a perimeter down at all: that decision is near-binary in the wall's measured
 #: thickness, and a cowl prints in spiral-vase mode with a single perimeter and no second wall to
 #: fall back on (cowl.md section 7), so a wall that comes out materially under `n_p * w` does not
@@ -115,7 +115,7 @@ TAU = 0.05
 #: **One-sided because only the thin side is a defect.** A sample over a rib legitimately reads
 #: more than `n_p * w`, because the wall follows the notch in and back out again and the inner
 #: contour dips with it -- `check_cowl_interior.wall_thickness` says so, and the real sections
-#: read up to 0.69 mm against a 0.6 mm wall for exactly that reason. Only `measured < t - WALL_TOL`
+#: read up to 0.69 mm against a 0.6 mm wall for exactly that reason. Only `measured < t - WALL_TOL_M`
 #: is a failure.
 #:
 #: **This tolerance is unmet on every `tail_shell` configuration measured, by three to five times,
@@ -126,11 +126,11 @@ TAU = 0.05
 #: healthy annulus, so these are thin walls and not severed ones.
 #:
 #: **The wall is about as thin as section 5's second pass permits, which is a binding criterion
-#: rather than a construction defect.** That pass stops at `TAU` = 0.05 mm and its own predicted
+#: rather than a construction defect.** That pass stops at `TAU_M` = 0.05 mm and its own predicted
 #: figures -- 0.0481, 0.0430, 0.0393 mm for those three builds -- agree with the refined real
 #: readings to within 0.0039 mm. So the prediction tracks the part closely and the walls come out
-#: just inside the criterion they were converged to. Whether tightening `TAU` toward this tolerance
-#: produces a compliant wall is unmeasured, and it is not free: `TAU` is what both passes stop at,
+#: just inside the criterion they were converged to. Whether tightening `TAU_M` toward this tolerance
+#: produces a compliant wall is unmeasured, and it is not free: `TAU_M` is what both passes stop at,
 #: so tightening it adds fit rows and re-cut rounds to every build.
 #:
 #: **An earlier version of this note reported 0.1514 and 0.2136 mm at `U` = 3 and 4, and a
@@ -199,7 +199,7 @@ TAU = 0.05
 #: cowl_interior_surface.md sections 6 and 6.1 and [OQ-DES-CW21]. It is deliberately recorded as
 #: the requirement anyway: a tolerance loosened until the part passes is not a tolerance, and
 #: IP-FC-56 is this project's own precedent for that mistake.
-WALL_TOL = 0.01
+WALL_TOL_M = 1.0e-5                          # 0.01 mm
 
 #: The hard floor on interval length, below which `_refine` will not subdivide. **Reaching it is
 #: a failure to report, not a result to accept** -- section 5 -- because it means the fitted
@@ -210,7 +210,7 @@ WALL_TOL = 0.01
 #: **This is not the station-seeding floor.** That one is tied to the wall thickness -- see
 #: `station_floor()` -- because two stations closer together than the wall they are building
 #: make the axial pole track near-degenerate (OQ-DES-CW24, cowl_interior_surface.md section 4.1).
-MIN_INTERVAL = 0.20
+MIN_INTERVAL_M = 2.0e-4                      # 0.20 mm
 
 #: Circumferential spacing, in millimeters, for the grid the surface is **fitted through**,
 #: and the range the resulting count is clamped to.
@@ -226,7 +226,7 @@ MIN_INTERVAL = 0.20
 #: section 5 is a product of two sample counts, so the cost is quadratic in this number:
 #: measured 2026-09-03 on the nose at U = 1, dropping it 32x took the cavity from 5266 s to
 #: 30 s.
-FIT_ARC = 1.0
+FIT_ARC_M = 1.0e-3                           # 1.0 mm
 FIT_MIN = 120
 FIT_MAX = 1200
 
@@ -240,8 +240,8 @@ FIT_MAX = 1200
 #:
 #: Evaluating is not fitting, and it is far cheaper: a point-to-curve distance against a
 #: polyline, not an interpolation through a grid. Spending the samples here rather than in
-#: `FIT_ARC` is the whole point of keeping the two apart.
-CHECK_ARC = 0.20
+#: `FIT_ARC_M` is the whole point of keeping the two apart.
+CHECK_ARC_M = 2.0e-4                         # 0.20 mm
 CHECK_MIN = 480
 CHECK_MAX = 6000
 
@@ -307,7 +307,7 @@ FLAT_TOL = 1.0e-9
 #:
 #: The floor is five orders below that failure and three above the kernel's own reproducibility
 #: on these operands.
-RIB_RESIDUE = 1.0e-2
+RIB_RESIDUE_M3 = 1.0e-11                     # 0.01 mm3
 
 #: A small fuzzy-boolean tolerance for the rib cut (`smooth.cut`) and its retry, and for the
 #: residue check (`common`) that reads them. **Not a design dimension -- a numerical-robustness
@@ -364,7 +364,7 @@ POST_CUT_ROUNDS = 6
 #: `finished_outer_at` for the buttress-cut cell's exterior -- so the same zone has to be
 #: excluded from each side of the same comparison, or the surviving points on one side would be
 #: measured against a polyline whose closing chord, on the other side, still crosses it.
-FINISHED_PLANE_TOL = 0.5
+FINISHED_PLANE_TOL_M = 5.0e-4                # 0.5 mm
 
 #: How far (mm) each side of a notch tool's own edge (ramp start/end, cut plane -- read via
 #: `feature_stations`) section 5's second pass samples extra finely, and how far apart (mm)
@@ -397,8 +397,17 @@ FINISHED_PLANE_TOL = 0.5
 #: (added the same day, above), the fitted surface is already well-resolved there before the
 #: first cut ever happens, so this scan's own job shrinks from "find the peak" to "confirm it",
 #: which does not need the same density.
-EDGE_SCAN_MARGIN = 1.0
-EDGE_SCAN_STEP = 0.5
+EDGE_SCAN_MARGIN_M = 1.0e-3                  # 1.0 mm
+
+#: How far apart the *uniform* half of section 5's second-pass scan samples.
+#:
+#: **1 mm, measured rather than tied to the row count.** A 76-point scan (4x the patch's own 19
+#: rows) missed the defect at `z` = -217.7270 by 2 mm and read 0.0430 mm there against the
+#: acceptance check's 0.0531 mm at the exact station -- under-sampling a real, fairly sharp local
+#: peak rather than measuring something different. It was a bare literal inside `cavity` until
+#: IP-FC-160; it is a spacing, so it belongs here with the other spacings.
+POST_CUT_SCAN_STEP_M = 1.0e-3                # 1.0 mm
+EDGE_SCAN_STEP_M = 5.0e-4                    # 0.5 mm
 
 #: How far (mm) each side of an inserted station section 5's second pass re-scans on the round
 #: that follows, instead of the whole patch.
@@ -406,7 +415,7 @@ EDGE_SCAN_STEP = 0.5
 #: **Measured, not assumed (OQ-DES-CW22, 2026-09-26).** One properly-bisected insertion's effect
 #: on the finished wall's own thickness, on `tail_shell` `U` = 1.0: -0.023 to -0.024 mm within a
 #: millimeter of it, -0.005 to -0.01 mm by 9 mm, under +-0.005 mm by 14 mm, and at most
-#: +-0.0012 mm (2.4% of `TAU`) anywhere past 20 mm -- consistent with numerical noise at that
+#: +-0.0012 mm (2.4% of `TAU_M`) anywhere past 20 mm -- consistent with numerical noise at that
 #: range, not a continuing effect. 20 mm keeps a margin over the 14-15 mm the effect actually
 #: reached in that measurement.
 #: **Why re-scanning at all is safe to skip beyond this window.** Patches are independent: a
@@ -414,20 +423,20 @@ EDGE_SCAN_STEP = 0.5
 #: contributes its own closed solid to the fuse and the fuse cannot alter geometry outside the
 #: piece that changed. Within one patch, the same locality this margin measures is what makes it
 #: safe to stop looking past it.
-POST_CUT_RESCAN_MARGIN = 20.0
+POST_CUT_RESCAN_MARGIN_M = 2.0e-2            # 20 mm
 
 #: How many times finer the polyline a distance is *measured against* is than the sample set.
 #:
-#: **Three, not eight, because the sample set now carries the resolution.** When `CHECK_ARC`
+#: **Three, not eight, because the sample set now carries the resolution.** When `CHECK_ARC_M`
 #: was 0.3 mm this factor had to make up the difference on its own; at 0.075 mm a factor of 3
 #: already puts 0.025 mm between the chords being measured against, which is a fiftieth of
-#: `TAU`. Eight cost 40,832 points per contour on the tail -- one `discretize` and one polyline
+#: `TAU_M`. Eight cost 40,832 points per contour on the tail -- one `discretize` and one polyline
 #: build of that size for every station -- and measured 463 s a contour for accuracy nothing
 #: needed.
 #: **The measurement is curve-to-curve and the discretisation error has to sit well below
-#: `TAU`.** Measured 2026-09-02: comparing 160 sampled points against a 160-point
+#: `TAU_M`.** Measured 2026-09-02: comparing 160 sampled points against a 160-point
 #: parameter-spaced polyline of the same contour reported 0.076 mm where the true deviation
-#: was 0.003 mm -- twenty-five times over, and over `TAU`, so the refinement chased its own
+#: was 0.003 mm -- twenty-five times over, and over `TAU_M`, so the refinement chased its own
 #: chord error down to the interval floor and reported a part that does not converge.
 #: `discretize` spaces by *parameter*, not arc length, so its chords cut the corners wherever
 #: the curve's speed varies, which on a rounded-rectangle section is everywhere.
@@ -437,7 +446,7 @@ DENSE_FACTOR = 3
 #: and the range that is clamped to. **The seed is deliberately thin and the criterion is the
 #: arbiter**, which is what "spacing is derived, not tuned" means: a patch seeded with two
 #: stations and left there is one where the midpoint check found the surface already within
-#: `TAU` of the erosion. Seeding six everywhere instead cost 23 minutes a part on a tail whose
+#: `TAU_M` of the erosion. Seeding six everywhere instead cost 23 minutes a part on a tail whose
 #: 59 feature stations make 60 patches, most of them a fraction of a millimeter long, and
 #: bought nothing the criterion did not already guarantee.
 #:
@@ -448,31 +457,31 @@ DENSE_FACTOR = 3
 #: `SEED_MAX` raised from 6 to 24, one patch each: a `nose_cowl_shell` at `U` = 4 costs **23 %**
 #: more and a `tail_shell` at `U` = 0.5 **33 %** more, not minutes. The second half of the note
 #: above is also wrong as a general claim -- generous seeding does buy something the criterion
-#: does not guarantee, because `_refine` stops at the *first* subdivision inside `TAU` and so
+#: does not guarantee, because `_refine` stops at the *first* subdivision inside `TAU_M` and so
 #: accepts a coarse fit that happens to pass: at `U` = 4 the nose goes 0.01530 -> 0.00710 mm on
-#: seeding alone. What the criterion guarantees is `TAU`, and `TAU` = 0.05 is five times
-#: `WALL_TOL`. Section 6.8.3 has both measurements; what to do is OQ-DES-CW31.
+#: seeding alone. What the criterion guarantees is `TAU_M`, and `TAU_M` = 0.05 is five times
+#: `WALL_TOL_M`. Section 6.8.3 has both measurements; what to do is OQ-DES-CW31.
 #: A patch at least this long is seeded with the six stations a C2 fit needs; a shorter one is
 #: seeded with its two ends and left for section 5 to subdivide if the erosion turns out not to
 #: be straight across it. Below six rows `approximate` cannot produce C2 at all -- it raises
 #: `NCollection_Array1::Value`, measured 2026-09-02 -- so this is where the continuity ladder
 #: in `_fit` gets its rows from.
-SEED_LONG_MM = 3.0
+SEED_LONG_M = 3.0e-3                         # 3.0 mm
 SEED_MIN = 2
 SEED_MAX = 6
 
 #: Target spacing, in millimeters, for the uniform samples a section is refit through, and the
 #: range the resulting count is clamped to. See `eroded_body` for why the spacing has to be
 #: uniform and why there is a ladder above it.
-SAMPLE_SPACING = 0.25
+SAMPLE_SPACING_M = 2.5e-4                    # 0.25 mm
 SAMPLE_MIN = 400
 SAMPLE_MAX = 3000
 
 #: How far a section may move when it is refit as one B-spline, in millimeters. A tenth of
-#: `TAU`, because the refit is of the *exterior* the wall is measured from: an error here is
+#: `TAU_M`, because the refit is of the *exterior* the wall is measured from: an error here is
 #: not a fitting error to be refined away but a changed part, and it would show up in the
 #: wall-thickness check as a bias no station disagrees with.
-REFIT_TOL = 0.005
+REFIT_TOL_M = 5.0e-6                         # 0.005 mm
 
 #: The fuzzy-tolerance ladder for the one boolean that needs one is `si.CUT_FUZZ_LADDER_MM`,
 #: for the same reason as the fuzz above: it is an OpenCASCADE argument in millimeters, not a
@@ -483,35 +492,35 @@ REFIT_TOL = 0.005
 #: Below this area, in square millimeters, a clipped notch section is a tangency artifact and
 #: not a notch. The narrowest notch the design has is `buttress_cut_thickness` = 0.1 mm wide,
 #: so even a 0.1 mm long one encloses 0.01 mm2 -- four orders above this.
-SLIVER_AREA = 1.0e-6
+SLIVER_AREA_M2 = 1.0e-12                     # 1.0e-6 mm2
 
 #: Below this perimeter, in millimeters, a loop left by the notch subtraction is boolean debris
 #: rather than a hole. See `_one_region`, which records why the floor sits where it does and
 #: what it is checked against.
-SLIVER_LENGTH = 0.01
+SLIVER_LENGTH_M = 1.0e-5                     # 0.01 mm
 
 #: How far inside its own end a station may sit. Sectioning exactly at a planar end returns the
 #: end face's boundary rather than the body's, which is the same curve for a prismatic part and
 #: not for this one.
-END_INSET = 1.0e-3
+END_INSET_M = 1.0e-6                         # 0.001 mm
 
 #: How far past each open end the cavity is carried, so the ends are actually open. Any value
-#: clear of `END_INSET` does; 1 mm is far enough to be unambiguous and short enough to stay
+#: clear of `END_INSET_M` does; 1 mm is far enough to be unambiguous and short enough to stay
 #: inside the blank's own bounding box arithmetic.
-END_OVERRUN = 1.0
+END_OVERRUN_M = 1.0e-3                       # 1.0 mm
 
 #: Two stations closer than this are one station.
-Z_TOL = 1.0e-6
+Z_TOL_M = 1.0e-9                             # 1e-6 mm
 
 #: Slack on the P1 slope assertion, in degrees, for the discretisation the check runs on.
-SLOPE_SLACK = 0.5
+SLOPE_SLACK_RAD = 8.726646259971648e-3       # 0.5 deg
 
 #: Angular half-window, in bins of one degree, searched when measuring a point against a
 #: polyline. Both contours are star-shaped about the section centroid -- a 1.3 mm slot in a
 #: body tens of millimeters across leaves them so -- which makes the nearest segment a local
 #: one and turns an O(n*m) scan into an O(n) one. 25 degrees is far wider than any nearest
 #: point observed and is what makes the pruning safe rather than merely fast.
-ANGLE_WINDOW = 25
+ANGLE_WINDOW_RAD = 0.4363323129985824        # 25 deg
 
 #: Metric A's thin-wall flag threshold (mm), `clearance_margin_scan`'s own criterion
 #: (OQ-DES-CW24, cowl.md) -- **not** the project's usual 0.1 mm print-accuracy figure.
@@ -551,7 +560,7 @@ ANGLE_WINDOW = 25
 #: **Whether this metric is kept at all is OQ-DES-CW25**, which turns on a measurement nobody has
 #: taken: only a tool's cut floor bounds the wall, its flanks bound nothing, and the minimum here
 #: is taken against the whole tool section without distinguishing them.
-CLEARANCE_MARGIN_MM = 0.01
+CLEARANCE_MARGIN_M = 1.0e-5                  # 0.01 mm
 
 
 # **Do not test a section for emptiness with `Face.Area`.** A planar face built on a single
@@ -597,7 +606,7 @@ class PreconditionFailed(Exception):
 
 
 class Unconverged(Exception):
-    """Section 5's floor was reached with the deviation still above `TAU`.
+    """Section 5's floor was reached with the deviation still above `TAU_M`.
 
     **A refusal carries the shape its own measurement was taken on.** Measured 2026-10-29: the
     post-cut pass refused a `tail_shell` at `U` = 3.0 reporting the finished wall closed to
@@ -618,20 +627,61 @@ class Unconverged(Exception):
     fitted surface for the pre-cut station budget.
     """
 
-    def __init__(self, message, shape=None, z=None):
+    def __init__(self, message, shape=None, z_m=None):
         Exception.__init__(self, message)
         #: The shape the refusal's measurement was taken on, or `None`. A reference, not a copy.
         self.shape = shape
-        #: The station the worst reading was at, or `None` when the refusal is not about one.
-        self.z = z
+        #: The station the worst reading was at **in meters**, or `None` when the refusal is not
+        #: about one.
+        self.z_m = z_m
 
 
 # --------------------------------------------------------------------------------
 # Plane geometry, in the layer plane
 # --------------------------------------------------------------------------------
 
+#: Slack, in steps, when counting how many whole steps fit across a span. One part in a
+#: billion: fifteen thousand times larger than the float noise it absorbs and nine orders
+#: smaller than one step, so it can never turn a genuinely fractional count into a whole one.
+STEP_SLACK = 1.0e-9
+
+
+def _parallel_to(axis, normal, tol=None):
+    """Is `axis` parallel or antiparallel to `normal`, both unit vectors?
+
+    Dimensionless on both sides: a dot product of two unit vectors against unity. Factored out
+    because `_extend_across_cell` and `_strip_seam` ask it identically, and because written
+    inline it reads as a bare `1.0` that an audit has to classify twice.
+    """
+    return abs(abs(axis.dot(normal)) - 1.0) < (CELL_DIRECTION_TOL if tol is None else tol)
+
+
+def _steps(span, step, minimum):
+    """How many whole steps of `step` fit across `span`, **independently of the unit both are
+    measured in**.
+
+    `int(span / step)` is not unit-invariant, and this conversion is how that was found rather
+    than something it introduced. The post-cut scan takes a window of `EDGE_SCAN_MARGIN_M`
+    either side of a notch edge, so the span is exactly two margins -- in millimeters, an edge
+    at -10.1006 gives `-9.1006 - -11.1006 = 2.0` exactly and `2.0 / 0.5 = 4`; in meters the
+    same subtraction gives a ratio of 3.9999999999999964, which truncates to **3**. Measured:
+    one of the nose's four notch edges flipped that way, taking the edge-focused scan from 20
+    points to 19 while every other figure in the build agreed to 4e-6.
+
+    A sample count that depends on the unit its inputs are written in is a defect on its own
+    terms, so the floor is taken with `STEP_SLACK` of slack rather than the arithmetic being
+    left to land where it falls. Truncation is kept, not replaced by rounding: a span of three
+    and a half steps still yields three, which is what every caller here means.
+    """
+    return max(int(span / step + STEP_SLACK), minimum)
+
+
 def _signed_area(pts):
-    """Twice the signed area of a closed polyline, positive counter-clockwise about +z."""
+    """Twice the signed area of a closed polyline, positive counter-clockwise about +z.
+
+    Unit-homogeneous: the return carries `pts`'s unit squared. Everything here works in meters,
+    so it is square meters.
+    """
     total = 0.0
     for i in range(len(pts)):
         x1, y1 = pts[i]
@@ -640,9 +690,13 @@ def _signed_area(pts):
     return total
 
 
-def _wire_area(wire, n=200):
-    """The area a closed wire encloses, from its own points rather than from `Face.Area`."""
-    pts = [(p.x, p.y) for p in wire.discretize(Number=n)]
+def _wire_area_m2(wire, n=200):
+    """The area a closed wire encloses in square meters, from its own points rather than from
+    `Face.Area` -- see the note above on why `Face.Area` is not usable here.
+
+    `discretize` hands back kernel points, so millimeters; they cross into SI here.
+    """
+    pts = [(si.m(p.x), si.m(p.y)) for p in wire.discretize(Number=n)]
     if len(pts) > 1 and pts[0] == pts[-1]:
         pts.pop()
     return abs(_signed_area(pts)) / 2.0
@@ -650,7 +704,7 @@ def _wire_area(wire, n=200):
 
 def _seg_distance(px, py, ax, ay, bx, by):
     """Distance from a point to a segment. Point-to-segment rather than point-to-point
-    because section 5 measures against `TAU` = 0.05 mm and the sampling interval is 1 mm."""
+    because section 5 measures against `TAU_M` = 0.05 mm and the sampling interval is 1 mm."""
     dx, dy = bx - ax, by - ay
     den = dx * dx + dy * dy
     if den <= 0.0:
@@ -766,7 +820,7 @@ def _min_wire_distance(wires_a, wires_b):
     size is set by where the samples fell. Measured 2026-10-24 on `nose_cowl_shell` at `U` = 1,
     `z` = -36.9470, where `distToShape` gives exactly 0.0 and `section` finds two crossing
     points, this function returns 0.000081 mm at the shipped 200/400 and anything from 0.000081
-    to 0.216 mm across 100/200 .. 20000/40000 -- no convergence, and `CLEARANCE_MARGIN_MM`
+    to 0.216 mm across 100/200 .. 20000/40000 -- no convergence, and `CLEARANCE_MARGIN_M`
     crossed in both directions. Use `distToShape` where the answer may be zero. The counts are
     deliberately 200 and 400 rather than equal, so `_min_wire_contact` reproduces this exactly.
     """
@@ -774,12 +828,12 @@ def _min_wire_distance(wires_a, wires_b):
         return None
     a_pts = []
     for w in wires_a:
-        a_pts.extend((p.x, p.y) for p in w.discretize(Number=200))
+        a_pts.extend((si.m(p.x), si.m(p.y)) for p in w.discretize(Number=200))
     if not a_pts:
         return None
     best = None
     for w in wires_b:
-        pts = [(p.x, p.y) for p in w.discretize(Number=400)]
+        pts = [(si.m(p.x), si.m(p.y)) for p in w.discretize(Number=400)]
         if len(pts) < 2:
             continue
         d = float(min(_Polyline(pts).distances(a_pts)))
@@ -802,12 +856,12 @@ def _min_wire_contact(wires_a, wires_b):
         return None
     a_pts = []
     for w in wires_a:
-        a_pts.extend((p.x, p.y) for p in w.discretize(Number=200))
+        a_pts.extend((si.m(p.x), si.m(p.y)) for p in w.discretize(Number=200))
     if not a_pts:
         return None
     best = None
     for w in wires_b:
-        pts = [(p.x, p.y) for p in w.discretize(Number=400)]
+        pts = [(si.m(p.x), si.m(p.y)) for p in w.discretize(Number=400)]
         if len(pts) < 2:
             continue
         got = _Polyline(pts).closest(a_pts)
@@ -820,11 +874,15 @@ def _min_wire_contact(wires_a, wires_b):
 # Sections and the erosion
 # --------------------------------------------------------------------------------
 
-def _slice_wires(shape, z):
-    return shape.slice(App.Vector(0, 0, 1), z)
+def _slice_wires(shape, z_m):
+    """The shape's section at `z_m` meters, as kernel wires.
+
+    The normal is a direction and carries no unit; the offset is a position and so converts.
+    """
+    return shape.slice(App.Vector(0, 0, 1), si.mm(z_m))
 
 
-def smoothed(wire, n, tol=REFIT_TOL):
+def smoothed(wire, n, tol_m=REFIT_TOL_M):
     """One closed cubic B-spline through a section, replacing the fragment chain OCC returns.
 
     **This is what makes the erosion possible at all, and it is not a nudge.** Sectioning the
@@ -846,12 +904,16 @@ def smoothed(wire, n, tol=REFIT_TOL):
     exercised when something breaks.
 
     The refit is *verified*, which is the whole difference between substituting a curve and
-    assuming one: the original wire is sampled densely and every sample must lie within `tol`
+    assuming one: the original wire is sampled densely and every sample must lie within `tol_m`
     of the new curve, or the build stops. Without that this would be a silent change to the
     exterior the wall is measured from.
     """
     pts = wire.discretize(Number=n)
-    if pts[0].distanceToPoint(pts[-1]) < Z_TOL:
+    # Kernel points on both sides of the comparison, so the threshold crosses to millimeters
+    # rather than the points crossing to meters: these points go straight into
+    # `Part.BSplineCurve` without any arithmetic on them, and converting out and back would
+    # only add rounding to the curve the wall is measured from.
+    if pts[0].distanceToPoint(pts[-1]) < si.mm(Z_TOL_M):
         pts = pts[:-1]
     curve = Part.BSplineCurve(pts, None, None, True, 3, None, False)
     shape = curve.toShape()
@@ -860,14 +922,15 @@ def smoothed(wire, n, tol=REFIT_TOL):
     # point: the curve interpolates the `n` samples exactly, so what is being checked is what
     # it does *between* them, and 4n `distToShape` calls on a B-spline cost more than the
     # erosion they are guarding.
-    dense = _Polyline([(p.x, p.y) for p in shape.discretize(Number=4 * n)])
-    worst = float(dense.distances(
-        [(p.x, p.y) for p in wire.discretize(Number=2 * n)]).max())
-    return Part.Wire(shape), worst
+    dense = _Polyline([(si.m(p.x), si.m(p.y))
+                       for p in shape.discretize(Number=4 * n)])
+    worst_m = float(dense.distances(
+        [(si.m(p.x), si.m(p.y)) for p in wire.discretize(Number=2 * n)]).max())
+    return Part.Wire(shape), worst_m
 
 
-def eroded_body(wire, t, z, tol=REFIT_TOL):
-    """The refit section, its face, and the face eroded by `t` -- refining until all three work.
+def eroded_body(wire, t_m, z_m, tol_m=REFIT_TOL_M):
+    """The refit section, its face, and the face eroded by `t_m` -- refining until all three work.
 
     **Superseded 2026-09-21 by the cell/arc method (`cell_boundary_planes`, `open_arc`,
     `eroded_arc`) and not safe to call on a symmetry-cell section.** `cavity()` no longer calls
@@ -902,29 +965,30 @@ def eroded_body(wire, t, z, tol=REFIT_TOL):
     Both conditions are checked on every rung, and reaching the end of the ladder is a failure
     to report rather than a coarser answer to accept.
     """
-    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(wire.Length / SAMPLE_SPACING)))
+    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(si.length_m(wire) / SAMPLE_SPACING_M)))
     why = None
     for n in (n0, 2 * n0, 4 * n0):
-        refit, moved = smoothed(wire, n, tol)
-        if moved > tol:
+        refit, moved_m = smoothed(wire, n, tol_m)
+        if moved_m > tol_m:
             why = ('refitting at %d points moved the section %.6f mm, over the %.6f mm '
-                   'allowed' % (n, moved, tol))
+                   'allowed' % (n, si.mm(moved_m), si.mm(tol_m)))
             continue
         face = Part.Face(refit)
         try:
-            inner = face.makeOffset2D(-t, 0, False, False, True)
+            inner = face.makeOffset2D(-si.mm(t_m), 0, False, False, True)
         except Exception as exc:                       # noqa: BLE001 -- reported below
-            why = 'the refit at %d points (%.6f mm) would not offset: %s' % (n, moved, exc)
+            why = ('the refit at %d points (%.6f mm) would not offset: %s'
+                   % (n, si.mm(moved_m), exc))
             continue
         if inner is None or not inner.Faces:
             why = 'the refit at %d points offset to nothing' % n
             continue
         return refit, face, inner
     raise PreconditionFailed(
-        'P3: no refit of the %.3f mm section at z = %.4f both reproduced it and eroded by '
+        'P3: no refit of the %.3f mm section at z = %.4f mm both reproduced it and eroded by '
         '%.4f mm. Last: %s. The wall is measured from this curve, so a refit that does not '
         'reproduce the section is a changed exterior, and one that will not offset is the '
-        'IP-FC-54 failure.' % (wire.Length, z, t, why))
+        'IP-FC-54 failure.' % (si.mm(si.length_m(wire)), si.mm(z_m), si.mm(t_m), why))
 
 
 # --------------------------------------------------------------------------------
@@ -953,7 +1017,32 @@ def eroded_body(wire, t, z, tol=REFIT_TOL):
 # approximate: a mirror of an exact flat face is that same face, not a near-duplicate of it.
 
 
-def cell_boundary_planes(cell, tol=1.0e-6):
+#: How far a face's own plane may sit from the origin and still count as passing through it.
+#: A nanometer. **This was `1.0e-6` sharing one `tol` argument with two dimensionless tests** --
+#: whether a normal has a z component, and whether two normals are the same direction -- and the
+#: conversion is what separated them: a position-to-plane distance is a length and the other two
+#: are components of a unit vector, so one number could not carry both after the units moved.
+CELL_ORIGIN_TOL_M = 1.0e-9
+
+#: How far a unit normal's component may stray from zero, and how far two unit normals may
+#: differ, and still count as equal. Dimensionless, and unchanged by the conversion.
+CELL_DIRECTION_TOL = 1.0e-6
+
+#: How close a point must lie to a cell plane to count as on it. A nanometer, from the
+#: `1.0e-6` mm the edge-classification tests used.
+CELL_PLANE_TOL_M = 1.0e-9
+
+#: How close two edge ends must be to count as joined when a section's arc is chained back
+#: together. A nanometer, from `_chain`'s own `1.0e-6` mm.
+CHAIN_TOL_M = 1.0e-9
+
+#: How close a cell arc's own end must lie to one of the cell's planes. Looser than
+#: `CELL_PLANE_TOL_M` by six orders deliberately -- this one classifies an end that the offset
+#: has already moved, where the others test an edge of the exact section. 1e-3 mm as before.
+ARC_END_TOL_M = 1.0e-6
+
+
+def cell_boundary_planes(cell, tol_m=CELL_ORIGIN_TOL_M, direction_tol=CELL_DIRECTION_TOL):
     """The symmetry cell's own flat construction faces, as unit normals through the origin.
 
     **Found from the cell's own geometry, not from the mirror chain that reassembles it.** The
@@ -976,11 +1065,15 @@ def cell_boundary_planes(cell, tol=1.0e-6):
             continue
         normal = f.Surface.Axis
         normal.normalize()
-        if abs(normal.z) > tol:
+        if abs(normal.z) > direction_tol:
             continue
-        if abs(f.Surface.Position.dot(normal)) > tol:
+        # A position dotted with a unit normal is the plane's distance from the origin, so it
+        # is a length and crosses into SI; the two normal tests above and below are on a unit
+        # vector and carry no unit at all.
+        if abs(si.m(f.Surface.Position.dot(normal))) > tol_m:
             continue
-        if not any((normal - p).Length < tol or (normal + p).Length < tol for p in planes):
+        if not any((normal - p).Length < direction_tol
+                   or (normal + p).Length < direction_tol for p in planes):
             planes.append(normal)
     if not planes:
         raise PreconditionFailed(
@@ -990,16 +1083,21 @@ def cell_boundary_planes(cell, tol=1.0e-6):
     return planes
 
 
-def _on_plane(edge, planes, tol):
+def _on_plane(edge, planes, tol_m):
+    """True when every one of seven samples along `edge` lies within `tol_m` of some plane.
+
+    A point dotted with a unit normal is a distance, so the comparison is a length one and the
+    sample crosses into SI where it is taken. The curve parameters are not lengths.
+    """
     lo, hi = edge.FirstParameter, edge.LastParameter
     for i in range(7):
-        p = edge.valueAt(lo + (hi - lo) * i / 6.0)
-        if not any(abs(p.x * n.x + p.y * n.y + p.z * n.z) < tol for n in planes):
+        p = si.point_m(edge.valueAt(lo + (hi - lo) * i / 6.0))
+        if not any(abs(p[0] * n.x + p[1] * n.y + p[2] * n.z) < tol_m for n in planes):
             return False
     return True
 
 
-def _chain(edges, tol=1.0e-6):
+def _chain(edges, tol_m=CHAIN_TOL_M):
     """`edges` reordered tail to head into one open run, or a failure if they do not chain.
 
     Not assumed of `wire.Edges` order, because what is being reordered here is *the edges left
@@ -1008,14 +1106,18 @@ def _chain(edges, tol=1.0e-6):
     """
     remaining = list(edges)
     chain = [remaining.pop(0)]
+    tol_mm = si.mm(tol_m)
     while remaining:
+        # Kernel points on both sides, so the threshold crosses to millimeters rather than
+        # every vertex crossing to meters -- the points themselves are never stored or
+        # computed with, only compared.
         tail = chain[-1].Vertexes[-1].Point
         for i, e in enumerate(remaining):
             a, b = e.Vertexes[0].Point, e.Vertexes[-1].Point
-            if tail.distanceToPoint(a) < tol:
+            if tail.distanceToPoint(a) < tol_mm:
                 chain.append(remaining.pop(i))
                 break
-            if tail.distanceToPoint(b) < tol:
+            if tail.distanceToPoint(b) < tol_mm:
                 chain.append(e.reversed())
                 remaining.pop(i)
                 break
@@ -1026,7 +1128,7 @@ def _chain(edges, tol=1.0e-6):
     return chain
 
 
-def open_arc(wire, planes, tol=1.0e-6):
+def open_arc(wire, planes, tol_m=CELL_PLANE_TOL_M):
     """The true-exterior portion of a cell section: `wire` with its construction edges removed.
 
     Returns `(arc, plane_at_start, plane_at_end, flip)`. For the tail's one plane the two ends
@@ -1046,12 +1148,12 @@ def open_arc(wire, planes, tol=1.0e-6):
     `open_contour`, `eroded_arc`) discretizes `arc` itself and then reverses the *list*, once,
     using `flip`, rather than asking a wire to have been built facing the other way.
     """
-    keep = [e for e in wire.Edges if not _on_plane(e, planes, tol)]
+    keep = [e for e in wire.Edges if not _on_plane(e, planes, tol_m)]
     if not keep:
         raise PreconditionFailed(
             'a cell section has no arc left once its %d construction boundary(ies) are '
             'removed -- every edge of this section lies in a cell plane' % len(planes))
-    arc = Part.Wire(_chain(keep, tol))
+    arc = Part.Wire(_chain(keep, tol_m))
     if arc.isClosed():
         raise PreconditionFailed(
             'a cell section\'s arc came back closed once its construction boundaries were '
@@ -1060,12 +1162,14 @@ def open_arc(wire, planes, tol=1.0e-6):
         return arc, planes[0], planes[0], False
 
     def which(point):
+        p = si.point_m(point)
         for i, n in enumerate(planes):
-            if abs(point.x * n.x + point.y * n.y + point.z * n.z) < 1.0e-3:
+            if abs(p[0] * n.x + p[1] * n.y + p[2] * n.z) < ARC_END_TOL_M:
                 return i
         raise PreconditionFailed(
-            'a cell arc\'s end at (%.4f, %.4f, %.4f) is not on any of its %d construction '
-            'planes to 1e-3 mm' % (point.x, point.y, point.z, len(planes)))
+            'a cell arc\'s end at (%.4f, %.4f, %.4f) mm is not on any of its %d construction '
+            'planes to %g mm'
+            % (si.mm(p[0]), si.mm(p[1]), si.mm(p[2]), len(planes), si.mm(ARC_END_TOL_M)))
 
     probe = arc.discretize(Number=10)
     i0, i1 = which(probe[0]), which(probe[-1])
@@ -1111,24 +1215,27 @@ def open_contour(wire, n, flip=False):
     """`n` points along an open arc, evenly spaced by arc length, and the dense polyline they
     were taken from -- the open-arc counterpart of `contour`, with no anchor or wraparound
     needed, since the two ends are already the cell's own construction boundary."""
-    dense = [(p.x, p.y) for p in _disc(wire, max(DENSE_FACTOR * n, 400), flip)]
+    dense = [(si.m(p.x), si.m(p.y))
+             for p in _disc(wire, max(DENSE_FACTOR * n, 400), flip)]
     return _resample_open(dense, n), _Polyline(dense, closed=False)
 
 
-def _smoothed_open(wire, n, flip, tol=REFIT_TOL):
+def _smoothed_open(wire, n, flip, tol_m=REFIT_TOL_M):
     """`smoothed`'s open counterpart: one open cubic B-spline through `n` points of `wire`,
-    verified the same way."""
+    verified the same way. The deviation it returns is in meters."""
     pts = _disc(wire, n, flip)
     curve = Part.BSplineCurve(pts, None, None, False, 3, None, False)
     shape = curve.toShape()
-    dense = _Polyline([(p.x, p.y) for p in shape.discretize(Number=4 * n)], closed=False)
-    worst = float(dense.distances([(p.x, p.y) for p in _disc(wire, 2 * n, flip)]).max())
-    return Part.Wire(shape), worst
+    dense = _Polyline([(si.m(p.x), si.m(p.y))
+                       for p in shape.discretize(Number=4 * n)], closed=False)
+    worst_m = float(dense.distances(
+        [(si.m(p.x), si.m(p.y)) for p in _disc(wire, 2 * n, flip)]).max())
+    return Part.Wire(shape), worst_m
 
 
-def eroded_arc(arc, t, z, p_start, p_end, flip, tol=REFIT_TOL):
-    """The open arc, refit and offset inward by `t`, its two ends snapped exactly onto the
-    cell's own planes.
+def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M):
+    """The open arc, refit and offset inward by `t_m`, its two ends snapped exactly onto the
+    cell's own planes. Returns `(x_m, y_m)` pairs.
 
     **Snapped, not trusted.** An inward 2-D offset moves each point along the curve's own local
     normal, which for a genuinely symmetric exterior crossing its own cell plane head-on is
@@ -1142,32 +1249,40 @@ def eroded_arc(arc, t, z, p_start, p_end, flip, tol=REFIT_TOL):
     (`flip` applied there), so its own start and end need no further reordering here -- only the
     offset's own start/end get snapped, to `p_start`/`p_end` respectively.
     """
-    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(arc.Length / SAMPLE_SPACING)))
+    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(si.length_m(arc) / SAMPLE_SPACING_M)))
     why = None
     for n in (n0, 2 * n0, 4 * n0):
-        refit, moved = _smoothed_open(arc, n, flip, tol)
-        if moved > tol:
+        refit, moved_m = _smoothed_open(arc, n, flip, tol_m)
+        if moved_m > tol_m:
             why = ('refitting the arc at %d points moved it %.6f mm, over the %.6f mm '
-                   'allowed' % (n, moved, tol))
+                   'allowed' % (n, si.mm(moved_m), si.mm(tol_m)))
             continue
         try:
-            offset = refit.makeOffset2D(-t, 0, False, True, True)
+            offset = refit.makeOffset2D(-si.mm(t_m), 0, False, True, True)
         except Exception as exc:                        # noqa: BLE001 -- reported below
-            why = 'the arc refit at %d points (%.6f mm) would not offset: %s' % (n, moved, exc)
+            why = ('the arc refit at %d points (%.6f mm) would not offset: %s'
+                   % (n, si.mm(moved_m), exc))
             continue
         if offset is None or not offset.Edges:
             why = 'the arc refit at %d points offset to nothing' % n
             continue
         # `refit` was built directly from the canonically-ordered points above, so its own
         # offset's discretisation needs no `flip` -- it already starts at the `p_start` end.
-        pts = [App.Vector(p.x, p.y, z) for p in offset.discretize(Number=max(2 * n, 400))]
+        #
+        # The snap stays in kernel units: `plane` is a unit normal, so subtracting the
+        # projection is exact arithmetic in whatever unit the point carries, and these points
+        # are only ever handed back as the eroded contour. The conversion to meters is the
+        # single pass at the return.
+        pts = [App.Vector(p.x, p.y, si.mm(z_m))
+               for p in offset.discretize(Number=max(2 * n, 400))]
         for i, plane in ((0, p_start), (-1, p_end)):
             d = pts[i].dot(plane)
             pts[i] = pts[i] - plane * d
-        return [(p.x, p.y) for p in pts]
+        return [(si.m(p.x), si.m(p.y)) for p in pts]
     raise PreconditionFailed(
-        'P3: no refit of the %.3f mm cell arc at z = %.4f both reproduced it and eroded by '
-        '%.4f mm. Last: %s.' % (arc.Length, z, t, why))
+        'P3: no refit of the %.3f mm cell arc at z = %.4f mm both reproduced it and eroded by '
+        '%.4f mm. Last: %s.'
+        % (si.mm(si.length_m(arc)), si.mm(z_m), si.mm(t_m), why))
 
 
 def _side_caps(surf, planes):
@@ -1181,6 +1296,11 @@ def _side_caps(surf, planes):
     at the part's own axis, so a single face across both would cut the near-axis corner off.
     Each edge instead gets its own face, closed at each end by a line to the axis point there --
     the two faces then share that axis line, which is ordinary shell topology, not a defect.
+
+    **No number crosses the boundary here.** Every value is a kernel vertex handed straight to
+    another kernel call, with no arithmetic, no comparison against a project figure, and
+    nothing stored -- so converting out to meters and back would be a no-op that only added
+    rounding to the faces the mirror-fuse has to match exactly. See the module docstring.
     """
     u0, u1, v0, v1 = surf.bounds()
     edge_lo = surf.vIso(v0).toShape()
@@ -1214,8 +1334,8 @@ def slab_normal(tool):
     return n
 
 
-def dilated_notches(notches, t, report=None):
-    """`dilate(B, t)` as a list of solids, built once for the part: section 4.2's right-hand
+def dilated_notches(notches, t_m, report=None):
+    """`dilate(B, t_m)` as a list of solids, built once for the part: section 4.2's right-hand
     term.
 
     **The ribs are applied to the cavity, not fitted into its surface, and that is the whole
@@ -1280,7 +1400,7 @@ def dilated_notches(notches, t, report=None):
     the wall comes out in pieces because the ribs are what bridge the buttress slots.
     """
     grown = []
-    angles = []
+    angles_rad = []
     for tool in notches.Solids:
         # **P4: no notch lies in the layer plane.** A rib forms because the slicer's single
         # perimeter walks into the notch and back out again *within* a layer; a notch lying in
@@ -1301,7 +1421,8 @@ def dilated_notches(notches, t, report=None):
                 'a cutting tool spanning z %.4f..%.4f has %d faces and not one of them is '
                 'planar, so it is not a slab and its thickness has no direction. P4 cannot be '
                 'evaluated on it and neither can the rib it is supposed to leave.'
-                % (tool.BoundBox.ZMin, tool.BoundBox.ZMax, len(tool.Faces)))
+                % (si.mm(si.bbox_m(tool).ZMin), si.mm(si.bbox_m(tool).ZMax),
+                   len(tool.Faces)))
         flat = math.hypot(normal.x, normal.y)
         if flat < FLAT_TOL:
             raise PreconditionFailed(
@@ -1309,8 +1430,9 @@ def dilated_notches(notches, t, report=None):
                 'plane is %.3e from horizontal. A rib forms where the perimeter walks into the '
                 'notch and back out within a layer, and a horizontal notch offers no such '
                 'path, so this one would come out malformed rather than as a rib. Horizontal '
-                'ribs are outside the design.' % (tool.BoundBox.ZMin, tool.BoundBox.ZMax, flat))
-        angles.append(math.degrees(math.asin(min(1.0, flat))))
+                'ribs are outside the design.'
+                % (si.mm(si.bbox_m(tool).ZMin), si.mm(si.bbox_m(tool).ZMax), flat))
+        angles_rad.append(math.asin(min(1.0, flat)))
 
         # **The facet count has a floor set by this tool, and below it the dilation is a comb.**
         # The copies sit on a circle of radius `t`, so adjacent ones are `2*t*sin(pi/N)` apart.
@@ -1325,37 +1447,42 @@ def dilated_notches(notches, t, report=None):
         # reporting 0.1035 mm of wall where 0.6 is wanted. The 0.2 mm diagonal cuts passed --
         # they need only 19 facets -- which is why the failure appeared at some stations and not
         # others. At 48 the spacing is 0.0785 mm and every tool overlaps.
-        span = [v.Point.x * normal.x + v.Point.y * normal.y + v.Point.z * normal.z
-                for v in tool.Vertexes]
-        in_plane = (max(span) - min(span)) / flat
-        spacing = 2.0 * t * math.sin(math.pi / RIB_FACETS)
-        if spacing >= in_plane:
+        # A vertex position dotted with a unit normal is a distance, so the span crosses
+        # into SI where it is read and the comparison against `t_m` is a meters-to-meters one.
+        span_m = [p[0] * normal.x + p[1] * normal.y + p[2] * normal.z
+                  for p in si.vertexes_m(tool)]
+        in_plane_m = (max(span_m) - min(span_m)) / flat
+        spacing_m = 2.0 * t_m * math.sin(math.pi / RIB_FACETS)
+        box = si.bbox_m(tool)
+        if spacing_m >= in_plane_m:
             raise PreconditionFailed(
                 'RIB_FACETS = %d puts adjacent copies %.4f mm apart while this tool is only '
                 '%.4f mm thick in the layer plane, so the copies do not overlap and their '
-                'union has gaps in it. The tool spans z %.4f..%.4f. It needs at least %d '
-                'facets: N > pi / asin(w / 2t) with w = %.4f and t = %.4f.'
-                % (RIB_FACETS, spacing, in_plane, tool.BoundBox.ZMin, tool.BoundBox.ZMax,
-                   int(math.ceil(math.pi / math.asin(min(1.0, in_plane / (2.0 * t))))) + 1,
-                   in_plane, t))
+                'union has gaps in it. The tool spans z %.4f..%.4f mm. It needs at least %d '
+                'facets: N > pi / asin(w / 2t) with w = %.4f mm and t = %.4f mm.'
+                % (RIB_FACETS, si.mm(spacing_m), si.mm(in_plane_m),
+                   si.mm(box.ZMin), si.mm(box.ZMax),
+                   int(math.ceil(math.pi / math.asin(
+                       min(1.0, in_plane_m / (2.0 * t_m))))) + 1,
+                   si.mm(in_plane_m), si.mm(t_m)))
 
-        copies = [tool.translated(App.Vector(t * math.cos(2.0 * math.pi * i / RIB_FACETS),
-                                             t * math.sin(2.0 * math.pi * i / RIB_FACETS),
-                                             0.0))
+        copies = [tool.translated(si.vec_m(t_m * math.cos(2.0 * math.pi * i / RIB_FACETS),
+                                           t_m * math.sin(2.0 * math.pi * i / RIB_FACETS),
+                                           0.0))
                   for i in range(RIB_FACETS)]
         solid = copies[0].fuse(copies[1:]).removeSplitter()
         if not solid.isValid() or not solid.Solids:
             raise PreconditionFailed(
                 'dilating a cutting tool by %.4f mm produced %d solids, valid=%s. The tool '
-                'spans z %.4f..%.4f with %d faces.'
-                % (t, len(solid.Solids), solid.isValid(), tool.BoundBox.ZMin,
-                   tool.BoundBox.ZMax, len(tool.Faces)))
+                'spans z %.4f..%.4f mm with %d faces.'
+                % (si.mm(t_m), len(solid.Solids), solid.isValid(),
+                   si.mm(box.ZMin), si.mm(box.ZMax), len(tool.Faces)))
         grown.append(solid)
 
     if report is not None:
         report.update(dilated_tools=len(grown),
-                      dilated_volume=sum(g.Volume for g in grown),
-                      shallowest_cut_deg=min(angles) if angles else None)
+                      dilated_volume_m3=sum(si.volume_m3(g) for g in grown),
+                      shallowest_cut_rad=min(angles_rad) if angles_rad else None)
     # The shallowest angle is reported, not bounded -- see `FLAT_TOL`. A cut at theta leaves a
     # rib of `2*n_p*w + t_cut / sin(theta)`, so this number is the one to look at if a rib ever
     # measures wider than expected.
@@ -1364,11 +1491,12 @@ def dilated_notches(notches, t, report=None):
     # they produce is a %d-gon, not an arc. Say polygon, so the number reads as what it is.
     note('ribs: %d tools dilated by %.4f mm, as a %d-gon approximation of the disc; '
          'shallowest cut plane %.2f deg from the layer plane'
-         % (len(grown), t, RIB_FACETS, min(angles) if angles else float('nan')))
+         % (len(grown), si.mm(t_m), RIB_FACETS,
+            math.degrees(min(angles_rad)) if angles_rad else float('nan')))
     return grown
 
 
-def tool_clearance_ranked(surf_shape, tool_shapes, z):
+def tool_clearance_ranked(surf_shape, tool_shapes, z_m):
     """OQ-DES-CW24's raw per-tool measurement at one station: the in-plane clearance from the
     candidate interior surface's own slice to each individual dilated rib tool's own slice,
     ranked nearest first.
@@ -1381,18 +1509,18 @@ def tool_clearance_ranked(surf_shape, tool_shapes, z):
     It is also what Metric B needs directly -- the ranked list's own second entry -- which a
     fused slice cannot produce at all.
 
-    Returns a list of `(index, distance)` into `tool_shapes`, sorted nearest first. A tool with
-    no section at `z` is simply absent from the list, not reported at distance zero.
+    Returns a list of `(index, distance_m)` into `tool_shapes`, sorted nearest first. A tool
+    with no section at `z_m` is simply absent from the list, not reported at distance zero.
     """
-    s_wires = [w for w in _slice_wires(surf_shape, z) if w]
+    s_wires = [w for w in _slice_wires(surf_shape, z_m) if w]
     if not s_wires:
         return []
     out = []
     for i, shape in enumerate(tool_shapes):
-        tool_wires = [w for w in _slice_wires(shape, z) if w]
-        d = _min_wire_distance(s_wires, tool_wires)
-        if d is not None:
-            out.append((i, d))
+        tool_wires = [w for w in _slice_wires(shape, z_m) if w]
+        d_m = _min_wire_distance(s_wires, tool_wires)
+        if d_m is not None:
+            out.append((i, d_m))
     out.sort(key=lambda id_: id_[1])
     return out
 
@@ -1432,16 +1560,21 @@ FACE_IMAGE_TOL = 0.01
 #: would be wrong in exactly the place a thin spot is most likely.
 FLOOR_DOT = 0.5
 
+#: Below this length a vector is taken to have no direction. Dimensionless: it is applied to a
+#: vector that is about to be normalized, so what it bounds is the vector's own magnitude in
+#: whatever unit it arrived in, not a dimension of the part.
+DEGENERATE_DIRECTION = 1.0e-9
+
 
 #: How far to step off a face to decide which way is out of the solid, in millimeters.
 #:
 #: It has to stay well inside the thinnest dimension the solid has, which for a cutting tool is
 #: `buttress_cut_thickness` = 0.1 mm between its two cheeks: a step of half that or more would
 #: land on or past the opposite cheek and read as outside from either side.
-OUTWARD_STEP_MM = 1.0e-3
+OUTWARD_STEP_M = 1.0e-6                      # 0.001 mm
 
 
-def _outward_normal(face, solid, step=OUTWARD_STEP_MM):
+def _outward_normal(face, solid, step_m=OUTWARD_STEP_M):
     """A face's own outward normal -- the one that leaves `solid`.
 
     **Read by displacement, not from `Face.Orientation`.** The orientation flag does not survive
@@ -1461,14 +1594,19 @@ def _outward_normal(face, solid, step=OUTWARD_STEP_MM):
         u0, u1, v0, v1 = face.ParameterRange
         n = face.normalAt(0.5 * (u0 + u1), 0.5 * (v0 + v1))
     n.normalize()
-    out_plus = not solid.isInside(point + n * step, 0.5 * step, True)
-    out_minus = not solid.isInside(point - n * step, 0.5 * step, True)
+    # `point` and `n` are a kernel position and a unit direction, so the step crosses to
+    # millimeters rather than the position crossing to meters: `isInside` is a kernel call and
+    # nothing here is stored or compared against a project figure.
+    step_mm = si.mm(step_m)
+    out_plus = not solid.isInside(point + n * step_mm, 0.5 * step_mm, True)
+    out_minus = not solid.isInside(point - n * step_mm, 0.5 * step_mm, True)
     if out_plus == out_minus:
+        box = si.bbox_m(solid)
         raise PreconditionFailed(
-            'stepping %.1e mm either way off a face of a solid spanning z %.4f..%.4f lands %s '
-            'it both times, so the face has no outward direction to read. The step has to be '
-            'smaller than the solid\'s own thinnest dimension.'
-            % (step, solid.BoundBox.ZMin, solid.BoundBox.ZMax,
+            'stepping %.1e mm either way off a face of a solid spanning z %.4f..%.4f mm lands '
+            '%s it both times, so the face has no outward direction to read. The step has to '
+            'be smaller than the solid\'s own thinnest dimension.'
+            % (step_mm, si.mm(box.ZMin), si.mm(box.ZMax),
                'outside' if out_plus else 'inside'))
     return n if out_plus else n * -1.0
 
@@ -1500,18 +1638,22 @@ def tool_face_roles(raw_tool):
     and anything else is an end cap.
 
     Returns one dict per face of `raw_tool`, in face order, carrying the role, the outward
-    normal, the two dot products the role was read from, and the face's area.
+    normal, the two dot products the role was read from, and the face's area in square meters.
     """
     e = slab_normal(raw_tool)
     if e is None:
+        box = si.bbox_m(raw_tool)
         raise PreconditionFailed(
-            'a cutting tool spanning z %.4f..%.4f has no planar face, so it is not a slab and '
-            'its faces have no cheek direction to be classified against.'
-            % (raw_tool.BoundBox.ZMin, raw_tool.BoundBox.ZMax))
+            'a cutting tool spanning z %.4f..%.4f mm has no planar face, so it is not a slab '
+            'and its faces have no cheek direction to be classified against.'
+            % (si.mm(box.ZMin), si.mm(box.ZMax)))
+    # `a` is built from a centroid but is immediately normalized into a pure direction, so the
+    # only question its length answers is "is this degenerate" -- a dimensionless test once the
+    # vector is a direction, and the floor is on the vector's own scale, not the part's.
     com = raw_tool.CenterOfMass
     a = App.Vector(-com.x, -com.y, 0.0)
     a = a - e * a.dot(e)
-    if a.Length > 1.0e-9:
+    if a.Length > DEGENERATE_DIRECTION:
         a.normalize()
     else:
         a = App.Vector(0, 0, 0)
@@ -1528,11 +1670,11 @@ def tool_face_roles(raw_tool):
         else:
             role = 'end'
         out.append(dict(role=role, normal=n, dot_cheek=d_cheek, dot_floor=d_floor,
-                        area=face.Area))
+                        area_m2=si.area_m2(face)))
     return out
 
 
-def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
+def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t_m, zs_m):
     """IP-FC-148: at each station in `zs`, which face of the nearest buttress tool carries
     Metric A's own minimum, and what that face bounds.
 
@@ -1570,7 +1712,7 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
     points on one outline to a 400-chord approximation of the other, and no sample is a crossing
     point, so it cannot return the zero. Measured 2026-10-24 on `nose_cowl_shell` at `U` = 1,
     `z` = -36.9470, that leftover spans 0.000081 to 0.216 mm as the sampling is varied from
-    100/200 to 20000/40000 on unchanged geometry, and crosses `CLEARANCE_MARGIN_MM` in both
+    100/200 to 20000/40000 on unchanged geometry, and crosses `CLEARANCE_MARGIN_M` in both
     directions -- so at a crossing the flag reports where the samples fell, not the part. A
     dilated tool is *supposed* to cross: that is how the rib gets its `t` of material (section
     4.2's identity), and the crossing has to be somewhere along every slot that enters the wall
@@ -1590,39 +1732,43 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
     """
     rows = []
     roles_cache = {}
-    for z in zs:
-        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z)
+    step_mm = si.mm(OUTWARD_STEP_M)
+    for z_m in zs_m:
+        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z_m)
         if not ranked:
             continue
-        index, metric_a = ranked[0]
-        s_wires = [w for w in _slice_wires(surf_shape, z) if w]
-        t_wires = [w for w in _slice_wires(tool_shapes[index], z) if w]
+        index, metric_a_m = ranked[0]
+        s_wires = [w for w in _slice_wires(surf_shape, z_m) if w]
+        t_wires = [w for w in _slice_wires(tool_shapes[index], z_m) if w]
         got = _min_wire_contact(s_wires, t_wires)
         if got is None:
             continue
-        dist, p_surf, p_tool = got
+        dist_m, p_surf_m, p_tool_m = got
         if index not in roles_cache:
             roles_cache[index] = tool_face_roles(raw_tools[index])
         roles = roles_cache[index]
-        vertex = Part.Vertex(App.Vector(p_tool[0], p_tool[1], z))
-        near = sorted((face.distToShape(vertex)[0], fi)
+        vertex = Part.Vertex(si.vec_m(p_tool_m[0], p_tool_m[1], z_m))
+        near = sorted((si.distance_m(face, vertex), fi)
                       for fi, face in enumerate(raw_tools[index].Faces))
-        offset, fi = near[0]
+        offset_m, fi = near[0]
         entry = roles[fi]
         n = entry['normal']
-        gap = App.Vector(p_surf[0] - p_tool[0], p_surf[1] - p_tool[1], 0.0)
+        # A direction, built from a difference of two positions and normalized, so it carries
+        # no unit once normalized and the zero test is on the difference itself.
+        gap = si.vec_m(p_surf_m[0] - p_tool_m[0], p_surf_m[1] - p_tool_m[1], 0.0)
         if gap.Length > 0.0:
             gap.normalize()
         # A hair along -n, so the sample sits in the material this face's own cut takes out
-        # rather than on the blank's skin.
+        # rather than on the blank's skin. Kernel positions and a kernel tolerance: the step
+        # crosses to millimeters, the positions never leave the kernel.
         probe = raw_tools[index].Faces[fi].distToShape(vertex)[1][0][0] \
-            - n * (2.0 * OUTWARD_STEP_MM)
-        in_blank = bool(body.isInside(probe, OUTWARD_STEP_MM, True))
+            - n * (2.0 * step_mm)
+        in_blank = bool(body.isInside(probe, step_mm, True))
         inside_n, total_n = 0, 0
         for w in t_wires:
             for p in w.discretize(Number=CROSSING_SAMPLES):
                 total_n += 1
-                if surf_shape.isInside(p, OUTWARD_STEP_MM, True):
+                if surf_shape.isInside(p, step_mm, True):
                     inside_n += 1
         # **Three states, not two.** An earlier version of this reported only `crossing`, which
         # conflated the two ways of not crossing: a tool entirely outside the surface, where the
@@ -1637,17 +1783,19 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
             engagement = 'engulfed'
         else:
             engagement = 'crossing'
-        row = dict(z=z, tool=index, metric_a=metric_a, contact_distance=dist,
+        row = dict(z_m=z_m, tool=index, metric_a_m=metric_a_m, contact_distance_m=dist_m,
                    engagement=engagement, crossing=bool(engagement == 'crossing'),
                    is_clearance=bool(engagement == 'clear'),
                    fraction_inside=(float(inside_n) / total_n) if total_n else None,
-                   p_surf=p_surf, p_tool=p_tool, face=fi, role=entry['role'],
+                   p_surf_m=p_surf_m, p_tool_m=p_tool_m, face=fi, role=entry['role'],
                    normal=(n.x, n.y, n.z), dot_cheek=entry['dot_cheek'],
-                   dot_floor=entry['dot_floor'], offset=offset,
-                   expected_offset=t * math.hypot(n.x, n.y),
+                   dot_floor=entry['dot_floor'], offset_m=offset_m,
+                   expected_offset_m=t_m * math.hypot(n.x, n.y),
                    normal_dot_gap=gap.dot(n), in_blank=in_blank)
+        # `FACE_IMAGE_TOL` is a fraction of the wall, so the product is a length and both sides
+        # of this comparison are meters.
         row['on_face_image'] = bool(
-            abs(row['offset'] - row['expected_offset']) <= FACE_IMAGE_TOL * t)
+            abs(row['offset_m'] - row['expected_offset_m']) <= FACE_IMAGE_TOL * t_m)
         # Only a contact that is *on* a floor's dilated image, inside the blank, is a distance to
         # something that bounds the wall. A contact on the facet bridging two faces is a distance
         # to an edge of the tool, and which of the two faces happens to be nearest is then an
@@ -1657,14 +1805,16 @@ def clearance_face_scan(surf_shape, tool_shapes, raw_tools, body, t, zs):
         if len(near) > 1:
             second = roles[near[1][1]]
             row.update(second_face=near[1][1], second_role=second['role'],
-                       second_offset=near[1][0],
-                       second_expected=t * math.hypot(second['normal'].x, second['normal'].y))
+                       second_offset_m=near[1][0],
+                       second_expected_m=t_m * math.hypot(second['normal'].x,
+                                                          second['normal'].y))
         rows.append(row)
     return rows
 
 
-def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
-                           coarse_step=1.0, refine_window=1.0, refine_step=0.05, n_worst=15):
+def clearance_margin_scan(surf_shape, tool_shapes, z_lo_m, z_hi_m,
+                           coarse_step_m=1.0e-3, refine_window_m=1.0e-3,
+                           refine_step_m=5.0e-5, n_worst=15):
     """OQ-DES-CW24's scan of a candidate interior surface against the individual rib tools that
     will be cut into it: Metric A (the nearest tool's own clearance) and Metric B (the ratio
     between the two nearest tools' clearances), adaptively sampled.
@@ -1685,7 +1835,7 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
     0.097097 mm and Metric B reads 5.950x, both comfortably passing, and a 0.01 mm row
     displacement there severs the wall into two solids with a 99.3% partition slip. What catches
     that is `shell_solid()`'s own solid-count and partition checks, not this scan. Metric A's own
-    standing is narrower than it was: see `CLEARANCE_MARGIN_MM` for what its distance is and is
+    standing is narrower than it was: see `CLEARANCE_MARGIN_M` for what its distance is and is
     not known to bound.
 
     **Two stages, not one fixed grid.** A `coarse_step` pass finds candidate thin points, then a
@@ -1696,7 +1846,8 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
     0.02 mm scan found), and a uniformly fine grid everywhere costs on the order of 19 hours for
     one whole-tail build -- not viable as a per-build check.
 
-    Returns the refined worst points as a list of `(z, metric_a)`, nearest-clearance first.
+    Returns the refined worst points as a list of `(z_m, metric_a_m)`, nearest-clearance
+    first. The default steps are 1 mm coarse, a 1 mm window and 0.05 mm fine, as before.
 
     **Metric B was removed here, 2026-10-04** (IP-FC-147, OQ-DES-CW24 alternative 3). It was a
     ratio between the two nearest tools' distances to the *interior surface*, reported alongside
@@ -1711,39 +1862,39 @@ def clearance_margin_scan(surf_shape, tool_shapes, z_lo, z_hi,
 
     This function reports; it does not gate.
     """
-    def sample(z):
-        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z)
+    def sample(z_m):
+        ranked = tool_clearance_ranked(surf_shape, tool_shapes, z_m)
         if not ranked:
             return None
         return ranked[0][1]
 
-    n_coarse = max(int((z_hi - z_lo) / coarse_step), 1)
+    n_coarse = _steps(z_hi_m - z_lo_m, coarse_step_m, 1)
     coarse = []
     for k in range(n_coarse + 1):
-        z = z_lo + (z_hi - z_lo) * k / float(n_coarse)
-        got = sample(z)
-        if got is not None:
-            coarse.append((z, got))
+        z_m = z_lo_m + (z_hi_m - z_lo_m) * k / float(n_coarse)
+        got_m = sample(z_m)
+        if got_m is not None:
+            coarse.append((z_m, got_m))
     coarse.sort(key=lambda row: row[1])
 
     results = []
-    for z_center, _a in coarse[:n_worst]:
-        fine_lo = max(z_lo, z_center - refine_window)
-        fine_hi = min(z_hi, z_center + refine_window)
-        n_fine = max(int((fine_hi - fine_lo) / refine_step), 1)
+    for z_center_m, _a in coarse[:n_worst]:
+        fine_lo_m = max(z_lo_m, z_center_m - refine_window_m)
+        fine_hi_m = min(z_hi_m, z_center_m + refine_window_m)
+        n_fine = _steps(fine_hi_m - fine_lo_m, refine_step_m, 1)
         best = None
         for k in range(n_fine + 1):
-            z = fine_lo + (fine_hi - fine_lo) * k / float(n_fine)
-            got = sample(z)
-            if got is not None and (best is None or got < best[1]):
-                best = (z, got)
+            z_m = fine_lo_m + (fine_hi_m - fine_lo_m) * k / float(n_fine)
+            got_m = sample(z_m)
+            if got_m is not None and (best is None or got_m < best[1]):
+                best = (z_m, got_m)
         if best is not None:
             results.append(best)
     results.sort(key=lambda row: row[1])
     return results
 
 
-def _one_region(shape, z, fuzz):
+def _one_region(shape, z_m, fuzz_mm):
     """P2: the eroded section is a single closed loop. Returns its face.
 
     **Asserted against the loops that are geometry, not against the ones that are boolean
@@ -1759,28 +1910,30 @@ def _one_region(shape, z, fuzz):
     unclipped tools were biting spurious pinholes into the tail, those loops measured 0.603 and
     0.522 mm, and this floor reports both.
     """
-    where = 'z = %.4f' % z + ('' if fuzz is None else ' (fuzz %g)' % fuzz)
-    faces = [f for f in shape.Faces if f.OuterWire.Length > SLIVER_LENGTH]
+    where = ('z = %.4f mm' % si.mm(z_m)
+             + ('' if fuzz_mm is None else ' (fuzz %g mm)' % fuzz_mm))
+    faces = [f for f in shape.Faces if si.length_m(f.OuterWire) > SLIVER_LENGTH_M]
     if len(faces) != 1:
         raise PreconditionFailed(
             'P2: the eroded section is %d regions at %s, not one -- the erosion pinched it '
             'apart' % (len(faces), where))
-    loops = [w for w in faces[0].Wires if w.Length > SLIVER_LENGTH]
+    loops = [w for w in faces[0].Wires if si.length_m(w) > SLIVER_LENGTH_M]
     if len(loops) != 1:
         raise PreconditionFailed(
-            'P2: the eroded section at %s has %d loops, not one (lengths %s)'
-            % (where, len(loops), ', '.join('%.4f' % w.Length for w in loops)))
+            'P2: the eroded section at %s has %d loops, not one (lengths %s mm)'
+            % (where, len(loops),
+               ', '.join('%.4f' % si.mm(si.length_m(w)) for w in loops)))
     return faces[0]
 
 
-def fit_samples(perimeter):
-    """How many points of this contour go into the fit grid. See `FIT_ARC`."""
-    return max(FIT_MIN, min(FIT_MAX, int(perimeter / FIT_ARC)))
+def fit_samples(perimeter_m):
+    """How many points of this contour go into the fit grid. See `FIT_ARC_M`."""
+    return max(FIT_MIN, min(FIT_MAX, int(perimeter_m / FIT_ARC_M)))
 
 
-def check_samples(perimeter):
-    """How many points of this contour the wall is evaluated at. See `CHECK_ARC`."""
-    return max(CHECK_MIN, min(CHECK_MAX, int(perimeter / CHECK_ARC)))
+def check_samples(perimeter_m):
+    """How many points of this contour the wall is evaluated at. See `CHECK_ARC_M`."""
+    return max(CHECK_MIN, min(CHECK_MAX, int(perimeter_m / CHECK_ARC_M)))
 
 
 def contour(face_or_wire, n, anchor=0.0):
@@ -1801,7 +1954,8 @@ def contour(face_or_wire, n, anchor=0.0):
     cowl's axis is the z axis by construction.
     """
     wire = face_or_wire if isinstance(face_or_wire, Part.Wire) else face_or_wire.OuterWire
-    dense = [(p.x, p.y) for p in wire.discretize(Number=max(DENSE_FACTOR * n, 400))]
+    dense = [(si.m(p.x), si.m(p.y))
+             for p in wire.discretize(Number=max(DENSE_FACTOR * n, 400))]
     if len(dense) > 1 and dense[0] == dense[-1]:
         dense.pop()
     if _signed_area(dense) < 0.0:
@@ -1862,7 +2016,7 @@ def contour(face_or_wire, n, anchor=0.0):
     #
     # Interpolating the crossing removes the quantisation outright. The anchor is a geometric
     # feature of the section, so the origin it defines is exact, and what remains is the dense
-    # polyline's chord error -- 1e-4 mm at this spacing, three orders under `TAU`.
+    # polyline's chord error -- 1e-4 mm at this spacing, three orders under `TAU_M`.
     ux, uy = math.cos(anchor), math.sin(anchor)
     start = 0
     cross = None
@@ -1910,38 +2064,45 @@ def contour(face_or_wire, n, anchor=0.0):
     return samples, _Polyline(dense)
 
 
-def _check_slope(lower, upper, z_lo, z_hi, limit):
+def _check_slope(lower, upper, z_lo_m, z_hi_m, limit_rad):
     """P1: every section steeper than `overhang_angle_from_bed`.
 
     Checked on the **un-notched** body, which is where section 4.2's `erode(A, t)` applies and
     where the `t*cos(alpha)` reasoning holds. The notch ramps are cut at this same angle by
     design and are handled by the dilation of B, so including them here would fire the
     assertion on the feature the design intends.
+
+    **The comparison is in radians, and the printed figures are degrees.** The angle and the
+    slack have to be in the same unit as the limit: this function computed `worst` in degrees
+    while `SLOPE_SLACK` became radians, which left `11.31 < 0.60` and silently stopped the
+    assertion firing at all -- caught by the check script's own "P1 fires on a deliberately
+    shallow section" case, which exists for exactly this.
     """
-    dz = abs(z_hi - z_lo)
-    if dz <= 0.0:
+    dz_m = abs(z_hi_m - z_lo_m)
+    if dz_m <= 0.0:
         return
-    worst = None
-    at = 0.0
+    worst_rad = None
+    at_rad = 0.0
     for (x1, y1), (x2, y2) in zip(lower, upper):
-        dr = math.hypot(x2 - x1, y2 - y1)
-        ang = math.degrees(math.atan2(dz, dr))
-        if worst is None or ang < worst:
-            worst = ang
-            at = math.atan2(y1, x1)
-    if worst is not None and worst < limit - SLOPE_SLACK:
+        dr_m = math.hypot(x2 - x1, y2 - y1)
+        ang_rad = math.atan2(dz_m, dr_m)
+        if worst_rad is None or ang_rad < worst_rad:
+            worst_rad = ang_rad
+            at_rad = math.atan2(y1, x1)
+    if worst_rad is not None and worst_rad < limit_rad - SLOPE_SLACK_RAD:
         raise PreconditionFailed(
-            'P1: the body is %.2f deg from the bed between z = %.4f and %.4f, at %.1f deg '
+            'P1: the body is %.2f deg from the bed between z = %.4f and %.4f mm, at %.1f deg '
             'around the section -- shallower than overhang_angle_from_bed = %.2f. The inset '
             'leaves t*cos(alpha) of perpendicular wall, so this station would emit a knife '
-            'edge.' % (worst, z_lo, z_hi, math.degrees(at), limit))
+            'edge.' % (math.degrees(worst_rad), si.mm(z_lo_m), si.mm(z_hi_m),
+                       math.degrees(at_rad), math.degrees(limit_rad)))
 
 
 # --------------------------------------------------------------------------------
 # Stations
 # --------------------------------------------------------------------------------
 
-def _tessellated_interior(body, sections, deflection=0.1):
+def _tessellated_interior(body, sections, deflection_m=1.0e-4):
     """A z the body really does section at, found from a mesh rather than from a box.
 
     Only called when `z_extent`'s probes of the bounding box have all missed, which happens
@@ -1952,23 +2113,25 @@ def _tessellated_interior(body, sections, deflection=0.1):
     somehow not interior, near-middle is the next most likely place.
 
     Returns `None` if even that finds nothing, so the caller can say so rather than guess.
+    The deflection is 0.1 mm, as before; it is a length and so is stored in meters.
     """
-    lo = hi = None
+    lo_m = hi_m = None
     for face in body.Faces:
-        points, _facets = face.tessellate(deflection)
+        points, _facets = face.tessellate(si.mm(deflection_m))
         for point in points:
-            lo = point.z if lo is None else min(lo, point.z)
-            hi = point.z if hi is None else max(hi, point.z)
-    if lo is None or hi <= lo:
+            z_m = si.m(point.z)
+            lo_m = z_m if lo_m is None else min(lo_m, z_m)
+            hi_m = z_m if hi_m is None else max(hi_m, z_m)
+    if lo_m is None or hi_m <= lo_m:
         return None
     for f in (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8):
-        z = lo + (hi - lo) * f
-        if sections(z):
-            return z
+        z_m = lo_m + (hi_m - lo_m) * f
+        if sections(z_m):
+            return z_m
     return None
 
 
-def z_extent(body, tol=END_INSET):
+def z_extent(body, tol_m=END_INSET_M):
     """The body's real axial extent, found by asking it where it sections.
 
     **`Shape.BoundBox` is not tight on these solids, and taking it at its word puts stations
@@ -2000,40 +2163,41 @@ def z_extent(body, tol=END_INSET):
 
     About 34 sections at roughly 0.7 s each, once per part.
     """
-    def sections(z):
+    def sections(z_m):
         try:
-            return len(_slice_wires(body, z)) >= 1
+            return len(_slice_wires(body, z_m)) >= 1
         except Exception:                              # noqa: BLE001 -- a miss is a miss
             return False
 
-    box = body.BoundBox
-    lo, hi = box.ZMin, box.ZMax
-    inside = None
+    box = si.bbox_m(body)
+    lo_m, hi_m = box.ZMin, box.ZMax
+    inside_m = None
     for f in (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8):
-        z = lo + (hi - lo) * f
-        if sections(z):
-            inside = z
+        z_m = lo_m + (hi_m - lo_m) * f
+        if sections(z_m):
+            inside_m = z_m
             break
-    if inside is None:
-        inside = _tessellated_interior(body, sections)
-    if inside is None:
+    if inside_m is None:
+        inside_m = _tessellated_interior(body, sections)
+    if inside_m is None:
         raise PreconditionFailed(
-            'the body does not section anywhere in its own bounding box, %.4f to %.4f, nor '
-            'anywhere in the z range of its own tessellation' % (lo, hi))
+            'the body does not section anywhere in its own bounding box, %.4f to %.4f mm, nor '
+            'anywhere in the z range of its own tessellation'
+            % (si.mm(lo_m), si.mm(hi_m)))
 
-    def edge(outside, within):
-        while abs(within - outside) > tol:
-            mid = 0.5 * (outside + within)
-            if sections(mid):
-                within = mid
+    def edge(outside_m, within_m):
+        while abs(within_m - outside_m) > tol_m:
+            mid_m = 0.5 * (outside_m + within_m)
+            if sections(mid_m):
+                within_m = mid_m
             else:
-                outside = mid
-        return within
+                outside_m = mid_m
+        return within_m
 
-    return edge(lo, inside), edge(hi, inside)
+    return edge(lo_m, inside_m), edge(hi_m, inside_m)
 
 
-def feature_stations(notches, z_lo, z_hi):
+def feature_stations(notches, z_lo_m, z_hi_m):
     """Section 4.1: the axial positions where the exterior itself has an edge.
 
     **Derived from the geometry rather than restated from the parameters.** Every buttress
@@ -2064,52 +2228,52 @@ def feature_stations(notches, z_lo, z_hi):
     below it is currently dormant. The notch-edge count over the same twelve runs 4 for the nose
     and 19-26 for the tail.
     """
-    seen = sorted(v.Point.z for v in notches.Vertexes
-                  if z_lo + MIN_INTERVAL < v.Point.z < z_hi - MIN_INTERVAL)
+    seen = sorted(p[2] for p in si.vertexes_m(notches)
+                  if z_lo_m + MIN_INTERVAL_M < p[2] < z_hi_m - MIN_INTERVAL_M)
     out = []
-    for z in seen:
-        if not out or abs(z - out[-1]) > max(Z_TOL, MIN_INTERVAL):
-            out.append(z)
+    for z_m in seen:
+        if not out or abs(z_m - out[-1]) > max(Z_TOL_M, MIN_INTERVAL_M):
+            out.append(z_m)
     return out
 
 
-def _patches(z_lo, z_hi, features):
-    edges = [z_lo] + list(features) + [z_hi]
+def _patches(z_lo_m, z_hi_m, features_m):
+    edges = [z_lo_m] + list(features_m) + [z_hi_m]
     return [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)
-            if edges[i + 1] - edges[i] > MIN_INTERVAL]
+            if edges[i + 1] - edges[i] > MIN_INTERVAL_M]
 
 
-def _seed(z_lo, z_hi, inset_lo, inset_hi):
-    n = SEED_MAX if (z_hi - z_lo) >= SEED_LONG_MM else SEED_MIN
-    zs = [z_lo + (z_hi - z_lo) * i / float(n - 1) for i in range(n)]
+def _seed(z_lo_m, z_hi_m, inset_lo, inset_hi):
+    n = SEED_MAX if (z_hi_m - z_lo_m) >= SEED_LONG_M else SEED_MIN
+    zs = [z_lo_m + (z_hi_m - z_lo_m) * i / float(n - 1) for i in range(n)]
     # Only the part's own ends are inset. An internal patch boundary is a station the patches
     # on both sides must sample at *exactly* the same z, or their two approximations of it are
     # separated by the inset.
     if inset_lo:
-        zs[0] += END_INSET
+        zs[0] += END_INSET_M
     if inset_hi:
-        zs[-1] -= END_INSET
+        zs[-1] -= END_INSET_M
     return zs
 
 
-def station_floor(t):
+def station_floor(t_m):
     """Section 4.1: the minimum separation two fit stations may have.
 
     **Tied to the wall, not to a fixed number** (IP-FC-144, OQ-DES-CW24 alternative 2). Two
     stations closer together than the wall they are building carry very nearly the same eroded
     contour, so the fit is asked to interpolate a near-duplicate and the axial pole track through
-    them is near-degenerate. `MIN_INTERVAL` remains a hard geometric floor underneath, for a wall
+    them is near-degenerate. `MIN_INTERVAL_M` remains a hard geometric floor underneath, for a wall
     thinner than it.
     """
-    return max(t, MIN_INTERVAL)
+    return max(t_m, MIN_INTERVAL_M)
 
 
-def _thin_stations(zs, floor):
-    """Drop stations that sit closer than `floor` to the one before them.
+def _thin_stations(zs_m, floor_m):
+    """Drop stations that sit closer than `floor_m` to the one before them.
 
     **This is the filter the per-patch union never had.** `feature_stations()` already
     deduplicates its own output, and `_patches()` already refuses a patch shorter than
-    `MIN_INTERVAL`, but both of those guards are set at `MIN_INTERVAL` = 0.20 mm while the floor
+    `MIN_INTERVAL_M`, but both of those guards are set at `MIN_INTERVAL_M` = 0.20 mm while the floor
     applied here is `station_floor(t)` = 0.60 mm at the current wall. So a pair between 0.20 and
     0.60 mm is legitimate to every upstream guard and still too close to fit through, and the
     seed stations and the notch edges are independent sets besides, so their union can be closer
@@ -2118,7 +2282,7 @@ def _thin_stations(zs, floor):
     **Measured 2026-10-25 on the real seed union, by `station_gaps.py`, which needs no cavity.**
     `tail_shell` at `U` = 3.0 puts 32 stations in the union and keeps 27: **seven gaps fall under
     the 0.60 mm floor**, and they are not one phenomenon. Six are notch-edge to notch-edge at
-    0.22 to 0.51 mm -- legal under `MIN_INTERVAL`, under the floor -- and one is the union case
+    0.22 to 0.51 mm -- legal under `MIN_INTERVAL_M`, under the floor -- and one is the union case
     proper, a seed station at -60.0003433 against a notch edge at exactly -60.0000000, **0.0003433
     mm apart, 1748 times finer than the wall**. `U` = 1.0 and `U` = 4.0 read 0.0004578 mm, 1311
     times the wall. An earlier version of this note said "neither contains a close pair on its
@@ -2133,21 +2297,21 @@ def _thin_stations(zs, floor):
 
     **Both end stations are preserved exactly.** A patch boundary is a station the patches on
     both sides must sample at the same `z`, or their two approximations of it are separated by
-    this filter rather than meeting (see `_seed`'s own note on `END_INSET`). The last station is
+    this filter rather than meeting (see `_seed`'s own note on `END_INSET_M`). The last station is
     therefore restored even when the greedy pass would have dropped it, displacing its neighbor
     instead.
     """
-    if len(zs) < 2:
-        return list(zs)
-    out = [zs[0]]
-    for z in zs[1:]:
-        if z - out[-1] >= floor:
-            out.append(z)
-    if out[-1] != zs[-1]:
+    if len(zs_m) < 2:
+        return list(zs_m)
+    out = [zs_m[0]]
+    for z_m in zs_m[1:]:
+        if z_m - out[-1] >= floor_m:
+            out.append(z_m)
+    if out[-1] != zs_m[-1]:
         # keep the end; drop whatever the greedy pass kept too close in front of it
-        while len(out) > 1 and zs[-1] - out[-1] < floor:
+        while len(out) > 1 and zs_m[-1] - out[-1] < floor_m:
             out.pop()
-        out.append(zs[-1])
+        out.append(zs_m[-1])
     return out
 
 
@@ -2185,9 +2349,9 @@ def _fit(rows):
     violation of requirement (4): a patch is bounded by two genuine creases in the exterior,
     continuity is required *within* one, and a two-station patch has no interior join to be
     continuous across. It survives only because section 5's midpoint check found it already
-    within `TAU` of the erosion.
+    within `TAU_M` of the erosion.
     """
-    zs = [z for z, _pts in rows]
+    zs_m = [z_m for z_m, _pts in rows]
     n = len(rows[0][1])
 
     # V: one open curve per row, its two ends the cell's own construction plane. The
@@ -2196,18 +2360,20 @@ def _fit(rows):
     # each its own.
     vparams = [i / float(n - 1) for i in range(n)]
     curves = []
-    for z, pts in rows:
+    for z_m, pts in rows:
         curve = Part.BSplineCurve()
-        curve.interpolate(Points=[App.Vector(x, y, z) for x, y in pts],
+        # `rows` carries meters -- `eroded_arc` returns them -- so this is the crossing into
+        # the kernel, and the poles, tracks and grid below never leave it.
+        curve.interpolate(Points=[si.vec_m(x, y, z_m) for x, y in pts],
                           PeriodicFlag=False, Parameters=vparams)
         curves.append(curve)
 
     # U: interpolate each pole track through the stations. Same argument for giving the
     # parameters explicitly -- every track must share a knot vector for the poles to assemble
     # into a grid.
-    lo, hi = zs[0], zs[-1]
-    span = hi - lo
-    uparams = [(z - lo) / span for z in zs]
+    lo_m, hi_m = zs_m[0], zs_m[-1]
+    span_m = hi_m - lo_m
+    uparams = [(z_m - lo_m) / span_m for z_m in zs_m]
     poles = [curve.getPoles() for curve in curves]
     tracks = []
     for j in range(len(poles[0])):
@@ -2226,7 +2392,7 @@ def _fit(rows):
     return surf
 
 
-def _lid(surf, u, z, planes):
+def _lid(surf, u, z_m, planes):
     """A patch's cap at one of its two axial ends, taken from the surface's own iso curve and
     closed across the cell's construction boundary(ies) (section 4.5).
 
@@ -2241,12 +2407,14 @@ def _lid(surf, u, z, planes):
     off; the wedge closes correctly by routing through the axis point at this station instead,
     one straight segment in each plane.
     """
+    # Kernel vertices handed straight to kernel line constructors, so nothing crosses the
+    # boundary here but `z_m`, which is a stored position. See the module docstring.
     wire = Part.Wire([surf.uIso(u).toShape()])
     a, b = wire.Vertexes[0].Point, wire.Vertexes[-1].Point
     if len(planes) <= 1:
         closers = [Part.makeLine(b, a)]
     else:
-        axis = App.Vector(0, 0, z)
+        axis = si.vec_m(0.0, 0.0, z_m)
         closers = [Part.makeLine(b, axis), Part.makeLine(axis, a)]
     wire = Part.Wire(wire.Edges + closers)
     try:
@@ -2255,11 +2423,11 @@ def _lid(surf, u, z, planes):
         return Part.makeFilledFace(wire.Edges)
 
 
-def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
+def _refine(fit_at, outer_at, zs_m, t_m, tau_m, budget, n_check):
     """Section 5: refine until the fitted interior holds the wall, then stop.
 
     **The criterion is the wall, measured in the layer plane.** At each candidate station the
-    fitted surface is sectioned, the section is sampled at `CHECK_ARC`, and every sample's
+    fitted surface is sectioned, the section is sampled at `CHECK_ARC_M`, and every sample's
     distance to the exterior is compared with `t`. What is reported is the worst departure of
     the perimeter width from the width it is supposed to be.
 
@@ -2272,82 +2440,89 @@ def _refine(fit_at, outer_at, zs, t, tau, budget, n_check):
     affordable to check at the resolution a 1.3 mm rib actually needs.
 
     Spacing is still derived, not tuned. The tolerance is now the physical one.
+
+    Every length here is meters: the stations, the wall, the tolerance and the gap it reports.
+    The figures the progress lines print are millimeters, because a reader comparing one
+    against a drawing of a printed part wants the units the drawing carries.
     """
-    rows = [(z, fit_at(z)) for z in zs]
+    rows = [(z_m, fit_at(z_m)) for z_m in zs_m]
 
     while True:
         surf = _fit(rows)
         face = surf.toShape()
         wanted = []
-        worst = 0.0
+        worst_m = 0.0
         unsliceable = 0
         shapes = []
         at_floor = 0
-        worst_at_floor = 0.0
+        worst_at_floor_m = 0.0
         for i in range(len(rows) - 1):
-            z_a, z_b = rows[i][0], rows[i + 1][0]
+            z_a_m, z_b_m = rows[i][0], rows[i + 1][0]
             # **Measuring an interval and subdividing it are separate decisions** (IP-FC-144,
             # OQ-DES-CW24). A short interval must not be split -- bisecting it drives the fit
             # further into the near-degenerate condition it is already in -- but it must still
             # be measured, or the worst-conditioned interval in the patch is the one place no
             # number is ever taken. This guard used to `continue` before measuring, which is
             # how a near-duplicate pair could sit in the station set unmeasured at every stage.
-            divisible = (z_b - z_a) > 2 * MIN_INTERVAL
-            z_m = 0.5 * (z_a + z_b)
+            divisible = (z_b_m - z_a_m) > 2 * MIN_INTERVAL_M
+            z_mid_m = 0.5 * (z_a_m + z_b_m)
             # **An insertion has two possible causes and they are not the same failure.**
             # Either the wall is measurably wrong -- which more stations fix -- or the surface
             # would not section into one open arc at all, which more stations do not fix and
             # which subdividing turns into a silent loop that runs to the budget. They are
             # counted apart so the progress line can say which is happening. The surface is open
             # now, not periodic, so the wanted section is the one open wire, not a closed one.
-            sliced = _slice_wires(face, z_m)
+            sliced = _slice_wires(face, z_mid_m)
             cut = [w for w in sliced if not w.isClosed()]
             if len(cut) != 1:
                 unsliceable += 1
                 shapes.append('%d wire(s), %d open' % (len(sliced), len(cut)))
                 if divisible:
-                    wanted.append((i, z_m))
+                    wanted.append((i, z_mid_m))
                 else:
                     at_floor += 1
                 continue
             here, _dense = open_contour(cut[0], n_check)
-            gap = float(np.abs(outer_at(z_m).distances(here) - t).max())
-            worst = max(worst, gap)
-            if gap > tau:
+            gap_m = float(np.abs(outer_at(z_mid_m).distances(here) - t_m).max())
+            worst_m = max(worst_m, gap_m)
+            if gap_m > tau_m:
                 if divisible:
-                    wanted.append((i, z_m))
+                    wanted.append((i, z_mid_m))
                 else:
                     # Section 5: reaching the floor is a failure to *report*, not a result to
                     # accept. It is reported rather than raised because promoting it to a
                     # refusal is a separate decision nobody has made.
                     at_floor += 1
-                    worst_at_floor = max(worst_at_floor, gap)
+                    worst_at_floor_m = max(worst_at_floor_m, gap_m)
         if at_floor:
             note('    %d interval(s) at the %.3f mm subdivision floor could not be split; '
                  'worst wall error measured across them %.4f mm against %.3f'
-                 % (at_floor, 2 * MIN_INTERVAL, worst_at_floor, tau))
+                 % (at_floor, si.mm(2 * MIN_INTERVAL_M), si.mm(worst_at_floor_m),
+                    si.mm(tau_m)))
         if not wanted:
-            return rows, surf, worst
+            return rows, surf, worst_m
         note('    refining: %d stations -> %d, worst wall error %.4f mm over %.3f%s'
-             % (len(rows), len(rows) + len(wanted), worst, tau,
+             % (len(rows), len(rows) + len(wanted), si.mm(worst_m), si.mm(tau_m),
                 '' if not unsliceable else
                 '   [%d of %d from a surface that would not section: %s]'
                 % (unsliceable, len(wanted), '; '.join(sorted(set(shapes))))))
         if len(rows) + len(wanted) > budget:
             raise Unconverged(
-                'section 5 wanted more than %d stations between z = %.4f and %.4f. Worst '
+                'section 5 wanted more than %d stations between z = %.4f and %.4f mm. Worst '
                 'measured wall error %.4f mm against %.3f; %d of the %d insertions were not '
                 'from a measured wall at all but from a fitted surface that would not section '
                 'into one closed loop (%s). Subdividing does not fix that second kind, so if '
                 'it dominates here the station count is a symptom and not the problem.'
-                % (budget, rows[0][0], rows[-1][0], worst, tau, unsliceable, len(wanted),
+                % (budget, si.mm(rows[0][0]), si.mm(rows[-1][0]), si.mm(worst_m),
+                   si.mm(tau_m), unsliceable, len(wanted),
                    '; '.join(sorted(set(shapes))) or 'none'), shape=surf)
-        for offset, (i, z_m) in enumerate(wanted):
-            rows.insert(i + 1 + offset, (z_m, fit_at(z_m)))
+        for offset, (i, z_mid_m) in enumerate(wanted):
+            rows.insert(i + 1 + offset, (z_mid_m, fit_at(z_mid_m)))
 
 
-def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHED_PLANE_TOL):
-    """Section 5's second pass (IP-FC-143, OQ-DES-CW21): how much *thinner* than `t` the
+def _finished_wall_gap(solid, z_m, t_m, outer_at, planes, n_check,
+                       plane_tol_m=FINISHED_PLANE_TOL_M):
+    """Section 5's second pass (IP-FC-143, OQ-DES-CW21): how much *thinner* than `t_m` the
     finished, rib-cut wall gets at `z`, measured directly against the cut solid instead of the
     smooth pre-rib surface `_refine` checks above.
 
@@ -2373,20 +2548,22 @@ def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHE
     for this measurement.
 
     Returns `None` when the section is not exactly one closed loop, or when every discretised
-    point falls within `plane_tol` of a construction plane. Both are rare and left unconverted
+    point falls within `plane_tol_m` of a construction plane. Both are rare and left unconverted
     rather than raised: this is an additional safety measurement layered on top of section 5's
     existing one, and a station it cannot evaluate is not evidence the wall there is wrong.
+
+    The gap it returns is in meters.
     """
-    wires = [w for w in _slice_wires(solid, z) if w.isClosed()]
+    wires = [w for w in _slice_wires(solid, z_m) if w.isClosed()]
     if len(wires) != 1:
         return None
-    pts = wires[0].discretize(Number=n_check)
-    inner = [(p.x, p.y) for p in pts
-             if all(abs(p.x * n.x + p.y * n.y) > plane_tol for n in planes)]
+    pts = [(si.m(p.x), si.m(p.y)) for p in wires[0].discretize(Number=n_check)]
+    inner = [(x, y) for x, y in pts
+             if all(abs(x * n.x + y * n.y) > plane_tol_m for n in planes)]
     if not inner:
         return None
-    thinnest = float(np.min(outer_at(z).distances(inner)))
-    return max(0.0, t - thinnest)
+    thinnest_m = float(np.min(outer_at(z_m).distances(inner)))
+    return max(0.0, t_m - thinnest_m)
 
 
 # --------------------------------------------------------------------------------
@@ -2408,9 +2585,12 @@ def _finished_wall_gap(solid, z, t, outer_at, planes, n_check, plane_tol=FINISHE
 _probe = None
 
 
-def _probe_contour(z, pts):
-    """The eroded contour at `z`, as the construction should use it. Identity in every build."""
-    return pts if _probe is None else _probe.contour(z, pts)
+def _probe_contour(z_m, pts):
+    """The eroded contour at `z_m`, as the construction should use it. Identity in every build.
+
+    `z_m` and `pts` are meters, like everything else the construction carries.
+    """
+    return pts if _probe is None else _probe.contour(z_m, pts)
 
 
 def _probe_floor(default):
@@ -2418,7 +2598,7 @@ def _probe_floor(default):
     return default if _probe is None else _probe.station_floor(default)
 
 
-def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=None,
+def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, report=None,
            clearance_check=False, exterior_split=None):
     """The solid the wall encloses, entirely within the symmetry cell: sections 4 and 4.5.
 
@@ -2472,11 +2652,11 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     rib cut removes measurably more material there than the smooth offset predicts, near the
     shallow-angle end of this construction's notch angles. The second pass, after the rib cut
     below, re-measures the finished wall on an independent grid -- a uniform pass everywhere plus
-    extra density around each notch edge (`EDGE_SCAN_MARGIN`/`EDGE_SCAN_STEP`), not merely
+    extra density around each notch edge (`EDGE_SCAN_MARGIN_M`/`EDGE_SCAN_STEP_M`), not merely
     `_refine`'s own row midpoints, which a real build was found to miss the defect at entirely --
     and, where a scanned point exceeds `tau`, inserts the midpoint of the two already-adjacent
     rows that bracket it and re-cuts. Round 0 scans every patch in full; every round after only
-    re-scans a `POST_CUT_RESCAN_MARGIN` window around that round's own insertions, sized from a
+    re-scans a `POST_CUT_RESCAN_MARGIN_M` window around that round's own insertions, sized from a
     direct measurement of how far one such insertion's effect actually reaches (OQ-DES-CW22) --
     bounded by `POST_CUT_ROUNDS`, since evidence gathered before this was written shows the gap
     does not always close quickly, and an unconverged build raises rather than ships a wall this
@@ -2488,7 +2668,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     applying a round's insertions -- 20 → 36 → 62 → 94 stations and 23 → 43 → 77 -- with round 6
     never reached. It does that while making no progress: this pass's own first-round worst gap is
     0.0601 mm at `tau` = 0.05, 0.02 and 0.01 alike, and 77 of its over-tolerance stations at 0.02
-    sit in intervals already at the `2 * MIN_INTERVAL` floor, which cannot be split at any budget.
+    sit in intervals already at the `2 * MIN_INTERVAL_M` floor, which cannot be split at any budget.
     **So inserting stations is not a lever on the tail's residual**, and raising either constant is
     buying more of something measured not to work (`cowl.md` OQ-DES-CW28, alternative 7).
 
@@ -2502,8 +2682,8 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     `_finished_wall_gap` below is a plain minimum with no corner exclusion; the gate's published
     figure is `wall_measure.candidates.corner_excluded_min` at a finer spacing. On that same
     `U` = 0.5 wall they read 0.03763 and 0.01345 mm, a factor of 2.80, essentially all of it corner
-    exclusion rather than sampling. Setting `tau` = `WALL_TOL` therefore does not ask for a
-    `WALL_TOL` wall; which of the two measures should be authoritative is OQ-DES-CW29.
+    exclusion rather than sampling. Setting `tau` = `WALL_TOL_M` therefore does not ask for a
+    `WALL_TOL_M` wall; which of the two measures should be authoritative is OQ-DES-CW29.
 
     **`clearance_check`, opt-in, off by default (OQ-DES-CW24).** Runs `clearance_margin_scan`
     against the converged smooth surface and the individual dilated ribs once the cut above has
@@ -2518,47 +2698,47 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     default because the scan itself costs on the order of an hour on top of an ordinary build.
     """
     planes = cell_boundary_planes(body)
-    lo, hi = z_extent(body)
-    z_lo, z_hi = lo + END_INSET, hi - END_INSET
+    lo_m, hi_m = z_extent(body)
+    z_lo_m, z_hi_m = lo_m + END_INSET_M, hi_m - END_INSET_M
 
     arcs = {}
     outers = {}
     fits = {}
     finished_outers = {}
 
-    def key(z):
-        return round(z / Z_TOL)
+    def key(z_m):
+        return round(z_m / Z_TOL_M)
 
-    def body_arc(z):
+    def body_arc(z_m):
         """`(open arc, plane at its start, plane at its end, flip)`, cached -- every user of a
         station's true exterior goes through this, so the cell's construction edges are
         stripped out, and the arc's orientation fixed, exactly once per station."""
-        k = key(z)
+        k = key(z_m)
         if k not in arcs:
-            wires = _slice_wires(body, z)
+            wires = _slice_wires(body, z_m)
             if len(wires) != 1:
                 raise PreconditionFailed(
-                    'P2: the cell body sections into %d loops at z = %.4f, not one'
-                    % (len(wires), z))
+                    'P2: the cell body sections into %d loops at z = %.4f mm, not one'
+                    % (len(wires), si.mm(z_m)))
             arcs[k] = open_arc(wires[0], planes)
         return arcs[k]
 
     # **One sample count for the whole part, taken from its widest section.** The fit needs a
     # rectangular grid, so every station in a patch must carry the same number of points; taking
     # it from the widest section makes the spacing finest where the contour is longest and never
-    # coarser than `FIT_ARC` anywhere.
-    widest = max(body_arc(z)[0].Length
-                 for z in (z_lo, 0.5 * (z_lo + z_hi), z_hi))
-    n_fit = fit_samples(widest)
-    n_check = check_samples(widest)
+    # coarser than `FIT_ARC_M` anywhere.
+    widest_m = max(si.length_m(body_arc(z_m)[0])
+                   for z_m in (z_lo_m, 0.5 * (z_lo_m + z_hi_m), z_hi_m))
+    n_fit = fit_samples(widest_m)
+    n_check = check_samples(widest_m)
 
     # The station floor this loop applies, and the contour every row is built from, are both read
     # through `_probe_floor` and `_probe_contour`. Both are the identity in every build. What a
     # measurement may do with them, and why the floor override is not a way to force a station in,
     # is `wall_measure.probe`.
 
-    def fit_at(z):
-        """The eroded cell arc at `z`, at fit resolution: one row of the grid.
+    def fit_at(z_m):
+        """The eroded cell arc at `z_m`, at fit resolution: one row of the grid.
 
         **The measurement seam is applied here, and here is the only place it works
         (OQ-DES-CW34).** An earlier version of the hook transformed the rows `_refine` returned,
@@ -2572,28 +2752,29 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         construction ever builds carry the perturbation, which is what "a different candidate
         interior surface" means.
         """
-        k = key(z)
+        k = key(z_m)
         if k not in fits:
-            arc, p_start, p_end, flip = body_arc(z)
-            pts = _resample_open(eroded_arc(arc, t, z, p_start, p_end, flip), n_fit)
-            fits[k] = _probe_contour(z, pts)
+            arc, p_start, p_end, flip = body_arc(z_m)
+            pts = _resample_open(eroded_arc(arc, t_m, z_m, p_start, p_end, flip), n_fit)
+            fits[k] = _probe_contour(z_m, pts)
         return fits[k]
 
-    def outer_at(z):
-        """The exterior at `z` as a dense polyline: what the wall is measured out to.
+    def outer_at(z_m):
+        """The exterior at `z_m` as a dense polyline: what the wall is measured out to.
 
         **`body`'s exterior, correct only before any buttress cut.** Section 5's first pass
         uses this -- the smooth surface must offset the un-notched OML, since no cut exists yet
         when it is fitted. `finished_outer_at` below is the post-cut equivalent, and the two
         must never be swapped."""
-        k = key(z)
+        k = key(z_m)
         if k not in outers:
-            arc, _p0, _p1, flip = body_arc(z)
+            arc, _p0, _p1, flip = body_arc(z_m)
             outers[k] = open_contour(arc, n_check, flip)[1]
         return outers[k]
 
-    def finished_outer_at(z):
-        """The *finished* exterior at `z`, from `notched`, not `body`: section 5's second pass.
+    def finished_outer_at(z_m):
+        """The *finished* exterior at `z_m`, from `notched`, not `body`: section 5's second
+        pass.
 
         **Sliced directly, never by cutting `notched` against this function's own cavity.**
         Wherever a buttress tool has already removed exterior material, `body`'s exterior and
@@ -2619,7 +2800,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         could never be nearest to a surviving point -- wrong, measured the same day: the tail's
         one construction plane is the cell's flat diameter side, so the excluded strip spans the
         section's full width (x = -50 to +50 at this build's scale), and the closing chord across
-        it is a near-straight line at `y` just above `FINISHED_PLANE_TOL` from one side to the
+        it is a near-straight line at `y` just above `FINISHED_PLANE_TOL_M` from one side to the
         other -- which sits *close to*, not far from, a legitimate kept point anywhere along that
         same flat side. Measured directly: this gave `_finished_wall_gap` a 'thinnest' of
         0.006-0.09 mm (a 0.59-0.55 mm 'gap') at *every* station near the cell's open end on a
@@ -2646,75 +2827,81 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         cell plane crosses the loop's boundary along one contiguous run; the nose's two planes
         have never been exercised through this path, and a second run there would need
         stitching into the comparison rather than being silently dropped."""
-        k = key(z)
+        k = key(z_m)
         if k not in finished_outers:
-            wires = [w for w in _slice_wires(notched, z) if w.isClosed()]
+            wires = [w for w in _slice_wires(notched, z_m) if w.isClosed()]
             if not wires:
                 raise PreconditionFailed(
-                    'P2: the buttress-cut cell has no closed section at z = %.4f' % z)
-            wire = wires[0] if len(wires) == 1 else max(wires, key=lambda w: abs(_wire_area(w)))
-            pts = wire.discretize(Number=n_check)
+                    'P2: the buttress-cut cell has no closed section at z = %.4f mm'
+                    % si.mm(z_m))
+            wire = (wires[0] if len(wires) == 1
+                    else max(wires, key=lambda w: abs(_wire_area_m2(w))))
+            # The section crosses into SI here, once, and every test below is meters.
+            pts = [(si.m(p.x), si.m(p.y)) for p in wire.discretize(Number=n_check)]
 
-            def excluded(p):
-                return not all(abs(p.x * n.x + p.y * n.y) > FINISHED_PLANE_TOL for n in planes)
+            def excluded(point):
+                x, y = point
+                return not all(abs(x * n.x + y * n.y) > FINISHED_PLANE_TOL_M for n in planes)
 
             exc_idx = [i for i, p in enumerate(pts) if excluded(p)]
             if not exc_idx:
                 raise PreconditionFailed(
                     'P2: no construction-plane crossing found in the buttress-cut cell\'s '
-                    'section at z = %.4f' % z)
+                    'section at z = %.4f mm' % si.mm(z_m))
             rotated = pts[exc_idx[0]:] + pts[:exc_idx[0]]
             kept, runs = [], 0
             prev_excluded = True
-            for p in rotated:
-                exc = excluded(p)
+            for point in rotated:
+                exc = excluded(point)
                 if not exc:
-                    kept.append((p.x, p.y))
+                    kept.append(point)
                     if prev_excluded:
                         runs += 1
                 prev_excluded = exc
             if not kept:
                 raise PreconditionFailed(
                     'P2: every discretised point of the buttress-cut cell\'s section at '
-                    'z = %.4f falls within %.2f mm of a construction plane' % (z, FINISHED_PLANE_TOL))
+                    'z = %.4f mm falls within %.2f mm of a construction plane'
+                    % (si.mm(z_m), si.mm(FINISHED_PLANE_TOL_M)))
             if runs > 1:
                 raise PreconditionFailed(
-                    'P2: the buttress-cut cell\'s section at z = %.4f crosses a construction '
-                    'plane in %d separate places, not one -- only a single contiguous exterior '
-                    'run is handled here' % (z, runs))
+                    'P2: the buttress-cut cell\'s section at z = %.4f mm crosses a '
+                    'construction plane in %d separate places, not one -- only a single '
+                    'contiguous exterior run is handled here' % (si.mm(z_m), runs))
             finished_outers[k] = _Polyline(kept, closed=False)
         return finished_outers[k]
 
-    note('interior: z %.3f .. %.3f, %d fit points (%.3f mm apart), %d check points '
+    note('interior: z %.3f .. %.3f mm, %d fit points (%.3f mm apart), %d check points '
          '(%.3f mm apart), %d cell plane(s)'
-         % (z_lo, z_hi, n_fit, widest / n_fit, n_check, widest / n_check, len(planes)))
+         % (si.mm(z_lo_m), si.mm(z_hi_m), n_fit, si.mm(widest_m / n_fit), n_check,
+            si.mm(widest_m / n_check), len(planes)))
     if report is not None:
         # **The circumferential sampling as numbers, not only in the log line above (IP-WTM-26).**
         # IP-WTM-36 showed the *axial* seed is a fixed count and that raising it hits a floor near
         # 0.0071 mm on a nose at `U` = 4. Whether that floor is the **circumferential** fit
         # resolution is the next question, and it cannot be asked from a log string: at `U` = 4 the
         # nose fits at 1.002 mm around the section against a 0.6 mm wall, so the control rows are
-        # further apart than the wall is thick. Section 6.8.3 excluded `FIT_ARC` as a cause of the
+        # further apart than the wall is thick. Section 6.8.3 excluded `FIT_ARC_M` as a cause of the
         # `U` *trend*, correctly, because it saturates once its count floor stops binding -- but a
         # quantity that saturates is the right shape for a floor, which is a different claim.
-        report.update(fit_points=n_fit, fit_spacing_mm=widest / n_fit,
-                      check_points=n_check, check_spacing_mm=widest / n_check,
-                      widest_section_mm=widest)
+        report.update(fit_points=n_fit, fit_spacing_m=widest_m / n_fit,
+                      check_points=n_check, check_spacing_m=widest_m / n_check,
+                      widest_section_m=widest_m)
 
     # **The body's own creases, not the notches'.** The surface follows the un-notched blank
     # now, so a rib start is not a boundary for it -- the rib is subtracted afterwards and
     # brings its own edges. Splitting at every rib end is what made the tail 60 patches.
-    features = feature_stations(body, z_lo, z_hi)
-    patches = _patches(z_lo, z_hi, features)
+    features_m = feature_stations(body, z_lo_m, z_hi_m)
+    patches = _patches(z_lo_m, z_hi_m, features_m)
 
     # **The notches' own edges, this time -- for section 5's second-pass scan, not for
     # patching.** The same function, called against the actual tools instead of `body`, reads
     # off exactly where a rib's own ramp starts, ends, or meets the cut plane: the axial
-    # positions `EDGE_SCAN_MARGIN`/`EDGE_SCAN_STEP` sample finely around, below.
-    notch_edges = feature_stations(notches, z_lo, z_hi)
+    # positions `EDGE_SCAN_MARGIN_M`/`EDGE_SCAN_STEP_M` sample finely around, below.
+    notch_edges_m = feature_stations(notches, z_lo_m, z_hi_m)
     if not patches:
         raise PreconditionFailed('the part is shorter than the %.2f mm interval floor'
-                                 % MIN_INTERVAL)
+                                 % si.mm(MIN_INTERVAL_M))
 
     # **One closed solid per patch, fused, rather than one sewn shell.** Interpolation makes
     # adjacent patches pass exactly through the station they share, so their edges now coincide
@@ -2734,22 +2921,22 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         extra = []
         # **The two open ends are extended past the part, not stopped at it.** A station may
         # not sit exactly on a planar end -- sectioning there returns the end face's boundary
-        # rather than the body's -- so the cavity stops `END_INSET` short at each end, and a
+        # rather than the body's -- so the cavity stops `END_INSET_M` short at each end, and a
         # cavity that stops short leaves a film of solid material closing the very opening the
         # cowl is open at. It renders, it is valid, and it is a cowl with its ends skinned
         # over. Extending the end caps outward removes it, and the extension falls outside the
         # blank so it cuts nothing else.
         if is_lo_end:
-            extra.append(lids[0].extrude(App.Vector(0, 0, -END_OVERRUN)))
+            extra.append(lids[0].extrude(si.vec_m(0.0, 0.0, -END_OVERRUN_M)))
         if is_hi_end:
-            extra.append(lids[1].extrude(App.Vector(0, 0, END_OVERRUN)))
+            extra.append(lids[1].extrude(si.vec_m(0.0, 0.0, END_OVERRUN_M)))
         return main, extra
 
     patch_entries = []
     started = time.time()
-    for index, (p_lo, p_hi) in enumerate(patches):
+    for index, (p_lo_m, p_hi_m) in enumerate(patches):
         at = time.time()
-        zs = _seed(p_lo, p_hi, p_lo <= z_lo, p_hi >= z_hi)
+        zs_m = _seed(p_lo_m, p_hi_m, p_lo_m <= z_lo_m, p_hi_m >= z_hi_m)
         # **Front-loaded with the notch topology's own edges (OQ-DES-CW22).** Section 5's second
         # pass used to discover every station it needed one bisection at a time, which is what
         # made real convergence expensive (IP-FC-143): up to six rounds, each re-scanning the
@@ -2760,68 +2947,71 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # around them from the start -- this is not the "insert an arbitrary station into an
         # already-converged fit" case measured catastrophic before this pass was written; it is a
         # richer starting seed for a convergence that has not run yet.
-        zs = sorted(set(zs) | {e for e in notch_edges if p_lo < e < p_hi})
+        zs_m = sorted(set(zs_m)
+                      | {e for e in notch_edges_m if p_lo_m < e < p_hi_m})
         # **The union is where a near-duplicate pair gets in** (IP-FC-144, OQ-DES-CW24
         # alternative 2). The seed stations and the notch edges are filtered against
         # themselves but never against each other, so two individually legitimate stations
         # can land arbitrarily close. Measured: this costs no accuracy -- same worst wall
         # error, 0.0496 mm, at 30 rows instead of 36 and 416.9 s instead of 539.8 s.
-        default_floor = station_floor(t)
-        floor = _probe_floor(default_floor)
-        kept = _thin_stations(zs, floor)
-        if len(kept) != len(zs):
+        default_floor_m = station_floor(t_m)
+        floor_m = _probe_floor(default_floor_m)
+        kept = _thin_stations(zs_m, floor_m)
+        if len(kept) != len(zs_m):
             note('    patch %d: %d stations -> %d on the %.3f mm floor'
-                 % (index, len(zs), len(kept), floor))
-        if floor != default_floor:
+                 % (index, len(zs_m), len(kept), si.mm(floor_m)))
+        if floor_m != default_floor_m:
             # Printed whenever a measurement is in force, dropped stations or not, so a log can
             # never be read as a production build's station set when it is not one.
-            note('    patch %d: %d stations, floor overridden to %.3f mm from %.3f (measurement)'
-                 % (index, len(zs), floor, default_floor))
-        zs = kept
+            note('    patch %d: %d stations, floor overridden to %.3f mm from %.3f '
+                 '(measurement)'
+                 % (index, len(zs_m), si.mm(floor_m), si.mm(default_floor_m)))
+        zs_m = kept
 
         # P1 over the patch, on the un-notched cell body, before anything is fitted. The two
         # contours being compared must be in the same order -- point i means the same place on
         # the section at both z -- which is exactly what `flip` guarantees across stations.
         prev = None
-        for z in zs:
-            arc, _p0, _p1, flip = body_arc(z)
+        for z_m in zs_m:
+            arc, _p0, _p1, flip = body_arc(z_m)
             here, _d = open_contour(arc, n_check, flip)
             if prev is not None:
-                _check_slope(prev[1], here, prev[0], z, overhang_deg)
-            prev = (z, here)
+                _check_slope(prev[1], here, prev[0], z_m, overhang_rad)
+            prev = (z_m, here)
 
-        rows, surf, worst = _refine(fit_at, outer_at, zs, t, tau, budget, n_check)
+        rows, surf, worst = _refine(fit_at, outer_at, zs_m, t_m, tau_m, budget, n_check)
         # Section 4.5: both cowls are open axially -- the tail at both ends, the nose body where
         # it is cut to the closure parts -- so a patch is closed by the two contours it already
         # has and there is no turnover to handle. The caps come from the fitted surface's own iso
         # curves rather than from the sample polygon, so the cap edge *is* the surface edge and
         # the piece closes without a tolerance argument. `_side_caps` closes the *other* pair of
         # free edges, along the cell's construction plane(s), which `_lid` does not reach.
-        is_lo_end, is_hi_end = p_lo <= z_lo, p_hi >= z_hi
+        is_lo_end, is_hi_end = p_lo_m <= z_lo_m, p_hi_m >= z_hi_m
         main, extra = assemble_patch(surf, rows, is_lo_end, is_hi_end)
-        patch_entries.append({'p_lo': p_lo, 'p_hi': p_hi, 'is_lo_end': is_lo_end,
-                              'is_hi_end': is_hi_end, 'rows': rows, 'main': main,
-                              'extra': extra})
+        patch_entries.append({'p_lo_m': p_lo_m, 'p_hi_m': p_hi_m,
+                              'is_lo_end': is_lo_end, 'is_hi_end': is_hi_end,
+                              'rows': rows, 'main': main, 'extra': extra})
         if report is not None:
             # **Pass 1's own worst, per patch, which only the log carried before (IP-WTM-36).**
             # It is the figure that shows this pass stopping *coarser* at larger `U` -- 0.0129 mm
-            # on a nose at `U` = 1 against 0.0308 at `U` = 4, both inside `TAU` = 0.05 and so both
+            # on a nose at `U` = 1 against 0.0308 at `U` = 4, both inside `TAU_M` = 0.05 and so both
             # accepted -- because `_seed` takes a fixed `SEED_MAX` stations for any patch over
-            # `SEED_LONG_MM` and bisection stops at the first subdivision that passes. A figure
+            # `SEED_LONG_M` and bisection stops at the first subdivision that passes. A figure
             # that explains a `U` trend should not be reachable only by parsing a log line.
             report.setdefault('smooth_patches', []).append(
-                {'p_lo': float(p_lo), 'p_hi': float(p_hi), 'seeded': len(zs),
-                 'stations': len(rows), 'worst': float(worst)})
+                {'p_lo_m': float(p_lo_m), 'p_hi_m': float(p_hi_m), 'seeded': len(zs_m),
+                 'stations': len(rows), 'worst_m': float(worst)})
 
-        note('patch %d/%d  z %9.4f .. %9.4f (%6.3f mm)  %2d seeded -> %2d stations  '
+        note('patch %d/%d  z %9.4f .. %9.4f mm (%6.3f mm)  %2d seeded -> %2d stations  '
              'worst wall %.4f  %5.1f s  [%.0f s total]'
-             % (index + 1, len(patches), p_lo, p_hi, p_hi - p_lo, len(zs), len(rows),
-                worst, time.time() - at, time.time() - started))
+             % (index + 1, len(patches), si.mm(p_lo_m), si.mm(p_hi_m),
+                si.mm(p_hi_m - p_lo_m), len(zs_m), len(rows),
+                si.mm(worst), time.time() - at, time.time() - started))
         # **The positions, in the log and not only in the report.** Two builds that both settle
         # on the same number of stations have not necessarily settled on the same stations, and
         # a build that lands elsewhere produces a different surface, different end caps and a
         # different wall while the progress line above reads identically.
-        note('    at %s' % ' '.join('%.4f' % z for z, _pts in rows))
+        note('    at %s mm' % ' '.join('%.4f' % si.mm(z_m) for z_m, _pts in rows))
 
     def fuse_smooth(entries):
         pieces = []
@@ -2835,7 +3025,8 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             fused = fused.fuse(piece)
         fused = fused.removeSplitter()
         note('smooth interior: %d solids, valid=%s, %.4f mm3, %.0f s to fuse'
-             % (len(fused.Solids), fused.isValid(), fused.Volume, time.time() - at))
+             % (len(fused.Solids), fused.isValid(),
+                si.volume_m3(fused) * si.MM3_PER_M3, time.time() - at))
         return fused
 
     smooth = fuse_smooth(patch_entries)
@@ -2873,7 +3064,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # smooth surface it cuts does -- so re-dilating and re-fusing it on every round would repeat
     # the single most expensive step in the whole build (IP-FC-116: ~72 s dilating, ~260 s
     # fusing at `U` = 1, both growing with `U`) for no reason.
-    ribs = dilated_notches(notches, t, report)
+    ribs = dilated_notches(notches, t_m, report)
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
 
     def cut_and_check(smooth_shape):
@@ -2883,22 +3074,26 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         at = time.time()
         cut = smooth_shape.cut((tool,), si.RIB_CUT_FUZZ_MM).removeSplitter()
         left = cut.common((tool,), si.RIB_CUT_FUZZ_MM)
-        if left.Volume > RIB_RESIDUE:
-            note('    %.4f mm3 of rib survived the cut; taking it out again' % left.Volume)
+        if si.volume_m3(left) > RIB_RESIDUE_M3:
+            note('    %.4f mm3 of rib survived the cut; taking it out again'
+                 % (si.volume_m3(left) * si.MM3_PER_M3))
             cut = cut.cut((left,), si.RIB_CUT_FUZZ_MM).removeSplitter()
             left = cut.common((tool,), si.RIB_CUT_FUZZ_MM)
-        if left.Volume > RIB_RESIDUE:
+        if si.volume_m3(left) > RIB_RESIDUE_M3:
             raise Unconverged(
                 '%.4f mm3 of dilated rib is still inside the cavity after the cut and one '
                 'retry, in %d piece(s). The cavity is therefore larger than the erosion allows '
                 'and the wall will be thin or missing wherever that rib should have been -- '
                 'and since the ribs are what bridge the buttress slots, the wall comes out in '
                 'pieces. Nothing downstream catches this: the cavity is a valid closed solid '
-                'either way.' % (left.Volume, len(left.Solids)), shape=cut)
+                'either way.' % (si.volume_m3(left) * si.MM3_PER_M3,
+                                 len(left.Solids)), shape=cut)
         if len(cut.Solids) != 1:
             if report is not None:
-                report.update(disconnected_pieces=[(s.Volume, s.BoundBox) for s in cut.Solids],
-                              rib_tool=tool)
+                report.update(
+                    disconnected_pieces=[(si.volume_m3(s), si.bbox_m(s))
+                                         for s in cut.Solids],
+                    rib_tool=tool)
             raise Unconverged(
                 '%d disconnected solids where the cavity should be one. There is no zero rib '
                 'residue reading that makes this acceptable: a rib is what bridges a buttress '
@@ -2909,10 +3104,11 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 'not a volume one, and a disconnected result is refused at any `U`, never '
                 'accepted as one more shape mirroring has to handle.' % len(cut.Solids),
                 shape=cut)
-        note('ribs cut in %.0f s, %.6f mm3 left inside' % (time.time() - at, left.Volume))
-        return cut, left.Volume
+        note('ribs cut in %.0f s, %.6f mm3 left inside'
+             % (time.time() - at, si.volume_m3(left) * si.MM3_PER_M3))
+        return cut, si.volume_m3(left)
 
-    solid, rib_residue = cut_and_check(smooth)
+    solid, rib_residue_m3 = cut_and_check(smooth)
 
     # **Section 5's second pass: the finished, rib-cut wall, not only the smooth surface above.**
     # Everything up to here converges the smooth interior against the true erosion (section 4.2)
@@ -2960,26 +3156,26 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # replace the uniform pass's own coverage of everywhere else.
     round0_scan_by_patch = {}
     for ei, entry in enumerate(patch_entries):
-        z0, z1 = entry['rows'][0][0], entry['rows'][-1][0]
+        z0_m, z1_m = entry['rows'][0][0], entry['rows'][-1][0]
         # **1 mm apart, not tied to the row count.** A 76-point scan (4x this patch's own 19
         # rows) missed the defect at `z` = -217.7270 by 2 mm and read 0.0430 mm there against
         # the acceptance check's own 0.0531 mm at the exact station -- close enough that the
         # cause was under-sampling a real, fairly sharp local peak, not a difference in what
         # is being measured.
-        n_scan = max(min(int((z1 - z0) / 1.0), 500), 40)
-        zs = [z0 + (z1 - z0) * k / float(n_scan - 1) for k in range(n_scan)]
+        n_scan = min(_steps(z1_m - z0_m, POST_CUT_SCAN_STEP_M, 40), 500)
+        zs_m = [z0_m + (z1_m - z0_m) * k / float(n_scan - 1) for k in range(n_scan)]
         n_edge = 0
-        for edge in notch_edges:
-            if not (z0 < edge < z1):
+        for edge_m in notch_edges_m:
+            if not (z0_m < edge_m < z1_m):
                 continue
-            lo_m = max(z0, edge - EDGE_SCAN_MARGIN)
-            hi_m = min(z1, edge + EDGE_SCAN_MARGIN)
-            steps = max(int((hi_m - lo_m) / EDGE_SCAN_STEP), 2)
-            zs.extend(lo_m + (hi_m - lo_m) * m / float(steps) for m in range(steps + 1))
+            lo_m = max(z0_m, edge_m - EDGE_SCAN_MARGIN_M)
+            hi_m = min(z1_m, edge_m + EDGE_SCAN_MARGIN_M)
+            steps = _steps(hi_m - lo_m, EDGE_SCAN_STEP_M, 2)
+            zs_m.extend(lo_m + (hi_m - lo_m) * m / float(steps) for m in range(steps + 1))
             n_edge += steps + 1
-        round0_scan_by_patch[ei] = sorted(set(zs))
+        round0_scan_by_patch[ei] = sorted(set(zs_m))
         note('    patch %d/%d scan: %d uniform + %d edge-focused (%d notch edge(s)) -> %d points'
-             % (ei + 1, len(patch_entries), n_scan, n_edge, len(notch_edges),
+             % (ei + 1, len(patch_entries), n_scan, n_edge, len(notch_edges_m),
                 len(round0_scan_by_patch[ei])))
 
     # **Round 0 scans every patch in full; round 1 onward only re-scans a window around that
@@ -2987,40 +3183,41 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # scanned at all that round -- correct, not just cheap, because patches are independent: a
     # change to one patch's fit and cut cannot move another patch's cavity boundary (each
     # contributes its own closed solid to the fuse, which cannot alter geometry outside the piece
-    # that changed), and within the *same* patch, `POST_CUT_RESCAN_MARGIN` is itself the measured
+    # that changed), and within the *same* patch, `POST_CUT_RESCAN_MARGIN_M` is itself the measured
     # distance beyond which one insertion's own effect is indistinguishable from noise.
     current_scan = round0_scan_by_patch
-    worst_finished = 0.0
-    worst_finished_z = None
+    worst_finished_m = 0.0
+    worst_finished_z_m = None
     for round_ in range(POST_CUT_ROUNDS + 1):
-        insertions = {}                                   # (ei, i) -> worst gap seen in that interval
-        worst_finished = 0.0
-        worst_finished_z = None
+        insertions = {}                            # (ei, i) -> worst gap seen in that interval
+        worst_finished_m = 0.0
+        worst_finished_z_m = None
         for ei, entry in enumerate(patch_entries):
             rows = entry['rows']
             i = 0
-            for z in current_scan.get(ei, ()):
-                while i < len(rows) - 2 and rows[i + 1][0] <= z:
+            for z_m in current_scan.get(ei, ()):
+                while i < len(rows) - 2 and rows[i + 1][0] <= z_m:
                     i += 1
-                z_a, z_b = rows[i][0], rows[i + 1][0]
+                z_a_m, z_b_m = rows[i][0], rows[i + 1][0]
                 # **Measure first, decide about splitting second** (IP-FC-144, OQ-DES-CW24).
                 # This guard used to skip before `_finished_wall_gap` was ever called, so the
                 # *finished* wall was never measured across a short interval and
                 # `worst_finished` could not include it -- the same blind spot `_refine` had,
                 # one pass later and on the real cut rather than the smooth surface.
-                divisible = (z_b - z_a) > 2 * MIN_INTERVAL
-                gap = _finished_wall_gap(solid, z, t, finished_outer_at, planes, n_check)
-                if gap is None:
+                divisible = (z_b_m - z_a_m) > 2 * MIN_INTERVAL_M
+                gap_m = _finished_wall_gap(solid, z_m, t_m, finished_outer_at, planes,
+                                           n_check)
+                if gap_m is None:
                     continue
-                if gap > worst_finished:
-                    worst_finished = gap
+                if gap_m > worst_finished_m:
+                    worst_finished_m = gap_m
                     # **Where, not only how much.** Measured 2026-10-28: a dose that drives this
                     # pass to 0.5999 mm against t = 0.600 -- the wall closed to 0.0001 mm -- left
                     # no record of the station it happened at, because the `note` below prints
                     # only the magnitude and the per-station note fires only for an interval too
                     # narrow to split. The z is what identifies the mechanism, and recovering it
                     # cost a 1.9 hour rebuild that is now unnecessary.
-                    worst_finished_z = float(z)
+                    worst_finished_z_m = float(z_m)
                 if exterior_split is not None and round_ == 0:
                     # **IP-WTM-26: the same measure, the same section, the two exteriors.**
                     # `_refine` converges the wall out to `outer_at` -- `body`'s un-notched OML,
@@ -3038,14 +3235,16 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                     # Round 0 only, because that is the one round that scans every patch in full;
                     # later rounds see a window around their own insertions and would weight the
                     # record toward whatever was already thin.
-                    oml = _finished_wall_gap(solid, z, t, outer_at, planes, n_check)
-                    exterior_split.append((float(z), float(gap),
-                                           None if oml is None else float(oml)))
-                if gap > tau and not divisible:
-                    note('    patch %d: finished wall %.4f mm over %.3f at z = %.4f, in an '
+                    oml_m = _finished_wall_gap(solid, z_m, t_m, outer_at, planes,
+                                               n_check)
+                    exterior_split.append((float(z_m), float(gap_m),
+                                           None if oml_m is None else float(oml_m)))
+                if gap_m > tau_m and not divisible:
+                    note('    patch %d: finished wall %.4f mm over %.3f at z = %.4f mm, in an '
                          'interval at the %.3f mm subdivision floor; reported, not split'
-                         % (ei, gap, tau, z, 2 * MIN_INTERVAL))
-                if gap > tau and divisible:
+                         % (ei, si.mm(gap_m), si.mm(tau_m), si.mm(z_m),
+                            si.mm(2 * MIN_INTERVAL_M)))
+                if gap_m > tau_m and divisible:
                     # **`slot`, not `key`.** `cavity()` already has a `key(z)` helper in this
                     # same scope (the station-position cache above), and reusing that name for
                     # this tuple silently shadowed it for the rest of the function's execution --
@@ -3054,7 +3253,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                     # branch ever actually ran, since every earlier test of this loop had zero
                     # insertions and never reached this line.
                     slot = (ei, i)
-                    insertions[slot] = max(insertions.get(slot, 0.0), gap)
+                    insertions[slot] = max(insertions.get(slot, 0.0), gap_m)
         if not insertions:
             break
         if round_ == POST_CUT_ROUNDS:
@@ -3064,14 +3263,16 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                 'interval(s). The smooth surface passes its own criterion already -- this is the '
                 'rib cut removing measurably more material than the smooth offset predicts, near '
                 'a shallow-angle notch boundary, and more stations have not closed it.'
-                % (POST_CUT_ROUNDS, worst_finished, tau,
-                   'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z,
+                % (POST_CUT_ROUNDS, si.mm(worst_finished_m), si.mm(tau_m),
+                   'unrecorded' if worst_finished_z_m is None
+                   else '%.4f' % si.mm(worst_finished_z_m),
                    len(insertions)),
-                shape=solid, z=worst_finished_z)
+                shape=solid, z_m=worst_finished_z_m)
         note('    post-cut refine: round %d, worst finished-wall gap %.4f mm over %.3f at '
-             'z = %s, inserting %d station(s)'
-             % (round_ + 1, worst_finished, tau,
-                'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z,
+             'z = %s mm, inserting %d station(s)'
+             % (round_ + 1, si.mm(worst_finished_m), si.mm(tau_m),
+                'unrecorded' if worst_finished_z_m is None
+                else '%.4f' % si.mm(worst_finished_z_m),
                 len(insertions)))
         by_patch = {}
         for (ei, i) in insertions:
@@ -3080,9 +3281,9 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         for ei, indices in sorted(by_patch.items()):
             entry = patch_entries[ei]
             rows = entry['rows']
-            midpoints = [0.5 * (rows[i][0] + rows[i + 1][0]) for i in indices]
-            new_zs = sorted(set([z for z, _pts in rows] + midpoints))
-            if len(new_zs) > budget:
+            midpoints_m = [0.5 * (rows[i][0] + rows[i + 1][0]) for i in indices]
+            new_zs_m = sorted(set([z_m for z_m, _pts in rows] + midpoints_m))
+            if len(new_zs_m) > budget:
                 # The worst gap and where it was is the diagnosis, and this message had neither.
                 # Measured 2026-10-28: a 0.5999 mm gap against t = 0.600 is the wall closed to
                 # 0.0001 mm, which no amount of budget fixes -- a reader needs the magnitude to
@@ -3093,25 +3294,28 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
                     'Worst finished-wall gap %.4f mm against %.3f at z = %s; a gap approaching '
                     't itself is material absent, not a tolerance miss, and more stations will '
                     'not close it.'
-                    % (budget, entry['p_lo'], entry['p_hi'], worst_finished, tau,
-                       'unrecorded' if worst_finished_z is None else '%.4f' % worst_finished_z),
-                    shape=solid, z=worst_finished_z)
-            new_rows = [(z, fit_at(z)) for z in new_zs]
+                    % (budget, si.mm(entry['p_lo_m']), si.mm(entry['p_hi_m']),
+                       si.mm(worst_finished_m), si.mm(tau_m),
+                       'unrecorded' if worst_finished_z_m is None
+                       else '%.4f' % si.mm(worst_finished_z_m)),
+                    shape=solid, z_m=worst_finished_z_m)
+            new_rows = [(z_m, fit_at(z_m)) for z_m in new_zs_m]
             surf2 = _fit(new_rows)
             main2, extra2 = assemble_patch(surf2, new_rows, entry['is_lo_end'],
                                            entry['is_hi_end'])
             patch_entries[ei] = dict(entry, rows=new_rows, main=main2, extra=extra2)
-            z0p, z1p = new_rows[0][0], new_rows[-1][0]
-            window_zs = []
-            for mz in midpoints:
-                lo_w = max(z0p, mz - POST_CUT_RESCAN_MARGIN)
-                hi_w = min(z1p, mz + POST_CUT_RESCAN_MARGIN)
-                steps = max(int((hi_w - lo_w) / 1.0), 10)
-                window_zs.extend(lo_w + (hi_w - lo_w) * m / float(steps) for m in range(steps + 1))
-            next_scan[ei] = sorted(set(window_zs))
+            z0p_m, z1p_m = new_rows[0][0], new_rows[-1][0]
+            window_zs_m = []
+            for mz_m in midpoints_m:
+                lo_w_m = max(z0p_m, mz_m - POST_CUT_RESCAN_MARGIN_M)
+                hi_w_m = min(z1p_m, mz_m + POST_CUT_RESCAN_MARGIN_M)
+                steps = _steps(hi_w_m - lo_w_m, POST_CUT_SCAN_STEP_M, 10)
+                window_zs_m.extend(lo_w_m + (hi_w_m - lo_w_m) * m / float(steps)
+                                   for m in range(steps + 1))
+            next_scan[ei] = sorted(set(window_zs_m))
         current_scan = next_scan
         smooth = fuse_smooth(patch_entries)
-        solid, rib_residue = cut_and_check(smooth)
+        solid, rib_residue_m3 = cut_and_check(smooth)
 
     # **OQ-DES-CW24's clearance-margin scan, opt-in and off by default.** `ribs` (the unfused,
     # per-tool dilation list, computed once above) is exactly what Metric B needs and the fused
@@ -3120,8 +3324,8 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # same candidate surface section 5 itself just finished checking -- so this never measures
     # a surface the rest of `cavity` has already moved past.
     if clearance_check:
-        margin = clearance_margin_scan(smooth, ribs, z_lo, z_hi)
-        thin = [(z, a) for z, a in margin if a < CLEARANCE_MARGIN_MM]
+        margin = clearance_margin_scan(smooth, ribs, z_lo_m, z_hi_m)
+        thin = [(z_m, a_m) for z_m, a_m in margin if a_m < CLEARANCE_MARGIN_M]
         # **IP-FC-148: what each reported minimum is a distance to, if anything.** The scan above
         # takes its minimum over the whole tool section and cannot say either whether the tool is
         # clear of the surface at that station -- if it is not, there is no clearance there to
@@ -3132,22 +3336,23 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # where the final candidate surface and the per-tool dilation list are both already in
         # hand; it costs one extra slice pair per already-reported station, against the scan's
         # own hundreds.
-        faces = clearance_face_scan(smooth, ribs, notches.Solids, body, t,
-                                    [z for z, _a in margin])
+        faces = clearance_face_scan(smooth, ribs, notches.Solids, body, t_m,
+                                    [z_m for z_m, _a in margin])
         for row in faces:
             note('      z %9.4f %-4s %.6f mm -> tool %2d %s %-5s in_blank=%-5s '
                  'bounds_wall=%-5s %-8s inside=%5.1f%%  offset %.4f/%.4f  '
                  'n.gap %+.3f  dot_floor %+.3f'
-                 % (row['z'], 'FLAG' if row['metric_a'] < CLEARANCE_MARGIN_MM else '',
-                    row['metric_a'], row['tool'],
+                 % (si.mm(row['z_m']),
+                    'FLAG' if row['metric_a_m'] < CLEARANCE_MARGIN_M else '',
+                    si.mm(row['metric_a_m']), row['tool'],
                     ('face %-2d' % row['face']) if row['on_face_image']
                     else ('EDGE %d/%s' % (row['face'], row.get('second_face'))),
                     row['role'] if row['on_face_image']
                     else '%s|%s' % (row['role'], row.get('second_role')),
                     row['in_blank'], row['bounds_wall'], row['engagement'],
                     100.0 * (row['fraction_inside'] or 0.0),
-                    row['offset'], row['expected_offset'], row['normal_dot_gap'],
-                    row['dot_floor']))
+                    si.mm(row['offset_m']), si.mm(row['expected_offset_m']),
+                    row['normal_dot_gap'], row['dot_floor']))
         tally, engaged = {}, {}
         for row in faces:
             if not row['on_face_image']:
@@ -3166,14 +3371,16 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
             report.update(clearance_faces=faces)
         if thin:
             note('    clearance margin: %d station(s) under the %.3f mm thin-wall flag '
-                 '(worst %.6f mm at z = %.4f, flag-only)'
-                 % (len(thin), CLEARANCE_MARGIN_MM, thin[0][1], thin[0][0]))
+                 '(worst %.6f mm at z = %.4f mm, flag-only)'
+                 % (len(thin), si.mm(CLEARANCE_MARGIN_M), si.mm(thin[0][1]),
+                    si.mm(thin[0][0])))
         else:
             note('    clearance margin: no station under the %.3f mm thin-wall flag '
-                 '(worst found %.6f mm)' % (CLEARANCE_MARGIN_MM, margin[0][1] if margin else
-                                            float('nan')))
+                 '(worst found %.6f mm)'
+                 % (si.mm(CLEARANCE_MARGIN_M),
+                    si.mm(margin[0][1]) if margin else float('nan')))
         if report is not None:
-            report.update(clearance_margin=margin, thin_wall_flags=thin)
+            report.update(clearance_margin_m=margin, thin_wall_flags_m=thin)
 
     if report is not None:
         # **The shape as well as its measure, and deliberately.** IP-FC-115 compares two ways of
@@ -3189,10 +3396,11 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # still holds: everything put in here is either already computed for the `note` below
         # or a length, so a report costs a build nothing measurable, and it must stay that
         # way. The shapes handed out are references, dropped when the caller's dict goes.
-        report.update(smooth_volume=smooth.Volume, smooth_faces=len(smooth.Faces),
-                      smooth_shape=smooth)
+        report.update(smooth_volume_m3=si.volume_m3(smooth),
+                      smooth_faces=len(smooth.Faces), smooth_shape=smooth)
     if report is not None:
-        report.update(rib_residue=rib_residue, cavity_volume=solid.Volume,
+        report.update(rib_residue_m3=rib_residue_m3,
+                      cavity_volume_m3=si.volume_m3(solid),
                       cavity_faces=len(solid.Faces), rib_tool=tool)
 
     # **`worst_wall` now reports the finished-wall criterion, not the smooth-surface one.**
@@ -3201,11 +3409,12 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
     # (and worth a future soak comparing against) is the one actually gating convergence here:
     # `worst_finished` from the last, passing round of the loop above.
     stations = sum(len(entry['rows']) for entry in patch_entries)
-    chosen = [z for entry in patch_entries for z, _pts in entry['rows']]
-    worst_wall = worst_finished
+    chosen = [z_m for entry in patch_entries for z_m, _pts in entry['rows']]
+    worst_wall_m = worst_finished_m
     note('cavity closed: %d solids, valid=%s, %.4f mm3, worst finished wall error %.4f mm, '
-         '%.0f s in all' % (len(solid.Solids), solid.isValid(), solid.Volume, worst_wall,
-                            time.time() - started))
+         '%.0f s in all'
+         % (len(solid.Solids), solid.isValid(), si.volume_m3(solid) * si.MM3_PER_M3,
+            si.mm(worst_wall_m), time.time() - started))
     if report is not None:
         # **`station_positions`, not `stations`.** The count already has that name below, and an
         # earlier version of this function set `stations` to this same list first and then
@@ -3214,9 +3423,10 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         # it. Given a distinct name here instead of fixed in place, since the count is what every
         # existing caller and report field actually means by `stations`.
         report.update(station_positions=chosen)
-        report.update(patches=len(patches), stations=stations, features=len(features),
-                      solids=len(solid.Solids), valid=solid.isValid(),
-                      worst_wall=worst_wall, fit_points=n_fit, check_points=n_check)
+        report.update(patches=len(patches), stations=stations,
+                      features=len(features_m), solids=len(solid.Solids),
+                      valid=solid.isValid(), worst_wall_m=worst_wall_m,
+                      fit_points=n_fit, check_points=n_check)
     return solid
 
 
@@ -3268,7 +3478,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 PARTITION_TOL = 2.0e-3
 
 
-def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
+def _extend_across_cell(solid, normal, depth_m=2.0e-3, tol_m=CELL_ORIGIN_TOL_M):
     """`solid`, continued a short distance past its own exact flat cap(s) at the cell boundary
     plane(s) through the origin.
 
@@ -3309,7 +3519,10 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
             continue
         axis = f.Surface.Axis
         axis.normalize()
-        if abs(abs(axis.dot(n)) - 1.0) < tol and abs(f.Surface.Position.dot(n)) < tol:
+        # A unit axis dotted with a unit normal is dimensionless; a position dotted with
+        # one is a distance. Two tests, two tolerances, as `cell_boundary_planes` separates
+        # them for the same reason.
+        if _parallel_to(axis, n) and abs(si.m(f.Surface.Position.dot(n))) < tol_m:
             caps.append(f)
         else:
             keep.append(f)
@@ -3332,12 +3545,13 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
             merged = merged.fuse(f)
         caps = merged.removeSplitter().Faces
     extra = []
+    depth_mm = si.mm(depth_m)
     for f in caps:
         far = f.copy()
-        far.translate(n * -depth)
+        far.translate(n * -depth_mm)
         extra.append(far)
         for w in f.Wires:
-            extra.append(w.extrude(n * -depth))
+            extra.append(w.extrude(n * -depth_mm))
     sewn = Part.makeCompound(keep + extra)
     sewn.sewShape()
     shells = [s for s in sewn.Shells if s.isClosed()]
@@ -3359,7 +3573,7 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
     return solid
 
 
-def _strip_seam(solid, normal, tol=1.0e-6):
+def _strip_seam(solid, normal, tol_m=CELL_ORIGIN_TOL_M):
     """`solid`'s own faces, minus every exact flat cap lying in the mirror plane through the
     origin -- the open shell a mirror should be sewn onto rather than fused against
     (`mirror_across_cell`).
@@ -3389,7 +3603,8 @@ def _strip_seam(solid, normal, tol=1.0e-6):
             continue
         axis = f.Surface.Axis
         axis.normalize()
-        if abs(abs(axis.dot(normal)) - 1.0) < tol and abs(f.Surface.Position.dot(normal)) < tol:
+        if _parallel_to(axis, normal) \
+                and abs(si.m(f.Surface.Position.dot(normal))) < tol_m:
             removed += 1
         else:
             keep.append(f)
@@ -3465,8 +3680,8 @@ def mirror_across_cell(cell_result, normal):
     return solid
 
 
-def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, report=None,
-                 clearance_check=False, exterior_split=None, stages=None):
+def shell_solid(notched, body, notches, t_m, overhang_rad, mirrors, tau_m=TAU_M,
+                 report=None, clearance_check=False, exterior_split=None, stages=None):
     """The wall: `notched` with its cavity removed, mirrored out to the whole part.
 
     Bounded by the exterior, the interior, and an annulus at each open end -- which is what
@@ -3499,7 +3714,7 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     is between two NURBS solids `t` apart, which is the hardest thing asked of the kernel here,
     and it is not reliable: the same code has produced a correct 23745.581 mm3 tail wall from
     one converged surface and a 21995 mm3 one in five pieces from another, both surfaces
-    measured inside `TAU` at every station and between them. Checking it at cell size, before
+    measured inside `TAU_M` at every station and between them. Checking it at cell size, before
     mirroring, is strictly better than checking the old full-part cut ever was: a defect here is
     caught while `wall`/`kept` are still half or an octant, cheaper to compute and with nothing
     from the mirror step yet able to hide or compound it.
@@ -3525,8 +3740,9 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
     # Nothing about measurement is passed down: the seam is a module-level one that `cavity` reads
     # for itself, so this function neither forwards nor mentions it (OQ-DES-CW34, revised
     # 2026-10-28). What a measurement installs, and how, is `wall_measure.probe`.
-    inside = cavity(body, notched, notches, t, overhang_deg, tau=tau, report=report,
-                     clearance_check=clearance_check, exterior_split=exterior_split)
+    inside = cavity(body, notched, notches, t_m, overhang_rad, tau_m=tau_m,
+                     report=report, clearance_check=clearance_check,
+                     exterior_split=exterior_split)
     # **`stages`, opt-in, off by default (IP-WTM-38).** IP-WTM-37 established that the rib cut
     # inside `cavity` only trims -- identical control nets -- so no boundary-value error can enter
     # there. The three booleans *after* it were never covered, and they cannot be checked from a
@@ -3550,12 +3766,15 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
             'legitimate: refused here rather than mirrored piece by piece into a part that is '
             'missing a piece.' % len(wall.Solids), shape=wall)
     kept = notched.common(inside)
-    total = wall.Volume + kept.Volume
-    slip = abs(total - notched.Volume) / notched.Volume
+    wall_m3, kept_m3 = si.volume_m3(wall), si.volume_m3(kept)
+    notched_m3 = si.volume_m3(notched)
+    total_m3 = wall_m3 + kept_m3
+    slip = abs(total_m3 - notched_m3) / notched_m3
     if report is not None:
-        report.update(cell_wall_volume=wall.Volume, partition_slip=slip)
+        report.update(cell_wall_volume_m3=wall_m3, partition_slip=slip)
     note('cell wall: %.4f mm3 in %d solid(s); the cut and the common account for %.6f%% of the '
-         'cell\'s own buttress-cut body' % (wall.Volume, len(wall.Solids), 100.0 * (1.0 - slip)))
+         'cell\'s own buttress-cut body'
+         % (wall_m3 * si.MM3_PER_M3, len(wall.Solids), 100.0 * (1.0 - slip)))
     if slip > PARTITION_TOL:
         raise Unconverged(
             'the cell wall and the material it was cut from do not add up to the cell\'s own '
@@ -3563,15 +3782,18 @@ def shell_solid(notched, body, notches, t, overhang_deg, mirrors, tau=TAU, repor
             'Cutting a solid in two partitions it, so this boolean lost material, and the wall '
             'it returned is not the cell. Section 6 would not catch it -- a wall that is mostly '
             'missing still measures %.3f mm thick wherever it survives.'
-            % (wall.Volume, kept.Volume, total, notched.Volume,
-               abs(total - notched.Volume), 100.0 * slip, t), shape=wall)
+            % (wall_m3 * si.MM3_PER_M3, kept_m3 * si.MM3_PER_M3,
+               total_m3 * si.MM3_PER_M3, notched_m3 * si.MM3_PER_M3,
+               abs(total_m3 - notched_m3) * si.MM3_PER_M3, slip * 100.0,
+               si.mm(t_m)), shape=wall)
 
     for normal in mirrors:
         wall = mirror_across_cell(wall, normal)
         if stages is not None:
             stages.append(('mirror_across_cell', wall))
     if report is not None:
-        report.update(wall_volume=wall.Volume, wall_solids=len(wall.Solids))
+        report.update(wall_volume_m3=si.volume_m3(wall),
+                      wall_solids=len(wall.Solids))
     note('wall: %.4f mm3 in %d solid(s) after %d mirror step(s)'
-         % (wall.Volume, len(wall.Solids), len(mirrors)))
+         % (si.volume_m3(wall) * si.MM3_PER_M3, len(wall.Solids), len(mirrors)))
     return wall

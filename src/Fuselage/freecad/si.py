@@ -41,14 +41,13 @@ if HERE not in sys.path:
 import FreeCAD as App
 import Part
 
-from units import M_PER_MM, MM_PER_M, deg_to_rad, m_to_mm, mm_to_m, rad_to_deg
+from units import (M_PER_MM, MM2_PER_M2, MM3_PER_M3, MM_PER_M, deg_to_rad, m_to_mm, mm_to_m,
+                   rad_to_deg)
 
-#: Area and volume factors, derived once here rather than written as `MM_PER_M ** 2` at each
-#: use. A squared or cubed factor is the easiest of all to get wrong by hand, and the error is
-#: a million or a billion rather than a thousand -- large enough to be caught, which is exactly
-#: why it is worth not relying on being caught.
-MM2_PER_M2 = MM_PER_M * MM_PER_M
-MM3_PER_M3 = MM_PER_M * MM_PER_M * MM_PER_M
+#: `MM2_PER_M2` and `MM3_PER_M3` are re-exported from `units` rather than defined here, so the
+#: modules that touch no FreeCAD API -- `measure.py` reading an STL -- can have them too. They
+#: are named in `__all__` below because `si.MM3_PER_M3` is how the port spells them at 40-odd
+#: call sites and moving them should not move the spelling.
 
 
 # ---------------------------------------------------------------------------------------------

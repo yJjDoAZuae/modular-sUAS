@@ -20,10 +20,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
+import si
+
 import corner_tree as C
 from corner_common import build_sheet, is_entry_point
 
-REFS = {'FlangeBoss': 352.4642526}
+#: OpenSCAD reference volumes in cubic meters, with the recorded mm3 figure beside each.
+REF_VOLS_M3 = {
+    'FlangeBoss': 3.524642526e-07,   # 352.4642526 mm3
+}
 
 PARAMS = [
     ('bulkhead_thickness', '6'),
@@ -95,26 +100,27 @@ def main():
     print('  %-20s %14s %14s %12s %9s  %s'
           % ('module', 'tree', 'OpenSCAD', 'delta', 'rel', 'checks'))
     for tip in tips:
-        ref = REFS[tip.Name]
+        ref_m3 = REF_VOLS_M3[tip.Name]
         s = tip.Shape
-        d = s.Volume - ref
+        volume_m3 = si.volume_m3(s)
+        d_m3 = volume_m3 - ref_m3
         checks = []
         if not s.isValid():
             checks.append('INVALID')
         if len(s.Solids) != 1:
             checks.append('solids=%d' % len(s.Solids))
-        if abs(d) / ref > 1e-3:
+        if abs(d_m3) / ref_m3 > 1e-3:
             checks.append('VOLUME')
-        if d < 0:
+        if d_m3 < 0:
             checks.append('SIGN -- curved positive must exceed the inscribed prism')
         if checks:
             all_ok = False
         print('  %-20s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
-              % (tip.Name, s.Volume, ref, d, 100 * d / ref,
+              % (tip.Name, volume_m3 * si.MM3_PER_M3, ref_m3 * si.MM3_PER_M3,
+                 d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3,
                  ' '.join(checks) if checks else 'ok'))
-        bb = s.BoundBox
-        print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-              % ('', bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+        print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+              % (('',) + tuple(si.mm(v) for v in si.bbox_m(s).as_tuple())))
     print('  result  = %s' % ('PASS' if all_ok else 'FAIL'))
 
     # make_web=False had no coverage at all before this -- bulkhead_positive.py calls it for

@@ -38,10 +38,12 @@ import fillets
 import flange_base
 import flange_boss
 import greeble_web
-from corner_common import build_sheet, is_entry_point, merge_params
+import si
+from corner_common import build_sheet, is_entry_point, merge_params, report
 
-REF = 982.5042986
-EXPECT_BBOX = (-40.0, -9.5625, 0.0, 0.0, 5.1375, 6.0)
+REF_M3 = 9.825042986e-7                     # 982.5042986 mm3, OpenSCAD, real module
+#: mm: -40, -9.5625, 0, 0, 5.1375, 6
+EXPECT_BBOX_M = (-0.040, -0.0095625, 0.0, 0.0, 0.0051375, 0.006)
 
 # Order is presentation only -- the sheet is a dependency graph, not a program, and FreeCAD
 # resolves it after every cell is set.
@@ -112,33 +114,11 @@ def flange_positive(doc, is_cowling=False, is_interconnect=False, make_web=True)
 def main():
     doc = App.newDocument('bulkhead_positive')
     tip = emit(doc)
-    s = tip.Shape
-    d = s.Volume - REF
-
-    print('PART:: CSG tree -- bulkhead_flange_positive assembled')
     print('  constituents = %d, nodes = %d'
           % (7 + (doc.getObject('GreebleToWebFillet') is not None), len(doc.Objects)))
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
-    print('  valid   = %s  solids=%d  faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-
-    fail = []
-    if not s.isValid():
-        fail.append('invalid shape')
-    if len(s.Solids) != 1:
-        fail.append('%d solids -- the constituents should overlap into one' % len(s.Solids))
-    if abs(d) / REF > 1e-3:
-        fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
-        fail.append('bounding box moved')
-    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    ok = not fail
+    ok = report('CSG tree -- bulkhead_flange_positive assembled', tip.Shape, REF_M3,
+                tol=1e-3, expect_bbox_m=EXPECT_BBOX_M,
+                source='OpenSCAD, through the real module')
 
     # is_cowling/is_interconnect/make_web=False had no coverage at all before this -- only
     # the default combo above (all False/True) was ever built. The constituent pieces
@@ -158,9 +138,10 @@ def main():
         sheet(doc2)
         tip2 = flange_positive(doc2, **kwargs)
         s2 = tip2.Shape
-        branch_ok = s2.isValid() and len(s2.Solids) == 1 and s2.Volume > 0.0
-        print('    %-18s volume=%.4f valid=%s solids=%d  %s'
-              % (label, s2.Volume, s2.isValid(), len(s2.Solids),
+        volume_m3 = si.volume_m3(s2)
+        branch_ok = s2.isValid() and len(s2.Solids) == 1 and volume_m3 > 0.0
+        print('    %-18s volume=%.4f mm3 valid=%s solids=%d  %s'
+              % (label, volume_m3 * si.MM3_PER_M3, s2.isValid(), len(s2.Solids),
                  'ok' if branch_ok else 'FAIL'))
         ok = ok and branch_ok
         App.closeDocument(doc2.Name)

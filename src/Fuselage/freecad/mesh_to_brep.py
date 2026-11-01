@@ -48,6 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
+import si
 from corner_common import is_entry_point
 
 try:
@@ -56,7 +57,9 @@ except ImportError:
     Mesh = None
 
 DEFAULT_POINTS = 300
-DEFAULT_TOL_MM = 1e-3      # 50x under the 0.05 mm floor, and 6x over the worst measured
+#: 1 micron: 50x under the 0.05 mm fit floor, and 6x over the worst deviation measured.
+DEFAULT_TOL_M = 1.0e-6
+#: A *relative* volume difference, so dimensionless and unchanged by the SI conversion.
 TIP_CHECK_REL = 1e-3
 
 
@@ -82,12 +85,15 @@ def refuse(message):
     raise SystemExit(1)
 
 
-def tip_shape(doc_path, expect=None):
+def tip_shape(doc_path, expect_volume_m3=None):
     """The document's tip solid -- the object nothing else consumes.
 
     Not the largest solid. See the module docstring: that heuristic silently selects a
     construction blank, and every comparison downstream then looks fine while meaning
     nothing.
+
+    `expect_volume_m3` is cubic meters like every other stored volume in the port; the figure
+    is printed in mm3 because every volume this project has recorded is a mm3 figure.
     """
     doc = App.openDocument(doc_path)
     tips = [o for o in doc.Objects
@@ -95,19 +101,28 @@ def tip_shape(doc_path, expect=None):
     if not tips:
         refuse('no tip solid in %s -- every solid is consumed by another object' % doc_path)
     shape = max(tips, key=lambda o: len(o.Shape.Faces)).Shape
-    if expect is not None:
-        rel = abs(shape.Volume - expect) / max(abs(expect), 1e-9)
-        say('  tip volume %.4f against expected %.4f (%.2e relative)' % (shape.Volume, expect, rel))
+    if expect_volume_m3 is not None:
+        volume_m3 = si.volume_m3(shape)
+        # The floor guards a division, not a length: it keeps a zero reference from raising
+        # instead of reporting. In cubic meters the old 1e-9 mm3 floor is 1e-18.
+        rel = abs(volume_m3 - expect_volume_m3) / max(abs(expect_volume_m3), 1e-18)
+        say('  tip volume %.4f mm3 against expected %.4f mm3 (%.2e relative)'
+            % (volume_m3 * si.MM3_PER_M3, expect_volume_m3 * si.MM3_PER_M3, rel))
         if rel > TIP_CHECK_REL:
-            refuse('the tip solid is %.4f mm^3 but %.4f was expected, %.2e relative.\n'
+            refuse('the tip solid is %.4f mm3 but %.4f mm3 was expected, %.2e relative.\n'
                    'That is the wrong object, not a tolerance problem -- a construction blank '
                    'reads as a part and every number below would be meaningless.'
-                   % (shape.Volume, expect, rel))
+                   % (volume_m3 * si.MM3_PER_M3, expect_volume_m3 * si.MM3_PER_M3, rel))
     return shape
 
 
-def deviation(mesh_path, shape, n):
-    """Max and mean distance from sampled mesh points to the B-rep surface, in mm."""
+def deviation_m(mesh_path, shape, n):
+    """Max and mean distance from sampled mesh points to the B-rep surface, **in meters**.
+
+    The mesh file is the boundary: an STL carries no unit metadata and is millimeters by
+    convention, so each sampled distance crosses into SI as it is measured. `si.distance_m`
+    reads the kernel the same way everything else in the port does.
+    """
     if Mesh is None:
         refuse('FreeCAD Mesh module unavailable')
     points = Mesh.Mesh(mesh_path).Points
@@ -115,12 +130,12 @@ def deviation(mesh_path, shape, n):
         refuse('%s has no points' % mesh_path)
     step = max(1, len(points) // n)
     picked = [p.Vector for i, p in enumerate(points) if i % step == 0][:n]
-    worst, total = 0.0, 0.0
+    worst_m, total_m = 0.0, 0.0
     for v in picked:
-        d = Part.Vertex(v).distToShape(shape)[0]
-        worst = max(worst, d)
-        total += d
-    return len(picked), worst, total / len(picked), len(points)
+        d_m = si.distance_m(Part.Vertex(v), shape)
+        worst_m = max(worst_m, d_m)
+        total_m += d_m
+    return len(picked), worst_m, total_m / len(picked), len(points)
 
 
 def main():
@@ -129,19 +144,23 @@ def main():
         if required not in opt:
             refuse('--%s is required' % required)
     n = int(opt.get('points', DEFAULT_POINTS))
-    tol = float(opt.get('tol', DEFAULT_TOL_MM))
-    expect = float(opt['expect']) if opt.get('expect') else None
+    # `--tol` and `--expect` arrive on a command line, which is a human-facing interface and
+    # so millimeters; both cross into SI here, where they are read.
+    tol_m = si.m(float(opt['tol'])) if opt.get('tol') else DEFAULT_TOL_M
+    expect_m3 = (float(opt['expect']) / si.MM3_PER_M3) if opt.get('expect') else None
 
-    shape = tip_shape(opt['doc'], expect)
-    say('  %s: %d faces, %d solid(s), volume %.6f mm^3'
-        % (os.path.basename(opt['doc']), len(shape.Faces), len(shape.Solids), shape.Volume))
+    shape = tip_shape(opt['doc'], expect_m3)
+    say('  %s: %d faces, %d solid(s), volume %.6f mm3'
+        % (os.path.basename(opt['doc']), len(shape.Faces), len(shape.Solids),
+           si.volume_m3(shape) * si.MM3_PER_M3))
 
-    used, worst, mean, total = deviation(opt['mesh'], shape, n)
+    used, worst_m, mean_m, total = deviation_m(opt['mesh'], shape, n)
     say('  %s: %d points, %d sampled' % (os.path.basename(opt['mesh']), total, used))
-    say('  deviation  max %.6f mm   mean %.6f mm   threshold %.6f mm' % (worst, mean, tol))
+    say('  deviation  max %.6f mm   mean %.6f mm   threshold %.6f mm'
+        % (si.mm(worst_m), si.mm(mean_m), si.mm(tol_m)))
     say('  coverage   %.1f%% of mesh points -- a sample is a lower bound' % (100.0 * used / total))
 
-    if worst > tol:
+    if worst_m > tol_m:
         say('  B-REP AND MESH DISAGREE')
         return 1
     say('  agree within threshold (nothing found to differ, which is not proof none does)')

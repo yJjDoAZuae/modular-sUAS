@@ -144,12 +144,12 @@ def main():
 
     if 'Invalid' in groove.State or 'Error' in groove.State:
         print('  full Groove     FAILED: %s' % groove.State)
-        native = None
+        native_m3 = None
     else:
-        native = si.volume_m3(body.Shape)
+        native_m3 = si.volume_m3(body.Shape)
         print('  + full Groove   = %.6f mm3 (reference %.6f, off by %+.6f)'
-              % (native * si.MM3_PER_M3, REF_VOL_M3 * si.MM3_PER_M3,
-                 (native - REF_VOL_M3) * si.MM3_PER_M3))
+              % (native_m3 * si.MM3_PER_M3, REF_VOL_M3 * si.MM3_PER_M3,
+                 (native_m3 - REF_VOL_M3) * si.MM3_PER_M3))
 
     # 3. the interrupted groove, cutting with a Part:: tool through PartDesign::Boolean
     doc.removeObject(groove.Name)

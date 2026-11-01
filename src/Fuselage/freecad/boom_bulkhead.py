@@ -44,6 +44,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import collections
+
 import FreeCAD as App
 
 import boom_oml
@@ -51,6 +53,7 @@ import boom_webs
 import bulkhead_web
 import corner_tree as C
 import plane2d
+import si
 from corner_common import build_sheet, is_entry_point, merge_params
 
 P = 'Params.'
@@ -58,20 +61,30 @@ P = 'Params.'
 # Mode 9 of each reference, which is the part itself and so a VOLUME, not an area. The rows
 # each variant overrides are the only three that differ between them, and they come from
 # `derived_parameters(1.0, 1.0, <type>, 3 mm)` -- see the head of each reference .scad.
+#: One boom type's reference build. `volume_m3` is SI like every other stored figure; the
+#: millimeter figure it was recorded as is in the comment on its row. `overrides` are
+#: expression strings bound for the parameter sheet and so stay millimeters -- a
+#: `Spreadsheet::Sheet` evaluates in millimeters and the seed comes from
+#: `derived_parameters()`, the exempt OpenSCAD path.
+Variant = collections.namedtuple('Variant', 'name volume_m3 overrides')
+
 VARIANTS = [
-    ('offset_single', 7433.4744903, {}),
-    ('center_single', 8296.1222588, {'boom_z_position': '0.0',
-                                     'boom_make_vert_web': '0.0',
-                                     'boom_make_lower_web': '1.0'}),
+    Variant('offset_single', 7.4334744903e-6, {}),          # 7433.4744903 mm3
+    Variant('center_single', 8.2961222588e-6,               # 8296.1222588 mm3
+            {'boom_z_position': '0.0',
+             'boom_make_vert_web': '0.0',
+             'boom_make_lower_web': '1.0'}),
 ]
-EXPECT_BBOX = (-50.0, -50.0, 0.0, 50.0, 50.0, 2.0)
+#: mm: -50, -50, 0, 50, 50, 2
+EXPECT_BBOX_M = (-0.05, -0.05, 0.0, 0.05, 0.05, 0.002)
 
 # ref_boom_bulkhead_center.scad modes 16 and 17, as (node, area). The assembled part agreeing
 # is the binding check; these say the lower web is right *on its own* rather than by two errors
 # cancelling. They are worth having because the numbers are close to the upper web's and not
 # equal to it -- 2888.83 against 2868.85 -- so a lower web built by mirroring the upper one
 # would land within a percent of the truth and look plausible.
-LOWER_REFS = [('LwOuterFlip', 2888.8332161), ('LwInnerFlip', 1265.7236228)]
+LOWER_REFS_M2 = [('LwOuterFlip', 2.8888332161e-3),      # 2888.8332161 mm2
+                 ('LwInnerFlip', 1.2657236228e-3)]      # 1265.7236228 mm2
 
 OWN = [
     ('boom_bulkhead_thickness', '2.0'),
@@ -179,22 +192,22 @@ def emit(doc, seed=None, overlay=None):
     return tip
 
 
-def _check(label, shape, ref):
-    got = shape.Volume
-    d = got - ref
-    bb = shape.BoundBox
-    real = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
+def _check(label, shape, ref_volume_m3):
+    got_m3 = si.volume_m3(shape)
+    d_m3 = got_m3 - ref_volume_m3
+    real = si.bbox_m(shape).as_tuple()
     checks = []
     if not shape.isValid():
         checks.append('INVALID')
     if len(shape.Solids) != 1:
         checks.append('SOLIDS=%d' % len(shape.Solids))
-    if abs(d) / ref > 6.0e-5:
+    if abs(d_m3) / ref_volume_m3 > 6.0e-5:
         checks.append('OVER TOLERANCE')
-    if max(abs(a - b) for a, b in zip(real, EXPECT_BBOX)) > 5.0e-4:
-        checks.append('BBOX [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]' % real)
+    if max(abs(a - b) for a, b in zip(real, EXPECT_BBOX_M)) > plane2d.BBOX_TOL_M:
+        checks.append('BBOX [%s] mm' % ', '.join('%.4f' % si.mm(v) for v in real))
     print('  %-22s %13.7f %13.7f %+10.5f%%  %s'
-          % (label, got, ref, 100 * d / ref, ' '.join(checks) if checks else 'ok'))
+          % (label, got_m3 * si.MM3_PER_M3, ref_volume_m3 * si.MM3_PER_M3,
+             100 * d_m3 / ref_volume_m3, ' '.join(checks) if checks else 'ok'))
     return not checks
 
 
@@ -207,14 +220,15 @@ def main():
     print('  %-22s %13s %13s %11s  %s'
           % ('boom type', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
     ok = True
-    for name, ref, overlay in VARIANTS:
-        doc = App.newDocument('boom_bulkhead_' + name)
-        tip = emit(doc, overlay=overlay)
-        ok &= _check(name, tip.Shape, ref)
-        for node, area_ref in LOWER_REFS:
+    for variant in VARIANTS:
+        doc = App.newDocument('boom_bulkhead_' + variant.name)
+        tip = emit(doc, overlay=variant.overrides)
+        ok &= _check(variant.name, tip.Shape, variant.volume_m3)
+        for node, area_ref_m2 in LOWER_REFS_M2:
             obj = doc.getObject(node)
             if obj is not None:
-                ok &= plane2d.report(doc, '  ' + node, obj.Shape, area_ref, 'webs_reach')
+                ok &= plane2d.report(doc, '  ' + node, obj.Shape, area_ref_m2,
+                                     'webs_reach')
         App.closeDocument(doc.Name)
     print('')
     print('  %s' % ('agrees' if ok else 'MISMATCH -- see checks above'))

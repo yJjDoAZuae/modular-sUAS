@@ -560,12 +560,50 @@ and it records a classification without being able to verify one. Inline literal
 than a per-site verdict, because a line number moves with every edit and because the
 classifier is a heuristic.
 
-**What remains is IP-FC-159 and IP-FC-160** — the port's own SI parameter layer, then the
-per-module conversion, callee-first by import layer with `cowl_interior` last because that is
-where the kernel's reproducibility floor makes a passing comparison weakest. It is a large change
-to delicate geometry, so it is scheduled rather than opportunistic — but it is a conformance gap
-on a decided standard, not an open question, and this document had it recorded as conformance
-until 2026-10-31.
+**The conversion is done for the port's construction and reference tier, 2026-11-01**, and
+`unit_regime.py` reports **0 constants stored in millimeters outside a declared boundary** across
+all 80 modules. It ran callee-first by import layer with `cowl_interior` last, because that is
+where the kernel's reproducibility floor makes a passing comparison weakest evidence.
+
+**The acceptance test was that the geometry did not move, checked against a pristine export of
+HEAD rather than against recollection.** **24 of the 25 reference modules reproduce every
+printed figure exactly** — they build through the parameter sheet, so the conversion touches
+only the measurement arithmetic and the geometry provably cannot move. The 25th is `cowl.py`,
+whose two freeform volumes moved by ~4e-6 for the reason below; its other two parts reproduce
+exactly. `check_cowl_interior` reproduces, on both cowl kinds, every
+wall-thickness reading, every station position, every rib gap and its verdict count; on the tail
+the smooth interior, the closed cavity and the worst finished-wall error are bit-identical.
+
+**Two things did move, and both are characterised rather than tolerated.** First, the freeform
+cowl volumes shifted by about 4e-6 relative, because the arithmetic now happens in meters:
+`50.0 - 6.0` is exactly 44 while `0.05 - 0.006` is 0.044000000000000004, one ulp, which a boolean
+against a B-spline OML amplifies. The converse was tested — pristine and converted code each
+reproduce their own figures bit-for-bit across two runs — so determinism is preserved and only
+the before/after comparison differs. Second, `int(span / step)` turned out **not to be
+unit-invariant**: a scan window of exactly two margins is `2.0 / 0.5 = 4` in millimeters and
+3.9999999999999964 in meters, which truncates to 3. That is a latent defect the conversion
+exposed rather than one it introduced, and it is fixed where it lives, in a `_steps` helper with
+a slack of one part in a billion.
+
+**Three defects the conversion created, each caught by a check that exists for that class.**
+`SLOPE_SLACK` became radians while `_check_slope` still computed degrees, which stopped the P1
+precondition firing at all — caught by the check script's own deliberately-shallow negative
+control, which is the only thing that can catch an assertion that silently stops asserting. A
+FreeCAD document property bound to a sheet expression fed millimeters into a meters offset —
+caught by the build, and **invisible to any name sweep, because nothing was renamed**: only the
+unit of an existing parameter changed. And a check script handed millimeter literals to a
+converted function — caught by the kernel refusing a 6 000 mm box.
+
+**A rename sweep was added for the fourth class**, `unit_regime.py --undefined`: a rename leaves
+a dangling reference that raises only on the branch that reaches it, and an attribute read
+through an import alias (`ci.WALL_TOL`) is invisible to any scope check. It found 7 bare names
+and 58 attribute references, one of them inside a refusal message no passing build executes.
+
+**What remains is 19 constants in seven modules and one decision**, [OQ-ARCH-24](#open-questions):
+`tools/wall_measure` may not import the conversion layer, because a committed test asserts it
+depends on nothing outside numpy and the standard library so that it stays loadable under
+FreeCAD's embedded interpreter, and `si.py` imports FreeCAD. IP-FC-159, the port's own SI
+parameter layer, is also still open.
 
 **A number printed in a document, a log or a drawing dimension is not a unit-regime statement.**
 The guidelines place display at its own boundary — *"Display, reports, drawings | out | m →
@@ -881,6 +919,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 | ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
+| ARCH-24 | open | How does `tools/wall_measure` reach the unit standard, when a committed test asserts it may import nothing outside numpy and the standard library -- so that it stays loadable under FreeCAD's embedded interpreter -- and `freecad/si.py` imports FreeCAD? 8 022 lines, **61 constants of which 38 are dimensional**, 41 inline dimensions. It is a decision about where a dependency may point, not a measurement: five alternatives, recommending that `freecad/units.py` (which imports only `math`) be admitted to the allowlist. Blocks IP-FC-163 and the last 19 constants of IP-FC-160 |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -3510,9 +3549,115 @@ thing to fix.
   them states a regime. This question's suggestion that such figures might need "restating"
   described work that does not exist.
 
-**What remains open about units is nothing.** The regime is SI, the boundary is the kernel
-adapter, kernel-domain tolerances sit inside it by the same reasoning the guidelines already apply
-to the FEM stack, and display is its own boundary. What remains is work, carried by IP-FC-158.
+**One thing was left open and this question did not see it, which is OQ-ARCH-24.** The regime is
+SI, the boundary is the kernel adapter, kernel-domain tolerances sit inside it by the same
+reasoning the guidelines already apply to the FEM stack, and display is its own boundary — all of
+that stands. What the withdrawal note originally said, that "what remains open about units is
+nothing", was wrong: `tools/wall_measure` cannot import the conversion layer, because a committed
+test asserts it depends on nothing outside numpy and the standard library, and converting it
+therefore needs a decision about that property rather than a conversion. Found 2026-11-01 while
+converting the port's consumers of it.
+
+### OQ-ARCH-24 — How does `wall_measure` reach the unit standard, when it may not import the conversion layer?
+
+**The subsystem.** `src/Fuselage/tools/wall_measure/` is the wall-thickness measurement
+subsystem: 19 modules, 8 022 lines, 61 module-level numeric constants and 41 bare inline
+dimensional literals (measured 2026-11-01). It holds the candidate wall measures, the five
+pre-committed gates they were selected against, the corpus sweep, the ring-break scan, the
+normal-distance measure and the synthetic truth fixtures. Thirty-eight of its 61 constants are
+lengths, areas or angles in millimeters and degrees — `WALL_TOL = 0.01`, `SAMPLE_ARC = 0.20`,
+`NOMINAL = 0.6`, `ALIGN_DEG = 30.0`, `truth.R_OUTER = 10.0` and so on.
+
+**Why it is in scope.** It is project Python performing internal calculations, so
+[general.md](../guidelines/general.md)'s standard covers it: *"Every internally stored value uses
+SI base units … This applies to every variable, field, parameter, function argument, and return
+value in the project."* Nothing about a measurement subsystem exempts it, and there is no file
+interface between it and the code it serves — it is called directly from
+`freecad/check_cowl_interior.py`, which is now SI, and from seven diagnostic drivers in the port.
+
+**Why it cannot simply be converted.** `tests/test_wall_measure_sweep.py` asserts, as a committed
+property with its reason recorded, that no module in the package imports anything outside
+`numpy, json, os, re, sys, time, math, collections, itertools, functools`:
+
+> IP-WTM-10 adopts the selected measure inside `check_cowl_interior`, which runs under FreeCAD's
+> embedded Python 3.11 with numpy 1.26 — not the project's 3.13. **So the measure has to depend on
+> nothing but numpy and the standard library.**
+
+`freecad/si.py` — the project's kernel-unit boundary — imports `FreeCAD` and `Part`. Three of the
+package's modules (`boolean_edges`, `locate`, `normal_distance`) receive the `Part` and `App`
+modules as *arguments* precisely so the package never imports them, and those three are the ones
+that make kernel calls and therefore need a conversion at each call. So the conversion needs
+either a new import, a local factor, or a boundary — and each of those is a change to a decided
+property rather than a mechanical edit.
+
+**What is affected while it is unresolved.** Nineteen constants in seven port modules
+(`sever_doses` 5, `normal_check` 3, `fit_amplification` 3, `refused_wall` 2, `ring_scan` 2,
+`tau_study` 2, `wall_vanish` 2), because each of those drivers passes geometry through
+`wall_measure` and converting one side alone would put a crossing on every call. They are
+`unnamed-unit` findings in `tools/unit_regime.py` today and the only ones left.
+`check_cowl_interior` is converted and carries one named millimeter crossing at its two
+`wall_measure` calls, which whichever alternative wins will delete.
+
+**Alternatives.**
+
+1. **Admit `freecad/units.py` to the allowlist.** `units.py` holds `MM_PER_M`, `M_PER_MM`,
+   `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions, and imports only `math` — it has
+   no FreeCAD import at all, which IP-FC-8 recorded as deliberate ("any interpreter can read
+   it"). *Benefits:* one import, no duplicated factor, and the allowlist's actual purpose —
+   nothing that FreeCAD's embedded interpreter cannot load — is preserved, since `units.py` is
+   pure Python. *Drawbacks:* it couples `tools/wall_measure` to a module under `freecad/`, which
+   is a direction of dependency the tree does not otherwise have, and the allowlist stops being
+   "numpy and the standard library" and becomes "numpy, the standard library, and one named
+   project module", which is a weaker and more easily eroded statement. *Prerequisite:* confirm
+   `freecad/` is on `sys.path` wherever `wall_measure` is imported — it is under `freecadcmd` and
+   under `tests/conftest.py`, but `tools/` scripts that import it would need checking.
+
+2. **Move the conversion factors to a module both trees may import.** A new
+   `src/Fuselage/units.py` (or `tools/units.py`) holding the factors, with `freecad/units.py`
+   re-exporting them. *Benefits:* no cross-tree dependency and no duplicated literal; the
+   allowlist gains a module that is genuinely shared rather than borrowed. *Drawbacks:* a third
+   file in the units story, and the project already has one conversion module whose docstring
+   argues at length that there should be exactly one. *Prerequisite:* decide which tree owns it.
+
+3. **Give `wall_measure` its own factor.** `MM_PER_M = 1000.0` declared locally, with a comment
+   pointing at `freecad/units.py`. *Benefits:* no import, no allowlist change, no new file.
+   *Drawbacks:* it is the duplication `units.py`'s own docstring singles out as the thing to
+   avoid — it carefully explains why `tools/oml_export.MODEL_UNIT_MM` is *not* a duplicate, which
+   this plainly would be. A second declaration of the project's only length factor is a thing
+   that can drift.
+
+4. **Declare the package's interface a boundary and convert at it.** Keep `wall_measure`
+   millimeters throughout, and convert in each caller — one crossing per call, named. *Benefits:*
+   no change to the package, its tests, its corpus or its published figures, all of which are
+   millimeter figures today; the subsystem is handed kernel coordinates by construction, which is
+   an argument that its interface genuinely is the FreeCAD scripting boundary the guidelines list.
+   *Drawbacks:* it leaves 8 022 lines of library code storing millimeters, which is what the
+   standard forbids, and the 38 constants include design tolerances (`WALL_TOL`, the gate
+   thresholds) that are project figures rather than kernel ones. It also multiplies crossings:
+   eight call sites today, each needing points converted in and distances converted out.
+
+5. **Convert the package and relax the allowlist test to a narrower assertion.** Replace "nothing
+   outside numpy and the stdlib" with the property it is actually protecting — "importable under
+   FreeCAD's embedded interpreter" — asserted by importing the package under `freecadcmd` in
+   `check_*` rather than by inspecting import statements. *Benefits:* the test then checks the
+   real requirement instead of a proxy for it, and the conversion needs no exemption at all.
+   *Drawbacks:* the proxy is cheap and runs in the pytest tier; the real check needs FreeCAD and
+   so cannot run there, which is exactly why the proxy was chosen. It trades a fast assertion for
+   a slow one.
+
+**Recommendation: alternative 1, and if the cross-tree direction is unwanted, alternative 2.**
+The allowlist exists to keep the package loadable under FreeCAD's embedded Python, and
+`freecad/units.py` is loadable under any Python — admitting it costs the allowlist's purpose
+nothing while removing the whole obstacle. Alternative 3 duplicates the project's only length
+factor, which `units.py` argues against by name. Alternative 4 is the one to avoid: it is the
+largest body of millimeter storage left in the project and declaring its interface a boundary
+would be deciding the question by naming it something else — the same move as `units.py`'s own
+superseded docstring, which claimed `fillets.py`'s millimeter rows were "correct" and that
+converting them "would be the defect".
+
+What this does **not** turn on is any measurement nobody has taken: the subsystem's size, its
+constant count, its allowlist and the identity of the three kernel-touching modules are all
+measured above. It is a decision about where a dependency may point.
 
 ## References
 

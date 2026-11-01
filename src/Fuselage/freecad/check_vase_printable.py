@@ -79,6 +79,7 @@ import Part
 
 import build_part
 import cowl_interior as ci
+import si
 from corner_common import is_entry_point
 
 #: Kinds that must FAIL, as themselves rather than as a mock. These are the real walled cowls
@@ -114,18 +115,18 @@ def kinds_in_scope():
 #: the coverage statement above is in terms of.
 PITCH_FRACTION = 1.0 / 200.0
 
-#: How far above and below a feature's z each pair of stations sits, in millimeters. Far enough
-#: off the plane of a horizontal edge that the section is not degenerate, and near enough that
-#: a feature is bracketed rather than straddled. Absolute, because it answers to the kernel's
-#: tolerance rather than to the size of the part -- the same argument `cowl_interior.END_INSET`
-#: makes for itself.
-BRACKET = 1.0e-2
+#: How far above and below a feature's z each pair of stations sits. Far enough off the plane
+#: of a horizontal edge that the section is not degenerate, and near enough that a feature is
+#: bracketed rather than straddled. Absolute, because it answers to the kernel's tolerance
+#: rather than to the size of the part -- the same argument `cowl_interior.END_INSET_M` makes
+#: for itself. 0.01 mm, as before.
+BRACKET_M = 1.0e-5
 
-#: Two feature z closer than this are one feature. Set to twice `BRACKET` because that is when
+#: Two feature z closer than this are one feature. Set to twice `BRACKET_M` because that is when
 #: their brackets would overlap and the second pair would be re-sampling the first. Without it
 #: the tail's 306 faces contribute over a thousand stations, nearly all of them duplicates of
 #: each other -- vertices are plentiful and distinct feature heights are not.
-MIN_FEATURE_GAP = 2.0 * BRACKET
+MIN_FEATURE_GAP_M = 2.0 * BRACKET_M
 
 
 def _opt(name, default=None):
@@ -141,39 +142,39 @@ def _flag(name):
     return ('--%s' % name) in sys.argv
 
 
-def stations(shape, lo, hi, features=True):
+def stations(shape, lo_m, hi_m, features=True):
     """Every z the part is sectioned at: its own features, bracketed, plus a background.
 
-    Returned sorted and de-duplicated at `cowl_interior.Z_TOL`, and clipped to `(lo, hi)` --
+    Returned sorted and de-duplicated at `cowl_interior.Z_TOL_M`, and clipped to `(lo, hi)` --
     a bracket that falls off the end of the part would section empty and mean nothing.
 
     `features=False` gives the uniform background alone. Nothing in the check runs that way;
     it exists so the controls can measure what the feature stations are worth, rather than
     leaving it as a claim in this docstring.
     """
-    pitch = (hi - lo) * PITCH_FRACTION
+    pitch_m = (hi_m - lo_m) * PITCH_FRACTION
     found = []
     if features:
-        for z in sorted(v.Point.z for v in shape.Vertexes):
-            if not found or z - found[-1] > MIN_FEATURE_GAP:
-                found.append(z)
+        for z_m in sorted(p[2] for p in si.vertexes_m(shape)):
+            if not found or z_m - found[-1] > MIN_FEATURE_GAP_M:
+                found.append(z_m)
     out = []
-    for feature in found:
-        for z in (feature - BRACKET, feature + BRACKET):
-            if lo < z < hi:
-                out.append(z)
-    n = max(int(round((hi - lo) / pitch)), 2)
+    for feature_m in found:
+        for z_m in (feature_m - BRACKET_M, feature_m + BRACKET_M):
+            if lo_m < z_m < hi_m:
+                out.append(z_m)
+    n = max(int(round((hi_m - lo_m) / pitch_m)), 2)
     for i in range(1, n):
-        out.append(lo + (hi - lo) * i / float(n))
+        out.append(lo_m + (hi_m - lo_m) * i / float(n))
     out.sort()
     kept = []
-    for z in out:
-        if not kept or z - kept[-1] > ci.Z_TOL:
-            kept.append(z)
+    for z_m in out:
+        if not kept or z_m - kept[-1] > ci.Z_TOL_M:
+            kept.append(z_m)
     return kept
 
 
-def section_faults(shape, zs):
+def section_faults(shape, zs_m):
     """Stations whose section is not exactly one closed contour.
 
     Returns `(faults, sampled)`. A station that raises is a fault too, and is reported as one
@@ -181,30 +182,30 @@ def section_faults(shape, zs):
     clean.
     """
     faults = []
-    for z in zs:
+    for z_m in zs_m:
         try:
-            wires = shape.slice(App.Vector(0, 0, 1), z)
+            wires = shape.slice(App.Vector(0, 0, 1), si.mm(z_m))
         except Exception as exc:                                        # noqa: BLE001
-            faults.append((z, None, None, '%s: %s' % (type(exc).__name__, exc)))
+            faults.append((z_m, None, None, '%s: %s' % (type(exc).__name__, exc)))
             continue
         closed = [w for w in wires if w.isClosed()]
         if len(closed) != 1 or len(wires) != len(closed):
-            faults.append((z, len(closed), len(wires) - len(closed), ''))
-    return faults, len(zs)
+            faults.append((z_m, len(closed), len(wires) - len(closed), ''))
+    return faults, len(zs_m)
 
 
 def report(label, shape, expect_pass):
     """Both criteria on one solid. Returns True when the solid met DES-12."""
     try:
-        lo, hi = ci.z_extent(shape)
+        lo_m, hi_m = ci.z_extent(shape)
     except ci.PreconditionFailed as exc:
         print('  %-22s could not be located: %s' % (label, exc))
         return False
-    lo, hi = lo + BRACKET, hi - BRACKET
+    lo_m, hi_m = lo_m + BRACKET_M, hi_m - BRACKET_M
 
     shells = len(shape.Shells)
-    zs = stations(shape, lo, hi)
-    faults, sampled = section_faults(shape, zs)
+    zs_m = stations(shape, lo_m, hi_m)
+    faults, sampled = section_faults(shape, zs_m)
 
     ok = (shells == 1) and not faults
     caught = []
@@ -212,14 +213,15 @@ def report(label, shape, expect_pass):
         caught.append('%d shells' % shells)
     if faults:
         caught.append('%d of %d sections' % (len(faults), sampled))
-    print('  %-22s z %9.4f .. %9.4f  %4d stations  %d solid(s) %d shell(s)  %s'
-          % (label, lo, hi, sampled, len(shape.Solids), shells,
+    print('  %-22s z %9.4f .. %9.4f mm  %4d stations  %d solid(s) %d shell(s)  %s'
+          % (label, si.mm(lo_m), si.mm(hi_m), sampled, len(shape.Solids), shells,
              'one contour everywhere' if ok else 'FAILED on ' + ' and '.join(caught)))
-    for z, closed, opened, err in faults[:6]:
+    for z_m, closed, opened, err in faults[:6]:
         if err:
-            print('      z %9.4f  section raised %s' % (z, err))
+            print('      z %9.4f mm  section raised %s' % (si.mm(z_m), err))
         else:
-            print('      z %9.4f  %d closed contour(s), %d open' % (z, closed, opened))
+            print('      z %9.4f mm  %d closed contour(s), %d open'
+                  % (si.mm(z_m), closed, opened))
     if len(faults) > 6:
         print('      ... and %d more' % (len(faults) - 6))
     if ok is not expect_pass:
@@ -268,19 +270,21 @@ def synthetic_controls(shape):
     Both are cut from the real part, so the operands are the geometry actually shipped rather
     than a stand-in with a friendlier shape.
     """
-    lo, hi = ci.z_extent(shape)
-    mid = 0.5 * (lo + hi)
-    section = shape.slice(App.Vector(0, 0, 1), mid)
-    seed = section[0].BoundBox.Center if section else shape.BoundBox.Center
-    radius = 0.1 * (hi - lo)
+    lo_m, hi_m = ci.z_extent(shape)
+    mid_m = 0.5 * (lo_m + hi_m)
+    section = shape.slice(App.Vector(0, 0, 1), si.mm(mid_m))
+    seed = (si.point_m(section[0].BoundBox.Center) if section
+            else si.point_m(shape.BoundBox.Center))
+    radius_m = 0.1 * (hi_m - lo_m)
 
-    bore = Part.makeCylinder(radius, (hi - lo) + 2.0,
-                             App.Vector(seed.x, seed.y, lo - 1.0))
-    thin = 0.2 * (hi - lo) * PITCH_FRACTION
-    disc = Part.makeCylinder(radius, thin,
-                             App.Vector(seed.x, seed.y, mid - 0.5 * thin))
-    return (('hollowed r=%.2f' % radius, shape.cut(bore)),
-            ('void %.4f mm thick' % thin, shape.cut(disc)))
+    # The bore runs 1 mm past each end so it cuts clean through.
+    bore = si.cylinder_m(radius_m, (hi_m - lo_m) + 2.0e-3,
+                         si.vec_m(seed[0], seed[1], lo_m - 1.0e-3))
+    thin_m = 0.2 * (hi_m - lo_m) * PITCH_FRACTION
+    disc = si.cylinder_m(radius_m, thin_m,
+                         si.vec_m(seed[0], seed[1], mid_m - 0.5 * thin_m))
+    return (('hollowed r=%.2f mm' % si.mm(radius_m), shape.cut(bore)),
+            ('void %.4f mm thick' % si.mm(thin_m), shape.cut(disc)))
 
 
 def main():
@@ -309,8 +313,9 @@ def main():
                 # **What the feature stations are worth, measured on the same solid.** The
                 # background alone is uniform sampling for its own sake, which is the thing
                 # the sampling section of this module's docstring argues against.
-                lo, hi = ci.z_extent(broken)
-                bare = stations(broken, lo + BRACKET, hi - BRACKET, features=False)
+                lo_m, hi_m = ci.z_extent(broken)
+                bare = stations(broken, lo_m + BRACKET_M, hi_m - BRACKET_M,
+                                features=False)
                 missed, sampled = section_faults(broken, bare)
                 print('      background stations alone: %d of %d sections see it%s'
                       % (len(missed), sampled,

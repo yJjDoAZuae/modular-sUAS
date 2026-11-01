@@ -179,7 +179,7 @@ def test_uparams_matches_the_line_in_the_real_fit():
     # had without importing `Part`. If that line ever changes, the prediction silently stops
     # describing the kernel, so the duplicate is pinned to the source text.
     src = io.open(COWL_INTERIOR, encoding='utf-8').read()
-    assert 'uparams = [(z - lo) / span for z in zs]' in src
+    assert 'uparams = [(z_m - lo_m) / span_m for z_m in zs_m]' in src
 
 
 def test_a_flat_stack_has_no_parameters():
@@ -393,20 +393,20 @@ def test_the_station_floor_formula_matches_the_construction():
     # `station_floor` lives in `cowl_interior`, which cannot be imported without FreeCAD, so the
     # formula the bound above assumes is pinned to the source text instead of copied by hand.
     src = io.open(COWL_INTERIOR, encoding='utf-8').read()
-    assert 'return max(t, MIN_INTERVAL)' in src
+    assert 'return max(t_m, MIN_INTERVAL_M)' in src
     # The call site moved twice on 2026-10-28 and this test caught both, which is what it is for.
     # First behind a `station_floor_mm` parameter so OQ-DES-CW26's own station set could be
     # rebuilt; then behind the measurement seam, when that parameter was judged unacceptable in a
     # production signature. What the bound above actually needs is unchanged: a real build thins
-    # the union with `station_floor(t)`.
-    assert 'default_floor = station_floor(t)' in src
-    assert '_thin_stations(zs, floor)' in src
+    # the union with `station_floor(t_m)`.
+    assert 'default_floor_m = station_floor(t_m)' in src
+    assert '_thin_stations(zs_m, floor_m)' in src
     # **And that a build takes that default**, which is the part the bound rests on. The seam is
     # inert unless a measurement installs one, so `_probe_floor` returns its argument; if the seam
     # ever defaulted to something live, every gain bound derived from a 0.6 mm floor would quietly
     # stop holding. `test_wall_measure_probe` owns the seam's own behavior; this is the one fact
     # this file's arithmetic depends on.
-    assert 'floor = _probe_floor(default_floor)' in src
+    assert 'floor_m = _probe_floor(default_floor_m)' in src
     assert '\n_probe = None\n' in src
 
 

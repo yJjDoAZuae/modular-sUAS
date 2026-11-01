@@ -208,7 +208,7 @@ class TestTheConstructionHasNoMeasurementInItsInterface:
 
     def test_the_signatures_still_carry_their_production_arguments(self):
         """So the test above cannot pass by the signature having been emptied or renamed."""
-        assert 'tau=TAU' in self.signature('cavity')
+        assert 'tau_m=TAU_M' in self.signature('cavity')
         assert 'report=None' in self.signature('cavity')
         assert 'mirrors' in self.signature('shell_solid')
         assert 'stages=None' in self.signature('shell_solid')
@@ -219,10 +219,10 @@ class TestTheConstructionHasNoMeasurementInItsInterface:
 
     def test_the_construction_reads_the_seam_through_its_two_accessors(self):
         src = self.source()
-        assert 'def _probe_contour(z, pts):' in src
+        assert 'def _probe_contour(z_m, pts):' in src
         assert 'def _probe_floor(default):' in src
-        assert 'fits[k] = _probe_contour(z, pts)' in src
-        assert 'floor = _probe_floor(default_floor)' in src
+        assert 'fits[k] = _probe_contour(z_m, pts)' in src
+        assert 'floor_m = _probe_floor(default_floor_m)' in src
 
     def test_the_construction_does_not_import_the_measurement_module(self):
         """The dependency runs one way: a harness imports the construction, never the reverse.

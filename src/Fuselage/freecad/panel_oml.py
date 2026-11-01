@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
+import si
 from corner_common import build_sheet, is_entry_point
 
 # U = 1.0, 3/16 in panel -- the same reference configuration bulkhead_cuts.py and corner_tree.py
@@ -65,12 +66,19 @@ PARAMS = [
     ('outer_face', '=unit_width / 2'),
 ]
 
-REF_WIDTH = 75.000
-REF_EXPOSED_SPAN = 65.475
-REF_POCKET_DEPTH = 4.8625
-REF_INNER_FACE = 45.1375
-REF_OUTER_FACE = 50.000
-REF_LENGTH = 100.000
+REF_WIDTH_M = 0.075000                      # 75.000 mm
+REF_EXPOSED_SPAN_M = 0.065475               # 65.475 mm
+REF_POCKET_DEPTH_M = 0.0048625              # 4.8625 mm
+REF_INNER_FACE_M = 0.0451375                # 45.1375 mm
+REF_OUTER_FACE_M = 0.050000                 # 50.000 mm
+REF_LENGTH_M = 0.100000                     # 100.000 mm
+
+#: How far a measured envelope face may sit from its recorded position. A picometer -- this
+#: envelope is a box built straight from sheet expressions, so the only error it can carry is
+#: a wrong expression, and the figure is deliberately at the float floor rather than at any
+#: manufacturing tolerance. It was `1e-9` while these were millimeters; the tolerance has to
+#: cross with the quantity it bounds or the check silently loosens by a thousand.
+FACE_TOL_M = 1.0e-12
 
 
 def sheet(doc, seed=None):
@@ -96,37 +104,48 @@ def main():
     doc = App.newDocument('panel_oml')
     tip = emit(doc)
     s = tip.Shape
-    bb = s.BoundBox
+    bb = si.bbox_m(s)
 
     print('PART:: panel OML envelope (+X face)')
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+          % tuple(si.mm(v) for v in bb.as_tuple()))
     print('  valid   = %s   solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
-    width = bb.YMax - bb.YMin
-    depth = bb.XMax - bb.XMin
-    length = bb.ZMax - bb.ZMin
-    exposed_span = doc.Params.get('exposed_span')
-    print('  width          = %.4f  (expect %.4f)' % (width, REF_WIDTH))
-    print('  exposed span   = %.4f  (expect %.4f, not a box dimension -- printed for the '
-          'record)' % (exposed_span, REF_EXPOSED_SPAN))
-    print('  pocket depth   = %.4f  (expect %.4f)' % (depth, REF_POCKET_DEPTH))
-    print('  inner face x   = %.4f  (expect %.4f)' % (bb.XMin, REF_INNER_FACE))
-    print('  outer face x   = %.4f  (expect %.4f)' % (bb.XMax, REF_OUTER_FACE))
-    print('  length         = %.4f  (expect %.4f)' % (length, REF_LENGTH))
+    width_m = bb.YLength
+    depth_m = bb.XLength
+    length_m = bb.ZLength
+    # A sheet cell, so millimeters -- it is seeded from `derived_parameters()`, the exempt
+    # OpenSCAD path -- and it crosses into SI here, where it is read.
+    exposed_span_m = si.m(doc.Params.get('exposed_span'))
+    print('  width          = %.4f  (expect %.4f) mm'
+          % (si.mm(width_m), si.mm(REF_WIDTH_M)))
+    print('  exposed span   = %.4f  (expect %.4f) mm, not a box dimension -- printed for the '
+          'record' % (si.mm(exposed_span_m), si.mm(REF_EXPOSED_SPAN_M)))
+    print('  pocket depth   = %.4f  (expect %.4f) mm'
+          % (si.mm(depth_m), si.mm(REF_POCKET_DEPTH_M)))
+    print('  inner face x   = %.4f  (expect %.4f) mm'
+          % (si.mm(bb.XMin), si.mm(REF_INNER_FACE_M)))
+    print('  outer face x   = %.4f  (expect %.4f) mm'
+          % (si.mm(bb.XMax), si.mm(REF_OUTER_FACE_M)))
+    print('  length         = %.4f  (expect %.4f) mm'
+          % (si.mm(length_m), si.mm(REF_LENGTH_M)))
 
     fail = []
     if not s.isValid():
         fail.append('invalid shape')
     if len(s.Solids) != 1:
         fail.append('%d solids -- expected one box' % len(s.Solids))
-    for label, got, expect in (
-            ('width', width, REF_WIDTH), ('exposed span', exposed_span, REF_EXPOSED_SPAN),
-            ('pocket depth', depth, REF_POCKET_DEPTH), ('inner face', bb.XMin, REF_INNER_FACE),
-            ('outer face', bb.XMax, REF_OUTER_FACE), ('length', length, REF_LENGTH)):
-        if abs(got - expect) > 1e-9:
-            fail.append('%s off: got %.6f, expected %.6f' % (label, got, expect))
+    for label, got_m, expect_m in (
+            ('width', width_m, REF_WIDTH_M),
+            ('exposed span', exposed_span_m, REF_EXPOSED_SPAN_M),
+            ('pocket depth', depth_m, REF_POCKET_DEPTH_M),
+            ('inner face', bb.XMin, REF_INNER_FACE_M),
+            ('outer face', bb.XMax, REF_OUTER_FACE_M),
+            ('length', length_m, REF_LENGTH_M)):
+        if abs(got_m - expect_m) > FACE_TOL_M:
+            fail.append('%s off: got %.6f mm, expected %.6f mm'
+                        % (label, si.mm(got_m), si.mm(expect_m)))
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
     return 1 if fail else 0
 

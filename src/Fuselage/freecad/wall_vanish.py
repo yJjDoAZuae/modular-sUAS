@@ -109,11 +109,11 @@ def harness(doc, kind, u):
 
     planes = ci.cell_boundary_planes(body)
     lo, hi = ci.z_extent(body)
-    z_lo, z_hi = lo + ci.END_INSET, hi - ci.END_INSET
+    z_lo, z_hi = lo + ci.END_INSET_M, hi - ci.END_INSET_M
     arcs = {}
 
     def body_arc(z):
-        k = round(z / ci.Z_TOL)
+        k = round(z / ci.Z_TOL_M)
         if k not in arcs:
             wires = ci._slice_wires(body, z)
             if len(wires) != 1:
@@ -247,7 +247,7 @@ def run(kind, u, which, out_dir, scan_mm):
         flag = ''
         if worst is not None and worst <= 0.0:
             flag = '   WALL GONE'
-        elif worst is not None and worst < t - ci.WALL_TOL:
+        elif worst is not None and worst < t - ci.WALL_TOL_M:
             flag = '   under WALL_TOL'
         print('   %9.4f   %17s   %-10s  %11d   %4.0f%s'
               % (delta,

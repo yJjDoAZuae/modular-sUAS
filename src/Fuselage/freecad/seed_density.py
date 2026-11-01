@@ -122,7 +122,7 @@ OVERRIDABLE = {'seed-max': ('SEED_MAX', int), 'fit-arc': ('FIT_ARC', float),
                'check-arc': ('CHECK_ARC', float), 'check-min': ('CHECK_MIN', int)}
 
 #: **`TAU` is deliberately not in `OVERRIDABLE`, and the reason is a trap worth naming.**
-#: Setting `ci.TAU` does nothing, because both `cavity` and `shell_solid` declare `tau=TAU` as a
+#: Setting `ci.TAU_M` does nothing, because both `cavity` and `shell_solid` declare `tau=TAU` as a
 #: **default argument** -- bound once when the module is imported, never re-read. A `--tau` option
 #: implemented the same way as the four above would print the value it meant to test and build at
 #: 0.05 regardless: a silent null experiment that produces a confident wrong result rather than an
@@ -181,9 +181,9 @@ def one(kind, u, seed_max=None, overrides=None, out=None, save_dir=None, tau=Non
     started = time.time()
     report = {}
     row = {'kind': kind, 'u': float(u), 'seed_max': ci.SEED_MAX,
-           'fit_arc': ci.FIT_ARC, 'fit_min': ci.FIT_MIN, 'fit_max': ci.FIT_MAX,
-           'check_arc': ci.CHECK_ARC, 'check_min': ci.CHECK_MIN,
-           'tau': float(tau) if tau is not None else ci.TAU,
+           'fit_arc': ci.FIT_ARC_M, 'fit_min': ci.FIT_MIN, 'fit_max': ci.FIT_MAX,
+           'check_arc': ci.CHECK_ARC_M, 'check_min': ci.CHECK_MIN,
+           'tau': float(tau) if tau is not None else ci.TAU_M,
            'overrides': {k: v for k, v in overrides.items()},
            'error': None, 'seconds': None, 'patches': None, 'worst_smooth': None,
            'worst_finished': None, 'stations': None}
@@ -217,8 +217,8 @@ def one(kind, u, seed_max=None, overrides=None, out=None, save_dir=None, tau=Non
             # Named by every constant that was overridden, so two walls from different runs cannot
             # be confused for each other on disk -- the whole point of saving one is to re-measure
             # it, and re-measuring the wrong one would answer a question nobody asked.
-            stem = '%s_U%g_seed%d_arc%g_chk%g' % (kind, float(u), ci.SEED_MAX, ci.FIT_ARC,
-                                                  ci.CHECK_ARC)
+            stem = '%s_U%g_seed%d_arc%g_chk%g' % (kind, float(u), ci.SEED_MAX, ci.FIT_ARC_M,
+                                                  ci.CHECK_ARC_M)
             row['brep'] = os.path.join(save_dir, stem + '.brep')
             wall.exportBrep(row['brep'])
             out.write('    saved %s\n' % row['brep'])
@@ -290,8 +290,8 @@ def main():
             overrides[const] = cast(raw)
     print('seed_density %s, SEED_MAX=%s (module default %d), SEED_LONG_MM=%.1f, TAU=%.3f, '
           'FIT_ARC=%.3f clamped to [%d, %d], CHECK_ARC=%.3f'
-          % (kind, seed_max or 'default', ci.SEED_MAX, ci.SEED_LONG_MM, ci.TAU,
-             ci.FIT_ARC, ci.FIT_MIN, ci.FIT_MAX, ci.CHECK_ARC), flush=True)
+          % (kind, seed_max or 'default', ci.SEED_MAX, ci.SEED_LONG_M, ci.TAU_M,
+             ci.FIT_ARC_M, ci.FIT_MIN, ci.FIT_MAX, ci.CHECK_ARC_M), flush=True)
     seeds = [int(v) for v in _opt('seeds', '').split(',') if v] or [seed_max]
     rows = []
     for u in us:

@@ -34,7 +34,8 @@ import FreeCAD as App
 import Part
 
 import oml_blank
-from corner_common import is_entry_point, prism_mm
+import si
+from corner_common import is_entry_point
 
 # The parameter rows each cowl part's sheet carries, as (alias, value).
 #
@@ -59,6 +60,12 @@ from corner_common import is_entry_point, prism_mm
 # `cowl_tree` now, not this module. This module's own `emit_part()` mechanism has no more
 # callers among the four cowl kinds; it stays for now as the thing the reference checks build
 # against, not because anything still depends on it to produce a document.
+#: **These four tables are parameter-sheet rows, so they are millimeters and degrees** -- a
+#: `Spreadsheet::Sheet` evaluates in millimeters and the seed the sweep exports comes from
+#: `derived_parameters()`, the exempt OpenSCAD path. The `oml_*_m` rows are the exception the
+#: names already carry: they are meters, because the OML is a meter-scaled surface
+#: (OQ-DES-CW1). `from_flat` is where the whole set crosses into SI, and nothing below it
+#: reads a millimeter.
 _OML = [('oml_scale_m_per_mm', 1e-3), ('oml_length_m', 0.05),
         ('oml_offset_x_m', 0.0), ('oml_reversed', 0.0)]
 _COMMON = [('U', 1.0), ('unit_width', 100.0), ('overhang_angle_from_bed', 35.0)]
@@ -84,15 +91,40 @@ PARAMS_NOSE_PLATE = [('U', 1.0), ('overhang_angle_from_bed', 35.0),
                      ('plate_diam', 60.0), ('plate_thickness', 0.8),
                      ('plate_flange_height', 1.0), ('plate_flange_width', 2.0)]
 
+#: Rows of a parameter sheet that are **not** lengths, so `from_flat` must not convert them.
+#: Listed rather than inferred, because the failure mode of getting one wrong is silent: `U` is
+#: a multiplier, and scaling a multiplier by 1/1000 moves the part's size without moving any
+#: stated dimension, which is the one scale error that does not look like one.
+#:
+#: `overhang_angle_from_bed` is degrees from the bed (OQ-DES-CW2) and becomes radians, which is
+#: a conversion but not a length one. `oml_reversed` is a flag. The `oml_*_m` rows are already
+#: meters and are passed through.
+DIMENSIONLESS_ROWS = ('U', 'oml_reversed', 'oml_scale_m_per_mm')
+ANGLE_ROWS = ('overhang_angle_from_bed',)
+ALREADY_SI_ROWS = ('oml_length_m', 'oml_offset_x_m')
+
 
 def from_flat(seed):
-    """The nested form the builders take, from the flat sheet the sweep exports.
+    """The nested form the builders take, in SI, from the flat millimeter sheet the sweep exports.
 
-    The OML fields are grouped because they travel together and because three of them are
-    meters while everything around them is millimeters -- keeping them under one key is what
-    makes `oml['offset_x_m']` read as meters at the point of use (OQ-DES-CW1).
+    **This is the cowl family's unit boundary.** Every row of `seed` is a parameter-sheet value:
+    millimeters for a length, degrees for the overhang angle, except the `oml_*_m` rows which
+    are already meters (OQ-DES-CW1). Everything this returns is meters and radians, and every
+    builder below reads it that way.
+
+    The OML fields stay grouped because they travel together and because `oml['offset_x_m']`
+    reading as meters at the point of use is what OQ-DES-CW1 decided.
     """
-    p = {k: v for k, v in seed.items() if not k.startswith('oml_')}
+    p = {}
+    for key, value in seed.items():
+        if key.startswith('oml_'):
+            continue
+        if key in DIMENSIONLESS_ROWS:
+            p[key] = value
+        elif key in ANGLE_ROWS:
+            p[key.replace('_from_bed', '_rad')] = math.radians(value)
+        else:
+            p[key] = si.m(value)
     if any(k.startswith('oml_') for k in seed):
         p['oml'] = {'scale_m_per_mm': seed['oml_scale_m_per_mm'],
                     'length_m': seed['oml_length_m'],
@@ -155,106 +187,106 @@ def octant_to_full(shape):
 # The cutting tools
 # --------------------------------------------------------------------------------
 
-def buttress_shape(unit_width, body_len, z_end, z_offset, r_start, r_end, r_inset,
-                   overhang_angle_from_bed):
-    """The buttress cutting profile, in the plane it is extruded from.
+def buttress_shape(unit_width_m, body_len_m, z_end_m, z_offset_m, r_start_m, r_end_m,
+                   r_inset_m, overhang_rad):
+    """The buttress cutting profile, in the plane it is extruded from. Meters throughout.
 
-    Six points, and the two carrying `r_inset` are the reason it is not a simple trapezoid:
-    they step the profile inward by `r_inset` over a rise of `r_inset * tan(angle)`, which is
-    what keeps both ends of the cut at or above the overhang angle so the notch prints without
-    support. `overhang_angle_from_bed` is degrees from the bed (OQ-DES-CW2), so the tangent is
+    Six points, and the two carrying `r_inset_m` are the reason it is not a simple trapezoid:
+    they step the profile inward by `r_inset_m` over a rise of `r_inset_m * tan(angle)`, which
+    is what keeps both ends of the cut at or above the overhang angle so the notch prints
+    without support. `overhang_rad` is measured from the bed (OQ-DES-CW2), so the tangent is
     taken of the angle as given.
     """
-    rise = r_inset * math.tan(math.radians(overhang_angle_from_bed))
+    rise_m = r_inset_m * math.tan(overhang_rad)
     return [
-        (-unit_width, z_offset),
-        (r_start, z_offset),
-        (r_start + r_inset, z_offset + rise),
-        (r_end + r_inset, body_len - z_end - rise),
-        (r_end, body_len - z_end),
-        (-unit_width, body_len - z_end),
+        (-unit_width_m, z_offset_m),
+        (r_start_m, z_offset_m),
+        (r_start_m + r_inset_m, z_offset_m + rise_m),
+        (r_end_m + r_inset_m, body_len_m - z_end_m - rise_m),
+        (r_end_m, body_len_m - z_end_m),
+        (-unit_width_m, body_len_m - z_end_m),
     ]
 
 
-def diag_buttress_shape(unit_width, buttress_depth):
+def diag_buttress_shape(unit_width_m, buttress_depth_m):
     """The diagonal buttress profile -- a plain rectangle, unlike `buttress_shape`."""
     return [
-        (-unit_width, -unit_width / 2.0),
-        (buttress_depth, -unit_width / 2.0),
-        (buttress_depth, unit_width / 2.0),
-        (-unit_width, unit_width / 2.0),
+        (-unit_width_m, -unit_width_m / 2.0),
+        (buttress_depth_m, -unit_width_m / 2.0),
+        (buttress_depth_m, unit_width_m / 2.0),
+        (-unit_width_m, unit_width_m / 2.0),
     ]
 
 
-def _extruded(points, thickness):
+def _extruded(points_m, thickness_m):
     """`linear_extrude(height=thickness, center=true)` of a 2D profile."""
-    return prism_mm(points, -thickness / 2.0, thickness)
+    return si.prism_m(points_m, -thickness_m / 2.0, thickness_m)
 
 
-def _rot_x(shape, degrees):
+def _rot_x(shape, angle_rad):
     out = shape.copy()
-    out.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), degrees)
+    out.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), math.degrees(angle_rad))
     return out
 
 
-def _rot_z(shape, degrees):
+def _rot_z(shape, angle_rad):
     out = shape.copy()
-    out.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), degrees)
+    out.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), math.degrees(angle_rad))
     return out
 
 
-def _moved(shape, x=0.0, y=0.0, z=0.0):
+def _moved(shape, x_m=0.0, y_m=0.0, z_m=0.0):
     out = shape.copy()
-    out.translate(App.Vector(x, y, z))
+    out.translate(si.vec_m(x_m, y_m, z_m))
     return out
 
 
-def top_buttress(ang, unit_width, tail_len, cut_thickness, z_end, z_offset,
-                 r_start, r_end, r_inset, overhang_angle_from_bed):
+def top_buttress(ang_rad, unit_width_m, tail_len_m, cut_thickness_m, z_end_m, z_offset_m,
+                 r_start_m, r_end_m, r_inset_m, overhang_rad):
     """`rotate([ang,0,0]) translate([-w/2,0,-tail_len]) rotate([90,0,0]) extrude(profile)`.
 
     OpenSCAD applies its transforms innermost-first, so the profile is stood upright, moved
-    out to the part's flank and down to its aft end, and only then swung by `ang`.
+    out to the part's flank and down to its aft end, and only then swung by `ang_rad`.
     """
-    shape = _extruded(buttress_shape(unit_width, tail_len, z_end, z_offset,
-                                     r_start, r_end, r_inset, overhang_angle_from_bed),
-                      cut_thickness)
-    shape = _rot_x(shape, 90.0)
-    shape = _moved(shape, x=-unit_width / 2.0, z=-tail_len)
-    return _rot_x(shape, ang)
+    shape = _extruded(buttress_shape(unit_width_m, tail_len_m, z_end_m, z_offset_m,
+                                     r_start_m, r_end_m, r_inset_m, overhang_rad),
+                      cut_thickness_m)
+    shape = _rot_x(shape, math.pi / 2.0)
+    shape = _moved(shape, x_m=-unit_width_m / 2.0, z_m=-tail_len_m)
+    return _rot_x(shape, ang_rad)
 
 
-def top_diag_buttress(ang, unit_width, cut_thickness, depth):
-    shape = _extruded(diag_buttress_shape(unit_width, depth), cut_thickness)
-    shape = _moved(shape, x=-unit_width / 2.0)
-    return _rot_x(shape, ang)
+def top_diag_buttress(ang_rad, unit_width_m, cut_thickness_m, depth_m):
+    shape = _extruded(diag_buttress_shape(unit_width_m, depth_m), cut_thickness_m)
+    shape = _moved(shape, x_m=-unit_width_m / 2.0)
+    return _rot_x(shape, ang_rad)
 
 
-def side_buttress(ang, unit_width, body_len, cut_thickness, z_end, z_offset,
-                  r_start, r_end, r_inset, overhang_angle_from_bed):
+def side_buttress(ang_rad, unit_width_m, body_len_m, cut_thickness_m, z_end_m, z_offset_m,
+                  r_start_m, r_end_m, r_inset_m, overhang_rad):
     """As `top_buttress`, with the whole thing then swung a quarter turn onto the side."""
-    shape = _extruded(buttress_shape(unit_width, body_len, z_end, z_offset,
-                                     r_start, r_end, r_inset, overhang_angle_from_bed),
-                      cut_thickness)
-    shape = _rot_x(shape, 90.0)
-    shape = _rot_x(shape, ang)
-    shape = _moved(shape, x=-unit_width / 2.0, z=-body_len)
-    return _rot_z(shape, -90.0)
+    shape = _extruded(buttress_shape(unit_width_m, body_len_m, z_end_m, z_offset_m,
+                                     r_start_m, r_end_m, r_inset_m, overhang_rad),
+                      cut_thickness_m)
+    shape = _rot_x(shape, math.pi / 2.0)
+    shape = _rot_x(shape, ang_rad)
+    shape = _moved(shape, x_m=-unit_width_m / 2.0, z_m=-body_len_m)
+    return _rot_z(shape, -math.pi / 2.0)
 
 
-def bottom_buttress(ang, unit_width, body_len, cut_thickness, z_end, z_offset,
-                    r_start, r_end, r_inset, overhang_angle_from_bed):
-    """As `top_buttress`, turned to face the other way before being swung by `ang`."""
-    shape = _extruded(buttress_shape(unit_width, body_len, z_end, z_offset,
-                                     r_start, r_end, r_inset, overhang_angle_from_bed),
-                      cut_thickness)
-    shape = _rot_x(shape, 90.0)
-    shape = _moved(shape, x=-unit_width / 2.0, z=-body_len)
-    shape = _rot_z(shape, 180.0)
-    return _rot_x(shape, ang)
+def bottom_buttress(ang_rad, unit_width_m, body_len_m, cut_thickness_m, z_end_m, z_offset_m,
+                    r_start_m, r_end_m, r_inset_m, overhang_rad):
+    """As `top_buttress`, turned to face the other way before being swung by `ang_rad`."""
+    shape = _extruded(buttress_shape(unit_width_m, body_len_m, z_end_m, z_offset_m,
+                                     r_start_m, r_end_m, r_inset_m, overhang_rad),
+                      cut_thickness_m)
+    shape = _rot_x(shape, math.pi / 2.0)
+    shape = _moved(shape, x_m=-unit_width_m / 2.0, z_m=-body_len_m)
+    shape = _rot_z(shape, math.pi)
+    return _rot_x(shape, ang_rad)
 
 
-def pyramid(unit_width, tail_len, z_offset):
+def pyramid(unit_width_m, tail_len_m, z_offset_m):
     """The protected core: a pyramid over a cube, and the bulkhead interface.
 
     This is *subtracted from the buttress tools*, not from the blank -- so it is a region the
@@ -262,22 +294,22 @@ def pyramid(unit_width, tail_len, z_offset):
     load-bearing (section 6.3): the buttress cuts stopping short of it is what leaves the cowl
     something to seat on.
     """
-    half = unit_width / 2.0
-    apex = unit_width / 4.0
-    base = [App.Vector(half, half, 0), App.Vector(half, -half, 0),
-            App.Vector(-half, -half, 0), App.Vector(-half, half, 0)]
+    half_m = unit_width_m / 2.0
+    apex_m = unit_width_m / 4.0
+    base = si.vecs_m([(half_m, half_m, 0.0), (half_m, -half_m, 0.0),
+                      (-half_m, -half_m, 0.0), (-half_m, half_m, 0.0)])
     faces = [Part.Face(Part.makePolygon(base + [base[0]]))]
-    tip = App.Vector(0, 0, apex)
+    tip = si.vec_m(0.0, 0.0, apex_m)
     for i in range(4):
         a, b = base[i], base[(i + 1) % 4]
         faces.append(Part.Face(Part.makePolygon([a, b, tip, a])))
     shell = Part.Shell(faces)
     shell.sewShape()
     tip_solid = Part.makeSolid(shell)
-    tip_solid.translate(App.Vector(0, 0, -tail_len + z_offset))
+    tip_solid.translate(si.vec_m(0.0, 0.0, -tail_len_m + z_offset_m))
 
-    box = Part.makeBox(unit_width, unit_width, tail_len,
-                       App.Vector(-half, -half, -2 * tail_len + z_offset))
+    box = si.box_m(unit_width_m, unit_width_m, tail_len_m,
+                   si.vec_m(-half_m, -half_m, -2 * tail_len_m + z_offset_m))
     return tip_solid.fuse(box)
 
 
@@ -285,25 +317,26 @@ def pyramid(unit_width, tail_len, z_offset):
 # The blank, and the masks that cut it down
 # --------------------------------------------------------------------------------
 
-def _square_prism(unit_width, z0, height):
+def _square_prism(unit_width_m, z0_m, height_m):
     """`linear_extrude` of the source's oversized square -- 2*unit_width on a side.
 
     Deliberately larger than the part: these masks select a *range of z*, and the square is
     only there because a 2D profile has to have some extent.
     """
-    w = unit_width
-    return prism_mm([(w, w), (-w, w), (-w, -w), (w, -w)], z0, height)
+    w = unit_width_m
+    return si.prism_m([(w, w), (-w, w), (-w, -w), (w, -w)], z0_m, height_m)
 
 
-def right_half_mask(unit_width, body_len):
-    w = unit_width
-    return prism_mm([(w, 0), (w, w), (-w, w), (-w, 0)], -body_len - 1.5 * body_len,
-                 3 * body_len)
+def right_half_mask(unit_width_m, body_len_m):
+    w = unit_width_m
+    return si.prism_m([(w, 0), (w, w), (-w, w), (-w, 0)],
+                      -body_len_m - 1.5 * body_len_m, 3 * body_len_m)
 
 
-def octant_mask(unit_width, body_len):
-    w = unit_width
-    return prism_mm([(0, 0), (w, w), (0, w)], -body_len - 1.5 * body_len, 3 * body_len)
+def octant_mask(unit_width_m, body_len_m):
+    w = unit_width_m
+    return si.prism_m([(0, 0), (w, w), (0, w)],
+                      -body_len_m - 1.5 * body_len_m, 3 * body_len_m)
 
 
 def body_blank_full(name, U, oml):
@@ -312,19 +345,28 @@ def body_blank_full(name, U, oml):
     return solid, repairs
 
 
-def body_len_of(U, oml):
-    """`U * oml_length_m / oml_scale_m_per_mm` -- the blank's length in millimeters."""
-    return U * oml['length_m'] / oml['scale_m_per_mm']
+def body_len_m_of(U, oml):
+    """The blank's length **in meters**, as the model holds it.
+
+    `U * oml_length_m / oml_scale_m_per_mm` is the length in the model's millimeters, which is
+    what `oml_blank.blank` scales the imported surface to; this converts that to meters.
+
+    **The scale does not cancel.** It is 1e-3 in every configuration shipped today, which makes
+    `si.m(x / 1e-3)` look like `x` -- but `oml_scale_m_per_mm` is a parameter, so writing
+    `U * oml['length_m']` would silently stop tracking it and the mask would be the wrong
+    length at any other scale, with no stated dimension having moved.
+    """
+    return si.m(U * oml['length_m'] / oml['scale_m_per_mm'])
 
 
-def body_blank_full_lower(blank, unit_width, body_len, cut_len):
-    """Everything aft of `cut_len`: the cowl's own extent."""
-    return blank.common(_square_prism(unit_width, -body_len, body_len - cut_len))
+def body_blank_full_lower(blank, unit_width_m, body_len_m, cut_len_m):
+    """Everything aft of `cut_len_m`: the cowl's own extent."""
+    return blank.common(_square_prism(unit_width_m, -body_len_m, body_len_m - cut_len_m))
 
 
-def body_blank_full_upper(blank, unit_width, cut_len):
-    """Everything forward of `cut_len`: what the nose tip is made from."""
-    return blank.common(_square_prism(unit_width, -cut_len, cut_len))
+def body_blank_full_upper(blank, unit_width_m, cut_len_m):
+    """Everything forward of `cut_len_m`: what the nose tip is made from."""
+    return blank.common(_square_prism(unit_width_m, -cut_len_m, cut_len_m))
 
 
 # --------------------------------------------------------------------------------
@@ -334,17 +376,17 @@ def body_blank_full_upper(blank, unit_width, cut_len):
 def nose_cowl(p):
     """The nose cowl: one octant, one side buttress, taken out to the full shape."""
     blank, repairs = body_blank_full('vsp_nose', p['U'], p['oml'])
-    unit_width, U = p['unit_width'], p['U']
-    body_len = body_len_of(U, p['oml'])
-    cut_len = p['cut_len']
+    unit_width_m, U = p['unit_width'], p['U']
+    body_len_m = body_len_m_of(U, p['oml'])
+    cut_len_m = p['cut_len']
 
-    lower = body_blank_full_lower(blank, unit_width, body_len, cut_len)
-    octant = lower.common(octant_mask(unit_width, body_len))
+    lower = body_blank_full_lower(blank, unit_width_m, body_len_m, cut_len_m)
+    octant = lower.common(octant_mask(unit_width_m, body_len_m))
 
-    tool = side_buttress(0.0, unit_width, body_len, p['buttress_cut_thickness'],
-                         cut_len + p['buttress_z_offset'], p['buttress_z_offset'],
+    tool = side_buttress(0.0, unit_width_m, body_len_m, p['buttress_cut_thickness'],
+                         cut_len_m + p['buttress_z_offset'], p['buttress_z_offset'],
                          p['buttress_r_start'], p['buttress_r_end'], p['buttress_r_inset'],
-                         p['overhang_angle_from_bed'])
+                         p['overhang_angle_rad'])
     return octant_to_full(octant.cut(tool)), repairs
 
 
@@ -357,37 +399,40 @@ def tail_cowl(p):
     back -- would give a different and wrong part wherever a cut crosses the core boundary.
     """
     blank, repairs = body_blank_full('vsp_tail', p['U'], p['oml'])
-    unit_width, U = p['unit_width'], p['U']
-    tail_len = body_len_of(U, p['oml'])
-    cut_len = p['cut_len']
-    thickness, z_offset = p['buttress_cut_thickness'], p['buttress_z_offset']
-    r_inset, angle = p['buttress_r_inset'], p['overhang_angle_from_bed']
+    unit_width_m, U = p['unit_width'], p['U']
+    tail_len_m = body_len_m_of(U, p['oml'])
+    cut_len_m = p['cut_len']
+    thickness_m, z_offset_m = p['buttress_cut_thickness'], p['buttress_z_offset']
+    r_inset_m, overhang_rad = p['buttress_r_inset'], p['overhang_angle_rad']
 
-    lower = body_blank_full_lower(blank, unit_width, tail_len, cut_len)
-    half = lower.common(right_half_mask(unit_width, tail_len))
+    lower = body_blank_full_lower(blank, unit_width_m, tail_len_m, cut_len_m)
+    half = lower.common(right_half_mask(unit_width_m, tail_len_m))
 
     tools = []
-    for dx, ang in ((-unit_width * 0.30, 5.0), (0.0, 12.5), (unit_width * 0.30, 20.0)):
+    for dx_m, ang_rad in ((-unit_width_m * 0.30, math.radians(5.0)),
+                          (0.0, math.radians(12.5)),
+                          (unit_width_m * 0.30, math.radians(20.0))):
         tools.append(_moved(side_buttress(
-            ang, unit_width, tail_len, thickness, p['side_z_end'], z_offset,
-            p['side_r_start'], p['side_r_end'], r_inset, angle), x=dx))
+            ang_rad, unit_width_m, tail_len_m, thickness_m, p['side_z_end'], z_offset_m,
+            p['side_r_start'], p['side_r_end'], r_inset_m, overhang_rad), x_m=dx_m))
 
-    for dy, ang in ((unit_width * 0.07, 15.0), (0.0, 0.0)):
+    for dy_m, ang_rad in ((unit_width_m * 0.07, math.radians(15.0)), (0.0, 0.0)):
         tools.append(_moved(top_buttress(
-            ang, unit_width, tail_len, thickness, p['top_z_end'], z_offset,
-            p['top_r_start'], p['top_r_end'], r_inset, angle), y=dy))
+            ang_rad, unit_width_m, tail_len_m, thickness_m, p['top_z_end'], z_offset_m,
+            p['top_r_start'], p['top_r_end'], r_inset_m, overhang_rad), y_m=dy_m))
         tools.append(_moved(bottom_buttress(
-            ang, unit_width, tail_len, thickness, p['bottom_z_end'], z_offset,
-            p['bottom_r_start'], p['bottom_r_end'], r_inset, angle), y=dy))
+            ang_rad, unit_width_m, tail_len_m, thickness_m, p['bottom_z_end'], z_offset_m,
+            p['bottom_r_start'], p['bottom_r_end'], r_inset_m, overhang_rad), y_m=dy_m))
 
     # The two diagonal pairs, the second a unit_width*sin(30) further aft than the first.
-    diag_z = -tail_len + p['top_diag_z_start']
-    for dz in (0.0, unit_width * math.sin(math.radians(30.0))):
-        for ang in (30.0, -30.0):
+    diag_z_m = -tail_len_m + p['top_diag_z_start']
+    for dz_m in (0.0, unit_width_m * math.sin(math.radians(30.0))):
+        for ang_rad in (math.radians(30.0), math.radians(-30.0)):
             tools.append(_moved(top_diag_buttress(
-                ang, unit_width, thickness, p['top_diag_depth']), z=diag_z + dz))
+                ang_rad, unit_width_m, thickness_m, p['top_diag_depth']),
+                z_m=diag_z_m + dz_m))
 
-    cutter = _fuse(tools).cut(pyramid(unit_width, tail_len, z_offset))
+    cutter = _fuse(tools).cut(pyramid(unit_width_m, tail_len_m, z_offset_m))
     return mirror_y(half.cut(cutter)), repairs
 
 
@@ -396,9 +441,14 @@ def tail_cowl(p):
 #: magnitude finer than the printed fit the flange has to hold.
 FLANGE_OFFSET_SAMPLES = 480
 
+#: The overshoot that keeps a cutting cone's end face off the surface it is cutting through.
+#: 0.01 mm, the project's `geometry_eps()`. It is a construction epsilon rather than a
+#: dimension -- nothing measures it -- but it is a length and so is stored in meters.
+CUT_EPS_M = 1.0e-5
 
-def _clean_offset(face, inset):
-    """`face`'s outline inset by `inset`, as one closed curve rather than 540 fragments.
+
+def _clean_offset(face, inset_m):
+    """`face`'s outline inset by `inset_m` meters, as one closed curve rather than 540 fragments.
 
     **`makeOffset2D` cannot be used directly here.** The nose section is four B-spline edges;
     offsetting it returns 540 `OffsetCurve` segments, 98 of them shorter than a micron and the
@@ -411,8 +461,10 @@ def _clean_offset(face, inset):
     fidelity against the authority: OpenSCAD's `offset()` acts on an already-discretized
     polygon, so the reference this port matches is itself an approximation of the true offset.
     """
-    ref = face.makeOffset2D(-inset).OuterWire
+    ref = face.makeOffset2D(-si.mm(inset_m)).OuterWire
     # A periodic interpolation needs each point once; discretize repeats the closing point.
+    # The points stay kernel vectors: they go straight back into `interpolate` without any
+    # arithmetic on them, so converting out and in again would only add rounding.
     points = ref.discretize(Number=FLANGE_OFFSET_SAMPLES + 1)[:-1]
     curve = Part.BSplineCurve()
     curve.interpolate(Points=points, PeriodicFlag=True)
@@ -437,14 +489,13 @@ def nose_tip(p):
     checked by the volume `main()` reports.
     """
     blank, repairs = body_blank_full('vsp_nose', p['U'], p['oml'])
-    unit_width, cut_len = p['unit_width'], p['cut_len']
-    flange_h, inset = p['nose_flange_height'], p['nose_flange_inset']
-    plate_r = p['plate_diam'] / 2.0 + p['plate_tol']
-    eps = 0.01
+    unit_width_m, cut_len_m = p['unit_width'], p['cut_len']
+    flange_h_m, inset_m = p['nose_flange_height'], p['nose_flange_inset']
+    plate_r_m = p['plate_diam'] / 2.0 + p['plate_tol']
 
-    upper = body_blank_full_upper(blank, unit_width, cut_len)
+    upper = body_blank_full_upper(blank, unit_width_m, cut_len_m)
 
-    wires = blank.slice(App.Vector(0, 0, 1), -cut_len)
+    wires = blank.slice(App.Vector(0, 0, 1), si.mm(-cut_len_m))
     if not wires:
         raise ValueError('no cross-section at -cut_len; the flange silhouette needs one')
     face = Part.Face(max(wires, key=lambda w: Part.Face(w).Area))
@@ -452,42 +503,42 @@ def nose_tip(p):
     # from: extrude downward and do not also translate. The source translates because
     # `projection()` flattens its outline to z = 0 first, and carrying that translate across
     # to a section that never moved puts the flange at -13 instead of -7.
-    flange = Part.Face(_clean_offset(face, inset)).extrude(App.Vector(0, 0, -flange_h))
+    flange = Part.Face(_clean_offset(face, inset_m)).extrude(si.vec_m(0.0, 0.0, -flange_h_m))
 
     solid = upper.fuse(flange)
 
-    bore = Part.makeCylinder(plate_r, 3 * (cut_len + flange_h),
-                             App.Vector(0, 0, -1.5 * (cut_len + flange_h)))
+    bore = si.cylinder_m(plate_r_m, 3 * (cut_len_m + flange_h_m),
+                         si.vec_m(0.0, 0.0, -1.5 * (cut_len_m + flange_h_m)))
     solid = solid.cut(bore)
 
     # The seat the plate drops onto, flared out at the overhang angle so it prints.
-    height = cut_len - p['plate_thickness'] + flange_h + eps
-    seat = Part.makeCone(
-        plate_r + height / math.tan(math.radians(p['overhang_angle_from_bed'])),
-        plate_r, height, App.Vector(0, 0, -cut_len - flange_h - eps))
+    height_m = cut_len_m - p['plate_thickness'] + flange_h_m + CUT_EPS_M
+    seat = si.cone_m(
+        plate_r_m + height_m / math.tan(p['overhang_angle_rad']),
+        plate_r_m, height_m, si.vec_m(0.0, 0.0, -cut_len_m - flange_h_m - CUT_EPS_M))
     return solid.cut(seat), repairs
 
 
 def nose_plate(p):
     """`nose_plate()` -- the disc that closes the nose, with its own printed flange."""
-    r = p['plate_diam'] / 2.0
-    thickness, flange_h = p['plate_thickness'], p['plate_flange_height']
-    flange_w = p['plate_flange_width']
-    flare = flange_h / math.tan(math.radians(p['overhang_angle_from_bed']))
-    eps = 0.01
+    r_m = p['plate_diam'] / 2.0
+    thickness_m, flange_h_m = p['plate_thickness'], p['plate_flange_height']
+    flange_w_m = p['plate_flange_width']
+    flare_m = flange_h_m / math.tan(p['overhang_angle_rad'])
 
-    body = Part.makeCylinder(r, thickness + 2 * flange_h,
-                             App.Vector(0, 0, -thickness - 2 * flange_h))
-    taper = Part.makeCone(r + flare, r, flange_h,
-                          App.Vector(0, 0, -thickness - flange_h))
-    skirt = Part.makeCylinder(r + flare, flange_h,
-                              App.Vector(0, 0, -thickness - 2 * flange_h))
+    body = si.cylinder_m(r_m, thickness_m + 2 * flange_h_m,
+                         si.vec_m(0.0, 0.0, -thickness_m - 2 * flange_h_m))
+    taper = si.cone_m(r_m + flare_m, r_m, flange_h_m,
+                      si.vec_m(0.0, 0.0, -thickness_m - flange_h_m))
+    skirt = si.cylinder_m(r_m + flare_m, flange_h_m,
+                          si.vec_m(0.0, 0.0, -thickness_m - 2 * flange_h_m))
     solid = body.fuse(taper).fuse(skirt)
 
-    height = 2 * flange_h + eps
-    pocket = Part.makeCone(
-        r - flange_w + height / math.tan(math.radians(p['overhang_angle_from_bed'])),
-        r - flange_w, height, App.Vector(0, 0, -thickness - 2 * flange_h - eps))
+    height_m = 2 * flange_h_m + CUT_EPS_M
+    pocket = si.cone_m(
+        r_m - flange_w_m + height_m / math.tan(p['overhang_angle_rad']),
+        r_m - flange_w_m, height_m,
+        si.vec_m(0.0, 0.0, -thickness_m - 2 * flange_h_m - CUT_EPS_M))
     solid = solid.cut(pocket)
 
     # The plate is the one cowl part whose *driver* transforms it: `nose_render` wraps the
@@ -500,35 +551,24 @@ def nose_plate(p):
 
 # --------------------------------------------------------------------------------
 
+#: The reference configuration of each part, **already in the builders' SI form** -- the same
+#: thing `from_flat` returns, so it is built as `from_flat(dict(PARAMS_*))` rather than written
+#: out twice. Writing it by hand was how the millimeter figures survived here while the
+#: builders moved to meters; deriving it means the one conversion in `from_flat` is the only
+#: place the units are decided, and a reader checking a figure against a drawing reads the
+#: millimeter tables above.
 REFERENCE = {
-    'nose': dict(U=1.0, unit_width=100.0, cut_len=6.0, overhang_angle_from_bed=35.0,
-                 buttress_cut_thickness=0.1, buttress_z_offset=2.0, buttress_r_inset=3.0,
-                 buttress_r_start=0.0, buttress_r_end=6.6,
-                 oml=dict(scale_m_per_mm=1e-3, length_m=0.05, offset_x_m=0.0,
-                          reversed=False)),
-    'nose_nose': dict(U=1.0, unit_width=100.0, cut_len=6.0, overhang_angle_from_bed=35.0,
-                      nose_flange_height=1.0, nose_flange_inset=0.5,
-                      plate_diam=60.0, plate_thickness=0.8, plate_tol=0.1,
-                      oml=dict(scale_m_per_mm=1e-3, length_m=0.05, offset_x_m=0.0,
-                               reversed=False)),
-    'nose_plate': dict(U=1.0, overhang_angle_from_bed=35.0, plate_diam=60.0,
-                       plate_thickness=0.8, plate_flange_height=1.0,
-                       plate_flange_width=2.0),
-    'tail': dict(U=1.0, unit_width=100.0, cut_len=0.0, overhang_angle_from_bed=35.0,
-                 buttress_cut_thickness=0.1, buttress_z_offset=2.0, buttress_r_inset=5.0,
-                 side_z_end=25.0, side_r_start=0.0, side_r_end=23.3,
-                 top_z_end=3.0, top_r_start=0.0, top_r_end=0.0,
-                 bottom_z_end=20.0, bottom_r_start=0.0, bottom_r_end=28.8,
-                 top_diag_z_start=20.0, top_diag_depth=2.0,
-                 oml=dict(scale_m_per_mm=1e-3, length_m=0.1, offset_x_m=-0.25,
-                          reversed=True)),
+    'nose': from_flat(dict(PARAMS_NOSE_COWL)),
+    'nose_nose': from_flat(dict(PARAMS_NOSE_TIP)),
+    'nose_plate': from_flat(dict(PARAMS_NOSE_PLATE)),
+    'tail': from_flat(dict(PARAMS_TAIL)),
 }
 
 
 def main():
     print('PART:: cowl -- nose and tail, at the reference configuration')
     print('  %-8s %8s %7s %9s %14s  %s'
-          % ('cowl', 'solids', 'faces', 'repairs', 'volume', 'checks'))
+          % ('cowl', 'solids', 'faces', 'repairs', 'volume mm3', 'checks'))
     ok = True
     for label, build in (('nose', nose_cowl), ('nose_nose', nose_tip),
                          ('nose_plate', nose_plate), ('tail', tail_cowl)):
@@ -545,7 +585,8 @@ def main():
             checks.append('SOLIDS=%d' % len(shape.Solids))
         print('  %-8s %8d %7d %9d %14.3f  %s'
               % (label, len(shape.Solids), len(shape.Faces), len(repairs),
-                 oml_blank.volume(shape), ' '.join(checks) if checks else 'ok'))
+                 oml_blank.volume_m3(shape) * si.MM3_PER_M3,
+                 ' '.join(checks) if checks else 'ok'))
         ok &= not checks
     print('')
     print('  %s' % ('builds' if ok else 'FAILED -- see checks above'))

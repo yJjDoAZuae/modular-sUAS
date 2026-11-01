@@ -447,7 +447,15 @@ def section(p, z0, h):
     return full.removeSplitter()
 
 
-def report(name, shape, ref_volume_m3, tol=1e-4):
+#: How far a measured bounding box may sit from its recorded one, in meters. One micron -- the
+#: same figure as the `1e-3` mm the reference modules each carried before the conversion. A
+#: bounding box is exact arithmetic on the sheet's own expressions, so this bounds a wrong
+#: expression and not a kernel tolerance.
+BBOX_TOL_M = 1.0e-6
+
+
+def report(name, shape, ref_volume_m3, tol=1e-4, expect_bbox_m=None, source='OpenSCAD, faceted',
+           bbox_tol_m=BBOX_TOL_M):
     """Print the comparison IP-FC-5 is built to make, and say whether it passed.
 
     **Compared in SI, printed in millimeters.** The reference is cubic meters like every other
@@ -465,6 +473,12 @@ def report(name, shape, ref_volume_m3, tol=1e-4):
     same Part:: corner (`abs(d) / ref > 1e-4`), since this is that check's static-port
     ancestor. Also requires a valid, single-solid shape -- a plausible volume on a shape that
     is not one solid is not a part.
+
+    **`expect_bbox_m` is the recorded bounding box, in meters**, as
+    `(xmin, ymin, zmin, xmax, ymax, zmax)`. Supplying it is what lets the reference modules --
+    `simple_positives`, `greeble_web`, `bulkhead_positive` and the rest -- share this function
+    instead of each carrying its own copy of the same comparison. They each had one, and every
+    copy was a place for the millimeter-to-meter conversion to be made differently.
     """
     bb = si.bbox_m(shape)
     volume_m3 = si.volume_m3(shape)
@@ -473,11 +487,22 @@ def report(name, shape, ref_volume_m3, tol=1e-4):
     print('  volume  = %.6f mm3' % (volume_m3 * si.MM3_PER_M3))
     print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
           % tuple(v * si.MM_PER_M for v in bb.as_tuple()))
+    if expect_bbox_m is not None:
+        print('  expect  = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+              % tuple(v * si.MM_PER_M for v in expect_bbox_m))
     print('  valid   = %s   solids=%d faces=%d' % (valid, n_solids, len(shape.Faces)))
-    print('  ref     = %.6f mm3  (OpenSCAD, faceted)' % (ref_volume_m3 * si.MM3_PER_M3))
+    print('  ref     = %.6f mm3  (%s)' % (ref_volume_m3 * si.MM3_PER_M3, source))
     d = volume_m3 - ref_volume_m3
     rel = d / ref_volume_m3
     print('  delta   = %+.6f mm3  (%+.4f%%)' % (d * si.MM3_PER_M3, 100 * rel))
-    ok = valid and n_solids == 1 and abs(rel) <= tol
+
+    moved = None
+    if expect_bbox_m is not None:
+        moved = max(abs(a - b) for a, b in zip(bb.as_tuple(), expect_bbox_m))
+        if moved > bbox_tol_m:
+            print('  bbox    = MOVED by %.6f mm' % (moved * si.MM_PER_M))
+
+    ok = (valid and n_solids == 1 and abs(rel) <= tol
+          and (moved is None or moved <= bbox_tol_m))
     print('  result  = %s' % ('PASS' if ok else 'FAIL'))
     return ok

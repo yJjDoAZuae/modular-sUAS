@@ -363,7 +363,7 @@ def thickness_at(wall, z, t):
     rather than replaced by it, since the two say different things.
     """
     try:
-        got = cci.wall_thickness(wall, z, t, ci.WALL_TOL)
+        got = cci.wall_thickness(wall, z, t, ci.WALL_TOL_M)
     except Exception as exc:                                      # noqa: BLE001
         return {'error': '%s: %s' % (type(exc).__name__, str(exc)[:160])}
     if got is None:
@@ -419,7 +419,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # The station set `cavity` will derive, computed here so the target can be chosen
             # from it rather than from an absolute height that may not exist at this `U`.
             z_lo, z_hi = ci.z_extent(body_node.Shape)
-            z_lo, z_hi = z_lo + ci.END_INSET, z_hi - ci.END_INSET
+            z_lo, z_hi = z_lo + ci.END_INSET_M, z_hi - ci.END_INSET_M
             notch_edges = ci.feature_stations(notch_compound(tools), z_lo, z_hi)
             body_features = ci.feature_stations(body_node.Shape, z_lo, z_hi)
             p_lo, p_hi = ci._patches(z_lo, z_hi, body_features)[0]
@@ -445,7 +445,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                 wall = ci.shell_solid(cell_cut.Shape, body_node.Shape, notch_compound(tools),
                                       t, overhang, mirrors, report=report)
             w_lo, w_hi = ci.z_extent(wall)
-            s_lo, s_hi = w_lo + ci.END_INSET, w_hi - ci.END_INSET
+            s_lo, s_hi = w_lo + ci.END_INSET_M, w_hi - ci.END_INSET_M
             cont, broken, unread, worst, detail = ring_states(wall, s_lo, s_hi)
             rec.update(outcome='built', solids=len(wall.Solids), volume=wall.Volume,
                        partition_slip=report.get('partition_slip'),

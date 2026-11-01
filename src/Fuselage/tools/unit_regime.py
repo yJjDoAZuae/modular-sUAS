@@ -35,10 +35,21 @@ Everything else is SI, and a dimensional SI constant must say so in its name (`_
 
 **Inline literals are inventoried too, with a budget rather than a manifest entry.** A number
 written inside a function has no name to classify, so `inline_literals` sorts each one by what it
-*structurally cannot be* and reports what is left. Measured 2026-10-31: of **3089** numeric
-literals in the port's function bodies, **2818 cannot be a length at all** -- an index, a
-`/ 2.0`, a `range` bound, a format width -- and of the 271 that could, most are a fraction, an
-epsilon, a named default argument or an angle. The residue is small enough to read.
+*structurally cannot be* and reports what is left. Measured 2026-11-01, and the breakdown is
+given in full because it is the figure the ceilings are argued from -- of **3 044** numeric
+literals in the port's function bodies:
+
+    structural   2492   an index, a `/ 2.0`, a `range` bound, a format width -- cannot be a length
+    epsilon       218   below 1e-5, so a construction epsilon rather than a dimension
+    dimension     188   the residue: what this tool reports
+    fraction       50   a proportion of something else
+    default        48   a named default argument, so it has a name after all
+    angle          18   on a line calling `radians()` or `degrees()`
+    relative       16   a tolerance against a reference, not a length
+    count          14   a whole number that is not in the structural set
+
+Re-derive it with `sum(1 for ... in inline_literals(path))` grouped by kind; an earlier version
+of this paragraph quoted 3 089 and 2 818, and the second figure reproduced from nothing.
 
 Because a line number moves with every edit, the manifest records a **per-module ceiling** on
 that residue instead of listing sites: a count that may not rise. Converting a module lowers its
@@ -71,6 +82,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import builtins
 import io
 import json
 import os
@@ -83,7 +95,15 @@ MANIFEST = os.path.join(HERE, 'unit_regime.json')
 
 #: Units a constant may carry. `none` is dimensionless -- a count, a ratio, a dot product, an
 #: enum member, a font design unit.
-SI_UNITS = ('m', 'm2', 'm3', 'rad', 's', 'kg', 'none')
+#:
+#: `record` is a table whose rows hold several quantities at once -- `boom_oml.REFS` is an area,
+#: a bounding box and a tolerance per label. One suffix on the table's name cannot say what
+#: three different members carry, so the rule moves to the members: a `record` must be a
+#: `namedtuple` whose field names carry the units (`area_m2`, `bbox_m`), which puts the unit at
+#: every use site rather than on the declaration, and it must give a reason naming them. That
+#: is a stronger guarantee than the suffix, not a way around it -- `REFS[label].area_m2` says
+#: its unit on the line that reads it, where a suffixed table name would not.
+SI_UNITS = ('m', 'm2', 'm3', 'rad', 's', 'kg', 'none', 'record')
 MM_UNITS = ('mm', 'mm2', 'mm3', 'deg')
 
 #: A regime a module may declare. `si` is the default and is not listed in the manifest.
@@ -141,6 +161,27 @@ def _numeric(node):
     return None
 
 
+def _first_number(node):
+    """The first numeric literal anywhere inside an expression, or `None` if it holds none.
+
+    The fallback for the two shapes `_numeric` cannot read, both of which the port really
+    writes and both of which were invisible to this inventory until 2026-11-01:
+
+        REFS = [('web_inner', 5700.1741175, (-40.9, ...)), ...]   a table keyed by label
+        SQ2 = 2 ** 0.5                                            a computed constant
+
+    A table carries one unit for the whole table, exactly as a ladder tuple does, so one entry
+    classifies it and the reported value is the first figure in it -- enough for a reader to
+    recognize which constant the finding is about. Missing these mattered: `cowl.REFERENCE`
+    alone holds 51 numbers, and a blind inventory cannot support a claim that the port is SI.
+    """
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, (int, float)) \
+                and not isinstance(sub.value, bool):
+            return sub.value
+    return None
+
+
 def constants(path):
     """Every module-level numeric constant in one file, as `(name, line, value)`.
 
@@ -148,6 +189,11 @@ def constants(path):
     governed by the same rule but is not part of this inventory, which exists to make the
     *declared* surface classifiable. Only upper-case names are collected, which is the project's
     convention for a module constant and is what separates one from a module-level variable.
+
+    `value` is the constant's value when it is a plain number, and otherwise the first number
+    inside it -- a tuple's first member, a table's first figure, the first literal in a computed
+    expression. A constant holding no number at all is not in the inventory, because there is
+    nothing in it to carry a unit.
     """
     text = io.open(path, encoding='utf-8').read()
     found = []
@@ -155,6 +201,8 @@ def constants(path):
         if not isinstance(node, ast.Assign):
             continue
         value = _numeric(node.value)
+        if value is None:
+            value = _first_number(node.value)
         if value is None:
             continue
         for target in node.targets:
@@ -348,6 +396,20 @@ def audit(port=PORT, manifest=None):
                                         '(value %r)' % (value,)))
                 continue
 
+            # A constant may declare its own regime, overriding the module's. This is what a
+            # parameter-sheet alias table needs: `cowl.PARAMS_TAIL` is millimeters because a
+            # `Spreadsheet::Sheet` evaluates in millimeters and the seed comes from
+            # `derived_parameters()`, the exempt OpenSCAD path -- but the other 550 lines of
+            # `cowl.py` are ordinary library code and must stay SI. Declaring the whole module
+            # `boundary` to excuse one table would exempt everything around it, which is the
+            # coarse version of the mistake this tool exists to catch.
+            regime_here = entry.get('regime', regime)
+            if regime_here not in REGIMES:
+                findings.append(Finding(module, name, line, 'regime',
+                                        'declares unknown regime %r, expected one of %s'
+                                        % (regime_here, ', '.join(REGIMES))))
+                regime_here = regime
+
             unit = entry.get('unit')
             if unit not in SI_UNITS and unit not in MM_UNITS:
                 findings.append(Finding(module, name, line, 'bad-unit',
@@ -358,7 +420,7 @@ def audit(port=PORT, manifest=None):
             by_unit[unit] = by_unit.get(unit, 0) + 1
 
             if unit in MM_UNITS:
-                if regime == 'si':
+                if regime_here == 'si':
                     pending += 1
                     findings.append(Finding(
                         module, name, line, 'stored-mm',
@@ -366,8 +428,17 @@ def audit(port=PORT, manifest=None):
                         'behind si.py if the kernel requires it' % unit))
                 elif not entry.get('reason'):
                     findings.append(Finding(module, name, line, 'no-reason',
-                                            'is %s in a %s module and gives no reason'
-                                            % (unit, regime)))
+                                            'is %s at a %s and gives no reason'
+                                            % (unit, regime_here)))
+                continue
+
+            # A record carries no suffix, because its members carry their own; what it owes
+            # instead is a stated reason naming them, so a reader can check the claim.
+            if unit == 'record' and not entry.get('reason'):
+                findings.append(Finding(module, name, line, 'no-reason',
+                                        'is a record and does not name the units its fields '
+                                        'carry -- give the reason, e.g. "rows are '
+                                        'Ref2D(area_m2, bbox_m, tol)"'))
                 continue
 
             suffix = SUFFIX.get(unit)
@@ -417,13 +488,255 @@ def audit(port=PORT, manifest=None):
     return findings, summary
 
 
+# ---------------------------------------------------------------------------------------------
+# The rename sweep. A unit conversion renames constants, parameters and locals in bulk, and the
+# one error it keeps making is a reference the rename missed.
+# ---------------------------------------------------------------------------------------------
+
+#: Names a module may read without defining: the FreeCAD interpreter's own, and the two the port
+#: imports under a short alias everywhere. `__file__` and friends are module attributes rather
+#: than globals and are listed for the same reason.
+AMBIENT = frozenset((
+    'App', 'Part', 'Sketcher', 'Mesh', 'MeshPart', 'Draft', 'TechDraw', 'FreeCAD', 'FreeCADGui',
+    '__file__', '__name__', '__doc__', '__package__', '__spec__', '__builtins__',
+))
+
+
+def _bound_in(node):
+    """Every name a function binds: its parameters, its assignments, its imports, its `except`
+    aliases, and the names of anything defined inside it."""
+    out = set()
+    args = getattr(node, 'args', None)
+    if args is not None:
+        for group in (getattr(args, 'posonlyargs', []), args.args, args.kwonlyargs):
+            out.update(a.arg for a in group)
+        if args.vararg:
+            out.add(args.vararg.arg)
+        if args.kwarg:
+            out.add(args.kwarg.arg)
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and isinstance(sub.ctx, (ast.Store, ast.Del)):
+            out.add(sub.id)
+        elif isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) \
+                and sub is not node:
+            out.add(sub.name)
+        elif isinstance(sub, ast.Lambda) and sub is not node:
+            for group in (getattr(sub.args, 'posonlyargs', []), sub.args.args,
+                          sub.args.kwonlyargs):
+                out.update(a.arg for a in group)
+        elif isinstance(sub, ast.ExceptHandler) and sub.name:
+            out.add(sub.name)
+        elif isinstance(sub, (ast.Import, ast.ImportFrom)):
+            for alias in sub.names:
+                out.add((alias.asname or alias.name).split('.')[0])
+        elif isinstance(sub, ast.Global) or isinstance(sub, ast.Nonlocal):
+            out.update(sub.names)
+    return out
+
+
+def undefined_names(path):
+    """Names a file reads that nothing in it defines, as `(line, name)` pairs.
+
+    **This is the check a bulk rename needs and a test suite does not give you.** Renaming
+    `t` to `t_m` across a 3600-line module leaves a reference behind somewhere, and the
+    reference raises `NameError` only on the branch that reaches it -- which for a geometry
+    refusal path can be never, in any check that passes. Found 7 such sites in
+    `cowl_interior.py` alone on the day it was converted, including one in an `Unconverged`
+    message that no passing build executes.
+
+    Scoped rather than flat: a function sees the module's names plus its own, so a local that
+    shadows nothing is not reported, and a name defined only inside a sibling function is.
+    Imports inside a `try` are collected, because that is how the port guards `Mesh`.
+    """
+    text = io.open(path, encoding='utf-8').read()
+    tree = ast.parse(text)
+
+    top = set(dir(builtins)) | set(AMBIENT)
+    # Module scope: every name bound at the top level, plus the names of the functions and
+    # classes defined there. A function's own body is walked separately, with its own scope.
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            top.add(node.name)
+            continue
+        top |= _bound_in(node)
+
+    found = []
+
+    def visit(node, scope):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                visit(child, scope | _bound_in(child))
+            elif isinstance(child, ast.ClassDef):
+                visit(child, scope | {child.name} | _bound_in(child))
+            elif isinstance(child, ast.Lambda):
+                visit(child, scope | _bound_in(child))
+            else:
+                if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load) \
+                        and child.id not in scope:
+                    found.append((child.lineno, child.id))
+                visit(child, scope)
+
+    visit(tree, top)
+    return sorted(set(found))
+
+
+#: Where the rename sweep looks: the port, its sibling tool directory, and the pytest tier.
+#: Wider than `modules()` deliberately -- the references a rename misses are most often in a
+#: check script or a test, which are exactly the files `modules()` skips.
+SWEEP_DIRS = (
+    PORT,
+    HERE,
+    os.path.join(ROOT, 'tests'),
+)
+
+
+def _public_names(path):
+    """Every name a module defines at its top level, which is its importable surface."""
+    out = set()
+    try:
+        tree = ast.parse(io.open(path, encoding='utf-8').read())
+    except (SyntaxError, OSError):
+        return out
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        else:
+            out |= _bound_in(node)
+    return out
+
+
+def _aliases(tree):
+    """`local name -> module name` for every `import x` / `import x as y` in a file."""
+    out = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                base = alias.name.split('.')[0]
+                out[alias.asname or base] = base
+    return out
+
+
+def installed_attributes(path):
+    """`module.NAME` for every attribute this file assigns on an imported module.
+
+    A module attribute that something installs at run time is defined, even though no
+    top-level statement writes it: `geometry_branches` swaps `corner_common.max` for a tracing
+    wrapper and restores it in a `finally`, and `test_branching_dimensions` then asserts the
+    restore happened. Collected across the whole sweep rather than per file, because the file
+    that installs one and the file that reads it are usually not the same.
+    """
+    try:
+        tree = ast.parse(io.open(path, encoding='utf-8').read())
+    except (SyntaxError, OSError):
+        return set()
+    alias_map = _aliases(tree)
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, (ast.Store, ast.Del)) \
+                and isinstance(node.value, ast.Name):
+            module = alias_map.get(node.value.id)
+            if module is not None:
+                out.add('%s.%s' % (module, node.attr))
+    return out
+
+
+def missing_attributes(path, surface, installed=()):
+    """References to `module.NAME` where `module` is in `surface` and `NAME` is not in it.
+
+    **The half of a rename sweep that `undefined_names` cannot see.** `ci.WALL_TOL` is an
+    attribute access, not a name, so a renamed module constant read through an import alias is
+    invisible to a scope check and raises `AttributeError` only when that line runs. The
+    `cowl_interior` conversion left 20-odd of these across the check scripts and the pytest
+    tier, in modules whose own tests pass.
+
+    `surface` is `{module: set of its top-level names}`. A module not in it is skipped, so this
+    says nothing about FreeCAD's own API or the standard library.
+    """
+    try:
+        text = io.open(path, encoding='utf-8').read()
+        tree = ast.parse(text)
+    except (SyntaxError, OSError):
+        return []
+    alias_map = _aliases(tree)
+    installed = set(installed) | installed_attributes(path)
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
+            continue
+        if not isinstance(node.ctx, ast.Load):
+            continue
+        module = alias_map.get(node.value.id)
+        if module is None or module not in surface:
+            continue
+        # Every module has these whether or not it writes them.
+        if node.attr.startswith('__') and node.attr.endswith('__'):
+            continue
+        reference = '%s.%s' % (module, node.attr)
+        if node.attr not in surface[module] and reference not in installed:
+            out.append((node.lineno, reference))
+    return sorted(set(out))
+
+
+def sweep_undefined(dirs=SWEEP_DIRS):
+    """Both rename sweeps over every Python file in `dirs`, as `(relative path, line, what)`.
+
+    `undefined_names` catches a bare reference a rename missed; `missing_attributes` catches one
+    read through an import alias. Together they are what makes a bulk rename checkable without
+    executing every branch.
+    """
+    surface = {}
+    for directory in (PORT, HERE):
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if name.endswith('.py'):
+                surface[name[:-3]] = _public_names(os.path.join(directory, name))
+
+    paths = []
+    for directory in dirs:
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if name.endswith('.py'):
+                paths.append(os.path.join(directory, name))
+
+    installed = set()
+    for path in paths:
+        installed |= installed_attributes(path)
+
+    out = []
+    for path in paths:
+        rel = os.path.relpath(path, ROOT)
+        try:
+            rows = undefined_names(path)
+        except SyntaxError as exc:
+            out.append((rel, exc.lineno or 0, 'SYNTAX ERROR: %s' % exc.msg))
+            continue
+        for line, symbol in rows:
+            out.append((rel, line, symbol))
+        for line, symbol in missing_attributes(path, surface, installed):
+            out.append((rel, line, symbol))
+    return out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--strict', action='store_true',
                         help='exit 1 when there is any finding, not only an unclassified one')
     parser.add_argument('--kind', default=None,
                         help='report only findings of this kind')
+    parser.add_argument('--undefined', action='store_true',
+                        help='sweep for names a rename left behind, instead of auditing units')
     args = parser.parse_args(argv)
+
+    if args.undefined:
+        rows = sweep_undefined()
+        for path, line, symbol in rows:
+            print('%-52s:%-5d %s' % (path, line, symbol))
+        print('')
+        print('%d undefined reference(s) across %d directory(ies)'
+              % (len(rows), len(SWEEP_DIRS)))
+        return 1 if rows else 0
 
     findings, summary = audit()
     if args.kind:

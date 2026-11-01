@@ -19,7 +19,9 @@ from corner_common import is_entry_point, out_path
 
 REF_VOL_M3 = 5.518157396e-7                 # 551.8157396 mm3, OpenSCAD
 PART_VOL_M3 = 5.51827595e-7                 # 551.827595 mm3, the Part:: port
-TOL = 1e-3 * REF_VOL_M3
+#: 0.1% of the reference, so already SI -- named for its unit because it is a volume, not the
+#: dimensionless 1e-3 it is derived from.
+TOL_M3 = 1e-3 * REF_VOL_M3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -60,7 +62,7 @@ def main():
     print('  feature tree    = %s' % ' -> '.join(tree))
     print('  tip             = %s' % body.Tip.Name)
 
-    ok = (not still and s.isValid() and len(s.Solids) == 1 and abs(d) <= TOL)
+    ok = (not still and s.isValid() and len(s.Solids) == 1 and abs(d) <= TOL_M3)
     print('  result          = %s' % ('PASS' if ok else 'FAIL'))
     return 0 if ok else 1
 

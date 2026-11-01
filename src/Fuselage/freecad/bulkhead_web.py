@@ -50,9 +50,10 @@ from corner_common import build_sheet, is_entry_point, merge_params
 
 P = 'Params.'
 
-# ref_boom_bulkhead.scad mode 10
-REF_AREA = 5700.1741175
-EXPECT_BBOX = (-40.9, -40.9, 40.9, 40.9)
+# ref_boom_bulkhead.scad mode 10: 5700.1741175 mm2.
+REF_AREA_M2 = 5.7001741175e-3
+#: mm: -40.9, -40.9, 40.9, 40.9
+EXPECT_BBOX_M = (-0.0409, -0.0409, 0.0409, 0.0409)
 
 OWN = [
     ('web_width', '6.0'),
@@ -137,7 +138,8 @@ def main():
     print('PART:: 2D CSG tree -- bulkhead_web_inner_shape')
     print('  %-22s %13s %13s %11s  %s'
           % ('shape', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
-    ok = plane2d.report(doc, 'web_inner', tip.Shape, REF_AREA, 'oml_reach', EXPECT_BBOX)
+    ok = plane2d.report(doc, 'web_inner', tip.Shape, REF_AREA_M2, 'oml_reach',
+                        EXPECT_BBOX_M)
     print('')
     print('  %s' % ('agrees' if ok else 'MISMATCH -- see checks above'))
     return 0 if ok else 1

@@ -108,7 +108,12 @@ class TestCowlInteriorHelpers:
 
     def test_check_slope_refuses_a_section_shallower_than_the_overhang_limit(self, ci):
         with pytest.raises(PreconditionFailed) as caught:
-            ci._check_slope([(10.0, 0.0)], [(10.5, 0.0)], 0.0, 0.1, 35.0)
+            # A half-millimeter radial step over a tenth of a millimeter of rise: about
+            # 11 degrees from the bed, well under the 35 the assertion is given. Meters and
+            # radians since IP-FC-160 -- passing 35.0 here would be 35 *radians*, and the
+            # assertion would fire for a reason that has nothing to do with this geometry.
+            ci._check_slope([(0.010, 0.0)], [(0.0105, 0.0)], 0.0, 1.0e-4,
+                            math.radians(35.0))
         assert caught.value.message
 
     def test_polyline_closest_agrees_with_distances(self, ci):
@@ -120,25 +125,28 @@ class TestCowlInteriorHelpers:
         assert got[0] == pytest.approx(want, abs=1e-12)
 
     def test_thin_stations_removes_a_crowded_pair_and_keeps_both_ends(self, ci):
-        floor = ci.station_floor(0.6)
-        near = ci._thin_stations([-300.0, -60.0009, -60.0, -30.0, 0.0], floor)
-        assert near[0] == -300.0 and near[-1] == 0.0, 'both ends must survive'
-        assert all(b - a >= floor - 1e-12 for a, b in zip(near, near[1:]))
+        floor = ci.station_floor(0.0006)
+        near = ci._thin_stations([-0.300, -0.0600009, -0.060, -0.030, 0.0], floor)
+        assert near[0] == -0.300 and near[-1] == 0.0, 'both ends must survive'
+        assert all(b - a >= floor - 1e-15 for a, b in zip(near, near[1:]))
 
     def test_thin_stations_keeps_the_last_station_displacing_its_neighbor(self, ci):
-        floor = ci.station_floor(0.6)
-        ends = ci._thin_stations([0.0, 1.0, 1.0 + 0.5 * floor], floor)
-        assert ends[-1] == 1.0 + 0.5 * floor
-        assert all(b - a >= floor - 1e-12 for a, b in zip(ends, ends[1:]))
+        floor = ci.station_floor(0.0006)
+        ends = ci._thin_stations([0.0, 1.0e-3, 1.0e-3 + 0.5 * floor], floor)
+        assert ends[-1] == 1.0e-3 + 0.5 * floor
+        assert all(b - a >= floor - 1e-15 for a, b in zip(ends, ends[1:]))
 
     def test_the_station_floor_is_the_wall_thickness(self, ci):
-        assert ci.station_floor(0.6) >= 0.6 - 1e-12
+        assert ci.station_floor(0.0006) >= 0.0006 - 1e-15
 
     def test_wall_tol_is_five_times_tighter_than_the_fit_criterion(self, ci):
-        """Pinned so a future edit cannot quietly merge the two figures again."""
-        assert ci.WALL_TOL == 0.01
-        assert ci.TAU == 0.05
-        assert ci.WALL_TOL < ci.TAU
+        """Pinned so a future edit cannot quietly merge the two figures again. The ratio is
+        what the test is about and it is dimensionless, so it survived the SI conversion
+        unchanged; the two figures themselves are 0.01 mm and 0.05 mm in meters."""
+        assert ci.WALL_TOL_M == 1.0e-5
+        assert ci.TAU_M == 5.0e-5
+        assert ci.WALL_TOL_M < ci.TAU_M
+        assert ci.TAU_M == pytest.approx(5.0 * ci.WALL_TOL_M)
 
 
 class TestRingContinuity:
@@ -148,10 +156,12 @@ class TestRingContinuity:
         tube = Part.makeCylinder(10.0, 20.0).cut(Part.makeCylinder(9.4, 20.0))
         wires = [w for w in tube.slice(App.Vector(0, 0, 1), 10.0) if w.isClosed()]
         assert len(wires) == 2
-        faces, counts, area = cci.section_regions(wires)
+        faces, counts, area_m2 = cci.section_regions(wires)
         assert faces == 1, 'one region'
         assert counts == [2], 'with exactly one hole'
-        assert area == pytest.approx(math.pi * (100.0 - 9.4 ** 2), rel=1e-6)
+        # The tube is built in the kernel's millimeters; `section_regions` reports square
+        # meters since IP-FC-160, so the expectation crosses with it.
+        assert area_m2 == pytest.approx(math.pi * (100.0 - 9.4 ** 2) / 1.0e6, rel=1e-6)
 
     def test_two_separate_tubes_are_not_one_annulus(self, Part, App, cci):
         """The converse, which is the half that matters: a classifier that said annulus to
@@ -190,7 +200,12 @@ class TestErrorsAcrossTheRealBoundary:
 
     def test_a_remote_traceback_names_the_failing_vendor_line(self, ci):
         try:
-            ci._check_slope([(10.0, 0.0)], [(10.5, 0.0)], 0.0, 0.1, 35.0)
+            # A half-millimeter radial step over a tenth of a millimeter of rise: about
+            # 11 degrees from the bed, well under the 35 the assertion is given. Meters and
+            # radians since IP-FC-160 -- passing 35.0 here would be 35 *radians*, and the
+            # assertion would fire for a reason that has nothing to do with this geometry.
+            ci._check_slope([(0.010, 0.0)], [(0.0105, 0.0)], 0.0, 1.0e-4,
+                            math.radians(35.0))
         except RemoteGeometryError as exc:
             assert 'cowl_interior.py' in exc.remote_traceback
             assert '_check_slope' in exc.remote_traceback
@@ -227,12 +242,12 @@ class TestLifetimeAgainstTheRealVendor:
     def test_one_shape_serves_many_assertions_without_rebuilding(self, fc, Part, App, cci):
         """The access pattern that makes a 990 s cowl build testable at all."""
         tube = Part.makeCylinder(10.0, 40.0).cut(Part.makeCylinder(9.4, 40.0))
-        expect = math.pi * (100.0 - 9.4 ** 2)
+        expect_m2 = math.pi * (100.0 - 9.4 ** 2) / 1.0e6
         for z in (5.0, 12.0, 20.0, 28.0, 35.0):
             wires = [w for w in tube.slice(App.Vector(0, 0, 1), z) if w.isClosed()]
-            faces, counts, area = cci.section_regions(wires)
+            faces, counts, area_m2 = cci.section_regions(wires)
             assert faces == 1 and counts == [2]
-            assert area == pytest.approx(expect, rel=1e-6)
+            assert area_m2 == pytest.approx(expect_m2, rel=1e-6)
 
 
 class TestPerformanceBudget:

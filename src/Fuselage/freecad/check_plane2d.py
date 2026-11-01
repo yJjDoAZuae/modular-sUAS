@@ -24,6 +24,7 @@ import FreeCAD as App
 
 import corner_tree as C
 import plane2d as p2
+import si
 from corner_common import is_entry_point
 
 TOL = 1e-6          # exact polygon/circle area agreement expected to float precision
@@ -44,6 +45,16 @@ def main():
         if not ok:
             failures.append(label)
 
+    # **Every expectation here is a millimeter figure, deliberately.** The shapes are built
+    # from sheet expressions, which FreeCAD evaluates in millimeters, so `pi * 10 * 10` is how
+    # a reader derives the disc's area and how they check it by hand. `plane2d` measures in SI
+    # (IP-FC-160), so these two helpers convert the measurement rather than the expectation.
+    def check_area(label, got_m2, want_mm2, tol=TOL):
+        check(label, got_m2 * si.MM2_PER_M2, want_mm2, tol)
+
+    def check_length(label, got_m, want_mm, tol=TOL):
+        check(label, si.mm(got_m), want_mm, tol)
+
     # A minimal synthetic Params sheet, just the one alias enclosed()/report() need to read
     # -- not the real build_sheet() machinery, which belongs to parameters.py's own coverage,
     # not this module's.
@@ -59,7 +70,7 @@ def main():
         d = p2.disc(doc, 'Disc', '10')
         doc.recompute()
         shape = d.Shape
-        check('disc area r=10', p2.area(shape), math.pi * 10 * 10)
+        check_area('disc area r=10', p2.area_m2(shape), math.pi * 10 * 10)
         bb = shape.BoundBox
         check('disc bbox xmin', bb.XMin, -10.0)
         check('disc bbox xmax', bb.XMax, 10.0)
@@ -80,7 +91,7 @@ def main():
         r = p2.rect(doc, 'Rect', '20', '10', '0', '0')
         doc.recompute()
         shape = r.Shape
-        check('rect area 20x10', p2.area(shape), 200.0)
+        check_area('rect area 20x10', p2.area_m2(shape), 200.0)
         bb = shape.BoundBox
         check('rect bbox xmax', bb.XMax, 20.0)
         check('rect bbox ymax', bb.YMax, 10.0)
@@ -101,7 +112,7 @@ def main():
         u = p2.union(doc, 'Union', [a, b], '20')
         doc.recompute()
         shape = u.Shape
-        check('union of two overlapping rects', p2.area(shape), 150.0)
+        check_area('union of two overlapping rects', p2.area_m2(shape), 150.0)
         assert not p2.fragmented(shape), (
             'union() must return one face for overlapping input, not the Fuse-style '
             'compound of abutting patches its own docstring warns about')
@@ -109,18 +120,20 @@ def main():
         # enclosed() -- positive margin when the rectangle genuinely contains the shape
         # (reach 20 against a union spanning x in [0, 15]), zero-or-negative when it does
         # not (reach shrunk to 12, which the union's x = 15 edge now exceeds).
-        margin = p2.enclosed(doc, shape, 'test_reach')
-        check('enclosed() margin, reach=20 truly encloses', margin, 20.0 - 15.0)
+        margin_m = p2.enclosed_m(doc, shape, 'test_reach')
+        check_length('enclosed() margin, reach=20 truly encloses', margin_m,
+                     20.0 - 15.0)
 
     with C.tag('T3c_'):
         # A shape whose bbox genuinely exceeds the 'test_reach' = 20 alias: enclosed() must
         # report a non-positive margin, the exact signal report() treats as TRUNCATED.
         far = p2.rect(doc, 'Far', '10', '10', '15', '0')   # xmax = 25 > reach 20
         doc.recompute()
-        margin = p2.enclosed(doc, far.Shape, 'test_reach')
-        ok = margin <= 0
+        margin_m = p2.enclosed_m(doc, far.Shape, 'test_reach')
+        ok = margin_m <= 0
         print('  %-32s %14.6f %14s  %s'
-              % ('enclosed() negative past reach', margin, '<= 0', 'ok' if ok else 'FAIL'))
+              % ('enclosed() negative past reach', si.mm(margin_m), '<= 0',
+                 'ok' if ok else 'FAIL'))
         if not ok:
             failures.append('enclosed() negative-margin case')
 
@@ -132,7 +145,7 @@ def main():
         u = p2.union(doc, 'Union', [a, b], '50')
         doc.recompute()
         shape = u.Shape
-        check('union of two disjoint rects', p2.area(shape), 200.0)
+        check_area('union of two disjoint rects', p2.area_m2(shape), 200.0)
         assert not p2.fragmented(shape), 'disjoint pieces sharing no edge must not be flagged'
 
     # ------------------------------------------------------------
@@ -143,7 +156,7 @@ def main():
         a = p2.rect(doc, 'Src', '10', '10', '0', '0')
         m = p2.merge(doc, 'Merged', a, '20')
         doc.recompute()
-        check('merge of a single rect is an identity', p2.area(m.Shape), 100.0)
+        check_area('merge of a single rect is an identity', p2.area_m2(m.Shape), 100.0)
 
     # ------------------------------------------------------------
     # offset -- OpenSCAD's offset(r=value). Outward growth of a WxH rect by d:
@@ -156,13 +169,15 @@ def main():
         grown = p2.offset(doc, 'Grown', src, '2')
         doc.recompute()
         want = (10 + 4) * (10 + 4) - 4 * 4 + math.pi * 4
-        check('outward offset +2 of 10x10 rect', p2.area(grown.Shape), want, ARC_TOL)
+        check_area('outward offset +2 of 10x10 rect', p2.area_m2(grown.Shape), want,
+                   ARC_TOL)
 
     with C.tag('T5b_'):
         src = p2.rect(doc, 'Src', '10', '10', '0', '0')
         shrunk = p2.offset(doc, 'Shrunk', src, '-2')
         doc.recompute()
-        check('inward offset -2 of 10x10 rect', p2.area(shrunk.Shape), 6.0 * 6.0, ARC_TOL)
+        check_area('inward offset -2 of 10x10 rect', p2.area_m2(shrunk.Shape),
+                   6.0 * 6.0, ARC_TOL)
 
     # ------------------------------------------------------------
     # erode_difference -- erosion(A - B, r) == erosion(A, r) - dilation(B, r), for a window
@@ -186,7 +201,8 @@ def main():
         doc.recompute()
         dilation_of_inner = (4 + 2 * 2) ** 2 - 4 * 2 ** 2 + math.pi * 2 ** 2
         want = 16.0 * 16.0 - dilation_of_inner
-        check('erode_difference of a window', p2.area(eroded.Shape), want, ARC_TOL)
+        check_area('erode_difference of a window', p2.area_m2(eroded.Shape), want,
+                   ARC_TOL)
         assert eroded.Shape.isValid(), 'erode_difference must produce a valid shape'
 
     # ------------------------------------------------------------
@@ -201,15 +217,15 @@ def main():
     with C.tag('T7_'):
         src = p2.rect(doc, 'Src', '10', '10', '0', '0')
         doc.recompute()
-        src_area = p2.area(src.Shape)
+        src_area_m2 = p2.area_m2(src.Shape)
 
         radius = '2'
         filleted = p2.fillet_inner(doc, 'Fillet', src, radius, '30')
         doc.recompute()
-        f_area = p2.area(filleted.Shape)
+        f_area_m2 = p2.area_m2(filleted.Shape)
         removed_per_corner = 2.0 * 2.0 - (math.pi / 4.0) * 2.0 * 2.0
-        check('fillet_inner rounds all 4 convex corners',
-              src_area - f_area, 4 * removed_per_corner, ARC_TOL)
+        check_area('fillet_inner rounds all 4 convex corners',
+                   src_area_m2 - f_area_m2, 4 * removed_per_corner, ARC_TOL)
         assert filleted.Shape.isValid(), 'fillet_inner must produce a valid shape'
         assert not p2.fragmented(filleted.Shape), 'fillet_inner output must be one face'
 
@@ -219,11 +235,11 @@ def main():
         # to the offset chain's own tolerance -- a genuine identity check, not a bound.
         src = p2.rect(doc, 'Src', '10', '10', '0', '0')
         doc.recompute()
-        src_area = p2.area(src.Shape)
+        src_area_m2 = p2.area_m2(src.Shape)
         outered = p2.fillet_outer(doc, 'FilletOuter', src, '1', '30')
         doc.recompute()
-        check('fillet_outer on a convex rect is a no-op', p2.area(outered.Shape), src_area,
-              ARC_TOL)
+        check_area('fillet_outer on a convex rect is a no-op',
+                   p2.area_m2(outered.Shape), src_area_m2 * si.MM2_PER_M2, ARC_TOL)
         assert outered.Shape.isValid()
         assert not p2.fragmented(outered.Shape)
 
@@ -236,12 +252,14 @@ def main():
         r = p2.rect(doc, 'Rect', '10', '10', '0', '0')
         doc.recompute()
         print('  report(), correct reference:')
-        ok_report = p2.report(doc, 'rect ok', r.Shape, 100.0, 'test_reach')
+        ok_report = p2.report(doc, 'rect ok', r.Shape, 100.0 / si.MM2_PER_M2,
+                              'test_reach')
         if not ok_report:
             failures.append('report() should have passed a correct reference')
 
         print('  report(), wrong reference:')
-        bad_report = p2.report(doc, 'rect bad', r.Shape, 50.0, 'test_reach')
+        bad_report = p2.report(doc, 'rect bad', r.Shape, 50.0 / si.MM2_PER_M2,
+                               'test_reach')
         if bad_report:
             failures.append('report() should have failed a reference off by 2x')
 
@@ -251,7 +269,7 @@ def main():
     class _NoFaces:
         Faces = []
 
-    nan_result = p2.area(_NoFaces())
+    nan_result = p2.area_m2(_NoFaces())
     ok = nan_result != nan_result   # nan is the only float that is not equal to itself
     print('  %-32s %14s %14s  %s' % ('area() with no faces -> nan', str(nan_result), 'nan',
                                      'ok' if ok else 'FAIL'))

@@ -31,6 +31,7 @@ import FreeCAD as App
 
 import corner_tree as C
 import plane2d
+from plane2d import Ref2D
 from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
@@ -38,10 +39,14 @@ P = 'Params.'
 
 # ref_boom_bulkhead.scad modes 0, 1, 2, 3
 REFS = {
-    'centerline': (556.0000000, (0.0, 25.0, 40.0, 43.9)),
-    'mirrored': (1112.0000000, (-40.0, 25.0, 40.0, 43.9)),
-    'stroke': (1668.0908114, (-43.0, 22.0004, 43.0, 46.9)),
-    'erosion': (616.9927776, (-36.6573, 28.0709, 36.6573, 40.9)),
+    # 556.0000000 mm2, bbox [0, 25, 40, 43.9] mm
+    'centerline': Ref2D(0.000556, (0, 0.025, 0.04, 0.0439)),
+    # 1112.0000000 mm2, bbox [-40, 25, 40, 43.9] mm
+    'mirrored': Ref2D(0.001112, (-0.04, 0.025, 0.04, 0.0439)),
+    # 1668.0908114 mm2, bbox [-43, 22.0004, 43, 46.9] mm
+    'stroke': Ref2D(0.0016680908114, (-0.043, 0.0220004, 0.043, 0.0469)),
+    # 616.9927776 mm2, bbox [-36.6573, 28.0709, 36.6573, 40.9] mm
+    'erosion': Ref2D(0.0006169927776, (-0.0366573, 0.0280709, 0.0366573, 0.0409)),
 }
 
 PARAMS = [
@@ -141,8 +146,9 @@ def main():
           % ('shape', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
     ok = True
     for name in ('centerline', 'mirrored', 'stroke', 'erosion'):
-        ref, bbox = REFS[name]
-        ok &= plane2d.report(doc, name, tips[name].Shape, ref, 'web_reach', bbox)
+        ref = REFS[name]
+        ok &= plane2d.report(doc, name, tips[name].Shape, ref.area_m2, 'web_reach',
+                             ref.bbox_m)
     print('')
     print('  %s' % ('all shapes agree' if ok else 'MISMATCH -- see checks above'))
     print('  spine vertices: %d (%s)'

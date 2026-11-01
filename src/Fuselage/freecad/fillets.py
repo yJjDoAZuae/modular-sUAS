@@ -72,15 +72,19 @@ import Part
 import Sketcher as S
 
 import corner_tree as C
+import si
 from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
 
-REFS = {'OuterCornerFillet': 8.3462246,
-        'FlangeChamfer': 151.5351660,
-        'GreebleToWebFillet': 3.1435948,
-        'BoltFlangeFillet': 38.1582400,
-        'WebToBoltFillet': 89.9539546}
+#: OpenSCAD reference volumes in cubic meters, with the recorded mm3 figure beside each.
+REF_VOLS_M3 = {
+    'OuterCornerFillet':  8.3462246e-09,     # 8.3462246 mm3
+    'FlangeChamfer':      1.51535166e-07,    # 151.535166 mm3
+    'GreebleToWebFillet': 3.1435948e-09,     # 3.1435948 mm3
+    'BoltFlangeFillet':   3.815824e-08,      # 38.15824 mm3
+    'WebToBoltFillet':    8.99539546e-08,    # 89.9539546 mm3
+}
 
 PARAMS = [
     ('unit_width', '100.0'),
@@ -852,7 +856,7 @@ def main():
     print('  %-20s %14s %14s %12s %9s  %s'
           % ('module', 'tree', 'OpenSCAD', 'delta', 'rel', 'checks'))
     built = {tip.Name for tip in tips}
-    for name in REFS:
+    for name in REF_VOLS_M3:
         if name in built:
             continue
         # Not a failure. The hand driver's own parameters are one of the 27 variants where
@@ -860,28 +864,29 @@ def main():
         # body the clamp used to produce -- the one OQ-ARCH-14 removed. Nothing here can be
         # checked against it, and the whole-corpus comparison is what covers the removal.
         print('  %-20s %14s %14.6f %12s %9s  omitted -- %s'
-              % (name, 'not built', REFS[name], '', '',
+              % (name, 'not built', REF_VOLS_M3[name] * si.MM3_PER_M3, '', '',
                  'the web does not reach the flange face at these parameters'))
     ok = True
     for tip in tips:
-        ref = REFS[tip.Name]
+        ref_m3 = REF_VOLS_M3[tip.Name]
         s = tip.Shape
-        d = s.Volume - ref
+        volume_m3 = si.volume_m3(s)
+        d_m3 = volume_m3 - ref_m3
         checks = []
         if not s.isValid():
             checks.append('INVALID')
         if len(s.Solids) != 1:
             checks.append('solids=%d' % len(s.Solids))
-        if abs(d) / ref > 1e-3:
+        if abs(d_m3) / ref_m3 > 1e-3:
             checks.append('VOLUME')
         if checks:
             ok = False
         print('  %-20s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
-              % (tip.Name, s.Volume, ref, d, 100 * d / ref,
+              % (tip.Name, volume_m3 * si.MM3_PER_M3, ref_m3 * si.MM3_PER_M3,
+                 d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3,
                  ' '.join(checks) if checks else 'ok'))
-        bb = s.BoundBox
-        print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-              % ('', bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+        print('  %-20s bbox [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+              % (('',) + tuple(si.mm(v) for v in si.bbox_m(s).as_tuple())))
     print('  %s' % ('ok' if ok else 'FAIL -- see checks above'))
     return 0 if ok else 1
 

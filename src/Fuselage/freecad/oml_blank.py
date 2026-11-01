@@ -74,6 +74,12 @@ STEP_IMPORT_SCALE = MODEL_UNIT_MM / NATIVE_PER_MODEL_UNIT      # 3.28084
 # inside 0.010%.
 VOLUME_DEFLECTION_M = 2.0e-6                 # 0.002 mm
 
+#: What the import scale is checked against: at U = 1 the OML is one unit_width across. The
+#: width is a convention shared with `corner_common`, which this module cannot import, so it is
+#: restated here and asserted rather than assumed.
+UNIT_WIDTH_M = 0.100                         # 100 mm
+SCALE_TOL_M = 5.0e-4                         # 0.5 mm
+
 # How flat a face must be, in the STEP's own units, to count as lying in a plane -- and how
 # close two such faces must be to count as lying in the *same* plane.
 _FLAT = 1e-9
@@ -475,12 +481,15 @@ def blank(name, U, scale_m_per_mm, offset_x_m, reversed_):
     return solid, repairs
 
 
-def volume(shape, deflection=VOLUME_DEFLECTION_M):
-    """The volume the shape's triangles enclose.
+def volume_m3(shape, deflection=VOLUME_DEFLECTION_M):
+    """The volume the shape's triangles enclose, in cubic meters.
 
     Not `Shape.Volume`, which is unreliable on freeform surfaces by up to 6.79% here while
     reporting `isValid()` and `isClosed()` throughout -- OQ-DES-CW12. This is the quantity the
     OpenSCAD side reports, so the two are comparable.
+
+    The mesh points are a kernel object and so millimeters; the sum is divided once at the
+    return rather than each point being converted, which is the same number and one operation.
     """
     mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=si.mm(deflection),
                                   AngularDeflection=0.2, Relative=False)
@@ -491,7 +500,7 @@ def volume(shape, deflection=VOLUME_DEFLECTION_M):
         total += (a.x * (b.y * c.z - b.z * c.y)
                   - a.y * (b.x * c.z - b.z * c.x)
                   + a.z * (b.x * c.y - b.y * c.x))
-    return abs(total) / 6.0
+    return abs(total) / 6.0 / si.MM3_PER_M3
 
 
 def main():
@@ -503,7 +512,7 @@ def main():
         solid, repairs = surface(name)
         scaled = solid.copy()
         scaled.scale(STEP_IMPORT_SCALE)
-        tess, occ = volume(scaled), scaled.Volume
+        tess_m3, occ_m3 = volume_m3(scaled), si.volume_m3(scaled)
 
         checks = []
         if not solid.isClosed():
@@ -512,12 +521,15 @@ def main():
             checks.append('SOLIDS=%d' % len(solid.Solids))
         # The scale is a convention shared with a module this one cannot import, so it is
         # checked rather than assumed: at U = 1 the OML is one unit_width across.
-        bb = scaled.BoundBox
-        if abs(bb.YLength - 100.0) > 0.5 or abs(bb.ZLength - 100.0) > 0.5:
-            checks.append('SCALE y=%.3f z=%.3f, expected 100' % (bb.YLength, bb.ZLength))
+        bb = si.bbox_m(scaled)
+        if abs(bb.YLength - UNIT_WIDTH_M) > SCALE_TOL_M \
+                or abs(bb.ZLength - UNIT_WIDTH_M) > SCALE_TOL_M:
+            checks.append('SCALE y=%.3f z=%.3f mm, expected %.0f'
+                          % (si.mm(bb.YLength), si.mm(bb.ZLength), si.mm(UNIT_WIDTH_M)))
         print('  %-10s %6d %8d %14.3f %14.3f  %+8.4f%%  %s'
-              % (name, len(solid.Faces), len(repairs), tess, occ,
-                 100.0 * (occ - tess) / tess, ' '.join(checks) if checks else 'ok'))
+              % (name, len(solid.Faces), len(repairs), tess_m3 * si.MM3_PER_M3,
+                 occ_m3 * si.MM3_PER_M3, 100.0 * (occ_m3 - tess_m3) / tess_m3,
+                 ' '.join(checks) if checks else 'ok'))
         ok &= not checks
 
     print('')
