@@ -43,17 +43,20 @@ def main():
             failures.append(label)
 
     # ------------------------------------------------------------
-    # The two constructed variants. At the defaults, flat_offset's max() picks the longeron
-    # term (2.0 + 0.05 + 0.4 = 2.45) over the panel term (4.0 - (10 - 4.77 - 0.1) = -1.13).
-    # Growing panel_overlap alone pushes the panel term past it: 20.0 - (10 - 0 - 0) = 10.0.
+    # The two constructed variants. **Meters, since `Params` is SI (IP-FC-160)**; the
+    # millimeter figures stay here because they are what the arithmetic reads as. At the
+    # defaults, flat_offset's max() picks the longeron term (2.0 + 0.05 + 0.4 = 2.45 mm) over
+    # the panel term (4.0 - (10 - 4.77 - 0.1) = -1.13 mm). Growing panel_overlap alone pushes
+    # the panel term past it: 20.0 - (10 - 0 - 0) = 10.0 mm.
     # ------------------------------------------------------------
     longeron_wins = {}
-    panel_wins = {'panel_overlap': 20.0, 'panel_thickness': 0.0, 'panel_tolerance': 0.0}
+    panel_wins = {'panel_overlap': 0.020,                 # 20 mm
+                  'panel_thickness': 0.0, 'panel_tolerance': 0.0}
 
     p_lon = cc.Params(**longeron_wins)
     p_pan = cc.Params(**panel_wins)
-    lon_term = p_lon.longeron_radius + 0.05 + p_lon.longeron_chamfer
-    pan_term = 20.0 - p_pan.corner_radius
+    lon_term = p_lon.longeron_radius + 0.00005 + p_lon.longeron_chamfer    # + 0.05 mm
+    pan_term = 0.020 - p_pan.corner_radius                                 # 20 mm - r
     check('defaults: the longeron term genuinely wins flat_offset', -p_lon.flat_offset,
           lon_term)
     check('grown panel_overlap: the panel term genuinely wins flat_offset', -p_pan.flat_offset,
@@ -101,9 +104,17 @@ def main():
     # tools/branching_dimensions.py drives it -- confirms the reported BRANCH/PER lines, not
     # just the in-process bookkeeping above.
     # ------------------------------------------------------------
+    # **The variants file is millimeters, and that is a contract rather than an accident.**
+    # The real producer is `tools/branching_dimensions.py`, which fills it from the parameter
+    # sheets -- the exempt OpenSCAD path -- so `geometry_branches.py` reads it through
+    # `Params.from_mm`. The dicts above are this script's own SI test data, so they cross here.
+    def to_mm(entry):
+        return dict((key, value * 1000.0 if key in cc.Params.LENGTHS else value)
+                    for key, value in entry.items())
+
     variants_path = out_path('geometry_branches_variants.json')
     with io.open(variants_path, 'w', encoding='utf-8') as f:
-        json.dump([longeron_wins, panel_wins], f)
+        json.dump([to_mm(longeron_wins), to_mm(panel_wins)], f)
 
     freecadcmd = os.path.join(os.path.dirname(sys.executable), 'freecadcmd.exe')
     if not os.path.exists(freecadcmd):

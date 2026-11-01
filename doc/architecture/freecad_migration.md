@@ -432,10 +432,10 @@ rather than factors scattered through the geometry code:
 ```mermaid
 flowchart LR
     subgraph si["SI — meters"]
-        p["Parameters<br/>(ported to SI)"]
+        p["Parameters<br/>and geometry modules"]
     end
     subgraph conv["conversion layer"]
-        c["one named module"]
+        c["units.py<br/>+ kernel adapter"]
     end
     subgraph mm["millimeters"]
         fc["FreeCAD API"]
@@ -451,6 +451,129 @@ still exports, and still passes `isValid()`. It fails only at the printer.
 
 **The existing OpenSCAD path stays in millimeters and is never converted.** It has one
 phase left; converting it spends real risk for no benefit.
+
+### Where the port stands against this, measured
+
+**The diagram above is the design. The port does not implement it, and the gap is wide.**
+Measured on 2026-10-31:
+
+The first audit of this reported "46 of 79 modules holding 173 millimeter constants", which was
+roughly right and individually wrong, because it classified by name. `tools/unit_regime.py`
+classifies by reading each use site, and the real inventory is:
+
+| Classification | Count | What it means |
+| --- | --- | --- |
+| Dimensional, must become SI | **90** | 63 lengths, 3 areas, 20 volumes, 4 angles |
+| Dimensionless | **89** | a count, a ratio, a dot product, an enum member, a font design unit |
+| Millimeters at a declared boundary or in a view | **32** | legitimate, each with a recorded reason |
+| Seconds | **2** | already SI |
+| **Total module-level constants, in 80 modules** | **213** | |
+
+Name-guessing gets these wrong in both directions. `TAU` = 0.05 is a length; `CHEEK_DOT` = 0.9
+is a dot product; `RIB_FACETS` = 48 is a count; `UNITS_PER_EM` = 2048 is a font design unit; and
+**`FLAT_TOL` = 1e-9 reads like a length tolerance and is the hypot of a unit normal.** Reading
+the use sites also corrected four: `SLOPE_SLACK` and `ANGLE_WINDOW` are degrees rather than
+lengths, `FACE_IMAGE_TOL` is a fraction of `t`, and `PARTITION_TOL` is a relative volume slip.
+
+**It is not only the constants.** The parameters arrive from
+`fuselage_variants.derived_parameters()`, which is the OpenSCAD sweep's and whose
+`scaled_standard_values` returns `unit_width` = 100 — so millimeters propagate through every
+argument and return value in the port's geometry pipeline, which is exactly what the guidelines'
+*"never propagate inward"* forbids.
+
+**Inline literals are measured and ratcheted, not estimated.** The first write-up of this said "a few hundred", from one example and no count. Measured 2026-10-31 by `tools/unit_regime.py`: **3089** numeric literals sit inside the port's function bodies and **2527 cannot be a length at all** -- an index, a `range` bound, a format width, or a factor. The rule that separates the last of those is syntactic and is what makes `2.0` readable: a dimension is assigned, added or passed, while a factor is what you divide or scale *by*, so `abs(a) / 2.0` and `unit_width * 0.30` are factors and `0.010 * U` -- ten millimeters scaled by `U` -- is not. Of the rest, 202 are an epsilon, 53 a named default argument, 50 a proportion, 26 a relative tolerance and 10 an angle, leaving **208 bare dimensional literals in 33 modules** -- of which **107 are page geometry in a human-facing view** (`clearance_sheet` 44, `sheet_annotations` 38, `drawing` 8, `clearance_figure` 8, `drawing_standard` 6, `sheet_table` 3), which are millimeters legitimately. **Roughly a hundred remain in library code**, the largest holdings being `cowl` and `cowl_interior` at 13 each, `boom_web` 10, `corner_tree` 9 and `oml_blank` 9.
+
+**`corner_tree`'s nine are not dimensions**, and the distinction matters because it is
+the `PartDesign::` target state OQ-ARCH-11 decided. `gnr, eps, gr, gnt, lr, gt = 3.7,
+0.01, 2.9, 0.8, 2.0, 0.8` seeds a sketch, and `_sketch` then binds every dimension to a
+parameter-sheet expression through `setExpression` and asserts full constraint, because
+"an under-constrained sketch deforms silently and still extrudes to a valid solid". Its own
+docstring says it: *"`pts` seeds the geometry; the constraints are what actually place it."*
+The numbers have to be realistic so the solver converges to the right branch.
+
+**Why any of them exist is recorded in `parameters.py`**, and it is a staging decision
+rather than neglect: *"the ported modules each carry literal values, which was the right
+thing while they were only compared against isolated references at matching inputs, and it
+becomes wrong the moment a generator feeds the sweep."* Each module carries its own
+reference configuration so it can be run standalone against one isolated OpenSCAD render,
+which is how the port was validated. IP-FC-41 retires it, and the net is already under it:
+`check_literals` compares every literal against the authority, `check_unseeded` refuses a
+literal row the authority does not supply, and `build_sheet` raises rather than silently
+substituting a module's reference value for a variant's. The unit of conversion work is
+therefore a module rather than a constant.
+
+**This is not covered by the OpenSCAD exemption, and the difference is structural.** There the
+geometry layer is a separate language in a generated file, so the emission step is a real file
+interface and the guidelines name it as one: *"the sweep layer's emission step is the file
+interface… Everything above that line is SI."* The port has no such line. Its geometry layer
+**is** project Python — there is no file between `cowl_interior.py` and the kernel — so nothing
+in it qualifies as *"the narrow layer that reads a parameter file or writes a geometry file."*
+By the standard's own words, every one of those 173 constants is a stored value and should be SI.
+
+**Where the conversion goes, since it does not go inside geometry code.** The guidelines forbid
+that directly — *"Never call a conversion function inside geometry or analysis code — if you need
+one there, the boundary is in the wrong place"* — and in doing so they say what to do instead:
+give the boundary a shape. **That shape is `freecad/si.py`, delivered under IP-FC-158.** It owns
+the kernel calls that carry a number, takes SI in and gives SI back; geometry modules compose it,
+hold meters, and never see the factor. `units.py` remains the factor and the ÷1000 check, and
+`si.py` is the layer that calls it. Scattering `m_to_mm` through `cowl_interior` would satisfy
+the letter of the standard and violate its point.
+
+Its surface was derived from what the port calls, not guessed: **138 `App.Vector` constructions,
+about 190 numeric `Part.*` constructors, and about 450 measurement reads** — `.Volume` 206,
+`.BoundBox` 80, `.Length` 38, `.Area` 26. It deliberately does not wrap calls that carry no
+number, since `Part.Face(wire)` and `shape.cut(tool)` pass no dimensioned value and wrapping them
+would add indirection without moving a unit. So the rule for a caller is narrow and checkable:
+**if you are writing a number into the kernel or reading one out, it goes through `si`.**
+
+**A shape is a foreign object, like an open file.** `si.box_m(...)` returns a real `Part.Shape`
+whose own coordinates are millimeters, because that is what the kernel stores. That is not a
+leak — the shape belongs to the kernel and every *number* crossing in or out is converted — and
+it is why `volume_m3`, `area_m2` and `bbox_m` exist rather than letting a caller read
+`shape.Volume`, which is mm³.
+
+**Kernel-domain tolerances are the one category that belongs on the millimeter side**, and the
+guidelines already set the precedent with the FEM stack: mm/N/MPa is internally self-consistent,
+so it is treated as file interface — *"convert to SI on the way out of it, and never let mm/MPa
+values into project code."* A fuzz value, a `Z_TOL`, or OCC's `Precision::Confusion()` at 1e-7 mm
+is a parameter of the kernel rather than a dimension of the part, so it lives inside the adapter;
+project code that needs a tolerance states it in meters and the adapter converts. Drawing sheet
+geometry is the same case through the display boundary: A-series paper and font design units are
+presentation, not part dimensions.
+
+**How conformance is enforced rather than remembered.** `tools/unit_regime.py` with
+`tools/unit_regime.json` is the gate, delivered under IP-FC-161 and built *before* the conversion
+on purpose, because the check and the worklist are the same artifact. Every module-level constant
+in the port must be classified with the unit it carries; an unclassified one fails, which makes
+classification a step in adding a constant rather than archaeology afterwards. A dimensional SI
+constant must also name its unit — `_M`, `_M2`, `_M3`, `_RAD` — because the reader needs the unit
+at the use site. Millimeters are legitimate only in a module declared `boundary`, `presentation`
+or `external`, and each exemption must give a reason, since an exemption without one is drift with
+a manifest entry on top of it. Only a module that must *hold* a millimeter value is declared a
+boundary: `build_part`, `mesh_to_brep`, `preview` and `input_screen` cross the boundary but stay
+SI, so an unconverted constant in one is still a finding.
+
+**The instrument's limits are recorded in its own docstring**, because a passing check reads as
+"the port is SI" and means something narrower: it cannot see a value's unit at run time,
+and it records a classification without being able to verify one. Inline literals it now
+*does* see, through a per-module ceiling that may fall and may not rise -- a count rather
+than a per-site verdict, because a line number moves with every edit and because the
+classifier is a heuristic.
+
+**What remains is IP-FC-159 and IP-FC-160** — the port's own SI parameter layer, then the
+per-module conversion, callee-first by import layer with `cowl_interior` last because that is
+where the kernel's reproducibility floor makes a passing comparison weakest. It is a large change
+to delicate geometry, so it is scheduled rather than opportunistic — but it is a conformance gap
+on a decided standard, not an open question, and this document had it recorded as conformance
+until 2026-10-31.
+
+**A number printed in a document, a log or a drawing dimension is not a unit-regime statement.**
+The guidelines place display at its own boundary — *"Display, reports, drawings | out | m →
+whatever the reader needs"* — so a wall recorded as 0.600 mm in a design document, or a part
+dimensioned in millimeters because that is how a printed part is dimensioned, carries its unit
+with it and is correct as written. The standard governs what a value is *stored* in. Changing the
+stored regime of some future SI parameter layer would not oblige anyone to restate a recorded
+measurement, because a measurement with its unit attached is already unambiguous.
 
 ---
 
@@ -757,7 +880,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-20 | decided 2026-09-06 | Is a volume tolerance relative to volume, or to surface area? — **to surface area and part scale**, `\|Va − Vb\| / (A · 100U)`, dimensionless. A tessellated mesh's volume error goes as offset × area, so the denominator was the defect |
 | ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
-| ARCH-23 | open | The port is **millimeters throughout** and the SI unit boundary this document specifies has no consumers: `units.py` was built (IP-FC-8) and nothing in the geometry imports it. Whether to record millimeters as the port's regime or to adopt SI as designed is the decision |
+| ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -3349,84 +3472,47 @@ than a one-off at the small end — but it requires re-deriving a calibrated thr
 should be decided on the soak's evidence rather than in advance of it. The `U`-normalisation
 question above is in the same position and for the same reason.
 
-### OQ-ARCH-23 — The port is millimeters throughout, and the SI unit boundary has no consumers
+### OQ-ARCH-23 — The port's unit regime — WITHDRAWN 2026-10-31
 
-The project standard is SI (m, s, kg, rad). *The unit boundary* section of this document specifies
-how the FreeCAD port meets it: parameters in SI, FreeCAD's millimeter API on the other side, and
-**exactly one named conversion layer** between them rather than factors scattered through the
-geometry. Its diagram reads `Parameters (ported to SI) → conversion layer → FreeCAD API → STL/3MF
-export`. The roadmap's Phase 3 carries *Adopt SI internally in the ported code* as a checklist item
-and names the test that catches a mistake: a ported part's bounding box in meters must equal the
-OpenSCAD part's in millimeters divided by 1 000.
+**Withdrawn as never open.** This question asked which unit regime the port should work in. That
+was decided at the start of the project, and [general.md](../guidelines/general.md) records it:
+the SI standard's own scope list names *the FreeCAD port (roadmap Phase 3)* as the place "the
+standard actually lands across the geometry pipeline", and its conversion table lists
+`m ↔ mm` at FreeCAD scripting as one of five boundaries. There was nothing left to choose.
 
-**The conversion layer exists and nothing uses it.** `freecad/units.py` was delivered under IP-FC-8
-and holds `MM_PER_M`, `M_PER_MM`, `PA_PER_MPA`, `m_to_mm`/`mm_to_m`/`mpa_to_pa`/`pa_to_mpa`, the
-standard library's angle pair, and `bbox_m_matches_mm` — the ÷1 000 test the roadmap names — plus
-`describe_bbox_mismatch`. Measured across the tree on 2026-10-31, **its only importer is
-`check_units.py`, its own regression test.** No geometry module imports it.
+**The measurement in the question was right, and the port is non-conforming.** `units.py`'s
+single importer is a symptom: **46 of 79 port modules hold 173 module-level millimeter
+constants**, and the parameters arrive from the OpenSCAD sweep's `derived_parameters()` in
+millimeters, so the mm regime propagates through every argument and return value in the geometry
+pipeline. What the question got wrong was its conclusion — that this is a regime to ratify rather
+than a gap to close. [The unit boundary](#the-unit-boundary) now records the measurement, why the
+OpenSCAD exemption does not reach the port (there the geometry layer is a separate language in a
+generated file; here it is project Python with no file between it and the kernel), and where the
+conversion belongs. Scheduled as IP-FC-158.
 
-**The ported geometry is millimeters end to end**, and not ambiguously so: `cowl_interior`'s
-`MIN_INTERVAL` is 0.20, `WALL_TOL` is 0.01, a cowl wall `t` is 0.600, and stations are at
-`z` = -283.9951. `drawing.py` states the reason in one line — *"Model coordinates are millimeters
-because the OpenSCAD path is"* — and that reason is sound: the port reads the same parameter sheets
-and the same OML meshes the OpenSCAD path reads, and those are millimeters.
+**A second error, and it is the one worth remembering.** The justification offered for calling
+millimeters conforming was `units.py`'s own docstring, which asserts that "everything from the
+FreeCAD API inward is millimeters and stays that way." That docstring is this project's code, not
+its standard. **A module cannot grant itself an exemption from a guideline**, and a design
+document that cites one as authority launders it into the authority. The standard is
+[general.md](../guidelines/general.md); where a docstring disagrees with it, the docstring is the
+thing to fix.
 
-**Nothing built is wrong.** Millimeters throughout is self-consistent, and every figure this project
-has recorded is a millimeter figure. What is wrong is that **the design authority specifies a regime
-the code does not implement**, and the gap is now three months and 125 completed work items old. The
-concrete hazard is the one this section was written to prevent: a reader who follows this document
-writes new ported code in meters, and it is wrong by 1 000× against everything around it — an error
-that renders, exports and passes `isValid()`, and fails only at the printer.
+**Two things the question also ran together**, since conflating them is part of what produced it:
 
-#### Alternatives
+- *What unit a value is stored in.* This is what the standard governs — every variable, field,
+  parameter, argument and return value, inward of the boundaries listed above.
+- *What unit a number is written in.* This is presentation, and the guidelines already place it
+  at a boundary of its own: *"Display, reports, drawings | out | m → whatever the reader needs."*
+  A wall recorded as 0.600 mm in a design document, a station as `z` = -283.9951 mm, or a drawing
+  dimensioned in millimeters because that is how a printed part is dimensioned, carries its unit
+  with it and is complete and correct as written. None of those is a stored value and none of
+  them states a regime. This question's suggestion that such figures might need "restating"
+  described work that does not exist.
 
-1. **Record millimeters as the port's unit regime and retire the SI-internal requirement for it.**
-   Restate this section to say the port is millimeters because its inputs are, and keep `units.py`
-   for the boundaries that genuinely cross: the OML import, which this document already identifies
-   as *"the only meter-to-millimeter conversion"*, and the FEM tier's N/mm² against Pa.
-   *Benefits:* makes the authority true today at no code risk, and removes the 1 000× trap for new
-   code. *Drawbacks:* the project standard is SI, so this is a standing exemption and has to be
-   written as one rather than left as drift; it also makes the ÷1 000 bounding-box test apply only
-   at the OML import instead of at every part. *Prerequisites:* none.
-
-2. **Adopt SI in the ported code as designed.** Convert the parameter layer to meters and call
-   `m_to_mm` at the FreeCAD boundary. *Benefits:* the standard holds without exemption, and
-   `bbox_m_matches_mm` becomes a live check rather than dead code. *Drawbacks:* it touches every
-   dimensional constant in the port and every parameter sheet; **every recorded figure in this
-   project's design and implementation documents is a millimeter figure**, so the documentation
-   cost exceeds the code cost; and the kernel-domain tolerances (`RIB_CUT_FUZZ`, `Z_TOL`,
-   `MIN_INTERVAL`) are numbers whose magnitudes are meaningful in millimeters and become 1e-3-scale
-   in meters, which is where a 1 000× slip hides best. *Prerequisites:* a conversion plan for the
-   parameter sheets and the OML references, and a decision on whether the recorded figures are
-   restated or kept as millimeters with a note.
-
-3. **Convert only at the parameter interface and leave the geometry in millimeters.** Read the
-   sheets as SI, convert once on entry. *Benefits:* satisfies *"conversion confined to the file
-   interface"* literally, with a small blast radius in the geometry. *Drawbacks:* the sheets are
-   millimeters today, so this still means converting them — the documentation cost of alternative 2
-   without its benefit, because the regime a reader actually works in stays millimeters.
-   *Prerequisites:* the same sheet conversion as alternative 2.
-
-4. **Leave it undecided.** Listed because it is the status quo and therefore a real option, not
-   because it is a candidate. *Drawbacks:* it is how a reader of this document writes meters into
-   millimeter code, and the discrepancy survived three months unnoticed once already.
-
-#### Recommendation
-
-**Alternative 1.** The port is millimeters because its inputs are millimeters, which is an
-engineering reason rather than an oversight — `drawing.py` already records it in one line, so the
-decision was effectively taken and simply never promoted into this document. Alternative 2's real
-cost is restating every millimeter figure in the project's documentation rather than editing the
-code, and it buys conformance to a standard whose own purpose — unambiguous physical quantities at
-the boundaries where analysis and other tools meet the model — is served by keeping `units.py`
-exactly where it already matters: the OML import and the FEM tier. The state to get out of is the
-present one, where the document specifies a regime nothing implements and a passing test guards a
-module with no callers.
-
-**What this does not settle:** whether
-[general.md](../guidelines/general.md)'s units standard should carry the port as a named exemption
-beside the existing OpenSCAD one. That is the guidelines document's to state, and it follows this
-decision rather than preceding it.
+**What remains open about units is nothing.** The regime is SI, the boundary is the kernel
+adapter, kernel-domain tolerances sit inside it by the same reasoning the guidelines already apply
+to the FEM stack, and display is its own boundary. What remains is work, carried by IP-FC-158.
 
 ## References
 

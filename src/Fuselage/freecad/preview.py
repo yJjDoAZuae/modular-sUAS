@@ -12,7 +12,7 @@ Run it under freecadcmd:
     freecadcmd preview.py                 # the corner, three views, plus the OpenSCAD ref
     freecadcmd preview.py corner tip      # a named part and node
 
-Tessellation is a *setting*, not a property of the B-rep, so DEVIATION is stated here rather
+Tessellation is a *setting*, not a property of the B-rep, so DEVIATION_MTION is stated here rather
 than left to a default -- the mesh is for looking at, and a coarse one would show facets that
 are not in the model.
 """
@@ -29,8 +29,13 @@ from corner_common import is_entry_point, out_path, script_args
 
 # Angular and linear deviation for the display mesh. Fine enough that curvature reads as
 # curvature; nothing here is dimensional.
-DEVIATION = 0.05
-ANGULAR_DEG = 5.0
+# **Nothing reads either of these today**, confirmed by grep on 2026-10-31 while
+# converting them: they are stated settings with no call site, so the mesh this
+# module renders is produced at whatever the default is. Converted rather than
+# deleted because the note above explains why they are stated here at all, and a
+# setting nobody applies is a separate finding from a setting in the wrong unit.
+DEVIATION_M = 5.0e-5                        # 0.05 mm
+ANGULAR_RAD = 0.08726646259971647           # 5.0 deg
 
 # Three views: the sweep's standard camera, then straight down the print axis, then a low
 # angle that shows the z-varying features in profile.

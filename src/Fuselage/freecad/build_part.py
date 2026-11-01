@@ -39,6 +39,7 @@ sys.path.insert(0, HERE)
 import FreeCAD as App
 
 import corner_common
+import si
 import cowl_interior
 import parameters
 import part_kinds
@@ -67,10 +68,10 @@ KINDS = {kind: (module, getattr(parameters, table))
 # and six times the file for a worse number. 1e-3 also lands within a facet count of the
 # OpenSCAD reference, which keeps IP-FC-13 comparing geometry rather than mesh density.
 #
-# ANGULAR_DEFLECTION barely binds on these parts -- 0.5 and 5.0 produce identical meshes, and
+# ANGULAR_DEFLECTION_RAD barely binds on these parts -- 0.5 and 5.0 produce identical meshes, and
 # only at 0.05 does it start adding facets -- so the linear term is what is being set here.
-LINEAR_DEFLECTION = 1.0e-3
-ANGULAR_DEFLECTION = 0.5
+LINEAR_DEFLECTION_M = 1.0e-6                 # 0.001 mm
+ANGULAR_DEFLECTION_RAD = 0.008726646259971648    # 0.5 deg
 
 # The cowls are the exception, and they need one. The table above was measured on a bulkhead,
 # whose surfaces are planes, cylinders and cones -- shapes a mesher covers with few facets
@@ -111,26 +112,26 @@ ANGULAR_DEFLECTION = 0.5
 # different absolute deflections. `U` is the family's scale and is carried in the parameter
 # file, so it is the honest hook.
 #
-# **Deliberately not applied to `LINEAR_DEFLECTION` above.** That constant has a floor this
+# **Deliberately not applied to `LINEAR_DEFLECTION_M` above.** That constant has a floor this
 # argument does not reach: binary STL stores float32, so past about 26k facets the error is the
 # file format rather than the mesher, and 1e-3 was also chosen to land within a facet count of
 # the OpenSCAD reference so IP-FC-13 compares geometry and not mesh density. Scaling it would
 # move both of those. The prismatic parts pass today; extending this to them is a separate
 # question and needs its own measurement.
-COWL_LINEAR_DEFLECTION = 0.02
+COWL_LINEAR_DEFLECTION_M = 2.0e-5           # 0.02 mm
 COWL_KINDS = ('nose_cowl', 'nose_nose', 'tail', 'nose_cowl_shell', 'tail_shell')
 
 # **`nose_plate` was here and it was a miscategorization, not a design choice -- IP-FC-136.**
 # It reads like a cowl kind because `nose_render` builds it, but `cowl.nose_plate()` is three
 # `Part.makeCylinder`/`Part.makeCone` calls fused and cut -- exactly the "planes, cylinders and
 # cones" shape the comment above says a mesher covers cheaply at any deflection, not the
-# freeform OpenVSP surface `COWL_LINEAR_DEFLECTION` exists for. Carrying it here anyway cost
-# real accuracy: at `U` = 1 `COWL_LINEAR_DEFLECTION * U` = 0.02 mm gave a mesh 0.0148% off the
+# freeform OpenVSP surface `COWL_LINEAR_DEFLECTION_M` exists for. Carrying it here anyway cost
+# real accuracy: at `U` = 1 `COWL_LINEAR_DEFLECTION_M * U` = 0.02 mm gave a mesh 0.0148% off the
 # part's own exact B-rep volume (2883.546217 mm3, read from the FCStd `compare_backends`
-# `--keep` preserved), nearly three times `LINEAR_DEFLECTION`'s 0.001mm mesh (0.0007% off the
+# `--keep` preserved), nearly three times `LINEAR_DEFLECTION_M`'s 0.001mm mesh (0.0007% off the
 # same shape) -- and it was the reason `nose_plate` failed its own `TOL_EXACT` cross-backend
 # check at `U` = 1, 2 and 3 while passing at `U` = 0.5, where the coarser deflection happened
-# to still be fine enough. Re-meshed at `LINEAR_DEFLECTION` and re-measured against the same
+# to still be fine enough. Re-meshed at `LINEAR_DEFLECTION_M` and re-measured against the same
 # OpenSCAD reference: 0.00395%, 0.00452%, 0.00487%, 0.00496% at `U` = 0.5, 1, 2, 3 -- comfortably
 # inside 0.006% at every one, where OpenSCAD's own fixed-resolution mesh was the entire
 # remaining gap. Not a tolerance loosened to pass a check: the same tolerance, a part correctly
@@ -220,7 +221,7 @@ def export_deflection(kind, seed):
 
     One place for the rule, because it is no longer a constant lookup: a cowl's figure scales
     with the part's `U` and every other kind's does not. See `COWL_LINEAR_DEFLECTION` above for
-    why, and for why this is not applied to `LINEAR_DEFLECTION`.
+    why, and for why this is not applied to `LINEAR_DEFLECTION_M`.
 
     `U` comes from the parameter file, which carries it beside `unit_width` for every swept
     part. A seed without it -- a hand-written variant, say -- falls back to the `U` = 1 figure
@@ -228,9 +229,9 @@ def export_deflection(kind, seed):
     filename carries no `U`.
     """
     if kind not in COWL_KINDS:
-        return LINEAR_DEFLECTION
+        return LINEAR_DEFLECTION_M
     u = seed.get('U')
-    return COWL_LINEAR_DEFLECTION * (float(u) if u is not None else 1.0)
+    return COWL_LINEAR_DEFLECTION_M * (float(u) if u is not None else 1.0)
 
 
 def write_mesh(shape, out_path, deflection):
@@ -250,8 +251,9 @@ def write_mesh(shape, out_path, deflection):
     import MeshPart
 
     mesh = MeshPart.meshFromShape(Shape=shape,
-                                  LinearDeflection=deflection,
-                                  AngularDeflection=ANGULAR_DEFLECTION,
+                                  LinearDeflection=si.mm(deflection),
+                                  AngularDeflection=si.rad_to_deg(
+                                      ANGULAR_DEFLECTION_RAD),
                                   Relative=False)
     mesh.write(out_path)
     return mesh.CountFacets

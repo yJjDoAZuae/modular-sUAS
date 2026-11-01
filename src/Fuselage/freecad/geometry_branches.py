@@ -106,7 +106,13 @@ def main():
     try:
         for index, entry in enumerate(entries):
             _AT[0] = index
-            cc.Params(**entry)
+            # **The variants file is millimeters**, because its producer,
+            # `tools/branching_dimensions.py`, fills it from the parameter sheets -- the
+            # exempt OpenSCAD path. `Params` is SI, so the entries cross here. Every site
+            # this traces compares two lengths, so the branch taken would be the same
+            # either way; converting makes that a property of the code rather than a
+            # coincidence that a later absolute threshold would quietly break.
+            cc.Params.from_mm(**entry)
     finally:
         cc.max, cc.min = original
 

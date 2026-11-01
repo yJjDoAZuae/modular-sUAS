@@ -22,25 +22,40 @@ project to be silently wrong by 1000x". A factor written in twelve places is twe
 write it once as a multiply and once as a divide; `bbox_m_matches_mm` below is the measurement
 that catches it either way.
 
-**Where the boundary is, and where it is not.**
+**Where the boundary is.**
 
-    parameters (SI)  ->  THIS MODULE  ->  FreeCAD API (mm)  ->  STL / 3MF (mm)
+    parameters (SI)  ->  THIS MODULE + kernel adapter  ->  FreeCAD API (mm)  ->  STL / 3MF (mm)
 
-Everything from the FreeCAD API inward is millimeters and stays that way. The ported geometry
-modules in this directory call `Part::` with millimeter numbers because that is the API's unit,
-not because they are unconverted -- so `fillets.py` carrying bare millimeter rows is correct,
-and "fixing" it would be the error. **Never call a conversion function inside geometry or
-analysis code.** Needing one there means the boundary is in the wrong place, and the fix is to
-move the boundary rather than to convert twice.
+**Never call a conversion function inside geometry or analysis code.** Needing one there means
+the boundary is in the wrong place, and the fix is to move the boundary rather than to convert
+twice. That is why the boundary has to have a shape: a thin adapter owns the `Part::` and
+`Base.Vector` calls and converts at them, while the geometry modules hold SI and never see the
+factor.
+
+**That adapter does not exist yet, and until it does the port is non-conforming.** An earlier
+version of this docstring said the opposite -- that "everything from the FreeCAD API inward is
+millimeters and stays that way", and that a geometry module carrying bare millimeter rows was
+therefore correct. It is not correct, and this file was the wrong place to say so: the standard
+is `doc/guidelines/general.md`, which requires every stored value to be SI and confines non-SI to
+a narrow file-interface layer that never propagates inward. A module cannot grant itself an
+exemption from a guideline. Measured 2026-10-31: 46 of 79 port modules hold 173 module-level
+millimeter constants. IP-FC-158 through IP-FC-161 close it.
 
 **The SI side has no members yet, and this module is written before it does.** The port's
 parameters still come from `fuselage_variants.derived_parameters()`, which is the OpenSCAD
 sweep's, and that path is millimeters throughout by a deliberate exemption that is not going to
-change (doc/guidelines/general.md, "The OpenSCAD path stays in millimeters"). So today every
-number crossing into the port is already mm and needs no conversion at all. That is why this
-file defines a boundary instead of servicing a busy one: the factor and the check exist in one
-place from the start, rather than being introduced later alongside the first code that needs
-them, when a wrong sign would arrive with them.
+change (doc/guidelines/general.md, "The OpenSCAD path stays in millimeters"). So millimeters
+enter the port at its inputs, before any constant in any geometry module is reached, and
+IP-FC-159 gives the port a parameter layer of its own that is SI from its first line. That is
+also why this file defines a boundary instead of servicing a busy one: the factor and the check
+exist in one place from the start, rather than being introduced later alongside the first code
+that needs them, when a wrong sign would arrive with them.
+
+The exemption does not reach the port, and the difference is structural rather than a matter of
+degree. In the OpenSCAD path the geometry layer is a separate language in a generated file, which
+makes the emission step a genuine file interface -- the guidelines name it as one. The port's
+geometry layer is project Python with no file between it and the kernel, so nothing in it is
+"the narrow layer that reads a parameter file or writes a geometry file".
 
 The OpenSCAD path is exempt and is never converted. A `_mm` name in that code is accurate.
 

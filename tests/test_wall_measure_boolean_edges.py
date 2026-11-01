@@ -1366,19 +1366,31 @@ class TestConstants:
         assert be.KERNEL_TOL < be.FUZZ_TOL < be.WALL_TOL
 
     def test_the_fuzz_band_matches_the_builders_own_rib_cut_fuzz(self):
-        """Restated here rather than imported, so it is checked against the source of truth."""
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            'src', 'Fuselage', 'freecad', 'cowl_interior.py')
-        with open(path, 'r', encoding='utf-8') as handle:
-            text = handle.read()
-        for name, here in (('RIB_CUT_FUZZ', be.FUZZ_TOL),
-                           ('WALL_TOL', be.WALL_TOL),
-                           ('CHECK_ARC', be.SAMPLE_ARC)):
+        """Restated here rather than imported, so it is checked against the source of truth.
+
+        The fuzz moved to `freecad/si.py` under IP-FC-158: it is an OpenCASCADE argument in
+        millimeters rather than a dimension of the part, so it belongs at the unit boundary and
+        not in a geometry module. These bands stay millimeters for the same reason -- this
+        package measures the kernel's own geometry -- so the move changes where the value is
+        read from, not the value.
+        """
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        def stated(module, name):
+            path = os.path.join(root, 'src', 'Fuselage', 'freecad', '%s.py' % module)
+            with open(path, 'r', encoding='utf-8') as handle:
+                text = handle.read()
             marker = '\n%s = ' % name
-            assert marker in text, '%s is no longer a module constant in cowl_interior' % name
-            value = float(text.split(marker, 1)[1].split('\n', 1)[0].split('#')[0].strip())
-            assert value == pytest.approx(here), '%s drifted: builder %s, here %s' % (
-                name, value, here)
+            assert marker in text, '%s is no longer a module constant in %s' % (name, module)
+            stated_value = text.split(marker, 1)[1].split('\n', 1)[0].split('#')[0].strip()
+            return float(stated_value.lstrip('(').split(',')[0])
+
+        for module, name, here in (('si', 'RIB_CUT_FUZZ_MM', be.FUZZ_TOL),
+                                   ('cowl_interior', 'WALL_TOL', be.WALL_TOL),
+                                   ('cowl_interior', 'CHECK_ARC', be.SAMPLE_ARC)):
+            value = stated(module, name)
+            assert value == pytest.approx(here), '%s.%s drifted: builder %s, here %s' % (
+                module, name, value, here)
 
     def test_the_box_pad_sits_between_the_fuzz_and_the_wall_tolerance(self):
         """Wide enough never to reject a face the fuzzy cut legitimately snapped a point to, and

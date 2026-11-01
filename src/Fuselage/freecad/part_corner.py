@@ -11,25 +11,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
+import si
+
 from corner_common import Params, is_entry_point, out_path, report
 from part_end import build as build_end
 from part_middle import build as build_middle
 from part_transition import build as build_transition
 
-REF_VOL = 10395.9608969
+REF_VOL_M3 = 1.03959608969e-5         # 10395.9608969 mm3
 
 
 def build(p):
     lower = build_end(p).fuse(build_transition(p)).fuse(build_middle(p))
     upper = lower.mirror(App.Vector(0, 0, 0), App.Vector(0, 0, 1))
-    upper.translate(App.Vector(0, 0, p.unit_length))
+    upper.translate(si.vec_m(0, 0, p.unit_length))
     return lower.fuse(upper).removeSplitter()
 
 
 def main():
     App.newDocument('part_corner')
     shape = build(Params())
-    ok = report('fuselage_corner', shape, REF_VOL)
+    ok = report('fuselage_corner', shape, REF_VOL_M3)
 
     out = out_path('part_corner.step')
     shape.exportStep(out)

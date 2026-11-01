@@ -18,17 +18,24 @@ import FreeCAD as App
 from corner_common import is_entry_point, out_path
 from corner_tree import emit
 from measure import measure
-from variants import TABLE, panel_overlap
+import si
+from variants import TABLE_M, panel_overlap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = out_path('corner_tree.FCStd')
 
 
-def set_params(sheet, U, bt, pt):
+def set_params(sheet, U, bt_m, pt_m):
+    """Write one configuration to the parameter sheet.
+
+    The sheet is a FreeCAD `Spreadsheet::Sheet` whose expressions FreeCAD evaluates
+    in its own millimeters, so this is a unit boundary and converts here. `U` is
+    dimensionless and crosses unchanged.
+    """
     sheet.set('U', str(U))
-    sheet.set('bulkhead_thickness', str(bt))
-    sheet.set('panel_thickness', str(pt))
-    sheet.set('panel_overlap', str(panel_overlap(pt)))
+    sheet.set('bulkhead_thickness', str(si.mm(bt_m)))
+    sheet.set('panel_thickness', str(si.mm(pt_m)))
+    sheet.set('panel_overlap', str(si.mm(panel_overlap(pt_m))))
 
 
 def main():
@@ -53,7 +60,7 @@ def main():
 
     failures = []
     checked = 0
-    for U, bt, pt in TABLE:
+    for U, bt, pt in TABLE_M:
         stl = out_path('regen_U%g.stl' % U)
         if not os.path.exists(stl):
             print('%5g  -- reference %s not rendered, skipped' % (U, os.path.basename(stl)))
@@ -88,7 +95,7 @@ def main():
             failures.append((U, checks))
 
         print('%5g %6g %6g %14.5f %14.5f %+12.5f %+8.4f%% %6d %s'
-              % (U, bt, pt, ref, s.Volume, d, 100 * d / ref, len(s.Faces),
+              % (U, si.mm(bt), si.mm(pt), ref, s.Volume, d, 100 * d / ref, len(s.Faces),
                  ' '.join(checks) if checks else 'ok'))
 
     print('')
@@ -97,7 +104,7 @@ def main():
               'See README.md\'s Verification section for the openscad -D ... ref_regenerate'
               '.scad command that renders them.')
     else:
-        print('regenerate: %d/%d sizes checked, %d failures' % (checked, len(TABLE),
+        print('regenerate: %d/%d sizes checked, %d failures' % (checked, len(TABLE_M),
                                                                  len(failures)))
 
     # back to the reference size, save, and check the file the user would open

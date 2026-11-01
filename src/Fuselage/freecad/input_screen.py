@@ -79,6 +79,7 @@ import FreeCAD as App                                                   # noqa: 
 import Part                                                             # noqa: E402
 
 import cowl_interior as ci                                              # noqa: E402
+import si                                                               # noqa: E402
 import cowl_tree                                                        # noqa: E402
 from corner_common import is_entry_point                                # noqa: E402
 
@@ -88,10 +89,10 @@ BUILDERS = {'tail_shell': cowl_tree.tail_shell, 'nose_cowl_shell': cowl_tree.nos
 BASE_PARAMS = {'tail_shell': cowl_tree.PARAMS_TAIL_SHELL,
                'nose_cowl_shell': cowl_tree.PARAMS_NOSE_COWL_SHELL}
 
-#: `soak_cowl_shell.VOLUME_DEFLECTION`'s value, used only when `--hash` is asked for, so that a
+#: `soak_cowl_shell.VOLUME_DEFLECTION_M`'s value, used only when `--hash` is asked for, so that a
 #: hash from here is comparable with the one the 2026-10-06 soak recorded. A hash taken at a
 #: different deflection is a different triangle set and would not compare.
-HASH_DEFLECTION = 0.001
+HASH_DEFLECTION_M = 1.0e-6                   # 0.001 mm
 
 
 def _opt(name, default=None):
@@ -265,11 +266,11 @@ def build_case(kind, u, case, want_hash=False, shapes_dir=None, out=None):
         # driver side but imports cleanly under freecadcmd, the same reach-across `soak_cowl_shell`
         # makes, and `canonical_hash` is the screen OQ-ARCH-19 decided on.
         import mesh_stats
-        verts, facets = wall.tessellate(HASH_DEFLECTION)
+        verts, facets = wall.tessellate(si.mm(HASH_DEFLECTION_M))
         record['wall_hash'] = mesh_stats.canonical_hash(
             [[(verts[i].x, verts[i].y, verts[i].z), (verts[j].x, verts[j].y, verts[j].z),
               (verts[k].x, verts[k].y, verts[k].z)] for i, j, k in facets])
-        record['hash_deflection'] = HASH_DEFLECTION
+        record['hash_deflection_m'] = HASH_DEFLECTION_M
 
     shapes_dir = shapes_dir or inputs.SCREEN_SHAPES
     if not os.path.isdir(shapes_dir):

@@ -13,7 +13,7 @@ import FreeCAD as App
 
 from corner_common import Params, is_entry_point, out_path, report, section
 
-REF_VOL = 4041.5795009
+REF_VOL_M3 = 4.0415795009e-6          # 4041.5795009 mm3
 
 
 def build(p):
@@ -25,7 +25,7 @@ def build(p):
 def main():
     App.newDocument('part_middle')
     shape = build(Params())
-    ok = report('corner_middle', shape, REF_VOL)
+    ok = report('corner_middle', shape, REF_VOL_M3)
 
     out = out_path('part_middle.step')
     shape.exportStep(out)

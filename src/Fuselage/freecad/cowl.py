@@ -34,7 +34,7 @@ import FreeCAD as App
 import Part
 
 import oml_blank
-from corner_common import is_entry_point, prism
+from corner_common import is_entry_point, prism_mm
 
 # The parameter rows each cowl part's sheet carries, as (alias, value).
 #
@@ -188,7 +188,7 @@ def diag_buttress_shape(unit_width, buttress_depth):
 
 def _extruded(points, thickness):
     """`linear_extrude(height=thickness, center=true)` of a 2D profile."""
-    return prism(points, -thickness / 2.0, thickness)
+    return prism_mm(points, -thickness / 2.0, thickness)
 
 
 def _rot_x(shape, degrees):
@@ -292,18 +292,18 @@ def _square_prism(unit_width, z0, height):
     only there because a 2D profile has to have some extent.
     """
     w = unit_width
-    return prism([(w, w), (-w, w), (-w, -w), (w, -w)], z0, height)
+    return prism_mm([(w, w), (-w, w), (-w, -w), (w, -w)], z0, height)
 
 
 def right_half_mask(unit_width, body_len):
     w = unit_width
-    return prism([(w, 0), (w, w), (-w, w), (-w, 0)], -body_len - 1.5 * body_len,
+    return prism_mm([(w, 0), (w, w), (-w, w), (-w, 0)], -body_len - 1.5 * body_len,
                  3 * body_len)
 
 
 def octant_mask(unit_width, body_len):
     w = unit_width
-    return prism([(0, 0), (w, w), (0, w)], -body_len - 1.5 * body_len, 3 * body_len)
+    return prism_mm([(0, 0), (w, w), (0, w)], -body_len - 1.5 * body_len, 3 * body_len)
 
 
 def body_blank_full(name, U, oml):

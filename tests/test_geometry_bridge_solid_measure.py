@@ -127,7 +127,7 @@ class TestConvergedVolume:
         This is what distinguishes converging from running out of deflections.
         """
         _conv_vol, deflection, _tri = sm.converged_volume(cube)
-        assert deflection == pytest.approx(sm.DEFLECTIONS[1], rel=1e-9)
+        assert deflection == pytest.approx(sm.DEFLECTIONS_M[1], rel=1e-9)
 
     def test_a_curved_solid_cannot_converge_at_zero_tolerance(self, sm, Part):
         """**A cube cannot reach this path at all**, which is why the script uses a cylinder here.
@@ -157,7 +157,7 @@ class TestTessellationIsCachedOnTheShape:
     asked for. Measured on a cylinder: a fresh shape gives 500 / 1 672 / 5 024 facets at 0.02 /
     0.005 / 0.001, and the same shape asked again gives 5 024 at all three.
 
-    `converged_volume` walks the deflections coarse to fine on one shape, so its *first* run is
+    `converged_volume` walks `DEFLECTIONS_M` coarse to fine on one shape, so its *first* run is
     correct — each deflection really is finer than the cache. A second run compares identical
     volumes and stops at once, reporting the coarsest deflection as the converged one.
 
@@ -191,7 +191,7 @@ class TestTessellationIsCachedOnTheShape:
         _v2, second, _t2 = sm.converged_volume(cyl)
         assert first != second, (
             'both runs reported deflection %s; the cache effect may have been fixed' % first)
-        assert second == pytest.approx(sm.DEFLECTIONS[1], rel=1e-9)
+        assert second == pytest.approx(sm.DEFLECTIONS_M[1], rel=1e-9)
 
     def test_the_volume_itself_is_not_corrupted_only_the_reported_deflection(self, sm, Part):
         """Bounding the damage: the number is still the finest mesh's, which is the right answer.

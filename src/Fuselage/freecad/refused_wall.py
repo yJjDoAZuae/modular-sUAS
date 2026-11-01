@@ -145,7 +145,7 @@ def span_of(shape):
 def containment(cavity_shape, blank):
     """Question 1: what of the cavity lies outside the blank. `(verdict, why, record)`.
 
-    **An exact cut, with no fuzz, and that is deliberate.** `cut_and_check` uses `RIB_CUT_FUZZ`
+    **An exact cut, with no fuzz, and that is deliberate.** `cut_and_check` uses `si.RIB_CUT_FUZZ_MM`
     because it wants a robust rib cut; this wants the opposite. A fuzzy boolean welds across gaps
     below its tolerance, which is precisely the near-tangency residue `escape` exists to detect --
     so running this fuzzily would hide the most interesting answer and report `contained`.

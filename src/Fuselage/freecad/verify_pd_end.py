@@ -14,11 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import FreeCAD as App
 
+import si
 from corner_common import is_entry_point, out_path
 
-REF_VOL = 551.8157396
-PART_VOL = 551.827595                       # the Part:: port, same parameters
-TOL = 1e-3 * REF_VOL
+REF_VOL_M3 = 5.518157396e-7                 # 551.8157396 mm3, OpenSCAD
+PART_VOL_M3 = 5.51827595e-7                 # 551.827595 mm3, the Part:: port
+TOL = 1e-3 * REF_VOL_M3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,10 +45,14 @@ def main():
     print('  after recompute : %s' % (', '.join(still) if still else 'all clean'))
 
     s = body.Shape
-    d = s.Volume - REF_VOL
-    print('  volume          = %.6f' % s.Volume)
-    print('  OpenSCAD ref    = %.6f   (%+.6f, %+.4f%%)' % (REF_VOL, d, 100 * d / REF_VOL))
-    print('  Part:: port     = %.6f   (%+.9f)' % (PART_VOL, s.Volume - PART_VOL))
+    volume_m3 = si.volume_m3(s)
+    d = volume_m3 - REF_VOL_M3
+    print('  volume          = %.6f mm3' % (volume_m3 * si.MM3_PER_M3))
+    print('  OpenSCAD ref    = %.6f mm3 (%+.6f, %+.4f%%)'
+          % (REF_VOL_M3 * si.MM3_PER_M3, d * si.MM3_PER_M3, 100 * d / REF_VOL_M3))
+    print('  Part:: port     = %.6f mm3 (%+.9f)'
+          % (PART_VOL_M3 * si.MM3_PER_M3,
+             (volume_m3 - PART_VOL_M3) * si.MM3_PER_M3))
     print('  valid           = %s  solids=%d faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 

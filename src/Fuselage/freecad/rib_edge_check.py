@@ -17,12 +17,12 @@ five-face sliver "passed the existing volume-only OK/retry check" at 0.000000 mm
 Three things in the cut are entitled to move geometry, and the first two are not bounded by
 anything the wall is measured against:
 
-1. `smooth.cut(tool, RIB_CUT_FUZZ)` is a **fuzzy** boolean. Its own constant note records the
+1. `smooth.cut(tool, si.RIB_CUT_FUZZ_MM)` is a **fuzzy** boolean. Its own constant note records the
    fuzz doing exactly what a fuzz does -- "a snap of the near-tangent geometry together".
 2. `removeSplitter()` merges faces it judges co-surface and **refits** the merged boundary. On a
    B-spline that is a real change of geometry, and it runs on both operands and on the result.
 3. a near-tangency between a dilated diagonal and the interior surface is already documented
-   (`RIB_CUT_FUZZ`, the `Diag12Safe` sliver at `U` = 0.75), and a tangency is where a trimming
+   (`si.RIB_CUT_FUZZ_MM`, the `Diag12Safe` sliver at `U` = 0.75), and a tangency is where a trimming
    curve is worst determined.
 
 **The three operands are already available, so nothing in the builder changes.** `cavity`'s
