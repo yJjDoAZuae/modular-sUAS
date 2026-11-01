@@ -255,7 +255,7 @@ class TestTheConstructionHandsOverItsShape(object):
 
     def test_the_exception_accepts_a_shape_and_a_station(self):
         src = open(COWL_INTERIOR, encoding='utf-8').read()
-        assert 'def __init__(self, message, shape=None, z=None):' in src
+        assert 'def __init__(self, message, shape=None, z_m=None):' in src
 
     def test_there_are_refusal_sites_to_check(self):
         # Guards the two tests below from passing because the parse found nothing.
@@ -275,7 +275,7 @@ class TestTheConstructionHandsOverItsShape(object):
         # `shape` alone would make the artifact findable but not interpretable: the whole reason
         # the post-cut pass is instrumented is that a 0.5999 mm reading means nothing without the
         # `z` it was taken at. These are the only two sites that have one.
-        with_z = [line for line, kwargs in _unconverged_raises() if 'z' in kwargs]
+        with_z = [line for line, kwargs in _unconverged_raises() if 'z_m' in kwargs]
         assert len(with_z) == 2
 
 

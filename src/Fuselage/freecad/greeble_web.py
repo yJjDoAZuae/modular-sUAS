@@ -26,11 +26,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import build_sheet, is_entry_point
+from corner_common import build_sheet, is_entry_point, report
 
 V = App.Vector
-REF_VOL = 55.4365498      # ref_greeble_web.scad
-EXPECT_BBOX = (-9.1314, -8.0, 0.0, 0.0, 1.1314, 6.0)
+REF_VOL_M3 = 5.54365498e-8                  # 55.4365498 mm3, ref_greeble_web.scad
+EXPECT_BBOX_M = (-0.0091314, -0.008, 0.0, 0.0, 0.0011314, 0.006)
+#                mm: -9.1314, -8.0, 0.0, 0.0, 1.1314, 6.0
 
 PARAMS = [
     ('bulkhead_thickness', '6'),
@@ -100,31 +101,9 @@ def emit(doc):
 def main():
     doc = App.newDocument('greeble_web')
     tip = emit(doc)
-    s = tip.Shape
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
-    d = s.Volume - REF_VOL
-
-    print('PART:: CSG tree -- greeble_bolt_web')
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, ref_greeble_web.scad)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * d / REF_VOL))
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-
-    fail = []
-    if not s.isValid():
-        fail.append('invalid shape')
-    if len(s.Solids) != 1:
-        fail.append('%d solids' % len(s.Solids))
-    if abs(d) / REF_VOL > 1e-3:
-        fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
-        fail.append('bounding box moved')
-    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    return 1 if fail else 0
+    ok = report('CSG tree -- greeble_bolt_web', tip.Shape, REF_VOL_M3, tol=1e-3,
+                expect_bbox_m=EXPECT_BBOX_M, source='OpenSCAD, ref_greeble_web.scad')
+    return 0 if ok else 1
 
 
 if is_entry_point(__name__):

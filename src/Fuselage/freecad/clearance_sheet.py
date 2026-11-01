@@ -64,6 +64,7 @@ import FreeCAD as App
 import Part
 
 import cowl_interior as ci
+import si
 import cowl_tree
 import drawing
 import drawing_standard as std
@@ -261,9 +262,11 @@ def _run_census(surf, tool, step=CENSUS_STEP_MM):
     gaps = []
     steps = int((bb.ZMax - bb.ZMin) / step)
     for i in range(steps + 1):
+        # `bb` is the kernel's own box, so `z` is millimeters like the rest of this module's
+        # drawing geometry; `ci._slice_wires` takes meters (IP-FC-160), so it converts here.
         z = bb.ZMin + i * step
-        s_w = [w for w in ci._slice_wires(surf, z) if w]
-        t_w = [w for w in ci._slice_wires(tool, z) if w]
+        s_w = [w for w in ci._slice_wires(surf, si.m(z)) if w]
+        t_w = [w for w in ci._slice_wires(tool, si.m(z)) if w]
         if not (s_w and t_w):
             absent += 1
             continue
@@ -408,9 +411,11 @@ def build(kind, u, out_dir):
 
     report = {}
     at = time.time()
-    ci.cavity(body, notched, notches, t, tip.Overhang, report=report)
+    # `t` is millimeters off a document property and `Overhang` is degrees off another;
+    # `cavity` is meters and radians. This is the crossing.
+    ci.cavity(body, notched, notches, si.m(t), math.radians(tip.Overhang), report=report)
     smooth = report['smooth_shape']
-    ribs = ci.dilated_notches(notches, t)
+    ribs = ci.dilated_notches(notches, si.m(t))
     ci.note('cw25 sheet: cavity %.0f s; smooth %.1f mm3, %d dilated tool(s)'
             % (time.time() - at, smooth.Volume, len(ribs)))
 
@@ -445,7 +450,8 @@ def build(kind, u, out_dir):
                  census=dict(step_mm=CENSUS_STEP_MM, crossing=crossing, apart=apart,
                              absent=absent, gaps=gaps))
 
-    z_lo, z_hi = ci.z_extent(body)
+    # `z_extent` returns meters; everything this module draws with is millimeters.
+    z_lo, z_hi = (si.mm(v) for v in ci.z_extent(body))
     # Pages must be named `Page`, `Page2`, ... -- `sheet_naming.page_number` refuses
     # anything else, and `render_sheets.py` sorts by it, so a descriptive page name costs
     # the render. The station goes in the view and feature names instead.
@@ -479,8 +485,8 @@ def build(kind, u, out_dir):
         # costs about an hour because it samples a whole cowl adaptively; the per-station
         # quantity it reports is one `tool_clearance_ranked` call, which is cheap. Calling the
         # scan's own function means the sheet cannot drift from what the scan would print.
-        ranked = ci.tool_clearance_ranked(smooth, ribs, z)
-        row['metric_a'] = ranked[0][1] if ranked else None
+        ranked = ci.tool_clearance_ranked(smooth, ribs, si.m(z))
+        row['metric_a'] = si.mm(ranked[0][1]) if ranked else None
 
         # **The exact answer, from the kernel, against the sampled one.** `distToShape` on the
         # two section wires is the real in-plane distance and returns 0.0 where they cross;
@@ -497,7 +503,8 @@ def build(kind, u, out_dir):
         for n in METRIC_A_DENSITIES:
             got = _metric_a_at(s_wires, d_wires, n, 2 * n)
             sweep.append(dict(surface_points=n, tool_segments=2 * n, metric_a=got,
-                              flagged=bool(got is not None and got < ci.CLEARANCE_MARGIN_MM)))
+                              flagged=bool(got is not None
+                                           and got < si.mm(ci.CLEARANCE_MARGIN_M))))
         row['metric_a_sweep'] = sweep
         seen = [e['metric_a'] for e in sweep if e['metric_a'] is not None]
         if seen:
@@ -689,7 +696,7 @@ def build(kind, u, out_dir):
                 '8. Metric A is the clearance between those same two outlines -- the',
                 '   fitted interior surface and the dilated tool -- and the scan warns',
                 '   on any station below %.3f mm, since a tool that close to the cavity'
-                % ci.CLEARANCE_MARGIN_MM,
+                % si.mm(ci.CLEARANCE_MARGIN_M),
                 '   leaves no material between the slot and the inside of the part.',
                 '9. Note 6 is the same pair of outlines %.3f mm PAST each other, so they'
                 % abs(row['dilated_reach']),
@@ -705,7 +712,7 @@ def build(kind, u, out_dir):
                     '   point count, %d to %d, gives %.6f to %.3f mm -- every one of them'
                     % (METRIC_A_DENSITIES[0], METRIC_A_DENSITIES[-1], lo, hi),
                     '   wrong, with the %.3f mm warning line inside the range.'
-                    % ci.CLEARANCE_MARGIN_MM,
+                    % si.mm(ci.CLEARANCE_MARGIN_M),
                 ]
         else:
             metric_note = [

@@ -27,9 +27,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import build_sheet, is_entry_point
+from corner_common import build_sheet, is_entry_point, report
 
-REF_VOL = 709.2890625
+REF_VOL_M3 = 7.092890625e-7                 # 709.2890625 mm3, OpenSCAD
 
 # Derived for U=1.0 end_bolt 3/16in, read from the .scad that render_variant.py emits.
 PARAMS = [
@@ -129,7 +129,10 @@ def emit(doc):
 # pad running from y=0 to y=flange_y_bot (-x_start * flange_y_bot * bulkhead_thickness =
 # 8.5625 * 3.9375 * 6 = 202.2890625), abutting at y = flange_y_bot with zero overlap:
 # 288 + 202.2890625 = 490.2890625.
-INTERCONNECT_REF_VOL = 490.2890625
+INTERCONNECT_REF_VOL_M3 = 4.902890625e-7    # 490.2890625 mm3, hand-derived closed form
+
+#: mm: -40, -8, 0, 0, 5.1375, 6
+EXPECT_BBOX_M = (-0.040, -0.008, 0.0, 0.0, 0.0051375, 0.006)
 
 
 def main():
@@ -140,40 +143,17 @@ def main():
     """
     doc = App.newDocument('flange_base')
     tip = emit(doc)
-    s = tip.Shape
-    d = s.Volume - REF_VOL
-    rel = d / REF_VOL
-    bb = s.BoundBox
-    ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
-
-    print('PART:: CSG tree -- bulkhead flange base profile')
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * rel))
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
-    print('  expect  = [-40.0000, -8.0000, 0.0000, 0.0000, 5.1375, 6.0000]')
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-    print('  result  = %s' % ('PASS' if ok else 'FAIL'))
+    ok = report('CSG tree -- bulkhead flange base profile', tip.Shape, REF_VOL_M3,
+                expect_bbox_m=EXPECT_BBOX_M, source='OpenSCAD')
 
     doc2 = App.newDocument('flange_base_ic')
     C._SEEN.clear()
     sheet(doc2)
     tip_ic = flange_base_interconnect(doc2)
     doc2.recompute()
-    s2 = tip_ic.Shape
-    d2 = s2.Volume - INTERCONNECT_REF_VOL
-    rel2 = d2 / INTERCONNECT_REF_VOL
-    ok2 = s2.isValid() and len(s2.Solids) == 1 and abs(rel2) <= 1e-6
-
-    print('PART:: CSG tree -- bulkhead flange base profile (is_interconnect)')
-    print('  volume  = %.7f' % s2.Volume)
-    print('  ref     = %.7f  (hand-derived closed form)' % INTERCONNECT_REF_VOL)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d2, 100 * rel2))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s2.isValid(), len(s2.Solids), len(s2.Faces)))
-    print('  result  = %s' % ('PASS' if ok2 else 'FAIL'))
+    ok2 = report('CSG tree -- bulkhead flange base profile (is_interconnect)',
+                 tip_ic.Shape, INTERCONNECT_REF_VOL_M3, tol=1e-6,
+                 source='hand-derived closed form')
 
     return 0 if (ok and ok2) else 1
 

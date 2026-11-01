@@ -107,7 +107,7 @@ def measure(shell, tau=None, out=None):
     started = time.time()
     try:
         ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t, shell.Overhang, mirrors,
-                       tau=float(tau) if tau is not None else ci.TAU, report=report,
+                       tau=float(tau) if tau is not None else ci.TAU_M, report=report,
                        exterior_split=rows)
         error = None
     except ci.Unconverged as exc:
@@ -116,14 +116,14 @@ def measure(shell, tau=None, out=None):
         # collected -- and on a tail at a tightened `tau` that is the only way to get them.
         error = str(exc)
     out.write('wall t = %.4f mm, TAU = %.3f, WALL_TOL = %.3f, %d round-0 station(s), %.0f s\n'
-              % (t, float(tau) if tau is not None else ci.TAU, ci.WALL_TOL, len(rows),
+              % (t, float(tau) if tau is not None else ci.TAU_M, ci.WALL_TOL_M, len(rows),
                  time.time() - started))
     if error:
         out.write('  Unconverged (the round-0 record below still stands): %s\n' % error[:160])
     out.write('\n'.join('  ' + line for line in
-                        locate.exterior_table(rows, wall_tol=ci.WALL_TOL).splitlines()) + '\n')
+                        locate.exterior_table(rows, wall_tol=ci.WALL_TOL_M).splitlines()) + '\n')
     out.flush()
-    return rows, locate.exterior_verdict(rows, wall_tol=ci.WALL_TOL), error
+    return rows, locate.exterior_verdict(rows, wall_tol=ci.WALL_TOL_M), error
 
 
 def measure_rows(shell, tau=None, out=None):
@@ -141,7 +141,7 @@ def measure_rows(shell, tau=None, out=None):
     t = float(shell.Inset)
     started = time.time()
     wall = ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t, shell.Overhang,
-                          mirrors, tau=float(tau) if tau is not None else ci.TAU, report=report)
+                          mirrors, tau=float(tau) if tau is not None else ci.TAU_M, report=report)
     row_zs = report.get('station_positions') or []
     out.write('built in %.0f s; %d fit row(s), wall %.3f mm3 in %d solid(s)\n'
               % (time.time() - started, len(row_zs), wall.Volume, len(wall.Solids)))

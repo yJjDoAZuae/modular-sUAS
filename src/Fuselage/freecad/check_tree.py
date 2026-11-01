@@ -70,16 +70,17 @@ def main():
         set_params(sheet, U, bt, pt)
         doc.recompute()
 
-        _, ref, _, _ = measure(stl)
+        _, ref_m3, _, _ = measure(stl)
         s = tip.Shape
-        d = s.Volume - ref
+        volume_m3 = si.volume_m3(s)
+        d_m3 = volume_m3 - ref_m3
 
         checks = []
         if not s.isValid():
             checks.append('INVALID')
         if len(s.Solids) != 1:
             checks.append('solids=%d' % len(s.Solids))
-        if abs(d) / ref > 1e-4:
+        if abs(d_m3) / ref_m3 > 1e-4:
             checks.append('VOLUME')
         stale = [o.Name for o in doc.Objects
                  if getattr(o, 'Generator', None) and
@@ -95,8 +96,9 @@ def main():
             failures.append((U, checks))
 
         print('%5g %6g %6g %14.5f %14.5f %+12.5f %+8.4f%% %6d %s'
-              % (U, si.mm(bt), si.mm(pt), ref, s.Volume, d, 100 * d / ref, len(s.Faces),
-                 ' '.join(checks) if checks else 'ok'))
+              % (U, si.mm(bt), si.mm(pt), ref_m3 * si.MM3_PER_M3,
+                 volume_m3 * si.MM3_PER_M3, d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3,
+                 len(s.Faces), ' '.join(checks) if checks else 'ok'))
 
     print('')
     if checked == 0:
@@ -108,10 +110,11 @@ def main():
                                                                  len(failures)))
 
     # back to the reference size, save, and check the file the user would open
-    set_params(sheet, 1.0, 6.0, 4.77)
+    # 6 mm and 4.77 mm, in meters -- `set_params` converts on the way to the sheet.
+    set_params(sheet, 1.0, 0.006, 0.00477)
     sheet.set('panel_overlap', '4.0')
     doc.recompute()
-    before_save = tip.Shape.Volume
+    before_save_m3 = si.volume_m3(tip.Shape)
     doc.saveAs(OUT)
     App.closeDocument(doc.Name)
 
@@ -120,24 +123,29 @@ def main():
     doc = App.openDocument(OUT)
     tip, sheet = doc.getObject('Tip'), doc.getObject('Params')
     doc.recompute()
-    reload_volume = tip.Shape.Volume
+    reload_volume_m3 = si.volume_m3(tip.Shape)
     still_constrained = all(o.FullyConstrained for o in doc.Objects
                             if o.isDerivedFrom('Sketcher::SketchObject'))
-    reload_ok = still_constrained and abs(reload_volume - before_save) <= 1e-6 * before_save
-    print('  volume before save = %.6f' % before_save)
-    print('  volume on load     = %.6f  %s'
-          % (reload_volume, 'ok' if reload_ok else 'FAIL -- reload changed the shape'))
+    # A *relative* comparison, so the tolerance is dimensionless and unchanged.
+    reload_ok = (still_constrained
+                 and abs(reload_volume_m3 - before_save_m3) <= 1e-6 * before_save_m3)
+    print('  volume before save = %.6f mm3' % (before_save_m3 * si.MM3_PER_M3))
+    print('  volume on load     = %.6f mm3  %s'
+          % (reload_volume_m3 * si.MM3_PER_M3,
+             'ok' if reload_ok else 'FAIL -- reload changed the shape'))
     print('  sketches still constrained = %s  %s'
           % (still_constrained, 'ok' if still_constrained else 'FAIL'))
     print('  Outer.Radius       = %s'
           % [e for e in doc.getObject('MidOuter').ExpressionEngine if e[0] == 'Radius'])
 
     # the derived-part workflow: change a tolerance, then hang geometry off the tip
-    before = tip.Shape.Volume
+    before_m3 = si.volume_m3(tip.Shape)
     sheet.set('greeble_tolerance', '0.25')
     doc.recompute()
-    print('  greeble_tolerance 0.05 -> 0.25: %.6f -> %.6f (%+.4f)'
-          % (before, tip.Shape.Volume, tip.Shape.Volume - before))
+    after_m3 = si.volume_m3(tip.Shape)
+    print('  greeble_tolerance 0.05 -> 0.25: %.6f -> %.6f (%+.4f) mm3'
+          % (before_m3 * si.MM3_PER_M3, after_m3 * si.MM3_PER_M3,
+             (after_m3 - before_m3) * si.MM3_PER_M3))
 
     box = doc.addObject('Part::Box', 'UserBracket')
     box.Length, box.Width, box.Height = 6.0, 12.0, 4.0
@@ -146,16 +154,17 @@ def main():
     fuse = doc.addObject('Part::Fuse', 'UserFuse')
     fuse.Base, fuse.Tool = tip, box
     doc.recompute()
-    added = fuse.Shape.Volume - tip.Shape.Volume
+    added_m3 = si.volume_m3(fuse.Shape) - si.volume_m3(tip.Shape)
     sheet.set('U', '2.0')
     doc.recompute()
-    added2 = fuse.Shape.Volume - tip.Shape.Volume
+    added2_m3 = si.volume_m3(fuse.Shape) - si.volume_m3(tip.Shape)
     # the bracket is a fixed 6x12x4 box fused onto whatever the tip is -- it must always add
     # strictly positive material, at every size, or the derived-part workflow this section
     # exists to demonstrate is not actually following the tip.
-    bracket_ok = added > 0.0 and added2 > 0.0
-    print('  user bracket adds %.4f at U=1, %.4f at U=2 (bound, so it follows)  %s'
-          % (added, added2, 'ok' if bracket_ok else 'FAIL'))
+    bracket_ok = added_m3 > 0.0 and added2_m3 > 0.0
+    print('  user bracket adds %.4f at U=1, %.4f at U=2 mm3 (bound, so it follows)  %s'
+          % (added_m3 * si.MM3_PER_M3, added2_m3 * si.MM3_PER_M3,
+             'ok' if bracket_ok else 'FAIL'))
     print('  UserFuse.Base = %s' % fuse.Base.Name)
 
     os.remove(OUT)

@@ -1,7 +1,21 @@
-"""Volume and bounding box of a binary or ASCII STL, by the divergence theorem."""
+"""Volume and bounding box of a binary or ASCII STL, by the divergence theorem.
+
+**The file is this module's unit boundary (IP-FC-160).** An STL carries no unit metadata and is
+millimeters by convention -- it is what every slicer assumes and what this project's own exports
+write -- so `measure` converts at the read and returns SI. Nothing downstream has to know what
+unit the file was written in, which is the whole point of putting the crossing here.
+
+`units` rather than `si`: this module touches no FreeCAD API at all, so it stays importable
+under any interpreter, and `units` is the half of the conversion layer that has no FreeCAD
+import in it.
+"""
 import os
 import struct
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from units import MM3_PER_M3, m_to_mm, mm_to_m                                   # noqa: E402
 
 
 def read_stl(path):
@@ -30,6 +44,12 @@ def read_stl(path):
 
 
 def measure(path):
+    """`(triangles, volume_m3, lo_m, hi_m)` for an STL. See the module docstring on the unit.
+
+    The volume is converted once at the return rather than each vertex on the way in: it is the
+    same number, and three multiplications instead of nine per triangle on a mesh of up to
+    170 000 of them.
+    """
     tris = read_stl(path)
     vol = 0.0
     lo = [float('inf')] * 3
@@ -42,7 +62,8 @@ def measure(path):
             for i in range(3):
                 lo[i] = min(lo[i], p[i])
                 hi[i] = max(hi[i], p[i])
-    return len(tris), abs(vol), lo, hi
+    return (len(tris), abs(vol) / MM3_PER_M3,
+            [mm_to_m(v) for v in lo], [mm_to_m(v) for v in hi])
 
 
 def main():
@@ -55,12 +76,14 @@ def main():
     # can be measured without a kernel. `--pass` is dropped for the same reason as there:
     # freecadcmd forwards the token as well as the value.
     for path in [a for a in sys.argv[1:] if a != '--pass' and not a.endswith('.py')]:
-        n, vol, lo, hi = measure(path)
+        n, vol_m3, lo_m, hi_m = measure(path)
         print('%s' % path)
         print('  triangles = %d' % n)
-        print('  volume    = %.7f' % vol)
-        print('  bbox      = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-              % (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
+        # Printed in millimeters: an STL is a millimeter file and whoever runs this is
+        # comparing it against a slicer or a drawing.
+        print('  volume    = %.7f mm3' % (vol_m3 * MM3_PER_M3))
+        print('  bbox      = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+              % tuple(m_to_mm(v) for v in list(lo_m) + list(hi_m)))
 
 
 # Only when run directly -- importing this from a check script must not consume its argv.

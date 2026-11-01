@@ -46,7 +46,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import is_entry_point
+import si
+from corner_common import is_entry_point, report
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -83,7 +84,13 @@ GREEBLE_TOOL_PARAMS = [
     ('gt_mouth_y', '=-gt_greeble_radius * 3 / sqrt(2)'),
 ]
 
-REF_TOOL = 557.8049247                        # regenerated 2026-08-11 for the B12 fix
+REF_TOOL_M3 = 5.578049247e-7                  # 557.8049247 mm3, regenerated 2026-08-11
+                                              # for the B12 fix
+
+#: How far two sheet-derived lengths may differ and still count as equal. A picometer: both
+#: sides are the sheet's own arithmetic on the same cells, so a real disagreement is a wrong
+#: expression and not a kernel tolerance. It was `1e-9` while these were read as millimeters.
+SHEET_TOL_M = 1.0e-12
 
 
 def greeble_tool(doc):
@@ -114,8 +121,6 @@ def main():
     doc.recompute()
 
     s = tool.Shape
-    d = s.Volume - REF_TOOL
-    rel = d / REF_TOOL
     sheet = doc.getObject('Params')
 
     print('IP-FC-9 -- the greeble-forming tool')
@@ -126,32 +131,32 @@ def main():
     print('  post tool rib height = %s   (nominal since OQ-DES-B12)'
           % sheet.get('gt_greeble_nub_height'))
     print('')
-    print('  volume  = %.6f' % s.Volume)
-    print('  ref     = %.6f  (OpenSCAD, faceted)' % REF_TOOL)
-    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * rel))
-    bb = s.BoundBox
-    print('  z range = [%.4f, %.4f]  (expect -0.0100, 6.0200)' % (bb.ZMin, bb.ZMax))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-    volume_ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
-    print('  volume result = %s' % ('PASS' if volume_ok else 'FAIL'))
+    bb = si.bbox_m(s)
+    print('  z range = [%.4f, %.4f] mm  (expect -0.0100, 6.0200)'
+          % (si.mm(bb.ZMin), si.mm(bb.ZMax)))
+    volume_ok = report('the greeble-forming tool', s, REF_TOOL_M3)
 
     # The clearance must appear once, on the corner's bore, and never on the post. This was
     # asserted for the bore and merely printed for the rib, which is how OQ-DES-B12 survived
     # unnoticed -- the rib carried a second clearance of 0.00667 mm and nothing objected.
     # Both are checks now.
-    corner_bore = float(sheet.get('greeble_radius'))
-    post_bore = float(sheet.get('gt_greeble_radius'))
-    tol = float(sheet.get('greeble_tolerance'))
-    corner_rib = float(sheet.get('greeble_nub_height'))
-    post_rib = float(sheet.get('gt_greeble_nub_height'))
+    # Five sheet cells, crossing into SI as they are read: the sheet is millimeters because
+    # FreeCAD evaluates it in millimeters and its seed is `derived_parameters()`, the exempt
+    # OpenSCAD path.
+    corner_bore_m = si.m(float(sheet.get('greeble_radius')))
+    post_bore_m = si.m(float(sheet.get('gt_greeble_radius')))
+    tol_m = si.m(float(sheet.get('greeble_tolerance')))
+    corner_rib_m = si.m(float(sheet.get('greeble_nub_height')))
+    post_rib_m = si.m(float(sheet.get('gt_greeble_nub_height')))
 
-    ok = abs((corner_bore - post_bore) - tol) < 1e-9
-    print('  clearance carried once: corner bore - post bore = %.4f (= greeble_tolerance)  %s'
-          % (corner_bore - post_bore, 'ok' if ok else 'MISMATCH'))
-    rib_ok = abs(corner_rib - post_rib) < 1e-9
-    print('  rib nominal on both halves: %.6f vs %.6f  %s'
-          % (corner_rib, post_rib, 'ok' if rib_ok else 'MISMATCH -- OQ-DES-B12 has regressed'))
+    ok = abs((corner_bore_m - post_bore_m) - tol_m) < SHEET_TOL_M
+    print('  clearance carried once: corner bore - post bore = %.4f mm '
+          '(= greeble_tolerance)  %s'
+          % (si.mm(corner_bore_m - post_bore_m), 'ok' if ok else 'MISMATCH'))
+    rib_ok = abs(corner_rib_m - post_rib_m) < SHEET_TOL_M
+    print('  rib nominal on both halves: %.6f vs %.6f mm  %s'
+          % (si.mm(corner_rib_m), si.mm(post_rib_m),
+             'ok' if rib_ok else 'MISMATCH -- OQ-DES-B12 has regressed'))
 
     return 0 if (volume_ok and ok and rib_ok) else 1
 

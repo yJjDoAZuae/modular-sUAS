@@ -270,21 +270,32 @@ on one of them — IP-FC-13.**
       **The conversion does not belong inside the geometry modules either** — the guidelines
       forbid that and say what to do instead: move the boundary.
 
-      **Two of the four repair items are delivered (2026-10-31).**
+      **The port's construction and reference tier is converted and verified (2026-11-01).**
       [`freecad/si.py`](../src/Fuselage/freecad/si.py) (IP-FC-158) is the boundary: it owns the
       kernel calls that carry a number, takes SI in and gives SI back, and holds the
       OpenCASCADE fuzz values that moved out of `cowl_interior`. Verified by 36 checks in
       `check_si.py` under `freecadcmd`, each expectation written as plain arithmetic on the SI
       inputs so a squared-instead-of-cubed factor cannot pass.
       [`tools/unit_regime.py`](../src/Fuselage/tools/unit_regime.py) (IP-FC-161) is the gate and
-      the worklist at once — 213 constants classified by reading each use site, an unclassified
-      one fails, 30 tests. **Measured worklist: 90 dimensional constants to convert**, 89
-      dimensionless, 32 legitimately millimeters at a declared boundary.
+      the worklist at once, and it now reports **0 constants stored in millimeters outside a
+      declared boundary** across the port: 265 constants classified by reading each use site, of
+      which 79 are meters, 25 cubic meters, 4 square meters, 4 radians, 102 dimensionless, 16
+      records whose fields carry their own units, and 33 millimeters at a boundary or in a
+      human-facing view with a stated reason each. The inline-literal ceiling came down from 208
+      to 188 as the modules converted. **The acceptance test was that the geometry did not
+      move**, checked against a pristine export of HEAD: 24 of the 25 reference modules reproduce
+      every printed figure exactly, the 25th being the freeform cowl described below, and
+      `check_cowl_interior` reproduces every wall reading, station position and rib gap on
+      both cowl kinds.
 
-      **What remains is IP-FC-159 and IP-FC-160** — the port's own SI parameter layer, then the
-      per-module conversion against `variant_output_baseline`, callee-first by import layer with
-      `cowl_interior` last because that is where the kernel's reproducibility floor makes a
-      passing comparison weakest evidence.
+      **What remains is 19 constants in seven modules, and one decision.**
+      [OQ-ARCH-24](architecture/freecad_migration.md#open-questions) asks how
+      `tools/wall_measure` — 8 022 lines, 61 constants, 41 inline dimensions — reaches the
+      standard when a committed test asserts it may import nothing outside numpy and the standard
+      library, so that it stays loadable under FreeCAD's embedded interpreter, and `si.py`
+      imports FreeCAD. The seven drivers that pass geometry through it (IP-FC-163) wait on that
+      answer rather than gaining a crossing per call site that the answer would delete.
+      IP-FC-159, the port's own SI parameter layer, is also still open.
 
       The check this item names — a ported part's bounding box in meters equalling the OpenSCAD
       part's in millimeters divided by 1 000 — exists as `units.bbox_m_matches_mm` and goes live

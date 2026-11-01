@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import measure
+import units
 from corner_common import is_entry_point
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -65,24 +66,37 @@ def main():
     os.makedirs(SCRATCH, exist_ok=True)
     tris = _triangles()
 
+    # **The fixture is written in the STL's own millimeters and read back in SI.** The box
+    # is 2 x 3 x 4 mm, so 24 mm3; `measure` converts at the file (IP-FC-160) and these
+    # expectations convert with it, which is what makes this check test the crossing as well
+    # as the arithmetic. The tolerance crosses too: 1e-4 mm3 is 1e-13 m3.
+    want_vol_m3 = 24.0 / units.MM3_PER_M3
+    want_lo_m = [0.0, 0.0, 0.0]
+    want_hi_m = [units.mm_to_m(v) for v in (2.0, 3.0, 4.0)]
+    vol_tol_m3 = 1e-4 / units.MM3_PER_M3
+
     bin_path = os.path.join(SCRATCH, 'box.stl')
     _write_binary_stl(bin_path, tris)
-    n, vol, lo, hi = measure.measure(bin_path)
-    if n != 12 or abs(vol - 24.0) > 1e-4 or lo != [0.0, 0.0, 0.0] or hi != [2.0, 3.0, 4.0]:
-        print('  FAIL binary STL: n=%d vol=%.6f lo=%s hi=%s (want n=12 vol=24 lo=[0,0,0] '
-              'hi=[2,3,4])' % (n, vol, lo, hi))
+    n, vol_m3, lo_m, hi_m = measure.measure(bin_path)
+    if (n != 12 or abs(vol_m3 - want_vol_m3) > vol_tol_m3
+            or lo_m != want_lo_m or hi_m != want_hi_m):
+        print('  FAIL binary STL: n=%d vol=%.6f lo=%s hi=%s mm (want n=12 vol=24 lo=[0,0,0] '
+              'hi=[2,3,4])'
+              % (n, vol_m3 * units.MM3_PER_M3,
+                 [units.m_to_mm(v) for v in lo_m], [units.m_to_mm(v) for v in hi_m]))
         ok = False
     else:
-        print('  binary STL: OK  n=%d vol=%.6f' % (n, vol))
+        print('  binary STL: OK  n=%d vol=%.6f mm3' % (n, vol_m3 * units.MM3_PER_M3))
 
     ascii_path = os.path.join(SCRATCH, 'box_ascii.stl')
     _write_ascii_stl(ascii_path, tris)
-    n2, vol2, lo2, hi2 = measure.measure(ascii_path)
-    if n2 != 12 or abs(vol2 - 24.0) > 1e-4:
-        print('  FAIL ASCII STL: n=%d vol=%.6f (want n=12 vol=24)' % (n2, vol2))
+    n2, vol2_m3, lo2_m, hi2_m = measure.measure(ascii_path)
+    if n2 != 12 or abs(vol2_m3 - want_vol_m3) > vol_tol_m3:
+        print('  FAIL ASCII STL: n=%d vol=%.6f mm3 (want n=12 vol=24)'
+              % (n2, vol2_m3 * units.MM3_PER_M3))
         ok = False
     else:
-        print('  ASCII STL: OK  n=%d vol=%.6f' % (n2, vol2))
+        print('  ASCII STL: OK  n=%d vol=%.6f mm3' % (n2, vol2_m3 * units.MM3_PER_M3))
 
     # A shape with reversed winding on some faces must still report a positive volume --
     # measure() takes abs(vol), which is what makes it robust to a mesher's facet orientation
@@ -90,16 +104,16 @@ def main():
     reversed_tris = [list(reversed(t)) if i % 2 == 0 else t for i, t in enumerate(tris)]
     rev_path = os.path.join(SCRATCH, 'box_mixed_winding.stl')
     _write_binary_stl(rev_path, reversed_tris)
-    n3, vol3, _lo3, _hi3 = measure.measure(rev_path)
+    n3, vol3_m3, _lo3, _hi3 = measure.measure(rev_path)
     # Mixed winding does not preserve the true volume (it is a per-triangle signed-volume sum),
     # but it must never silently report a suspiciously-small or negative number without abs().
-    if vol3 < 0:
-        print('  FAIL mixed winding: measure() returned a negative volume (%.6f) -- abs() '
-              'is not being applied' % vol3)
+    if vol3_m3 < 0:
+        print('  FAIL mixed winding: measure() returned a negative volume (%.6f mm3) -- abs() '
+              'is not being applied' % (vol3_m3 * units.MM3_PER_M3))
         ok = False
     else:
-        print('  mixed winding stays non-negative: OK  vol=%.6f (uniform-winding vol=24 for '
-              'reference, not expected to match)' % vol3)
+        print('  mixed winding stays non-negative: OK  vol=%.6f mm3 (uniform-winding vol=24 '
+              'for reference, not expected to match)' % (vol3_m3 * units.MM3_PER_M3))
 
     print(('MEASURE.PY: OK' if ok else 'MEASURE.PY: FAIL'))
     sys.stdout.flush()

@@ -42,7 +42,8 @@ import FreeCAD as App
 import bulkhead_section
 import corner_tree as C
 import parameters
-from corner_common import is_entry_point, script_args
+import si
+from corner_common import BBOX_TOL_M, is_entry_point, script_args
 
 V = App.Vector
 
@@ -56,15 +57,17 @@ V = App.Vector
 # Regenerated 2026-08-11 for OQ-DES-B12, by re-rendering ref_bulkhead_full.scad. The part lost
 # 0.2322237 mm3, which is 8 x the 0.0290279 the octant lost -- the eight corners each carrying
 # the same nominal-rib correction, and a check that the fix did not leak into the tiling.
-REF = 6922.2726731
-EXPECT_BBOX = (-45.1375, -45.1375, 0.0, 45.1375, 45.1375, 6.0)
+REF_M3 = 6.9222726731e-6                    # 6922.2726731 mm3
+#: mm: -45.1375, -45.1375, 0, 45.1375, 45.1375, 6
+EXPECT_BBOX_M = (-0.0451375, -0.0451375, 0.0, 0.0451375, 0.0451375, 0.006)
 
 # IP-FC-132: U=1.0 cowling_bolt 0mm, rendered through the real OpenSCAD module and measured
 # from the STL mesh (mesh_stats.py) -- 34,256 triangles, so this is a faceted volume like
 # every other REF in this port, not an analytic one. FreeCAD came out at 9854.8937182 on the
 # first build that produced a valid single solid, +0.0017% and the bounding box exact.
-REF_COWLING = 9854.7238
-EXPECT_BBOX_COWLING = (-50.0, -50.0, 0.0, 50.0, 50.0, 8.0)
+REF_COWLING_M3 = 9.8547238e-6               # 9854.7238 mm3
+#: mm: -50, -50, 0, 50, 50, 8
+EXPECT_BBOX_COWLING_M = (-0.050, -0.050, 0.0, 0.050, 0.050, 0.008)
 
 # IP-FC-132: U=1.0 interconnect 3/16in, rendered through the real OpenSCAD module and measured
 # from the STL mesh (mesh_stats.py) -- 25,288 triangles. FreeCAD came out at 8209.5318, +0.0013%
@@ -77,8 +80,10 @@ EXPECT_BBOX_COWLING = (-50.0, -50.0, 0.0, 50.0, 50.0, 8.0)
 # otherwise, a branch the port had never carried, so every `make_web=False` half (the
 # interconnect's top) kept about 2.92 mm3 of material at that corner that the real geometry
 # does not have.
-REF_INTERCONNECT = 8209.4223
-EXPECT_BBOX_INTERCONNECT = (-45.1375, -45.1375, 0.0, 45.1375, 45.1375, 12.0)
+REF_INTERCONNECT_M3 = 8.2094223e-6          # 8209.4223 mm3
+#: mm: -45.1375, -45.1375, 0, 45.1375, 45.1375, 12
+EXPECT_BBOX_INTERCONNECT_M = (-0.0451375, -0.0451375, 0.0,
+                              0.0451375, 0.0451375, 0.012)
 
 # mirror_xy, then mirror_y, then mirror_x -- the nesting order in octant_to_full(). Each
 # normal is the plane's, and reflection does not care about its sign.
@@ -209,30 +214,34 @@ def main():
     is_cowling = float(doc.getObject('Params').get('is_cowling')) >= 0.5
     is_interconnect = float(doc.getObject('Params').get('is_interconnect')) >= 0.5
     if is_cowling:
-        ref, expect_bbox, label = REF_COWLING, EXPECT_BBOX_COWLING, ' (is_cowling)'
+        ref_m3, expect_bbox_m = REF_COWLING_M3, EXPECT_BBOX_COWLING_M
+        label = ' (is_cowling)'
     elif is_interconnect:
-        ref, expect_bbox, label = REF_INTERCONNECT, EXPECT_BBOX_INTERCONNECT, ' (is_interconnect)'
+        ref_m3, expect_bbox_m = REF_INTERCONNECT_M3, EXPECT_BBOX_INTERCONNECT_M
+        label = ' (is_interconnect)'
     else:
-        ref, expect_bbox, label = REF, EXPECT_BBOX, ''
+        ref_m3, expect_bbox_m, label = REF_M3, EXPECT_BBOX_M, ''
 
     s = tip.Shape
-    d = s.Volume - ref
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
+    volume_m3 = si.volume_m3(s)
+    d_m3 = volume_m3 - ref_m3
+    got_m = si.bbox_m(s).as_tuple()
 
     print('PART:: CSG tree -- bulkhead_section_full%s' % label)
     print('  nodes   = %d' % len(doc.Objects))
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, through the real module)' % ref)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / ref))
+    print('  volume  = %.7f mm3' % (volume_m3 * si.MM3_PER_M3))
+    print('  ref     = %.7f mm3  (OpenSCAD, through the real module)'
+          % (ref_m3 * si.MM3_PER_M3))
+    print('  delta   = %+.7f mm3  (%+.5f%%)' % (d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3))
     if not is_cowling and not is_interconnect:
         # Only meaningful against the end type's own octant reference -- a cowling or
-        # interconnect bulkhead's octant is a different shape and bulkhead_section.REF does
-        # not describe it.
-        print('  8x octant = %.7f  -- gap/overlap in the tiling is %+.4f'
-              % (8 * bulkhead_section.REF, 8 * bulkhead_section.REF - s.Volume))
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in expect_bbox))
+        # interconnect bulkhead's octant is a different shape and
+        # `bulkhead_section.REF_M3` does not describe it.
+        tiled_m3 = 8 * bulkhead_section.REF_M3
+        print('  8x octant = %.7f mm3  -- gap/overlap in the tiling is %+.4f mm3'
+              % (tiled_m3 * si.MM3_PER_M3, (tiled_m3 - volume_m3) * si.MM3_PER_M3))
+    print('  bbox    = [%s] mm' % ', '.join('%.4f' % si.mm(v) for v in got_m))
+    print('  expect  = [%s] mm' % ', '.join('%.4f' % si.mm(v) for v in expect_bbox_m))
     print('  valid   = %s  solids=%d  faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
@@ -241,9 +250,9 @@ def main():
         fail.append('invalid shape')
     if len(s.Solids) != 1:
         fail.append('%d solids -- the eight octants meet into one body' % len(s.Solids))
-    if abs(d) / ref > 1e-3:
+    if abs(d_m3) / ref_m3 > 1e-3:
         fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, expect_bbox)) > 1e-3:
+    if max(abs(a - b) for a, b in zip(got_m, expect_bbox_m)) > BBOX_TOL_M:
         fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
     return 1 if fail else 0

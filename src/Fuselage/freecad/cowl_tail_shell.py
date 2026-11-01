@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cowl_tree
+import si
 from corner_common import is_entry_point
 
 PARAMS = cowl_tree.PARAMS_TAIL_SHELL
@@ -45,9 +46,9 @@ def main():
     shape = tip.Shape
     bound = sum(len(list(getattr(o, "ExpressionEngine", []) or []))
                 for o in doc.Objects)
-    print("PART:: %s  solids=%d valid=%s  objects=%d bindings=%d  volume=%.4f"
+    print("PART:: %s  solids=%d valid=%s  objects=%d bindings=%d  volume=%.4f mm3"
           % ('tail_shell', len(shape.Solids), shape.isValid(), len(doc.Objects), bound,
-             shape.Volume))
+             si.volume_m3(shape) * si.MM3_PER_M3))
     sys.stdout.flush()
     return 0 if shape.isValid() and len(shape.Solids) == 1 else 1
 

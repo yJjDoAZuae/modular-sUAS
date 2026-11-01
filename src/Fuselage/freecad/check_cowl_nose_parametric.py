@@ -24,6 +24,7 @@ import FreeCAD as App
 
 import cowl
 import cowl_tree
+import si
 from corner_common import is_entry_point
 
 # Pinned literals, not read from the sweep: nothing under `freecadcmd` can import
@@ -50,43 +51,52 @@ NOSE_PLATE_SEEDS = {
 }
 
 
+#: How far two builds of the same shape may differ, as a symmetric-difference volume in cubic
+#: meters. 1e-15 m3 is the `1.0e-6` mm3 this check used before IP-FC-160 -- the figure has to
+#: cross with the quantity it bounds, or the check silently loosens by a billion.
+SYMDIFF_TOL_M3 = 1.0e-15
+
+
 def _old_nose_tip_shape(seed):
-    """`cowl.nose_tip()` wants `cut_len`/`plate_diam` as absolute millimeters, not the
-    fractions `cowl_tree`'s sheet holds -- see `cowl_tree.nose_tip`'s own docstring for why
-    the two builders disagree about that."""
-    p = dict(seed)
-    p['cut_len'] = seed['cut_len'] * seed['unit_width']
-    p['plate_diam'] = seed['plate_diam'] * seed['unit_width']
-    p['oml'] = {'scale_m_per_mm': seed['oml_scale_m_per_mm'],
-               'length_m': seed['oml_length_m'],
-               'offset_x_m': seed['oml_offset_x_m'],
-               'reversed': bool(seed['oml_reversed'])}
-    solid, _repairs = cowl.nose_tip(p)
+    """`cowl.nose_tip()` wants `cut_len`/`plate_diam` as absolute lengths, not the fractions
+    `cowl_tree`'s sheet holds -- see `cowl_tree.nose_tip`'s own docstring for why the two
+    builders disagree about that.
+
+    The seeds here are sheet rows, so millimeters; `cowl.from_flat` is the crossing into the
+    meters-and-radians form `cowl.py`'s builders take, and using it rather than assembling the
+    nested dict by hand means this check cannot drift out of step with that boundary.
+    """
+    flat = dict(seed)
+    flat['cut_len'] = seed['cut_len'] * seed['unit_width']
+    flat['plate_diam'] = seed['plate_diam'] * seed['unit_width']
+    solid, _repairs = cowl.nose_tip(cowl.from_flat(flat))
     return solid
 
 
-def _symdiff(a, b):
-    return a.cut(b).Volume + b.cut(a).Volume
+def _symdiff_m3(a, b):
+    return si.volume_m3(a.cut(b)) + si.volume_m3(b.cut(a))
 
 
 def _check_one(label, old, doc, tip):
     new = tip.Shape
-    d = _symdiff(old, new)
-    ok = new.isValid() and len(new.Faces) == len(old.Faces) and d < 1.0e-6
-    print('%-28s faces=%-3d valid=%-5s vol=%14.6f  symdiff=%.9f  %s'
-          % (label, len(new.Faces), new.isValid(), new.Volume, d, 'OK' if ok else 'FAIL'))
+    d_m3 = _symdiff_m3(old, new)
+    ok = new.isValid() and len(new.Faces) == len(old.Faces) and d_m3 < SYMDIFF_TOL_M3
+    print('%-28s faces=%-3d valid=%-5s vol=%14.6f mm3  symdiff=%.9f mm3  %s'
+          % (label, len(new.Faces), new.isValid(), si.volume_m3(new) * si.MM3_PER_M3,
+             d_m3 * si.MM3_PER_M3, 'OK' if ok else 'FAIL'))
     return 0 if ok else 1
 
 
-def _check_resolve(label, doc_lo, tip_lo, seed_hi, fresh_vol):
+def _check_resolve(label, doc_lo, tip_lo, seed_hi, fresh_vol_m3):
     sheet = doc_lo.getObject('Params')
     for alias, value in seed_hi.items():
         sheet.set(alias, repr(float(value)))
     doc_lo.recompute()
-    edited_vol = tip_lo.Shape.Volume
-    ok = abs(edited_vol - fresh_vol) < 1.0e-6
-    print('%-28s edited-in-place=%14.6f  fresh=%14.6f  %s'
-          % (label, edited_vol, fresh_vol, 'OK' if ok else 'FAIL'))
+    edited_vol_m3 = si.volume_m3(tip_lo.Shape)
+    ok = abs(edited_vol_m3 - fresh_vol_m3) < SYMDIFF_TOL_M3
+    print('%-28s edited-in-place=%14.6f  fresh=%14.6f mm3  %s'
+          % (label, edited_vol_m3 * si.MM3_PER_M3, fresh_vol_m3 * si.MM3_PER_M3,
+             'OK' if ok else 'FAIL'))
     return 0 if ok else 1
 
 
@@ -94,7 +104,8 @@ def check_nose_plate():
     bad = 0
     docs = {}
     for U, seed in sorted(NOSE_PLATE_SEEDS.items()):
-        old, _repairs = cowl.nose_plate(seed)
+        # The seed is sheet rows, so millimeters; `from_flat` is the crossing.
+        old, _repairs = cowl.nose_plate(cowl.from_flat(seed))
         doc = App.newDocument('check_plate_%g' % U)
         tip = cowl_tree.emit(doc, seed, cowl_tree.PARAMS_NOSE_PLATE, cowl_tree.nose_plate)
         bad += _check_one('nose_plate U=%g' % U, old, doc, tip)
@@ -102,7 +113,7 @@ def check_nose_plate():
     lo, hi = sorted(NOSE_PLATE_SEEDS)
     bad += _check_resolve('nose_plate resolve %g->%g' % (lo, hi),
                           docs[lo][0], docs[lo][1], NOSE_PLATE_SEEDS[hi],
-                          docs[hi][1].Shape.Volume)
+                          si.volume_m3(docs[hi][1].Shape))
     return bad
 
 
@@ -118,7 +129,7 @@ def check_nose_tip():
     lo, hi = sorted(NOSE_TIP_SEEDS)
     bad += _check_resolve('nose_tip resolve %g->%g' % (lo, hi),
                           docs[lo][0], docs[lo][1], NOSE_TIP_SEEDS[hi],
-                          docs[hi][1].Shape.Volume)
+                          si.volume_m3(docs[hi][1].Shape))
     return bad
 
 

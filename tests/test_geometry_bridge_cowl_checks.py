@@ -35,10 +35,32 @@ from conftest import requires_freecad                                       # no
 pytestmark = requires_freecad
 
 #: Outer radius, wall and height of the test tube, in millimeters. The wall is the cowl's own
-#: 0.6 mm so the numbers read on the same scale as the real part's.
+#: 0.6 mm so the numbers read on the same scale as the real part's. **These stay millimeters**
+#: because the fixtures are built with `Part.makeCylinder`, whose arguments are the kernel's own
+#: units -- the same reason `plane2d`'s constructors take millimeter expression strings.
 R_OUTER = 10.0
 WALL = 0.6
 HEIGHT = 20.0
+
+#: The same three figures in SI, derived rather than written twice, because
+#: `check_cowl_interior`'s measurement functions take and return meters since IP-FC-160. The
+#: tolerance crosses with them: 0.01 mm is `WALL_TOL`, and left at 0.01 against a meter figure
+#: it would be 1 000x looser while still reading as tight.
+MM_PER_M = 1000.0
+R_OUTER_M = R_OUTER / MM_PER_M
+WALL_M = WALL / MM_PER_M
+HEIGHT_M = HEIGHT / MM_PER_M
+TOL_M = 0.01 / MM_PER_M
+
+
+def si_m(value_mm):
+    """A millimeter figure as meters, for the stations the fixtures are built at.
+
+    The fixtures are kernel geometry and so millimeters; `check_cowl_interior`'s measurement
+    functions are SI (IP-FC-160). Named rather than written inline so a reader can see which
+    side of the boundary each number is on.
+    """
+    return value_mm / MM_PER_M
 
 
 @pytest.fixture
@@ -93,32 +115,32 @@ class TestWallThickness:
     """A tube's wall is exactly `WALL` everywhere, so every sample has a known right answer."""
 
     def test_a_uniform_wall_reads_its_own_thickness(self, cci, tube):
-        got = cci.wall_thickness(tube, HEIGHT / 2.0, WALL, 0.01)
+        got = cci.wall_thickness(tube, HEIGHT_M / 2.0, WALL_M, TOL_M)
         assert got is not None
         n, near, worst_low, median, worst_high = got
         assert n > 0
         assert near == n, '%d of %d samples landed outside 0.01 mm of %.2f' % (n - near, n, WALL)
-        assert worst_low == pytest.approx(WALL, abs=0.01)
-        assert median == pytest.approx(WALL, abs=0.01)
-        assert worst_high == pytest.approx(WALL, abs=0.01)
+        assert worst_low == pytest.approx(WALL_M, abs=TOL_M)
+        assert median == pytest.approx(WALL_M, abs=TOL_M)
+        assert worst_high == pytest.approx(WALL_M, abs=TOL_M)
 
     def test_a_thicker_wall_reads_thicker(self, cci, Part):
         """Pins that the function measures the wall rather than returning its `expect` argument."""
         thick = (Part.makeCylinder(R_OUTER, HEIGHT)
                  .cut(Part.makeCylinder(R_OUTER - 2.0, HEIGHT)))
-        got = cci.wall_thickness(thick, HEIGHT / 2.0, 2.0, 0.01)
+        got = cci.wall_thickness(thick, HEIGHT_M / 2.0, 2.0 / MM_PER_M, TOL_M)
         assert got is not None
         _n, _near, worst_low, median, _worst_high = got
-        assert median == pytest.approx(2.0, abs=0.01)
-        assert worst_low == pytest.approx(2.0, abs=0.01)
+        assert median == pytest.approx(2.0 / MM_PER_M, abs=TOL_M)
+        assert worst_low == pytest.approx(2.0 / MM_PER_M, abs=TOL_M)
 
     def test_a_wrong_expectation_is_reported_not_absorbed(self, cci, tube):
         """Asked for 2.0 mm on a 0.6 mm wall, no sample may count as near."""
-        got = cci.wall_thickness(tube, HEIGHT / 2.0, 2.0, 0.01)
+        got = cci.wall_thickness(tube, HEIGHT_M / 2.0, 2.0 / MM_PER_M, TOL_M)
         assert got is not None
         n, near, _worst_low, median, _worst_high = got
         assert near == 0
-        assert median == pytest.approx(WALL, abs=0.01)
+        assert median == pytest.approx(WALL_M, abs=TOL_M)
         assert n > 0
 
     def test_the_sample_count_comes_from_the_section_not_from_a_constant(self, cci, Part):
@@ -126,9 +148,10 @@ class TestWallThickness:
         millimeters -- the thing the 0.6 mm wall is measured in -- stays put."""
         small = (Part.makeCylinder(20.0, HEIGHT).cut(Part.makeCylinder(20.0 - WALL, HEIGHT)))
         large = (Part.makeCylinder(200.0, HEIGHT).cut(Part.makeCylinder(200.0 - WALL, HEIGHT)))
-        n_small = cci.wall_thickness(small, HEIGHT / 2.0, WALL, 0.01)[0]
-        n_large = cci.wall_thickness(large, HEIGHT / 2.0, WALL, 0.01)[0]
-        assert n_small == pytest.approx(2.0 * math.pi * 20.0 / cci.WALL_ARC, rel=0.02)
+        n_small = cci.wall_thickness(small, HEIGHT_M / 2.0, WALL_M, TOL_M)[0]
+        n_large = cci.wall_thickness(large, HEIGHT_M / 2.0, WALL_M, TOL_M)[0]
+        assert n_small == pytest.approx(
+            2.0 * math.pi * (20.0 / MM_PER_M) / cci.WALL_ARC_M, rel=0.02)
         assert n_large / n_small == pytest.approx(10.0, rel=0.02)
 
     def test_a_short_section_is_sampled_finer_than_asked_never_coarser(self, cci, Part):
@@ -136,9 +159,9 @@ class TestWallThickness:
         `WALL_ARC`. Which way the clamp errs is the whole of its safety: finer is harmless, coarser
         would silently undo the fix."""
         small = (Part.makeCylinder(5.0, HEIGHT).cut(Part.makeCylinder(5.0 - WALL, HEIGHT)))
-        n = cci.wall_thickness(small, HEIGHT / 2.0, WALL, 0.01)[0]
+        n = cci.wall_thickness(small, HEIGHT_M / 2.0, WALL_M, TOL_M)[0]
         assert n == cci.WALL_MIN
-        assert 2.0 * math.pi * 5.0 / n < cci.WALL_ARC
+        assert 2.0 * math.pi * (5.0 / MM_PER_M) / n < cci.WALL_ARC_M
 
     def test_a_station_outside_the_solid_returns_none(self, cci, tube):
         """The first documented `None` case: no closed loop at all at that station.
@@ -146,7 +169,7 @@ class TestWallThickness:
         "Fewer than two loops" in the docstring means *no* loops -- a station the solid does not
         reach. A station with exactly one loop is a different case, handled below.
         """
-        assert cci.wall_thickness(tube, HEIGHT + 50.0, WALL, 0.01) is None
+        assert cci.wall_thickness(tube, HEIGHT_M + 0.050, WALL_M, TOL_M) is None
 
     def test_a_single_loop_section_is_measured_as_a_strip(self, cci, Part):
         """Not `None`: a one-loop section is treated as a thin strip and measured by `2A/P`.
@@ -158,11 +181,11 @@ class TestWallThickness:
         not a defect in the function either. §6.1 states the same limit for the area-based mean.
         """
         rod = Part.makeCylinder(R_OUTER, HEIGHT)
-        got = cci.wall_thickness(rod, HEIGHT / 2.0, WALL, 0.01)
+        got = cci.wall_thickness(rod, HEIGHT_M / 2.0, WALL_M, TOL_M)
         assert got is not None
         n, near, _low, median, _high = got
         assert near == 0, 'a disc must not pass as a 0.6 mm wall'
-        assert median == pytest.approx(R_OUTER, rel=1e-3)
+        assert median == pytest.approx(R_OUTER_M, rel=1e-3)
 
     def test_a_ring_broken_into_one_arc_still_measures_correctly(self, cci, tube, Part, App):
         """A single radial slot leaves a C: one closed loop, so the strip estimator applies and
@@ -172,10 +195,10 @@ class TestWallThickness:
         wires = _wires_at(broken, HEIGHT / 2.0, App)
         assert len(wires) == 1, 'a single slot should leave one C-shaped loop'
         assert cci._is_annulus(wires) is False
-        got = cci.wall_thickness(broken, HEIGHT / 2.0, WALL, 0.01)
+        got = cci.wall_thickness(broken, HEIGHT_M / 2.0, WALL_M, TOL_M)
         assert got is not None
         _n, _near, _low, median, _high = got
-        assert median == pytest.approx(WALL, abs=0.01)
+        assert median == pytest.approx(WALL_M, abs=TOL_M)
 
     def test_a_ring_broken_into_two_arcs_returns_none(self, cci, tube, Part, App):
         """**The case the annulus guard exists for, and the one OQ-DES-CW26 is about.**
@@ -205,7 +228,7 @@ class TestWallThickness:
         wires = _wires_at(broken, z, App)
         assert len(wires) == 2, 'two opposing slots should leave two arcs at this station'
         assert cci._is_annulus(wires) is False
-        assert cci.wall_thickness(broken, z, WALL, 0.01) is None
+        assert cci.wall_thickness(broken, si_m(z), WALL_M, TOL_M) is None
 
 
 #: A pocket milled into the tube's outer face: `POCKET_WIDTH` mm around, `POCKET_DEPTH` mm deep,
@@ -267,9 +290,11 @@ class TestWallThicknessSampling:
         section twenty times round as on a small one, because the defect is the same size on both.
         """
         for r in (10.0, 50.0, 200.0):
-            got = cci.wall_thickness(pocketed_tube(Part, App, r), HEIGHT / 2.0, WALL, 0.01)
+            got = cci.wall_thickness(pocketed_tube(Part, App, r), HEIGHT_M / 2.0,
+                                     WALL_M, TOL_M)
             assert got is not None, 'r = %.0f gave no section' % r
-            assert got[2] == pytest.approx(WALL - POCKET_DEPTH, abs=1e-3), 'r = %.0f' % r
+            assert got[2] == pytest.approx((WALL - POCKET_DEPTH) / MM_PER_M,
+                                           abs=1e-3 / MM_PER_M), 'r = %.0f' % r
 
     def test_a_coarse_spacing_misses_part_of_that_same_thin_spot(self, cci, Part, App):
         """**The converse, measured rather than assumed.** A cause needs its converse tested, so
@@ -281,11 +306,11 @@ class TestWallThicknessSampling:
         sample count keeps smaller sections fine whatever is asked for.
         """
         part = pocketed_tube(Part, App, 200.0)
-        fine = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01)[2]
-        coarse = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01, 2.5)[2]
-        assert fine == pytest.approx(WALL - POCKET_DEPTH, abs=1e-3)
-        assert coarse > fine + 4.0 * 0.01
-        assert coarse < WALL, 'it should still see some of the pocket, just not its floor'
+        fine = cci.wall_thickness(part, HEIGHT_M / 2.0, WALL_M, TOL_M)[2]
+        coarse = cci.wall_thickness(part, HEIGHT_M / 2.0, WALL_M, TOL_M, 2.5 / MM_PER_M)[2]
+        assert fine == pytest.approx((WALL - POCKET_DEPTH) / MM_PER_M, abs=1e-3 / MM_PER_M)
+        assert coarse > fine + 4.0 * TOL_M
+        assert coarse < WALL_M, 'it should still see some of the pocket, just not its floor'
 
     def test_the_two_sampling_errors_push_opposite_ways_and_both_are_real(self, cci, Part, App):
         """Recorded because it is the trap in reasoning about this, and `wall_measure.density` says
@@ -299,16 +324,16 @@ class TestWallThicknessSampling:
         conclusion about the other.
         """
         part = pocketed_tube(Part, App, 200.0)
-        coarse = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01, 2.5)[2]
-        fine = cci.wall_thickness(part, HEIGHT / 2.0, WALL, 0.01)[2]
+        coarse = cci.wall_thickness(part, HEIGHT_M / 2.0, WALL_M, TOL_M, 2.5 / MM_PER_M)[2]
+        fine = cci.wall_thickness(part, HEIGHT_M / 2.0, WALL_M, TOL_M)[2]
         assert coarse > fine, 'on a smooth tube the sparse-sampling error is the only one'
 
     def test_the_sample_count_is_derived_and_clamped_at_both_ends(self, cci):
         """`wall_samples` alone, with no geometry: the arithmetic and both clamps."""
-        assert cci.wall_samples(1000.0) == 8000
-        assert cci.wall_samples(1000.0, 0.5) == 2000
-        assert cci.wall_samples(1.0) == cci.WALL_MIN
-        assert cci.wall_samples(1.0e9) == cci.WALL_MAX
+        assert cci.wall_samples(1000.0 / MM_PER_M) == 8000
+        assert cci.wall_samples(1000.0 / MM_PER_M, 0.5 / MM_PER_M) == 2000
+        assert cci.wall_samples(1.0 / MM_PER_M) == cci.WALL_MIN
+        assert cci.wall_samples(1.0e9 / MM_PER_M) == cci.WALL_MAX
 
 
 class TestStationMeasures:
@@ -317,14 +342,15 @@ class TestStationMeasures:
     def test_the_incumbent_entry_is_what_wall_thickness_returns(self, cci, tube):
         """The compatibility the item asks for: the leading figure is unchanged, so a reading can
         still be compared against every one recorded before the second measure existed."""
-        z = HEIGHT / 2.0
-        both = cci.station_measures(tube, z, WALL, 0.01)
-        assert tuple(both['incumbent']) == tuple(cci.wall_thickness(tube, z, WALL, 0.01))
+        z_m = HEIGHT_M / 2.0
+        both = cci.station_measures(tube, z_m, WALL_M, TOL_M)
+        assert tuple(both['incumbent']) == tuple(
+            cci.wall_thickness(tube, z_m, WALL_M, TOL_M))
 
     def test_both_measures_read_a_uniform_wall_as_its_own_thickness(self, cci, tube):
-        both = cci.station_measures(tube, HEIGHT / 2.0, WALL, 0.01)
-        assert both['selected'] == pytest.approx(WALL, abs=0.01)
-        assert both['incumbent'][2] == pytest.approx(WALL, abs=0.01)
+        both = cci.station_measures(tube, HEIGHT_M / 2.0, WALL_M, TOL_M)
+        assert both['selected'] == pytest.approx(WALL_M, abs=TOL_M)
+        assert both['incumbent'][2] == pytest.approx(WALL_M, abs=TOL_M)
         assert both['samples_per_loop'] > 0
 
     @pytest.mark.parametrize('width', [2.0, 1.2, 0.8, 0.4])
@@ -341,9 +367,11 @@ class TestStationMeasures:
         sampled differently would have no reason to respect the sign of that.
         """
         part = notched_tube(Part, App, 50.0, width=width)
-        both = cci.station_measures(part, HEIGHT / 2.0, WALL, 0.01)
+        both = cci.station_measures(part, HEIGHT_M / 2.0, WALL_M, TOL_M)
         assert both['selected'] is not None
-        assert both['selected'] >= both['incumbent'][2] - 1e-12
+        # A picometer: it guards a float comparison, not a geometric difference, so it crosses
+        # with the quantities it compares.
+        assert both['selected'] >= both['incumbent'][2] - 1e-15
         assert both['selected_samples'] < both['incumbent'][0], \
             'an inner notch has concave turns, so some samples must have been excluded'
 
@@ -358,20 +386,22 @@ class TestStationMeasures:
         it.
         """
         part = notched_tube(Part, App, 50.0, width=1.2)
-        both = cci.station_measures(part, HEIGHT / 2.0, WALL, 0.01)
-        assert both['incumbent'][2] == pytest.approx(0.3968, abs=5e-4)
-        assert both['selected'] == pytest.approx(both['incumbent'][2], abs=5e-4)
-        assert both['selected'] < WALL - 0.19, 'the thinning must survive the exclusion'
+        both = cci.station_measures(part, HEIGHT_M / 2.0, WALL_M, TOL_M)
+        assert both['incumbent'][2] == pytest.approx(0.3968 / MM_PER_M, abs=5e-4 / MM_PER_M)
+        assert both['selected'] == pytest.approx(both['incumbent'][2],
+                                                 abs=5e-4 / MM_PER_M)
+        assert both['selected'] < (WALL - 0.19) / MM_PER_M, \
+            'the thinning must survive the exclusion'
 
     def test_a_section_with_no_loop_pair_reports_no_selected_figure(self, cci, Part):
         """The one-loop strip branch feeds the incumbent a `2A/P` estimate and the selected measure
         nothing, because that measure is defined on an inner/outer pair. Mixing the two would make
         the second figure a blend of two estimators and break the subset identity above."""
         rod = Part.makeCylinder(R_OUTER, HEIGHT)
-        both = cci.station_measures(rod, HEIGHT / 2.0, WALL, 0.01)
+        both = cci.station_measures(rod, HEIGHT_M / 2.0, WALL_M, TOL_M)
         assert both['selected'] is None
         assert both['selected_samples'] == 0
-        assert both['incumbent'][2] == pytest.approx(R_OUTER, abs=0.01)
+        assert both['incumbent'][2] == pytest.approx(R_OUTER_M, abs=TOL_M)
 
     def test_a_broken_ring_returns_none_from_both(self, cci, tube, Part, App):
         """The annulus guard is upstream of either measure, so neither can report a thickness for a
@@ -380,7 +410,7 @@ class TestStationMeasures:
         a = Part.makeBox(4.0, 4.0, 10.0, App.Vector(R_OUTER - 2.0, -2.0, z - 5.0))
         b = Part.makeBox(4.0, 4.0, 10.0, App.Vector(-R_OUTER - 2.0, -2.0, z - 5.0))
         broken = tube.cut(a).cut(b)
-        assert cci.station_measures(broken, z, WALL, 0.01) is None
+        assert cci.station_measures(broken, si_m(z), WALL_M, TOL_M) is None
 
 
 class TestSeamEdgesAreNotListedTwice:
@@ -442,14 +472,15 @@ class TestInPlaneWidth:
         `test_a_tool_lying_in_the_layer_plane_is_refused`.
         """
         slab = Part.makeBox(0.1, 20.0, 20.0, App.Vector(0.0, -10.0, 0.0))
-        assert cci.in_plane_width(slab, 0.1) == pytest.approx(0.1, rel=1e-9)
+        assert cci.in_plane_width(slab, 0.1 / MM_PER_M) == pytest.approx(
+            0.1 / MM_PER_M, rel=1e-9)
 
     def test_a_tool_lying_in_the_layer_plane_is_refused(self, cci, Part, App):
         """Precondition P4. A flat slab's normal is vertical, so it has no horizontal component to
         divide by — it leaves no rib at all, and the build should have refused it earlier."""
         flat = Part.makeBox(20.0, 20.0, 0.1, App.Vector(-10.0, -10.0, 0.0))
         with pytest.raises(PreconditionFailed) as caught:
-            cci.in_plane_width(flat, 0.1)
+            cci.in_plane_width(flat, 0.1 / MM_PER_M)
         assert 'layer plane' in str(caught.value)
 
     def test_a_thirty_degree_slab_cuts_twice_as_wide(self, cci, Part, App):
@@ -457,7 +488,8 @@ class TestInPlaneWidth:
         normal to (0, -0.5, 0.866), `hypot` is 0.5, and a 0.1 mm cut is 0.2 mm wide."""
         slab = Part.makeBox(20.0, 20.0, 0.1, App.Vector(-10.0, -10.0, 0.0))
         slab.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 30.0)
-        assert cci.in_plane_width(slab, 0.1) == pytest.approx(0.2, rel=1e-6)
+        assert cci.in_plane_width(slab, 0.1 / MM_PER_M) == pytest.approx(
+            0.2 / MM_PER_M, rel=1e-6)
 
     @pytest.mark.parametrize('degrees', [10.0, 30.0, 45.0, 60.0, 80.0])
     def test_the_width_follows_the_closed_form_at_every_angle(self, cci, Part, App, degrees):
@@ -466,18 +498,20 @@ class TestInPlaneWidth:
         slab = Part.makeBox(20.0, 20.0, 0.1, App.Vector(-10.0, -10.0, 0.0))
         slab.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), degrees)
         expect = 0.1 / math.sin(math.radians(degrees))
-        assert cci.in_plane_width(slab, 0.1) == pytest.approx(expect, rel=1e-6)
+        assert cci.in_plane_width(slab, 0.1 / MM_PER_M) == pytest.approx(
+            expect / MM_PER_M, rel=1e-6)
 
     def test_the_width_is_independent_of_the_slabs_own_thickness(self, cci, Part, App):
         """`t_cut` is an argument, not a measurement -- which is the point the docstring makes:
         reading the width off the section would pass a notch cut to the wrong thickness."""
         slab = Part.makeBox(20.0, 20.0, 2.0, App.Vector(-10.0, -10.0, 0.0))
         slab.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 30.0)
-        assert cci.in_plane_width(slab, 0.1) == pytest.approx(0.2, rel=1e-6)
+        assert cci.in_plane_width(slab, 0.1 / MM_PER_M) == pytest.approx(
+            0.2 / MM_PER_M, rel=1e-6)
 
     def test_a_tool_with_no_planar_face_is_refused_by_name(self, cci, Part):
         """A sphere is not a slab, so its thickness has no direction. The refusal must be the
         project's own exception, arriving as itself across the boundary."""
         with pytest.raises(PreconditionFailed) as caught:
-            cci.in_plane_width(Part.makeSphere(5.0), 0.1)
+            cci.in_plane_width(Part.makeSphere(5.0), 0.1 / MM_PER_M)
         assert 'not a slab' in str(caught.value)

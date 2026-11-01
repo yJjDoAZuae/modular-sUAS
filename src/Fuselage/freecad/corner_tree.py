@@ -38,6 +38,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
+import si
 from corner_common import build_sheet, is_entry_point, out_path, script_args
 
 V = App.Vector
@@ -576,22 +577,25 @@ def emit(doc, seed=None, extra=()):
 # fuselage_corner and nothing else, so Tip is the deliverable in both cases; only the second
 # is a configuration the sweep would produce. The corner had never been checked at the swept
 # values until the bulkhead's assembly needed to share a sheet with it.
-DRIVER_REFS = [('EndCutGroove', 551.8157396), ('TransCutRelief', 607.6699024),
-               ('MidSection', 4041.5795009), ('Tip', 10395.9608969)]
-SWEPT_REFS = [('Tip', 14146.8357350)]            # ref_corner_full.scad
+DRIVER_REFS_M3 = [('EndCutGroove', 5.518157396e-7),        # 551.8157396 mm3
+                  ('TransCutRelief', 6.076699024e-7),      # 607.6699024 mm3
+                  ('MidSection', 4.0415795009e-6),         # 4041.5795009 mm3
+                  ('Tip', 1.03959608969e-5)]               # 10395.9608969 mm3
+SWEPT_REFS_M3 = [('Tip', 1.414683573500e-5)]               # 14146.8357350 mm3,
+                                                           # ref_corner_full.scad
 
 
 def main():
     args = script_args()
     seed = None
-    refs = DRIVER_REFS
+    refs_m3 = DRIVER_REFS_M3
     if args:
         import parameters
         # The CORNER table, never the bulkhead's: they differ on greeble_tolerance, 0.05
         # against 0, and that asymmetry is the joint. Seeding this from the bulkhead's would
         # build the bore with no clearance and the snap would be an interference fit.
         seed = parameters.seed(args[0], parameters.CORNER)
-        refs = SWEPT_REFS
+        refs_m3 = SWEPT_REFS_M3
 
     doc = App.newDocument('corner_tree')
     tip = emit(doc, seed)
@@ -599,13 +603,14 @@ def main():
     print('PART:: CSG tree -- fuselage_corner  (%s)'
           % ('swept parameters' if seed else 'hand driver parameters'))
     fail = []
-    for name, ref in refs:
+    for name, ref_m3 in refs_m3:
         obj = doc.getObject(name)
-        v = obj.Shape.Volume
-        d = v - ref
-        print('  %-16s %13.6f  ref %13.6f  %+10.6f  %+8.4f%%'
-              % (name, v, ref, d, 100 * d / ref))
-        if abs(d) / ref > 1e-3:
+        volume_m3 = si.volume_m3(obj.Shape)
+        d_m3 = volume_m3 - ref_m3
+        print('  %-16s %13.6f  ref %13.6f  %+10.6f  %+8.4f%%  mm3'
+              % (name, volume_m3 * si.MM3_PER_M3, ref_m3 * si.MM3_PER_M3,
+                 d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3))
+        if abs(d_m3) / ref_m3 > 1e-3:
             fail.append('%s off by more than 0.1%%' % name)
 
     s = tip.Shape

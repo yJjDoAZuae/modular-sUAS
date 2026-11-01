@@ -164,7 +164,7 @@ def measure(kind, u):
         # the same measurement. The 2026-10-06 corpus is the "before" set; at the mid station of its
         # saved `tail_shell` at `U` = 4 the reading moves from 0.4454 to 0.5675 mm. Do not difference
         # the two sets -- re-measure the saved walls instead, which needs no build.
-        got = cci.wall_thickness(wall, z, t, cci.ci.WALL_TOL)
+        got = cci.wall_thickness(wall, z, t, cci.ci.WALL_TOL_M)
         if got is None:
             missing_stations += 1
             continue

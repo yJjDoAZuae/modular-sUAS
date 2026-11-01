@@ -37,23 +37,37 @@ SOURCE = os.path.join(_HERE, '..', 'src', 'Fuselage', 'freecad', 'cowl_interior.
 #: Every `(function, parameter, constant)` whose default is a module-level constant, and therefore
 #: **frozen when `cowl_interior` is imported**. A driver cannot sweep any of these by setting the
 #: module attribute; it has to pass the value as an argument, the way `seed_density.one` passes
-#: `tau`. Recorded as of 2026-10-14.
+#: `tau_m`. Recorded as of 2026-10-14; re-recorded 2026-11-01 for IP-FC-160.
+#:
+#: **It grew from nine rows to fifteen at the SI conversion, and the growth is not a regression.**
+#: Five of the six new rows are tolerances that were bare literals in the signature before --
+#: `cell_boundary_planes(cell, tol=1.0e-6)` and four like it. Those were frozen at `def` time
+#: exactly as a named constant is, and unsweepable in the same way; naming them is what made them
+#: visible here, and it also put them in `tools/unit_regime.json` where their unit is recorded.
+#: The sixth, `cell_boundary_planes`'s `direction_tol`, exists because one `tol` was doing a
+#: length's job and a unit vector's at once and the conversion had to separate them.
 FROZEN_DEFAULTS = {
-    ('smoothed', 'tol', 'REFIT_TOL'),
-    ('eroded_body', 'tol', 'REFIT_TOL'),
-    ('_smoothed_open', 'tol', 'REFIT_TOL'),
-    ('eroded_arc', 'tol', 'REFIT_TOL'),
-    ('_outward_normal', 'step', 'OUTWARD_STEP_MM'),
-    ('z_extent', 'tol', 'END_INSET'),
-    ('_finished_wall_gap', 'plane_tol', 'FINISHED_PLANE_TOL'),
-    ('cavity', 'tau', 'TAU'),
-    ('shell_solid', 'tau', 'TAU'),
+    ('smoothed', 'tol_m', 'REFIT_TOL_M'),
+    ('eroded_body', 'tol_m', 'REFIT_TOL_M'),
+    ('_smoothed_open', 'tol_m', 'REFIT_TOL_M'),
+    ('eroded_arc', 'tol_m', 'REFIT_TOL_M'),
+    ('_outward_normal', 'step_m', 'OUTWARD_STEP_M'),
+    ('z_extent', 'tol_m', 'END_INSET_M'),
+    ('_finished_wall_gap', 'plane_tol_m', 'FINISHED_PLANE_TOL_M'),
+    ('cavity', 'tau_m', 'TAU_M'),
+    ('shell_solid', 'tau_m', 'TAU_M'),
+    ('cell_boundary_planes', 'tol_m', 'CELL_ORIGIN_TOL_M'),
+    ('cell_boundary_planes', 'direction_tol', 'CELL_DIRECTION_TOL'),
+    ('_chain', 'tol_m', 'CHAIN_TOL_M'),
+    ('open_arc', 'tol_m', 'CELL_PLANE_TOL_M'),
+    ('_extend_across_cell', 'tol_m', 'CELL_ORIGIN_TOL_M'),
+    ('_strip_seam', 'tol_m', 'CELL_ORIGIN_TOL_M'),
 }
 
 #: The constants `freecad/seed_density.py` sweeps by `setattr`. **None of these may appear in
 #: `FROZEN_DEFAULTS`**, which is the assertion that makes this file worth having: if one ever does,
 #: that driver's table silently becomes a column of identical builds.
-SWEPT_BY_SETATTR = ('SEED_MAX', 'FIT_ARC', 'FIT_MIN', 'FIT_MAX', 'CHECK_ARC', 'CHECK_MIN')
+SWEPT_BY_SETATTR = ('SEED_MAX', 'FIT_ARC_M', 'FIT_MIN', 'FIT_MAX', 'CHECK_ARC_M', 'CHECK_MIN')
 
 
 def _tree():
@@ -148,7 +162,7 @@ class TestFrozenDefaults:
         pass for the wrong reason."""
         tree = _tree()
         constants = _module_constants(tree)
-        assert 'TAU' in constants
+        assert 'TAU_M' in constants
         assert 'SEED_MAX' in constants
         assert len(constants) > 20, 'only %d constants found; the parse is wrong' % len(constants)
 
@@ -156,8 +170,8 @@ class TestFrozenDefaults:
         """The specific fact `seed_density.NOT_OVERRIDABLE` and its `tau` parameter exist for. If
         this ever fails, `TAU` has become overridable and that note is stale."""
         found = _frozen_defaults(_tree())
-        assert ('cavity', 'tau', 'TAU') in found
-        assert ('shell_solid', 'tau', 'TAU') in found
+        assert ('cavity', 'tau_m', 'TAU_M') in found
+        assert ('shell_solid', 'tau_m', 'TAU_M') in found
 
     def test_no_new_constant_has_quietly_become_un_overridable(self):
         """**A new entry here is not a bug, it is a notification.** A constant bound as a default

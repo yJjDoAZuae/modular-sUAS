@@ -136,7 +136,10 @@ class TestSpacingArithmetic:
         """**A mirror that drifts is worse than no mirror.** This module cannot import the gate --
         it must stay importable with no FreeCAD -- so the values are copied, and the copy is held
         to the original by reading it."""
-        assert density.GATE_ARC == gate_constant('WALL_ARC')
+        # The gate is SI since IP-FC-160 and this module is still millimeters, because
+        # `wall_measure` may not import the conversion layer (OQ-ARCH-24). The spacing crosses;
+        # the two clamps are counts and do not.
+        assert density.GATE_ARC == gate_constant('WALL_ARC_M') * 1000.0
         assert density.GATE_MIN == gate_constant('WALL_MIN')
         assert density.GATE_MAX == gate_constant('WALL_MAX')
         assert density.PRIOR_GATE_AROUND == 240, 'history, not a mirror: the gate no longer has it'

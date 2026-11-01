@@ -32,9 +32,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import build_sheet, is_entry_point
+import si
+from corner_common import build_sheet, is_entry_point, report
 
-REF_VOL = 223.8866978
+REF_VOL_M3 = 2.238866978e-7                 # 223.8866978 mm3, OpenSCAD, faceted
+
+#: mm: -40, -8, 0, 0, 5.1375, 0.8
+EXPECT_BBOX_M = (-0.040, -0.008, 0.0, 0.0, 0.0051375, 0.0008)
 
 PARAMS = [
     ('unit_width', '100.0'),
@@ -223,6 +227,9 @@ def _shoelace(pts):
 def _interconnect_ref_area(P):
     """Hand-derived closed form for `bulkhead_web_interconnect`'s cross-sectional area, IP-TEST-7.
 
+    **Unit-homogeneous**: every term is a length from `P` or a ratio, so the return carries
+    `P`'s unit squared. `main()` hands it meters and reads square meters back.
+
     Verified against the real build to 10 significant figures. Three tangency identities
     make this tractable despite the shape being a polygon fused with a quarter-disk and cut
     by a fillet circle -- all three follow directly from how the docstring above says
@@ -283,42 +290,20 @@ def main():
     """
     doc = App.newDocument('web')
     tip = emit(doc)
-    s = tip.Shape
-    d = s.Volume - REF_VOL
-    rel = d / REF_VOL
-    bb = s.BoundBox
-    ok = s.isValid() and len(s.Solids) == 1 and abs(rel) <= 1e-4
-
-    print('PART:: CSG tree -- bulkhead_web')
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, faceted)' % REF_VOL)
-    print('  delta   = %+.7f  (%+.4f%%)' % (d, 100 * rel))
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
-    print('  expect  = [-40.0000, -8.0000, 0.0000, 0.0000, 5.1375, 0.8000]')
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-    print('  result  = %s' % ('PASS' if ok else 'FAIL'))
+    ok = report('CSG tree -- bulkhead_web', tip.Shape, REF_VOL_M3,
+                expect_bbox_m=EXPECT_BBOX_M)
 
     doc2 = App.newDocument('web_ic')
     C._SEEN.clear()
     sheet(doc2)
     tip_ic = bulkhead_web_interconnect(doc2)
-    s2 = tip_ic.Shape
-    P = {alias: float(doc2.getObject('Params').get(alias)) for alias, _ in PARAMS}
-    ref_area2 = _interconnect_ref_area(P)
-    ref_vol2 = ref_area2 * P['plate_thickness']
-    d2 = s2.Volume - ref_vol2
-    rel2 = d2 / ref_vol2
-    ok2 = s2.isValid() and len(s2.Solids) == 1 and abs(rel2) <= 1e-6
-
-    print('PART:: CSG tree -- bulkhead_web (is_interconnect)')
-    print('  volume  = %.7f' % s2.Volume)
-    print('  ref     = %.7f  (hand-derived closed form)' % ref_vol2)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d2, 100 * rel2))
-    print('  valid   = %s  solids=%d faces=%d'
-          % (s2.isValid(), len(s2.Solids), len(s2.Faces)))
-    print('  result  = %s' % ('PASS' if ok2 else 'FAIL'))
+    # Every alias on the sheet, crossing into SI as it is read: the sheet is millimeters
+    # because FreeCAD evaluates it in millimeters, and `_interconnect_ref_area` below is
+    # unit-homogeneous, so handing it meters makes its return square meters.
+    P_m = {alias: si.m(float(doc2.getObject('Params').get(alias))) for alias, _ in PARAMS}
+    ref_vol2_m3 = _interconnect_ref_area(P_m) * P_m['plate_thickness']
+    ok2 = report('CSG tree -- bulkhead_web (is_interconnect)', tip_ic.Shape, ref_vol2_m3,
+                 tol=1e-6, source='hand-derived closed form')
 
     return 0 if (ok and ok2) else 1
 

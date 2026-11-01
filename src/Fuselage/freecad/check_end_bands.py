@@ -22,6 +22,7 @@ import Part
 
 from corner_common import Params, is_entry_point, out_path
 from measure import measure
+import si
 from part_end import build
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +49,7 @@ def main():
 
     print('%-12s %-10s %14s %14s %12s %9s  %s'
           % ('band', 'z', 'OpenSCAD', 'FreeCAD', 'delta', 'rel', 'checks'))
-    tot_ref = tot_fc = 0.0
+    tot_ref_m3 = tot_fc_m3 = 0.0
     bad = 0
     for z0, z1, label in BANDS:
         stl = out_path('band_%s_%s.stl' % (fmt(z0), fmt(z1)))
@@ -62,25 +63,30 @@ def main():
                 "this script's docstring.\n" % os.path.basename(stl))
             sys.stderr.flush()
             return 1
-        _, ref, _, _ = measure(stl)
+        _, ref_m3, _, _ = measure(stl)
 
-        slab = Part.makeBox(100, 100, z1 - z0, App.Vector(-50, -50, z0))
-        got = shape.common(slab).Volume
+        # The band's own slab, oversized in x and y so it selects a range of z and nothing
+        # else. `z0`/`z1` are the band edges in millimeters, from this script's own table.
+        slab = si.box_m(0.100, 0.100, si.m(z1 - z0),
+                        si.vec_m(-0.050, -0.050, si.m(z0)))
+        got_m3 = si.volume_m3(shape.common(slab))
 
-        tot_ref += ref
-        tot_fc += got
-        d = got - ref
-        off = abs(d) / ref > TOL
+        tot_ref_m3 += ref_m3
+        tot_fc_m3 += got_m3
+        d_m3 = got_m3 - ref_m3
+        off = abs(d_m3) / ref_m3 > TOL
         if off:
             bad += 1
         print('%-12s %-10s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
-              % (label, '%g-%g' % (z0, z1), ref, got, d, 100 * d / ref,
+              % (label, '%g-%g' % (z0, z1), ref_m3 * si.MM3_PER_M3,
+                 got_m3 * si.MM3_PER_M3, d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3,
                  'OVER TOLERANCE' if off else 'ok'))
 
-    d = tot_fc - tot_ref
-    total_off = abs(d) / tot_ref > TOL
+    d_m3 = tot_fc_m3 - tot_ref_m3
+    total_off = abs(d_m3) / tot_ref_m3 > TOL
     print('%-12s %-10s %14.6f %14.6f %+12.6f %+8.4f%%  %s'
-          % ('TOTAL', '', tot_ref, tot_fc, d, 100 * d / tot_ref,
+          % ('TOTAL', '', tot_ref_m3 * si.MM3_PER_M3, tot_fc_m3 * si.MM3_PER_M3,
+             d_m3 * si.MM3_PER_M3, 100 * d_m3 / tot_ref_m3,
              'OVER TOLERANCE' if total_off else 'ok'))
 
     ok = bad == 0 and not total_off

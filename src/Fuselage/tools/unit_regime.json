@@ -14,14 +14,33 @@
     "si": "boundary"
   },
   "constants": {
-    "boom_bulkhead.EXPECT_BBOX": {
+    "boom_bulkhead.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "boom_key.EXPECT_BBOX": {
-      "unit": "m"
-    },
-    "boom_key.REF_AREA": {
+    "boom_bulkhead.LOWER_REFS_M2": {
       "unit": "m2"
+    },
+    "boom_bulkhead.VARIANTS": {
+      "reason": "rows are Variant(name, volume_m3, overrides); `overrides` are expression strings bound for the parameter sheet and so millimeters, which is the sheet boundary",
+      "unit": "record"
+    },
+    "boom_key.EXPECT_BBOX_M": {
+      "unit": "m"
+    },
+    "boom_key.REF_AREA_M2": {
+      "unit": "m2"
+    },
+    "boom_oml.REFS": {
+      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+      "unit": "record"
+    },
+    "boom_web.REFS": {
+      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+      "unit": "record"
+    },
+    "boom_webs.REFS": {
+      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+      "unit": "record"
     },
     "build_part.ANGULAR_DEFLECTION_RAD": {
       "unit": "rad"
@@ -32,49 +51,61 @@
     "build_part.LINEAR_DEFLECTION_M": {
       "unit": "m"
     },
-    "bulkhead_cuts.EXPECT_BBOX": {
+    "bulkhead_cuts.CUTS_BBOX_TOL_M": {
       "unit": "m"
     },
-    "bulkhead_cuts.REF": {
-      "unit": "m3"
-    },
-    "bulkhead_full.EXPECT_BBOX": {
+    "bulkhead_cuts.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "bulkhead_full.EXPECT_BBOX_COWLING": {
+    "bulkhead_cuts.REF_M3": {
+      "unit": "m3"
+    },
+    "bulkhead_full.EXPECT_BBOX_COWLING_M": {
       "unit": "m"
     },
-    "bulkhead_full.EXPECT_BBOX_INTERCONNECT": {
+    "bulkhead_full.EXPECT_BBOX_INTERCONNECT_M": {
       "unit": "m"
     },
-    "bulkhead_full.REF": {
-      "unit": "m3"
-    },
-    "bulkhead_full.REF_COWLING": {
-      "unit": "m3"
-    },
-    "bulkhead_full.REF_INTERCONNECT": {
-      "unit": "m3"
-    },
-    "bulkhead_positive.EXPECT_BBOX": {
+    "bulkhead_full.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "bulkhead_positive.REF": {
+    "bulkhead_full.REF_COWLING_M3": {
       "unit": "m3"
     },
-    "bulkhead_section.EXPECT_BBOX": {
+    "bulkhead_full.REF_INTERCONNECT_M3": {
+      "unit": "m3"
+    },
+    "bulkhead_full.REF_M3": {
+      "unit": "m3"
+    },
+    "bulkhead_full.STAGES": {
+      "unit": "none"
+    },
+    "bulkhead_positive.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "bulkhead_section.REF": {
+    "bulkhead_positive.REF_M3": {
       "unit": "m3"
     },
-    "bulkhead_tree.REF_TOOL": {
-      "unit": "m3"
-    },
-    "bulkhead_web.EXPECT_BBOX": {
+    "bulkhead_section.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "bulkhead_web.REF_AREA": {
+    "bulkhead_section.REF_M3": {
+      "unit": "m3"
+    },
+    "bulkhead_section.REF_VARIANT": {
+      "unit": "none"
+    },
+    "bulkhead_tree.REF_TOOL_M3": {
+      "unit": "m3"
+    },
+    "bulkhead_tree.SHEET_TOL_M": {
+      "unit": "m"
+    },
+    "bulkhead_web.EXPECT_BBOX_M": {
+      "unit": "m"
+    },
+    "bulkhead_web.REF_AREA_M2": {
       "unit": "m2"
     },
     "clearance_figure.CONTACT_FACTOR": {
@@ -139,13 +170,74 @@
       "unit": "mm",
       "reason": "TechDraw sheet and view coordinates, which are page millimeters"
     },
+    "clearance_sheet.STATIONS": {
+      "reason": "the drawn stations of a clearance sheet, in the millimeters the sheet is dimensioned in",
+      "unit": "mm"
+    },
+    "corner_common.BBOX_TOL_M": {
+      "unit": "m"
+    },
+    "corner_tree.DRIVER_REFS_M3": {
+      "unit": "m3"
+    },
+    "corner_tree.SWEPT_REFS_M3": {
+      "unit": "m3"
+    },
+    "cowl.CUT_EPS_M": {
+      "unit": "m"
+    },
     "cowl.FLANGE_OFFSET_SAMPLES": {
       "unit": "none"
     },
-    "cowl_interior.ANGLE_WINDOW": {
+    "cowl.PARAMS_NOSE_COWL": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl.PARAMS_NOSE_PLATE": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl.PARAMS_NOSE_TIP": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl.PARAMS_TAIL": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl._COMMON": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl._OML": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_interior.ANGLE_WINDOW_RAD": {
       "unit": "rad"
     },
-    "cowl_interior.CHECK_ARC": {
+    "cowl_interior.ARC_END_TOL_M": {
+      "unit": "m"
+    },
+    "cowl_interior.CELL_DIRECTION_TOL": {
+      "unit": "none"
+    },
+    "cowl_interior.CELL_ORIGIN_TOL_M": {
+      "unit": "m"
+    },
+    "cowl_interior.CELL_PLANE_TOL_M": {
+      "unit": "m"
+    },
+    "cowl_interior.CHAIN_TOL_M": {
+      "unit": "m"
+    },
+    "cowl_interior.CHECK_ARC_M": {
       "unit": "m"
     },
     "cowl_interior.CHECK_MAX": {
@@ -157,34 +249,37 @@
     "cowl_interior.CHEEK_DOT": {
       "unit": "none"
     },
-    "cowl_interior.CLEARANCE_MARGIN_MM": {
+    "cowl_interior.CLEARANCE_MARGIN_M": {
       "unit": "m"
     },
     "cowl_interior.CROSSING_SAMPLES": {
       "unit": "none"
     },
+    "cowl_interior.DEGENERATE_DIRECTION": {
+      "unit": "none"
+    },
     "cowl_interior.DENSE_FACTOR": {
       "unit": "none"
     },
-    "cowl_interior.EDGE_SCAN_MARGIN": {
+    "cowl_interior.EDGE_SCAN_MARGIN_M": {
       "unit": "m"
     },
-    "cowl_interior.EDGE_SCAN_STEP": {
+    "cowl_interior.EDGE_SCAN_STEP_M": {
       "unit": "m"
     },
-    "cowl_interior.END_INSET": {
+    "cowl_interior.END_INSET_M": {
       "unit": "m"
     },
-    "cowl_interior.END_OVERRUN": {
+    "cowl_interior.END_OVERRUN_M": {
       "unit": "m"
     },
     "cowl_interior.FACE_IMAGE_TOL": {
       "unit": "none"
     },
-    "cowl_interior.FINISHED_PLANE_TOL": {
+    "cowl_interior.FINISHED_PLANE_TOL_M": {
       "unit": "m"
     },
-    "cowl_interior.FIT_ARC": {
+    "cowl_interior.FIT_ARC_M": {
       "unit": "m"
     },
     "cowl_interior.FIT_MAX": {
@@ -199,28 +294,31 @@
     "cowl_interior.FLOOR_DOT": {
       "unit": "none"
     },
-    "cowl_interior.MIN_INTERVAL": {
+    "cowl_interior.MIN_INTERVAL_M": {
       "unit": "m"
     },
-    "cowl_interior.OUTWARD_STEP_MM": {
+    "cowl_interior.OUTWARD_STEP_M": {
       "unit": "m"
     },
     "cowl_interior.PARTITION_TOL": {
       "unit": "none"
     },
-    "cowl_interior.POST_CUT_RESCAN_MARGIN": {
+    "cowl_interior.POST_CUT_RESCAN_MARGIN_M": {
       "unit": "m"
     },
     "cowl_interior.POST_CUT_ROUNDS": {
       "unit": "none"
     },
-    "cowl_interior.REFIT_TOL": {
+    "cowl_interior.POST_CUT_SCAN_STEP_M": {
+      "unit": "m"
+    },
+    "cowl_interior.REFIT_TOL_M": {
       "unit": "m"
     },
     "cowl_interior.RIB_FACETS": {
       "unit": "none"
     },
-    "cowl_interior.RIB_RESIDUE": {
+    "cowl_interior.RIB_RESIDUE_M3": {
       "unit": "m3"
     },
     "cowl_interior.SAMPLE_MAX": {
@@ -229,10 +327,10 @@
     "cowl_interior.SAMPLE_MIN": {
       "unit": "none"
     },
-    "cowl_interior.SAMPLE_SPACING": {
+    "cowl_interior.SAMPLE_SPACING_M": {
       "unit": "m"
     },
-    "cowl_interior.SEED_LONG_MM": {
+    "cowl_interior.SEED_LONG_M": {
       "unit": "m"
     },
     "cowl_interior.SEED_MAX": {
@@ -241,23 +339,56 @@
     "cowl_interior.SEED_MIN": {
       "unit": "none"
     },
-    "cowl_interior.SLIVER_AREA": {
+    "cowl_interior.SLIVER_AREA_M2": {
       "unit": "m2"
     },
-    "cowl_interior.SLIVER_LENGTH": {
+    "cowl_interior.SLIVER_LENGTH_M": {
       "unit": "m"
     },
-    "cowl_interior.SLOPE_SLACK": {
+    "cowl_interior.SLOPE_SLACK_RAD": {
       "unit": "rad"
     },
-    "cowl_interior.TAU": {
+    "cowl_interior.STEP_SLACK": {
+      "unit": "none"
+    },
+    "cowl_interior.TAU_M": {
       "unit": "m"
     },
-    "cowl_interior.WALL_TOL": {
+    "cowl_interior.WALL_TOL_M": {
       "unit": "m"
     },
-    "cowl_interior.Z_TOL": {
+    "cowl_interior.Z_TOL_M": {
       "unit": "m"
+    },
+    "cowl_tree.PARAMS_NOSE_COWL": {
+      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_tree.PARAMS_NOSE_PLATE": {
+      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_tree.PARAMS_NOSE_TIP": {
+      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_tree.PARAMS_TAIL": {
+      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_tree._OML_ROWS": {
+      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+      "regime": "boundary",
+      "unit": "record"
+    },
+    "cowl_tree._WALL_ROWS": {
+      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+      "regime": "boundary",
+      "unit": "record"
     },
     "dimension_placement.ARROWHEAD_LENGTH_HEIGHTS": {
       "unit": "none"
@@ -274,6 +405,9 @@
     "dimension_placement.MAX_NOTE_ASSIGNMENTS": {
       "unit": "none"
     },
+    "dimension_placement.NEWLINE": {
+      "unit": "none"
+    },
     "dimension_placement.NOTE_LINE_PITCH_HEIGHTS": {
       "unit": "none"
     },
@@ -284,6 +418,15 @@
       "unit": "mm",
       "reason": "a page-space zero test for TechDraw geometry"
     },
+    "drawing.ARRANGEMENTS": {
+      "unit": "none"
+    },
+    "drawing.LINE_SPACE_PERCENT": {
+      "unit": "none"
+    },
+    "drawing.NEWLINE": {
+      "unit": "none"
+    },
     "drawing.PREFERRED_SCALES": {
       "unit": "none"
     },
@@ -292,6 +435,9 @@
       "reason": "TechDraw's own reference deflection, in millimeters"
     },
     "drawing.SCALE_FLOOR_FRACTION": {
+      "unit": "none"
+    },
+    "drawing.VIEW_DIRECTION": {
       "unit": "none"
     },
     "drawing.VIEW_FILL": {
@@ -398,6 +544,12 @@
       "unit": "mm",
       "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
     },
+    "fillets.REF_VOLS_M3": {
+      "unit": "m3"
+    },
+    "fillets.SQ2": {
+      "unit": "none"
+    },
     "fit_amplification.DELTA": {
       "unit": "m"
     },
@@ -413,19 +565,25 @@
     "fit_amplification.WALL_MM": {
       "unit": "m"
     },
-    "flange_base.INTERCONNECT_REF_VOL": {
+    "flange_base.EXPECT_BBOX_M": {
+      "unit": "m"
+    },
+    "flange_base.INTERCONNECT_REF_VOL_M3": {
       "unit": "m3"
     },
-    "flange_base.REF_VOL": {
+    "flange_base.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "flange_boss.REF_VOLS_M3": {
       "unit": "m3"
     },
     "geometry_branches._AT": {
       "unit": "none"
     },
-    "greeble_web.EXPECT_BBOX": {
+    "greeble_web.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "greeble_web.REF_VOL": {
+    "greeble_web.REF_VOL_M3": {
       "unit": "m3"
     },
     "input_screen.HASH_DEFLECTION_M": {
@@ -437,7 +595,7 @@
     "mesh_to_brep.DEFAULT_POINTS": {
       "unit": "none"
     },
-    "mesh_to_brep.DEFAULT_TOL_MM": {
+    "mesh_to_brep.DEFAULT_TOL_M": {
       "unit": "m"
     },
     "mesh_to_brep.TIP_CHECK_REL": {
@@ -469,6 +627,12 @@
     "oml_blank.RATIO_SPREAD_TOL": {
       "unit": "none"
     },
+    "oml_blank.SCALE_TOL_M": {
+      "unit": "m"
+    },
+    "oml_blank.UNIT_WIDTH_M": {
+      "unit": "m"
+    },
     "oml_blank.VOLUME_DEFLECTION_M": {
       "unit": "m"
     },
@@ -484,22 +648,25 @@
     "oml_blank._SAMPLES": {
       "unit": "none"
     },
-    "panel_oml.REF_EXPOSED_SPAN": {
+    "panel_oml.FACE_TOL_M": {
       "unit": "m"
     },
-    "panel_oml.REF_INNER_FACE": {
+    "panel_oml.REF_EXPOSED_SPAN_M": {
       "unit": "m"
     },
-    "panel_oml.REF_LENGTH": {
+    "panel_oml.REF_INNER_FACE_M": {
       "unit": "m"
     },
-    "panel_oml.REF_OUTER_FACE": {
+    "panel_oml.REF_LENGTH_M": {
       "unit": "m"
     },
-    "panel_oml.REF_POCKET_DEPTH": {
+    "panel_oml.REF_OUTER_FACE_M": {
       "unit": "m"
     },
-    "panel_oml.REF_WIDTH": {
+    "panel_oml.REF_POCKET_DEPTH_M": {
+      "unit": "m"
+    },
+    "panel_oml.REF_WIDTH_M": {
       "unit": "m"
     },
     "part_corner.REF_VOL_M3": {
@@ -517,11 +684,20 @@
     "pd_end.REF_VOL_M3": {
       "unit": "m3"
     },
+    "plane2d.BBOX_TOL_M": {
+      "unit": "m"
+    },
+    "plane2d.ENCLOSURE_FLOOR_M": {
+      "unit": "m"
+    },
     "preview.ANGULAR_RAD": {
       "unit": "rad"
     },
     "preview.DEVIATION_M": {
       "unit": "m"
+    },
+    "preview.VIEWS": {
+      "unit": "none"
     },
     "refused_wall.LOCAL_HALF_MM": {
       "unit": "m"
@@ -605,6 +781,9 @@
     "sheet_annotations.DETAIL_MARGIN": {
       "unit": "none"
     },
+    "sheet_annotations.DIA": {
+      "unit": "none"
+    },
     "si.CUT_FUZZ_LADDER_MM": {
       "unit": "mm",
       "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
@@ -613,10 +792,10 @@
       "unit": "mm",
       "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
     },
-    "simple_positives.EXPECT_BBOX": {
+    "simple_positives.EXPECT_BBOX_M": {
       "unit": "m"
     },
-    "simple_positives.REF_VOL": {
+    "simple_positives.REF_VOL_M3": {
       "unit": "m3"
     },
     "soak_compare.GAP_TOL": {
@@ -673,6 +852,9 @@
     "verify_pd_end.REF_VOL_M3": {
       "unit": "m3"
     },
+    "verify_pd_end.TOL_M3": {
+      "unit": "m3"
+    },
     "wall_vanish.DOSES": {
       "unit": "none"
     },
@@ -682,15 +864,14 @@
     "wall_vanish.SCAN_MM": {
       "unit": "m"
     },
-    "web.REF_VOL": {
+    "web.EXPECT_BBOX_M": {
+      "unit": "m"
+    },
+    "web.REF_VOL_M3": {
       "unit": "m3"
     }
   },
   "inline": {
-    "boom_bulkhead": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
     "boom_web": {
       "allowed": 10,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
@@ -703,15 +884,7 @@
       "allowed": 1,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
     },
-    "bulkhead_full": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
     "bulkhead_positive": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "bulkhead_section": {
       "allowed": 1,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
     },
@@ -731,13 +904,9 @@
       "allowed": 9,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
     },
-    "cowl": {
-      "allowed": 13,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
     "cowl_interior": {
-      "allowed": 13,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+      "allowed": 12,
+      "reason": "converted to SI (IP-FC-160); what remains is dimensionless and the ceiling is at it, so a new bare dimension here fails"
     },
     "drawing": {
       "allowed": 8,
@@ -764,15 +933,11 @@
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
     },
     "oml_blank": {
-      "allowed": 9,
+      "allowed": 7,
       "reason": "values belonging to what is on the other side of this module's boundary"
     },
     "pd_end": {
       "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "plane2d": {
-      "allowed": 1,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
     },
     "rib_proximity": {

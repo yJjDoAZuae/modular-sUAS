@@ -54,8 +54,10 @@ from corner_common import build_sheet, is_entry_point
 V = App.Vector
 P = 'Params.'
 
-REF_AREA = 166.8606422        # ref_boom_bulkhead.scad mode 4, OpenSCAD, faceted
-EXPECT_BBOX = (-7.2, 17.8, 7.2, 34.2)
+#: ref_boom_bulkhead.scad mode 4, OpenSCAD, faceted: 166.8606422 mm2.
+REF_AREA_M2 = 1.668606422e-4
+#: mm: -7.2, 17.8, 7.2, 34.2
+EXPECT_BBOX_M = (-0.0072, 0.0178, 0.0072, 0.0342)
 
 PARAMS = [
     ('boom_diameter', '8.0'),
@@ -187,7 +189,8 @@ def main():
     """
     doc = App.newDocument('boom_key')
     tip = emit(doc)
-    ok = plane2d.report(doc, 'boom_key_shape', tip.Shape, REF_AREA, 'key_reach', EXPECT_BBOX)
+    ok = plane2d.report(doc, 'boom_key_shape', tip.Shape, REF_AREA_M2, 'key_reach',
+                        EXPECT_BBOX_M)
     print('  %s' % ('ok' if ok else 'MISMATCH -- see checks above'))
     return 0 if ok else 1
 

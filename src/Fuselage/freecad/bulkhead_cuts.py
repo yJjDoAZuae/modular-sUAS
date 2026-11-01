@@ -37,7 +37,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import corner_tree as C
-from corner_common import build_sheet, is_entry_point
+import si
+from corner_common import build_sheet, is_entry_point, report
 
 # The cut tool, at mask_eps = 0. **This is deliberately not the OpenSCAD number.** OpenSCAD's
 # is 49812.1210938 with the bounding box starting at x = -59.99; the 0.01 mm is the mask
@@ -48,8 +49,14 @@ from corner_common import build_sheet, is_entry_point
 # Regenerated 2026-08-14 for OQ-DES-B13, which took the eps out of `clean_r`. The mask-overlap
 # sliver is unchanged at 1.7951847; both backends moved by the same amount, -1.4697 in OpenSCAD
 # against -1.4685 here.
-REF = 49810.3259091
-EXPECT_BBOX = (-60.0, -60.0, -9.0, 20.0, 20.0, 9.0)
+REF_M3 = 4.98103259091e-5                   # 49810.3259091 mm3, OpenSCAD, transcribed
+#: mm: -60, -60, -9, 20, 20, 9
+EXPECT_BBOX_M = (-0.060, -0.060, -0.009, 0.020, 0.020, 0.009)
+
+#: This assembly's bounding box is checked a decade looser than the rest -- 10 micron rather
+#: than 1 -- because the cut tools are a fuse of masks whose outer faces are built from
+#: `mask_reach`, not from a dimensioned feature. It was `1e-2` mm before the conversion.
+CUTS_BBOX_TOL_M = 1.0e-5
 
 PARAMS = [
     ('unit_width', '100.0'),
@@ -280,31 +287,9 @@ def cuts(doc, is_cowling=False, is_interconnect=False):
 def main():
     doc = App.newDocument('bulkhead_cuts')
     tip = emit(doc)
-    s = tip.Shape
-    d = s.Volume - REF
-
-    print('PART:: CSG tree -- bulkhead_section cut tools')
-    print('  volume  = %.7f' % s.Volume)
-    print('  ref     = %.7f  (OpenSCAD, transcribed)' % REF)
-    print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
-    print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-    print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
-    print('  valid   = %s  solids=%d  faces=%d'
-          % (s.isValid(), len(s.Solids), len(s.Faces)))
-
-    fail = []
-    if not s.isValid():
-        fail.append('invalid shape')
-    if len(s.Solids) != 1:
-        fail.append('%d solids -- the tools should overlap into one' % len(s.Solids))
-    if abs(d) / REF > 1e-3:
-        fail.append('volume off by more than 0.1%')
-    if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-2:
-        fail.append('bounding box moved')
-    print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
-    ok = not fail
+    ok = report('CSG tree -- bulkhead_section cut tools', tip.Shape, REF_M3, tol=1e-3,
+                expect_bbox_m=EXPECT_BBOX_M, source='OpenSCAD, transcribed',
+                bbox_tol_m=CUTS_BBOX_TOL_M)
 
     # is_cowling and is_interconnect had no direct coverage at all before this -- cuts()
     # only ran at the default (False, False) above. bulkhead_section.py exercises both
@@ -323,9 +308,10 @@ def main():
         sheet(doc2)
         node2 = cuts(doc2, **kwargs)
         s2 = node2.Shape
-        branch_ok = s2.isValid() and len(s2.Solids) == 1 and s2.Volume > 0.0
-        print('    %-18s volume=%.4f valid=%s solids=%d  %s'
-              % (label, s2.Volume, s2.isValid(), len(s2.Solids),
+        volume_m3 = si.volume_m3(s2)
+        branch_ok = s2.isValid() and len(s2.Solids) == 1 and volume_m3 > 0.0
+        print('    %-18s volume=%.4f mm3 valid=%s solids=%d  %s'
+              % (label, volume_m3 * si.MM3_PER_M3, s2.isValid(), len(s2.Solids),
                  'ok' if branch_ok else 'FAIL'))
         ok = ok and branch_ok
         App.closeDocument(doc2.Name)

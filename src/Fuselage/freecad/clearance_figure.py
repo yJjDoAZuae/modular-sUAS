@@ -134,6 +134,7 @@ def capture(kind, u, out_dir, stations=None, tau=None):
 
     import cowl_interior as ci
     import cowl_tree
+    import si
     import soak_cowl_shell as soak
 
     builders = {'tail_shell': cowl_tree.tail_shell,
@@ -156,12 +157,14 @@ def capture(kind, u, out_dir, stations=None, tau=None):
     # below, so the duplicate is 6 % of the run rather than half of it. On a tail it would not be.
 
     # `tau` is passed rather than left to default: `cavity(..., tau=TAU)` binds the module
-    # constant at import, so setting `ci.TAU` afterwards does nothing.
+    # constant at import, so setting `ci.TAU_M` afterwards does nothing.
     kwargs = dict(report=report, clearance_check=True)
     if tau is not None:
         kwargs['tau'] = float(tau)
     scan_at = time.time()
-    ci.cavity(body, notched, notches, t, tip.Overhang, **kwargs)
+    # `t` is millimeters off a document property and `Overhang` is degrees off another;
+    # `cavity` is meters and radians (IP-FC-160). This is the crossing.
+    ci.cavity(body, notched, notches, si.m(t), math.radians(tip.Overhang), **kwargs)
     ci.note('figure capture: cavity with the clearance scan took %.0f s'
             % (time.time() - scan_at))
 
@@ -172,40 +175,53 @@ def capture(kind, u, out_dir, stations=None, tau=None):
     if not rows:
         raise SystemExit('the clearance scan flagged no station, so there is nothing to draw')
 
-    ribs = ci.dilated_notches(notches, t)
+    ribs = ci.dilated_notches(notches, si.m(t))
     raw_tools = notches.Solids
     roles_by_tool = {}
 
     wanted = rows
     if stations:
         keep = [float(s) for s in stations]
-        wanted = [r for r in rows if any(abs(r['z'] - k) < 1.0e-6 for k in keep)]
+        # The scan's own rows carry `z_m`; the station a caller names on the command line
+        # is millimeters, which is what a reader reads off a drawing.
+        wanted = [r for r in rows
+                  if any(abs(si.mm(r['z_m']) - k) < 1.0e-6 for k in keep)]
         if not wanted:
             raise SystemExit('none of %r is a scanned station; the scan has %s'
-                             % (keep, ', '.join('%.4f' % r['z'] for r in rows)))
+                             % (keep, ', '.join('%.4f' % si.mm(r['z_m']) for r in rows)))
 
     captured = []
     for row in wanted:
         index = row['tool']
         if index not in roles_by_tool:
             roles_by_tool[index] = ci.tool_face_roles(raw_tools[index])
-        z = row['z']
+        z_m = row['z_m']
+        z = si.mm(z_m)
         surface = [_loop_points(w, SURFACE_POINTS)
-                   for w in ci._slice_wires(smooth, z) if w]
+                   for w in ci._slice_wires(smooth, z_m) if w]
         dilated = [_loop_points(w, SURFACE_POINTS)
-                   for w in ci._slice_wires(ribs[index], z) if w]
-        raw_wires = [w for w in ci._slice_wires(raw_tools[index], z) if w]
+                   for w in ci._slice_wires(ribs[index], z_m) if w]
+        raw_wires = [w for w in ci._slice_wires(raw_tools[index], z_m) if w]
         edges = _tag_edges(Part, raw_wires, raw_tools[index], roles_by_tool[index])
         entry = dict(surface=surface, dilated=dilated, raw_edges=edges)
-        for key in ('z', 'tool', 'metric_a', 'contact_distance', 'engagement',
-                    'fraction_inside', 'role', 'second_role', 'offset',
-                    'expected_offset', 'on_face_image', 'in_blank', 'bounds_wall',
-                    'normal_dot_gap'):
+        # **The payload is millimeters, because it is what a figure is dimensioned in.**
+        # `clearance_face_scan` reports SI, so every length crosses here, once, and the keys
+        # keep the names the figure script and the published figures already use.
+        for key in ('tool', 'engagement', 'fraction_inside', 'role', 'second_role',
+                    'on_face_image', 'in_blank', 'bounds_wall', 'normal_dot_gap'):
             if key in row:
                 entry[key] = row[key]
-        entry['p_surf'] = [float(v) for v in row['p_surf'][:2]]
-        entry['p_tool'] = [float(v) for v in row['p_tool'][:2]]
-        entry['roles'] = [dict(role=r['role'], area=r['area']) for r in roles_by_tool[index]]
+        entry['z'] = z
+        for key, source in (('metric_a', 'metric_a_m'),
+                            ('contact_distance', 'contact_distance_m'),
+                            ('offset', 'offset_m'),
+                            ('expected_offset', 'expected_offset_m')):
+            if source in row:
+                entry[key] = si.mm(row[source])
+        entry['p_surf'] = [si.mm(float(v)) for v in row['p_surf_m'][:2]]
+        entry['p_tool'] = [si.mm(float(v)) for v in row['p_tool_m'][:2]]
+        entry['roles'] = [dict(role=r['role'], area=r['area_m2'] * si.MM2_PER_M2)
+                          for r in roles_by_tool[index]]
         captured.append(entry)
         ci.note('  z=%-11.4f tool %-2d %-8s metric_a=%.6f role=%-5s bounds_wall=%s '
                 '(%d surface loops, %d dilated loops, %d tagged edges)'
@@ -215,7 +231,8 @@ def capture(kind, u, out_dir, stations=None, tau=None):
     payload = dict(kind=kind, u=float(u), t=t,
                    buttress_cut_thickness=float(
                        doc.getObject('Params').get('buttress_cut_thickness')),
-                   rib_facets=ci.RIB_FACETS, clearance_margin_mm=ci.CLEARANCE_MARGIN_MM,
+                   rib_facets=ci.RIB_FACETS,
+                   clearance_margin_mm=si.mm(ci.CLEARANCE_MARGIN_M),
                    stations=captured)
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)

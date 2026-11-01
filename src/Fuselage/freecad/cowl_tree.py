@@ -38,6 +38,7 @@ import Part
 
 import corner_tree as C
 import oml_blank
+import si
 
 V = App.Vector
 P = 'Params.'
@@ -245,7 +246,7 @@ def _add_clearance_props(obj):
 
     **`ThinWallFlags`/`WorstClearanceMargin` are its output**, mirroring how `PartitionSlip`
     already surfaces a `shell_solid` report value as a document property: how many stations the
-    scan found under `cowl_interior.CLEARANCE_MARGIN_MM` (Metric A, flag-only), and the single
+    scan found under `cowl_interior.CLEARANCE_MARGIN_M` (Metric A, flag-only), and the single
     worst clearance found. Both read 0 / 0.0 when `ClearanceCheck` is off. The companion ratio
     once reported beside Metric A, "Metric B", was never stored here and no longer exists at all:
     it did not measure the tool-to-tool crowding its name claimed, and was removed on 2026-10-04
@@ -263,7 +264,7 @@ def _add_clearance_props(obj):
     if not hasattr(obj, 'ThinWallFlags'):
         obj.addProperty('App::PropertyInteger', 'ThinWallFlags', 'Shell',
                         'How many stations the clearance-margin scan found under '
-                        'cowl_interior.CLEARANCE_MARGIN_MM. 0 if ClearanceCheck was off.')
+                        'cowl_interior.CLEARANCE_MARGIN_M. 0 if ClearanceCheck was off.')
     if not hasattr(obj, 'WorstClearanceMargin'):
         obj.addProperty('App::PropertyFloat', 'WorstClearanceMargin', 'Shell',
                         'The single worst (smallest) nearest-tool clearance the scan found, '
@@ -323,14 +324,21 @@ class _CowlShell(object):
         # nose's three mirrors and the tail's one.
         notches = Part.makeCompound([n.Shape for n in obj.Notches])
         mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in obj.Mirrors]
+        # **This is the cowl interior's unit boundary (IP-FC-160).** `Inset` and `Overhang` are
+        # FreeCAD document properties bound to sheet expressions, so millimeters and degrees;
+        # `cowl_interior` is meters and radians throughout. The properties written back below
+        # are the same kind of thing in the other direction -- millimeter properties a soak and
+        # `check_cowl_interior` read -- so the report's SI figures convert on the way out.
         obj.Shape = cowl_interior.shell_solid(
-            obj.Base.Shape, obj.Body.Shape, notches, obj.Inset, obj.Overhang, mirrors,
+            obj.Base.Shape, obj.Body.Shape, notches, si.m(obj.Inset),
+            math.radians(obj.Overhang), mirrors,
             report=report, clearance_check=obj.ClearanceCheck)
         _add_slip(obj)
+        # A *relative* volume difference, so dimensionless and unconverted.
         obj.PartitionSlip = report.get('partition_slip', 0.0)
-        thin = report.get('thin_wall_flags', [])
+        thin = report.get('thin_wall_flags_m', [])
         obj.ThinWallFlags = len(thin)
-        obj.WorstClearanceMargin = thin[0][1] if thin else 0.0
+        obj.WorstClearanceMargin = si.mm(thin[0][1]) if thin else 0.0
 
     def dumps(self):
         return None
@@ -367,13 +375,19 @@ class _NoseFlange(object):
 
     def execute(self, obj):
         import cowl
+        import si
         if obj.Base is None or not obj.Height:
             return
         wires = obj.Base.Shape.slice(App.Vector(0, 0, 1), -obj.CutLen)
         if not wires:
             return
         face = Part.Face(max(wires, key=lambda w: Part.Face(w).Area))
-        outline = cowl._clean_offset(face, obj.Inset)
+        # `obj.Inset` is a FreeCAD document property bound to a sheet expression, so it is
+        # millimeters; `cowl._clean_offset` takes meters like the rest of that module. The
+        # crossing is here, where the property is read. Getting this wrong is not subtle --
+        # 0.5 mm read as 0.5 m offsets the section clean away and `makeOffset2D` returns no
+        # wires at all -- but it is invisible to a name sweep, because nothing was renamed.
+        outline = cowl._clean_offset(face, si.m(obj.Inset))
         obj.Shape = Part.Face(outline).extrude(App.Vector(0, 0, -obj.Height))
 
     def dumps(self):

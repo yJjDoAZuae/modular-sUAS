@@ -310,3 +310,164 @@ class TestTheToolSaysWhatItCannotSee:
         head = text.split('"""')[1].lower()
         assert 'run time' in head, 'it cannot see a value\'s unit at run time'
         assert 'heuristic' in head, 'the inline classifier is a heuristic and must say so'
+
+
+class TestTheInventorySeesATableAndAComputedConstant:
+    """The blind spot that let 34 constants sit unclassified, and the `record` unit that
+    followed from closing it.
+
+    `_numeric` read a plain number or a tuple's first member and nothing else, so a table keyed
+    by label and a constant whose value is an expression were both invisible to the whole
+    inventory -- `cowl.REFERENCE` alone holds 51 numbers. A blind inventory cannot support a
+    claim that the port is SI, which is why this is tested rather than left to the next audit.
+    """
+
+    def test_a_table_keyed_by_label_is_in_the_inventory(self, tmp_path):
+        """A `(label, figure, ...)` table carries a unit and must be classifiable."""
+        write(tmp_path, 'm.py',
+              "REFS = [('web_inner', 5700.1741175, (-40.9, -40.9)),\n"
+              "        ('other', 1265.7236228, (-33.8, -33.8))]\n")
+        got = ur.constants(str(tmp_path / 'm.py'))
+        assert got == [('REFS', 1, 5700.1741175)], 'the first figure identifies the table'
+
+    def test_a_dict_table_is_in_the_inventory(self, tmp_path):
+        write(tmp_path, 'm.py', "REFS = {'a': (8959.34, (-50.0, -50.0), 6.0e-5)}\n")
+        assert [n for n, _l, _v in ur.constants(str(tmp_path / 'm.py'))] == ['REFS']
+
+    def test_a_computed_constant_is_in_the_inventory(self, tmp_path):
+        """`SQ2 = 2 ** 0.5` holds literals, so it has something to classify."""
+        write(tmp_path, 'm.py', 'SQ2 = 2 ** 0.5\n')
+        assert ur.constants(str(tmp_path / 'm.py')) == [('SQ2', 1, 2)]
+
+    def test_a_constant_with_no_number_in_it_stays_out(self, tmp_path):
+        """There is nothing in it to carry a unit."""
+        write(tmp_path, 'm.py', "MODE = 'tail'\nNAMES = ['a', 'b']\n")
+        assert ur.constants(str(tmp_path / 'm.py')) == []
+
+    def test_a_record_needs_no_suffix(self, tmp_path):
+        """Its members carry the units, so the table's own name cannot and need not."""
+        write(tmp_path, 'm.py', "REFS = {'a': (1.0, (2.0, 3.0))}\n")
+        manifest = {'regimes': {}, 'constants': {
+            'm.REFS': {'unit': 'record', 'reason': 'rows are Ref2D(area_m2, bbox_m)'}}}
+        findings, _summary = ur.audit(str(tmp_path), manifest)
+        assert findings == []
+
+    def test_a_record_with_no_reason_is_reported(self, tmp_path):
+        """The reason is where the field units are stated, so it is the whole guarantee."""
+        write(tmp_path, 'm.py', "REFS = {'a': (1.0, (2.0, 3.0))}\n")
+        manifest = {'regimes': {}, 'constants': {'m.REFS': {'unit': 'record'}}}
+        findings, _summary = ur.audit(str(tmp_path), manifest)
+        assert [f.kind for f in findings] == ['no-reason']
+
+    def test_a_constant_may_declare_its_own_regime(self, tmp_path):
+        """A sheet alias table is millimeters inside an otherwise-SI module. Declaring the whole
+        module `boundary` to excuse one table would exempt everything around it."""
+        write(tmp_path, 'm.py', "PARAMS = [('cut_len', 6.0)]\nWALL_M = 0.0006\n")
+        manifest = {'regimes': {}, 'constants': {
+            'm.PARAMS': {'unit': 'mm', 'regime': 'boundary', 'reason': 'a parameter sheet'},
+            'm.WALL_M': {'unit': 'm'}}}
+        findings, summary = ur.audit(str(tmp_path), manifest)
+        assert findings == []
+        assert summary['pending'] == 0, 'a declared boundary is not pending work'
+
+    def test_a_constant_regime_override_does_not_leak_to_its_neighbors(self, tmp_path):
+        """The override is per constant. The module stays SI, so a *second* millimeter constant
+        with no override of its own is still a finding."""
+        write(tmp_path, 'm.py', "PARAMS = [('cut_len', 6.0)]\nSTRAY = 0.6\n")
+        manifest = {'regimes': {}, 'constants': {
+            'm.PARAMS': {'unit': 'mm', 'regime': 'boundary', 'reason': 'a parameter sheet'},
+            'm.STRAY': {'unit': 'mm'}}}
+        findings, summary = ur.audit(str(tmp_path), manifest)
+        assert [(f.name, f.kind) for f in findings] == [('STRAY', 'stored-mm')]
+        assert summary['pending'] == 1
+
+
+class TestTheRenameSweepFindsWhatATestRunDoesNot:
+    """`--undefined`. A rename leaves a reference that raises only on the branch reaching it,
+    and an attribute read through an import alias is invisible to any scope check.
+
+    Measured 2026-11-01 on the real conversion: 7 bare names in `cowl_interior`, one inside a
+    refusal message no passing build executes, and 58 `module.NAME` references across the check
+    scripts and this tier.
+    """
+
+    def test_a_name_nothing_defines_is_reported(self, tmp_path):
+        write(tmp_path, 'm.py', 'A_M = 1.0\n\n\ndef f():\n    return A\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == [(5, 'A')]
+
+    def test_a_local_shadowing_nothing_is_not_reported(self, tmp_path):
+        write(tmp_path, 'm.py', 'def f():\n    x = 1.0\n    return x\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == []
+
+    def test_a_comprehension_variable_is_bound(self, tmp_path):
+        write(tmp_path, 'm.py', 'def f(rows):\n    return [z for z, _p in rows]\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == []
+
+    def test_an_except_alias_is_bound(self, tmp_path):
+        write(tmp_path, 'm.py',
+              'def f():\n    try:\n        pass\n'
+              '    except ValueError as exc:\n        return exc\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == []
+
+    def test_a_name_defined_only_in_a_sibling_function_is_reported(self, tmp_path):
+        """The scope walk is the point: a flat check would call this defined."""
+        write(tmp_path, 'm.py',
+              'def a():\n    helper = 1\n    return helper\n\n\n'
+              'def b():\n    return helper\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == [(7, 'helper')]
+
+    def test_an_ambient_vendor_name_is_not_reported(self, tmp_path):
+        """`App` and `Part` arrive from FreeCAD's own interpreter in the check scripts."""
+        write(tmp_path, 'm.py', 'def f():\n    return App.Vector(0, 0, 1)\n')
+        assert ur.undefined_names(str(tmp_path / 'm.py')) == []
+
+    def test_an_attribute_a_module_does_not_define_is_reported(self, tmp_path):
+        """`ci.WALL_TOL` after the rename: an `ast.Attribute`, invisible to a scope check."""
+        write(tmp_path, 'other.py', 'WALL_TOL_M = 1.0e-5\n')
+        write(tmp_path, 'm.py', 'import other\n\n\ndef f():\n    return other.WALL_TOL\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == [(5, 'other.WALL_TOL')]
+
+    def test_the_renamed_attribute_is_accepted(self, tmp_path):
+        write(tmp_path, 'other.py', 'WALL_TOL_M = 1.0e-5\n')
+        write(tmp_path, 'm.py',
+              'import other\n\n\ndef f():\n    return other.WALL_TOL_M\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == []
+
+    def test_an_import_alias_is_followed(self, tmp_path):
+        """`import cowl_interior as ci` is how the port spells it everywhere."""
+        write(tmp_path, 'other.py', 'WALL_TOL_M = 1.0e-5\n')
+        write(tmp_path, 'm.py', 'import other as o\n\n\ndef f():\n    return o.WALL_TOL\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == [(5, 'other.WALL_TOL')]
+
+    def test_a_module_dunder_is_not_a_missing_attribute(self, tmp_path):
+        """Every module has `__file__` whether or not a statement writes it."""
+        write(tmp_path, 'other.py', 'A_M = 1.0\n')
+        write(tmp_path, 'm.py', 'import other\n\n\ndef f():\n    return other.__file__\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == []
+
+    def test_an_attribute_installed_at_run_time_is_defined(self, tmp_path):
+        """`geometry_branches` swaps `corner_common.max` for a tracing wrapper and restores it;
+        `test_branching_dimensions` then asserts the restore happened. Neither is a defect."""
+        write(tmp_path, 'other.py', 'A_M = 1.0\n')
+        write(tmp_path, 'm.py',
+              'import other\n\n\ndef f():\n    other.max = max\n    return other.max\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == []
+
+    def test_an_installed_attribute_is_shared_across_the_sweep(self, tmp_path):
+        """The file that installs one and the file that reads it are usually not the same."""
+        write(tmp_path, 'other.py', 'A_M = 1.0\n')
+        write(tmp_path, 'm.py', 'import other\n\n\ndef f():\n    return other.max\n')
+        surface = {'other': ur._public_names(str(tmp_path / 'other.py'))}
+        assert ur.missing_attributes(str(tmp_path / 'm.py'), surface) == [(5, 'other.max')]
+        got = ur.missing_attributes(str(tmp_path / 'm.py'), surface, installed={'other.max'})
+        assert got == []
+
+    def test_the_real_tree_has_no_dangling_reference(self):
+        """The condition the conversion drove to zero, and the one a later rename breaks."""
+        rows = ur.sweep_undefined()
+        assert rows == [], 'dangling reference(s): %s' % rows[:8]

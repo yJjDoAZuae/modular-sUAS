@@ -60,10 +60,11 @@ def main():
         shape = build(p)
         dt = time.time() - t0
 
-        _, ref, lo, hi = measure(stl)
+        _, ref_m3, lo_m, hi_m = measure(stl)
 
-        d = shape.Volume - ref
-        bb = shape.BoundBox
+        volume_m3 = si.volume_m3(shape)
+        d_m3 = volume_m3 - ref_m3
+        bb = si.bbox_m(shape)
 
         checks = []
         if not shape.isValid():
@@ -71,18 +72,22 @@ def main():
         if len(shape.Solids) != 1:
             checks.append('solids=%d' % len(shape.Solids))
         # the corner spans its full unit_length in z, and reaches corner_radius in x and y
-        if abs(bb.ZMax - p.unit_length) > 1e-6 or abs(bb.ZMin) > 1e-6:
-            checks.append('z=[%.4f,%.4f]' % (bb.ZMin, bb.ZMax))
-        if abs(bb.XMax - p.corner_radius) > 0.01:
-            checks.append('xmax=%.4f' % bb.XMax)
-        if abs(d) / ref > 1e-4:
+        # `p` is a `corner_common.Params`, which is SI, and `bb` is now SI too, so both
+        # sides of these comparisons are meters. The two tolerances cross with them: 1e-6 mm
+        # becomes 1e-9 m and 0.01 mm becomes 1e-5 m.
+        if abs(bb.ZMax - p.unit_length) > 1.0e-9 or abs(bb.ZMin) > 1.0e-9:
+            checks.append('z=[%.4f,%.4f] mm' % (si.mm(bb.ZMin), si.mm(bb.ZMax)))
+        if abs(bb.XMax - p.corner_radius) > 1.0e-5:
+            checks.append('xmax=%.4f mm' % si.mm(bb.XMax))
+        if abs(d_m3) / ref_m3 > 1e-4:
             checks.append('VOLUME')
         if checks:
             failures.append((U, checks))
 
         print('%5g %6g %6g %14.5f %14.5f %+12.5f %+8.4f%% %6.2fs %6d %s'
-              % (U, si.mm(bt), si.mm(pt), ref, shape.Volume, d, 100 * d / ref, dt, len(shape.Faces),
-                 ' '.join(checks) if checks else 'ok'))
+              % (U, si.mm(bt), si.mm(pt), ref_m3 * si.MM3_PER_M3,
+                 volume_m3 * si.MM3_PER_M3, d_m3 * si.MM3_PER_M3, 100 * d_m3 / ref_m3, dt,
+                 len(shape.Faces), ' '.join(checks) if checks else 'ok'))
 
     print('')
     if checked == 0:

@@ -70,9 +70,11 @@ import flange_base
 import flange_boss
 import greeble_web
 import parameters
+import si
 import simple_positives
 import web
-from corner_common import build_sheet, check_seed, is_entry_point, merge_params, script_args
+from corner_common import (BBOX_TOL_M, build_sheet, check_seed, is_entry_point,
+                           merge_params, script_args)
 
 # The octant, at mask_eps = 0. **Deliberately not the OpenSCAD number**, which is 865.7400435
 # with the bounding box reaching y = -13.6618. OpenSCAD's octant is oversized by the mask
@@ -88,8 +90,9 @@ from corner_common import build_sheet, check_seed, is_entry_point, merge_params,
 # making the greeble tool's snap rib nominal. OpenSCAD moved by -0.0290279 and FreeCAD by
 # -0.0290299: the two kernels agreeing on the SIZE OF THE CHANGE to 2e-6 mm3 is what says the
 # fix did the same thing on both sides, and it is a stronger check than either number alone.
-REF = 865.2850690
-EXPECT_BBOX = (-40.0, -13.6569, 0.0, 0.0, 5.1375, 6.0)
+REF_M3 = 8.65285069e-7                      # 865.2850690 mm3, OpenSCAD, real module
+#: mm: -40, -13.6569, 0, 0, 5.1375, 6
+EXPECT_BBOX_M = (-0.040, -0.0136569, 0.0, 0.0, 0.0051375, 0.006)
 
 # **The one variant REF and EXPECT_BBOX actually describe -- checked, not assumed.** Found
 # 2026-09-10: `main()` took whatever `params.json` a caller passed on faith, and `out/` is
@@ -237,8 +240,8 @@ def main():
     is_cowling = float(doc.getObject('Params').get('is_cowling')) >= 0.5
     is_interconnect = float(doc.getObject('Params').get('is_interconnect')) >= 0.5
     s = tip.Shape
-    bb = s.BoundBox
-    got = (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax)
+    got_m = si.bbox_m(s).as_tuple()
+    volume_m3 = si.volume_m3(s)
 
     label = (' (is_cowling)' if is_cowling
              else ' (is_interconnect)' if is_interconnect else '')
@@ -246,7 +249,7 @@ def main():
     print('  nodes   = %d, sketches = %d'
           % (len(doc.Objects), len([o for o in doc.Objects if o.isDerivedFrom(
               'Sketcher::SketchObject')])))
-    print('  volume  = %.7f' % s.Volume)
+    print('  volume  = %.7f mm3' % (volume_m3 * si.MM3_PER_M3))
 
     mismatch = False
     if is_cowling:
@@ -254,13 +257,13 @@ def main():
         # is_cowling octant is. IP-FC-132 has no isolated octant reference for this branch;
         # the binding check is bulkhead_full's, against the real OpenSCAD full-part render.
         print('  ref     = -- (no octant-only reference for is_cowling; see bulkhead_full.py)')
-        d = None
+        d_m3 = None
     elif is_interconnect:
         # Same reasoning: an interconnect's octant is two mirrored halves (bulkhead_full.py),
         # a different shape REF/EXPECT_BBOX were never computed against.
         print('  ref     = -- (no octant-only reference for is_interconnect; '
              'see bulkhead_full.py)')
-        d = None
+        d_m3 = None
     elif got_variant != REF_VARIANT:
         # Told which variant REF describes and worked out which variant this file is --
         # `build_sheet.py`'s own rule for a family key, applied here to a hand check.
@@ -275,13 +278,15 @@ def main():
              % (REF_VARIANT['U'], REF_VARIANT['bulkhead_type_name'], REF_VARIANT['panel_name'],
                 got_variant['U'], got_variant['bulkhead_type_name'], got_variant['panel_name'],
                 REF_VARIANT['U'], REF_VARIANT['bulkhead_type_name'], REF_VARIANT['panel_name']))
-        d = None
+        d_m3 = None
     else:
-        d = s.Volume - REF
-        print('  ref     = %.7f  (OpenSCAD, through the real module)' % REF)
-        print('  delta   = %+.7f  (%+.5f%%)' % (d, 100 * d / REF))
-        print('  bbox    = [%s]' % ', '.join('%.4f' % v for v in got))
-        print('  expect  = [%s]' % ', '.join('%.4f' % v for v in EXPECT_BBOX))
+        d_m3 = volume_m3 - REF_M3
+        print('  ref     = %.7f mm3  (OpenSCAD, through the real module)'
+              % (REF_M3 * si.MM3_PER_M3))
+        print('  delta   = %+.7f mm3  (%+.5f%%)'
+              % (d_m3 * si.MM3_PER_M3, 100 * d_m3 / REF_M3))
+        print('  bbox    = [%s] mm' % ', '.join('%.4f' % si.mm(v) for v in got_m))
+        print('  expect  = [%s] mm' % ', '.join('%.4f' % si.mm(v) for v in EXPECT_BBOX_M))
     print('  valid   = %s  solids=%d  faces=%d'
           % (s.isValid(), len(s.Solids), len(s.Faces)))
 
@@ -302,10 +307,10 @@ def main():
         fail.append('%d solids -- the octant is one connected body' % len(s.Solids))
     if mismatch:
         fail.append('wrong variant passed -- see the REFUSED line above')
-    elif d is not None:
-        if abs(d) / REF > 1e-3:
+    elif d_m3 is not None:
+        if abs(d_m3) / REF_M3 > 1e-3:
             fail.append('volume off by more than 0.1%')
-        if max(abs(a - b) for a, b in zip(got, EXPECT_BBOX)) > 1e-3:
+        if max(abs(a - b) for a, b in zip(got_m, EXPECT_BBOX_M)) > BBOX_TOL_M:
             fail.append('bounding box moved')
     print('  %s' % ('FAIL: ' + '; '.join(fail) if fail else 'ok'))
     return 1 if fail else 0

@@ -31,18 +31,19 @@ import bulkhead_full
 import corner_tree
 import mesh_to_brep as mt
 import parameters
+import si
 from corner_common import is_entry_point, out_path, script_args
 
 DEFAULT_PARAMS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               'out', 'reference_bulkhead.params.json')
 REF_MESH = out_path('ref_bulkhead_full.stl')
 
-# The true pair: the mesh against its own part's B-rep, within the module's own DEFAULT_TOL_MM.
-TRUE_TOL_MM = mt.DEFAULT_TOL_MM
+# The true pair: the mesh against its own part's B-rep, within the module's own DEFAULT_TOL_M.
+TRUE_TOL_M = mt.DEFAULT_TOL_M
 # The false pair: the same mesh against a different part's B-rep. IP-FC-33 measured 57.3 mm;
-# any value clearly on the "different part" side of TRUE_TOL_MM confirms the check would have
+# any value clearly on the "different part" side of TRUE_TOL_M confirms the check would have
 # caught a mismatch, without pinning today's corner geometry to that exact historical figure.
-FALSE_FLOOR_MM = 1.0
+FALSE_FLOOR_M = 1.0e-3                      # 1 mm
 
 
 def _build(doc_name, table, fcstd_name, params_path):
@@ -81,22 +82,23 @@ def main():
     fail = []
 
     print('TRUE PAIR -- the mesh against its own part (bulkhead_full)')
-    shape = mt.tip_shape(bulkhead_doc, expect=bulkhead_full.REF)
-    used, worst, mean, total = mt.deviation(REF_MESH, shape, mt.DEFAULT_POINTS)
+    shape = mt.tip_shape(bulkhead_doc, expect_volume_m3=bulkhead_full.REF_M3)
+    used, worst_m, mean_m, total = mt.deviation_m(REF_MESH, shape, mt.DEFAULT_POINTS)
     print('  %d of %d mesh point(s) sampled' % (used, total))
     print('  deviation  max %.6f mm   mean %.6f mm   threshold %.6f mm'
-          % (worst, mean, TRUE_TOL_MM))
-    if worst > TRUE_TOL_MM:
-        fail.append('true pair: B-rep and mesh disagree by more than %.6f mm' % TRUE_TOL_MM)
+          % (si.mm(worst_m), si.mm(mean_m), si.mm(TRUE_TOL_M)))
+    if worst_m > TRUE_TOL_M:
+        fail.append('true pair: B-rep and mesh disagree by more than %.6f mm'
+                    % si.mm(TRUE_TOL_M))
 
     print('\nFALSE PAIR -- the same mesh against a different part (corner_tree), the negative '
           'control')
     shape = mt.tip_shape(corner_doc)
-    used, worst, mean, total = mt.deviation(REF_MESH, shape, mt.DEFAULT_POINTS)
+    used, worst_m, mean_m, total = mt.deviation_m(REF_MESH, shape, mt.DEFAULT_POINTS)
     print('  %d of %d mesh point(s) sampled' % (used, total))
     print('  deviation  max %.6f mm   mean %.6f mm   floor %.6f mm'
-          % (worst, mean, FALSE_FLOOR_MM))
-    if worst < FALSE_FLOOR_MM:
+          % (si.mm(worst_m), si.mm(mean_m), si.mm(FALSE_FLOOR_M)))
+    if worst_m < FALSE_FLOOR_M:
         fail.append('false pair: a mismatched part read as agreeing -- the method has no '
                     'separation left')
 

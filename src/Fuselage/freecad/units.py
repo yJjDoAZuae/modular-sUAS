@@ -79,6 +79,18 @@ MM_PER_M = 1000.0
 #: work out which way round the division went.
 M_PER_MM = 0.001
 
+#: Area and volume factors, derived once here rather than written as `MM_PER_M ** 2` at each
+#: use. A squared or cubed factor is the easiest of all to get wrong by hand, and the error is
+#: a million or a billion rather than a thousand -- large enough to be caught, which is exactly
+#: why it is worth not relying on being caught.
+#:
+#: **Here rather than in `si.py`, which is where they started.** They are pure conversion
+#: factors with nothing FreeCAD about them, and `measure.py` needs the volume one while
+#: deliberately importing no FreeCAD API at all so it stays readable under any interpreter.
+#: `si.py` re-exports both, so every existing `si.MM3_PER_M3` call site is unaffected.
+MM2_PER_M2 = MM_PER_M * MM_PER_M
+MM3_PER_M3 = MM_PER_M * MM_PER_M * MM_PER_M
+
 #: Pascals in one megapascal. FreeCAD's FEM stack works in N/mm^2, and 1 N/mm^2 is exactly
 #: 1 MPa, so this is the whole of the stress conversion. Treat that stack as file interface:
 #: convert on the way out of it and never let MPa into project code.

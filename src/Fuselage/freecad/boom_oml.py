@@ -35,12 +35,13 @@ import FreeCAD as App
 
 import corner_tree as C
 import plane2d
+from plane2d import Ref2D
 from corner_common import build_sheet, is_entry_point
 
 V = App.Vector
 P = 'Params.'
 
-# ref_boom_bulkhead.scad modes 12, 11 and 8, as (area, bbox, tolerance).
+# ref_boom_bulkhead.scad modes 12, 11 and 8, as `plane2d.Ref2D` rows.
 #
 # The bores need their own tolerance and it is the reason this table carries one at all. The
 # usual 6.0e-5 floor is what `$fa = 1` costs when a circle is capped at 360 segments; these
@@ -49,9 +50,12 @@ P = 'Params.'
 # the deficit disappears into 3e-6, so the floor only becomes visible when the bores are
 # measured alone. It is faceting, not disagreement -- FreeCAD's circles are exact.
 REFS = {
-    'oml_outer': (8959.3433819, (-50.0, -50.0, 50.0, 50.0), 6.0e-5),
-    'oml_inner': (103.0474738, (-42.05, -42.05, 42.05, 42.05), 4.0e-4),
-    'oml': (8856.3094939, (-50.0, -50.0, 50.0, 50.0), 6.0e-5),
+    # 8959.3433819 mm2, bbox [-50, -50, 50, 50] mm
+    'oml_outer': Ref2D(0.0089593433819, (-0.05, -0.05, 0.05, 0.05), 6e-05),
+    # 103.0474738 mm2, bbox [-42.05, -42.05, 42.05, 42.05] mm
+    'oml_inner': Ref2D(0.0001030474738, (-0.04205, -0.04205, 0.04205, 0.04205), 0.0004),
+    # 8856.3094939 mm2, bbox [-50, -50, 50, 50] mm
+    'oml': Ref2D(0.0088563094939, (-0.05, -0.05, 0.05, 0.05), 6e-05),
 }
 
 PARAMS = [
@@ -191,8 +195,9 @@ def main():
           % ('shape', 'FreeCAD', 'OpenSCAD', 'delta', 'checks'))
     ok = True
     for label, tip in tips:
-        ref, bbox, tol = REFS[label]
-        ok &= plane2d.report(doc, label, tip.Shape, ref, 'oml_reach', bbox, tol)
+        ref = REFS[label]
+        ok &= plane2d.report(doc, label, tip.Shape, ref.area_m2, 'oml_reach',
+                             ref.bbox_m, ref.tol)
     print('')
     print('  %s' % ('agrees' if ok else 'MISMATCH -- see checks above'))
     return 0 if ok else 1

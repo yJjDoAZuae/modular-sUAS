@@ -1385,10 +1385,18 @@ class TestConstants:
             stated_value = text.split(marker, 1)[1].split('\n', 1)[0].split('#')[0].strip()
             return float(stated_value.lstrip('(').split(',')[0])
 
-        for module, name, here in (('si', 'RIB_CUT_FUZZ_MM', be.FUZZ_TOL),
-                                   ('cowl_interior', 'WALL_TOL', be.WALL_TOL),
-                                   ('cowl_interior', 'CHECK_ARC', be.SAMPLE_ARC)):
-            value = stated(module, name)
+        # **This mirror now spans the unit boundary, and that is why the factor is
+        # explicit rather than folded into the figures.** `cowl_interior` is SI since
+        # IP-FC-160; `boolean_edges` is still millimeters, because this package may not import
+        # the conversion layer (OQ-ARCH-24). `si.RIB_CUT_FUZZ_MM` is a kernel argument and
+        # stays millimeters on both sides, so it needs no factor at all -- which is the
+        # distinction the two rows below would lose if the conversion were hidden.
+        mm_per_m = 1000.0
+        for module, name, here, factor in (
+                ('si', 'RIB_CUT_FUZZ_MM', be.FUZZ_TOL, 1.0),
+                ('cowl_interior', 'WALL_TOL_M', be.WALL_TOL, mm_per_m),
+                ('cowl_interior', 'CHECK_ARC_M', be.SAMPLE_ARC, mm_per_m)):
+            value = stated(module, name) * factor
             assert value == pytest.approx(here), '%s.%s drifted: builder %s, here %s' % (
                 module, name, value, here)
 

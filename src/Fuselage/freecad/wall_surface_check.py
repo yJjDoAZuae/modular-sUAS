@@ -143,7 +143,7 @@ def check_stages(kind, u, tau=None, out=None):
         mirrors = [App.Vector(*[float(v) for v in s.split(',')]) for s in tip.Mirrors]
         stages = []
         ci.shell_solid(tip.Base.Shape, tip.Body.Shape, notches, float(tip.Inset), tip.Overhang,
-                       mirrors, tau=float(tau) if tau is not None else ci.TAU, stages=stages)
+                       mirrors, tau=float(tau) if tau is not None else ci.TAU_M, stages=stages)
         out.write('%s U=%s: %d stage(s) in %.0f s\n'
                   % (kind, u, len(stages), time.time() - started))
         rows = be.stage_identity(stages)
