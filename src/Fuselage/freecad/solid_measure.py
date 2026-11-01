@@ -56,7 +56,7 @@ the boolean difference and the surface distance.
 
 **This is not an export setting.** Refining a tessellation to measure something is unrelated to
 the deflection a part is *exported* at, which is chosen for printing and preview
-(`build_part.COWL_LINEAR_DEFLECTION`). Analysis of the B-rep and export of a mesh are separate
+(`build_part.COWL_LINEAR_DEFLECTION_M`). Analysis of the B-rep and export of a mesh are separate
 concerns and neither may be adjusted to suit the other.
 """
 import os
@@ -67,13 +67,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
+import si
+
 #: Deflections tried in order, in millimeters, coarsest first.
 #:
 #: The tail wall converges by the third: successive volumes 23726.383, 23735.043, 23737.997,
 #: with the step falling from 8.66 to 2.95 mm3, and the *difference between two builds* falling
 #: 1.360 -> 0.170 -> 0.006. Below 0.001 the triangle count passes 1.8 million and the cost is
 #: minutes per solid for a change in the fifth decimal place.
-DEFLECTIONS = (0.02, 0.005, 0.001, 0.00025)
+DEFLECTIONS_M = (2.0e-5, 5.0e-6, 1.0e-6, 2.5e-7)   # 0.02, 0.005, 0.001, 0.00025 mm
 
 #: A volume is converged when refining changes it by less than this, relative to itself.
 #:
@@ -112,6 +114,8 @@ class TopologyMismatch(Exception):
 
 
 def mesh_volume(shape, deflection):
+    """Mesh volume at `deflection` meters. A deflection is a length and crosses to
+    the kernel's millimeters at the tessellation call, like any other."""
     """Volume of `shape`'s tessellation at `deflection`, by the divergence theorem.
 
     Signed tetrahedra from the origin, summed and taken absolute so winding does not change the
@@ -121,9 +125,9 @@ def mesh_volume(shape, deflection):
     # **A shape hands back the triangulation it already has.** Asking for 0.02 mm after asking
     # for 0.001 mm returns the 0.001 mm mesh -- measured 2026-09-05, 1845851 facets both times
     # -- so a caller that refines from fine to coarse silently measures the fine mesh twice.
-    # `converged_volume` and `converged_difference` both walk `DEFLECTIONS` coarsest first,
+    # `converged_volume` and `converged_difference` both walk `DEFLECTIONS_M` coarsest first,
     # which is the order that does not have this problem.
-    verts, facets = shape.tessellate(deflection)
+    verts, facets = shape.tessellate(si.mm(deflection))
     total = 0.0
     for i, j, k in facets:
         a, b, c = verts[i], verts[j], verts[k]
@@ -149,7 +153,7 @@ def open_edges(shape, deflection):
     not a hole with area, and it moves the volume by nothing measurable -- but it is the kind of
     thing to look at before believing a mesh volume, which is why this is here.
     """
-    points, facets = shape.tessellate(deflection)
+    points, facets = shape.tessellate(si.mm(deflection))
     keys = [(round(p.x, 6), round(p.y, 6), round(p.z, 6)) for p in points]
     seen = {}
     for i, j, k in facets:
@@ -176,7 +180,7 @@ def _area_sampler(shape, deflection=0.02):
     inside the chosen one, which is what makes the sample mean an estimate of the area-weighted
     mean rather than of a per-triangle one.
     """
-    verts, facets = shape.tessellate(deflection)
+    verts, facets = shape.tessellate(si.mm(deflection))
     cumulative, total = [], 0.0
     for i, j, k in facets:
         a, b, c = verts[i], verts[j], verts[k]
@@ -260,7 +264,7 @@ def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection=0.02):
     return (area * mean, area * (variance / len(gaps)) ** 0.5, area, mean, max(gaps))
 
 
-def converged_volume(shape, tol=CONVERGENCE, deflections=DEFLECTIONS, report=None):
+def converged_volume(shape, tol=CONVERGENCE, deflections=DEFLECTIONS_M, report=None):
     """The solid's volume, refined until it stops moving. Raises if it never does.
 
     Returns `(volume, deflection, triangles)` for the first refinement whose result agrees with
@@ -312,7 +316,7 @@ def wire_area(face):
     return abs(total) / 2.0 / max(scale, 1.0e-12)
 
 
-def converged_difference(a, b, tol=DIFFERENCE_CONVERGENCE, deflections=DEFLECTIONS,
+def converged_difference(a, b, tol=DIFFERENCE_CONVERGENCE, deflections=DEFLECTIONS_M,
                          report=None):
     """How much two solids' volumes differ, refined until *the difference* stops moving.
 

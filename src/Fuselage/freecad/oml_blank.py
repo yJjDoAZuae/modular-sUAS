@@ -30,6 +30,7 @@ import FreeCAD as App
 import MeshPart
 import Part
 
+import si
 from corner_common import is_entry_point
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -71,7 +72,7 @@ STEP_IMPORT_SCALE = MODEL_UNIT_MM / NATIVE_PER_MODEL_UNIT      # 3.28084
 # 0.02 would have passed both cowls and failed the tip by twelve times the tolerance, for a
 # part whose geometry is exact. 0.002 is the coarsest value at which every part converges
 # inside 0.010%.
-VOLUME_DEFLECTION = 0.002
+VOLUME_DEFLECTION_M = 2.0e-6                 # 0.002 mm
 
 # How flat a face must be, in the STEP's own units, to count as lying in a plane -- and how
 # close two such faces must be to count as lying in the *same* plane.
@@ -474,14 +475,14 @@ def blank(name, U, scale_m_per_mm, offset_x_m, reversed_):
     return solid, repairs
 
 
-def volume(shape, deflection=VOLUME_DEFLECTION):
+def volume(shape, deflection=VOLUME_DEFLECTION_M):
     """The volume the shape's triangles enclose.
 
     Not `Shape.Volume`, which is unreliable on freeform surfaces by up to 6.79% here while
     reporting `isValid()` and `isClosed()` throughout -- OQ-DES-CW12. This is the quantity the
     OpenSCAD side reports, so the two are comparable.
     """
-    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=deflection,
+    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=si.mm(deflection),
                                   AngularDeflection=0.2, Relative=False)
     points, facets = mesh.Topology
     total = 0.0

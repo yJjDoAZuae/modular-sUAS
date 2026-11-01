@@ -64,6 +64,8 @@ import numpy as np
 import FreeCAD as App
 import Part
 
+import si
+
 
 #: Section 5: the tolerance on the **wall**, in millimeters, and **absolute at every `U`**.
 #: The wall is `n_p * w` thick at every scale because extrusion width is a property of the
@@ -323,13 +325,19 @@ RIB_RESIDUE = 1.0e-2
 #: already works around for the mirror step (`_strip_seam`) and the cell-level cut
 #: (`_extend_across_cell`), here inside the ordinary rib cut instead.
 #:
+#: **The value itself lives in `si.RIB_CUT_FUZZ_MM`, and this note stays here** because it is
+#: the finding that explains it, which belongs beside the cut it was found in. A fuzz is an
+#: OpenCASCADE argument in millimeters, calibrated against the kernel's own
+#: `Precision::Confusion` of 1e-7 mm, so it is not a dimension of the part and a geometry module
+#: holding it is indistinguishable -- to a reader, or to `tools/unit_regime.py` -- from a module
+#: that was never converted to SI (IP-FC-158).
+#:
 #: **Chosen empirically, and it is not free of side effects at any size.** `1.0e-6` left the
 #: split in place; `1.0e-5` closed it into one valid solid with the real piece's volume moved by
 #: 0.0006 mm3 in 122902.77 (4.9e-9 relative) -- a snap of the near-tangent geometry together, not
 #: a bulk change; `1.0e-4` and above moved the volume by tens of mm3, well past what a tangency
-#: snap should cost. `1.0e-5` is three orders below `RIB_RESIDUE` and four below `TAU`, so it
-#: cannot be mistaken for tolerating a real gap.
-RIB_CUT_FUZZ = 1.0e-5
+#: snap should cost. `1.0e-5` is three orders below `RIB_RESIDUE_M3` and four below `TAU_M`, so
+#: it cannot be mistaken for tolerating a real gap.
 
 #: How many times `cavity` will re-cut the finished wall against section 5's second pass
 #: (IP-FC-143, OQ-DES-CW21) before giving up and raising `Unconverged`.
@@ -466,13 +474,11 @@ SAMPLE_MAX = 3000
 #: wall-thickness check as a bias no station disagrees with.
 REFIT_TOL = 0.005
 
-#: Fuzzy tolerances tried, in order, for the one boolean that needs one: taking the dilated
-#: notches out of the eroded section. Millimeters. Unused since the ribs became a 3-D cut; see
-#: ladder climbed against the result rather than a single value.
-#:
-#: The ceiling is a fifth of `TAU`, which bounds the whole mechanism: whichever rung answers,
-#: the section cannot have moved by more than that, and `TAU` is itself a twelfth of the wall.
-CUT_FUZZ_LADDER = (1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2)
+#: The fuzzy-tolerance ladder for the one boolean that needs one is `si.CUT_FUZZ_LADDER_MM`,
+#: for the same reason as the fuzz above: it is an OpenCASCADE argument in millimeters, not a
+#: dimension of the part. Its ceiling is a fifth of `TAU_M`, which bounds the whole mechanism --
+#: whichever rung answers, the section cannot have moved by more than that, and `TAU_M` is itself
+#: a twelfth of the wall.
 
 #: Below this area, in square millimeters, a clipped notch section is a tangency artifact and
 #: not a notch. The narrowest notch the design has is `buttress_cut_thickness` = 0.1 mm wide,
@@ -2875,12 +2881,12 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
         cavity's own connectivity), factored out so the post-cut refinement loop below can
         redo just this step -- the expensive dilation above is not repeated."""
         at = time.time()
-        cut = smooth_shape.cut((tool,), RIB_CUT_FUZZ).removeSplitter()
-        left = cut.common((tool,), RIB_CUT_FUZZ)
+        cut = smooth_shape.cut((tool,), si.RIB_CUT_FUZZ_MM).removeSplitter()
+        left = cut.common((tool,), si.RIB_CUT_FUZZ_MM)
         if left.Volume > RIB_RESIDUE:
             note('    %.4f mm3 of rib survived the cut; taking it out again' % left.Volume)
-            cut = cut.cut((left,), RIB_CUT_FUZZ).removeSplitter()
-            left = cut.common((tool,), RIB_CUT_FUZZ)
+            cut = cut.cut((left,), si.RIB_CUT_FUZZ_MM).removeSplitter()
+            left = cut.common((tool,), si.RIB_CUT_FUZZ_MM)
         if left.Volume > RIB_RESIDUE:
             raise Unconverged(
                 '%.4f mm3 of dilated rib is still inside the cavity after the cut and one '
@@ -3247,7 +3253,7 @@ def cavity(body, notched, notches, t, overhang_deg, tau=TAU, budget=64, report=N
 #: corrected cell-level construction (OQ-DES-CW20) -- real enough to investigate, since it is
 #: over the floor this constant used to hold. Two numerical-robustness interventions were tried
 #: first and neither explains it: a fuzzy-boolean tolerance that cleanly fixed an unrelated,
-#: genuine disconnection defect at `U` = 0.75 (`RIB_CUT_FUZZ`) barely moved this slip when
+#: genuine disconnection defect at `U` = 0.75 (`si.RIB_CUT_FUZZ_MM`) barely moved this slip when
 #: applied to the rib cut (3.593e-04 -> 3.233e-04) and did not move it at all when applied to
 #: the wall cut itself -- a real geometric defect would be expected to respond to exactly this
 #: kind of intervention the way the `U` = 0.75 one did, and this did not. Measured independently
@@ -3312,7 +3318,7 @@ def _extend_across_cell(solid, normal, depth=2.0, tol=1.0e-6):
     if len(caps) > 1:
         # **A fuzzy-boolean cut can split one contiguous cap into several coplanar pieces.**
         # Measured 2026-09-21 at the tail's `U` = 0.5/0.75: `cavity()`'s rib cut, with
-        # `RIB_CUT_FUZZ` applied to resolve a real near-tangency defect (see that constant),
+        # `si.RIB_CUT_FUZZ_MM` applied to resolve a real near-tangency defect (see that constant),
         # left the cell-boundary cap as two adjacent faces (1857.29 + 151.93 mm2) instead of the
         # one contiguous face (2009.22 mm2) a plain cut produces -- same combined area, same
         # plane, sharing an edge that is an artifact of the cut, not a real boundary. Extending

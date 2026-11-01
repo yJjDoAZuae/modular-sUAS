@@ -20,7 +20,8 @@ import FreeCAD as App
 from corner_common import Params, is_entry_point, out_path
 from measure import measure
 from part_corner import build
-from variants import TABLE, panel_overlap
+import si
+from variants import TABLE_M, panel_overlap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,7 +45,8 @@ def main():
 
     failures = []
     checked = 0
-    for U, bt, pt in TABLE:
+    # bt and pt are meters, as the table is; the row print converts for the reader.
+    for U, bt, pt in TABLE_M:
         stl = out_path('regen_U%g.stl' % U)
         if not os.path.isfile(stl):
             print('%5g  -- reference %s not rendered, skipped' % (U, os.path.basename(stl)))
@@ -79,7 +81,7 @@ def main():
             failures.append((U, checks))
 
         print('%5g %6g %6g %14.5f %14.5f %+12.5f %+8.4f%% %6.2fs %6d %s'
-              % (U, bt, pt, ref, shape.Volume, d, 100 * d / ref, dt, len(shape.Faces),
+              % (U, si.mm(bt), si.mm(pt), ref, shape.Volume, d, 100 * d / ref, dt, len(shape.Faces),
                  ' '.join(checks) if checks else 'ok'))
 
     print('')

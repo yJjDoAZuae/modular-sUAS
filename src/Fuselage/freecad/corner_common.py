@@ -10,12 +10,26 @@ fewer 2D-boolean edge cases.
 
 Parameters are a value object rather than module constants, so a regenerate is a new
 `Params(U=...)` and a re-run -- the Part:: paradigm has no stored feature tree to update.
+
+**Unit regime: SI, converted at the kernel through `si.py` (IP-FC-160).** Every length on
+`Params` and every argument to the geometry helpers below is in meters. The FreeCAD shapes they
+return hold millimeters, because that is what OpenCASCADE stores -- so a measurement taken off
+one comes back through `si.volume_m3` and friends rather than off `shape.Volume`.
+
+**The parameter *spreadsheet* is a separate thing and stays millimeters.** `build_sheet` writes
+a FreeCAD `Spreadsheet::Sheet`, which is a document artifact whose expressions FreeCAD evaluates
+in its own units, and `check_seed` compares it against `derived_parameters()`, which is the
+exempt OpenSCAD path. So the `PARAMS` alias tables, the seed, and everything in this file that
+touches them are millimeters by the same rule that makes an exported STL millimeters: they
+belong to something outside the library. `Params` is the library's own value object and is SI.
 """
 import os
 import sys
 
 import FreeCAD as App
 import Part
+
+import si
 
 # Everything these scripts write goes here, and nothing here is source. The scripts used to
 # save beside themselves, which put `.FCStd` documents, their rotating `.FCStd1` backups,
@@ -46,14 +60,27 @@ def out_path(*parts):
 
 
 class Params(object):
-    def __init__(self, U=1.0, FX=1.0, bulkhead_thickness=6.0, panel_thickness=4.77,
-                 panel_offset=0.0, panel_overlap=4.0, panel_tolerance=0.1,
-                 longeron_tolerance=0.05, greeble_thickness=0.8, greeble_tolerance=0.05,
-                 extrusion_width=0.4, greeble_nub_thickness=None):
+    """One variant's parameters, **in meters** (IP-FC-160).
+
+    Every default below is the same physical value it has always been, written in the project's
+    units: `bulkhead_thickness` is 6 mm and so is `0.006`. The millimeter figures are kept in
+    the comments beside them, because every number this project has recorded is a millimeter
+    number and a reader checking one against a drawing should not have to convert in their head.
+
+    `from_mm` is the constructor for the millimeter side -- a seed read from
+    `derived_parameters()`, which is the exempt OpenSCAD path. That is the only place a
+    millimeter value should enter.
+    """
+
+    def __init__(self, U=1.0, FX=1.0, bulkhead_thickness=0.006, panel_thickness=0.00477,
+                 panel_offset=0.0, panel_overlap=0.004, panel_tolerance=0.0001,
+                 longeron_tolerance=0.00005, greeble_thickness=0.0008,
+                 greeble_tolerance=0.00005, extrusion_width=0.0004,
+                 greeble_nub_thickness=None):
         self.U, self.FX = U, FX
-        self.unit_length = 100.0 * U * FX
-        self.corner_radius = 10.0 * U
-        self.longeron_radius = 2.0 * U
+        self.unit_length = 0.100 * U * FX           # 100 mm at U = 1
+        self.corner_radius = 0.010 * U              # 10 mm at U = 1
+        self.longeron_radius = 0.002 * U            # 2 mm at U = 1
 
         self.bulkhead_thickness = bulkhead_thickness
         self.panel_thickness = panel_thickness
@@ -68,7 +95,7 @@ class Params(object):
         self.greeble_nub_thickness = (greeble_thickness if greeble_nub_thickness is None
                                       else greeble_nub_thickness)
 
-        self.eps = 0.01                              # geometry_eps()
+        self.eps = 0.00001                           # geometry_eps(), 0.01 mm
         self.longeron_chamfer = extrusion_width
         self.far = 2.0 * self.corner_radius          # mask_reach()
 
@@ -86,6 +113,32 @@ class Params(object):
             - (self.corner_radius - panel_thickness - panel_tolerance))
         self.flat_x = -(panel_overlap + panel_offset)
         self.flat_y = self.flat_offset - self.flat_x
+
+    #: Keyword arguments that are lengths, so `from_mm` converts exactly these and nothing
+    #: else. `U` and `FX` are dimensionless multipliers and must not be touched -- scaling a
+    #: multiplier by 1/1000 is the one error in this conversion that would not look like a
+    #: scale error, because it moves the part's size without moving any stated dimension.
+    LENGTHS = ('bulkhead_thickness', 'panel_thickness', 'panel_offset', 'panel_overlap',
+               'panel_tolerance', 'longeron_tolerance', 'greeble_thickness',
+               'greeble_tolerance', 'extrusion_width', 'greeble_nub_thickness')
+
+    @classmethod
+    def from_mm(cls, **kwargs):
+        """`Params` from a millimeter parameter set -- the seed boundary, and the only one.
+
+        `derived_parameters()` belongs to the exempt OpenSCAD path and is millimeters
+        throughout, so a seed read from it crosses into SI here. An unknown key is passed
+        through untouched rather than converted, so a dimensionless addition to the parameter
+        set does not silently become a thousandth of itself; a length added to the set must be
+        added to `LENGTHS` as well, and `check_corner_common.py` asserts the two agree.
+        """
+        converted = {}
+        for key, value in kwargs.items():
+            if key in cls.LENGTHS and value is not None:
+                converted[key] = si.m(value)
+            else:
+                converted[key] = value
+        return cls(**converted)
 
 
 def through_cut(extent):
@@ -341,43 +394,48 @@ def check_seed(sheet, seed):
     return bad
 
 
-def prism(points, z0, h):
-    """A polygon extruded through `h` starting at `z0`."""
+def prism_mm(points, z0, h):
+    """A polygon extruded through `h` starting at `z0`, **in millimeters**.
+
+    **Transitional, and named so it cannot be mistaken for the SI form.** `si.prism_m` is the
+    one to use; this exists only for `cowl.py`'s three call sites, which are still millimeters
+    until the cowl family is converted under IP-FC-160. Delete it with the last of them.
+    """
     pts = [App.Vector(x, y, z0) for x, y in points]
     pts.append(pts[0])
     return Part.Face(Part.makePolygon(pts)).extrude(App.Vector(0, 0, h))
 
 
 def half_shape(p, z0, h):
-    """One half of the profile, before the diagonal mirror."""
+    """One half of the profile, before the diagonal mirror. All lengths in meters."""
     far = p.far
-    solid = Part.makeCylinder(p.corner_radius, h, App.Vector(0, 0, z0))
+    solid = si.cylinder_m(p.corner_radius, h, si.vec_m(0, 0, z0))
 
     # rectangular extension carrying the panel interface outboard
     w = p.panel_overlap + p.panel_offset - p.panel_tolerance
-    solid = solid.fuse(Part.makeBox(w, p.corner_radius, h, App.Vector(-w, 0, z0)))
+    solid = solid.fuse(si.box_m(w, p.corner_radius, h, si.vec_m(-w, 0, z0)))
 
     # longeron bore
-    solid = solid.cut(Part.makeCylinder(p.longeron_radius + p.longeron_tolerance, h,
-                                        App.Vector(0, 0, z0)))
+    solid = solid.cut(si.cylinder_m(p.longeron_radius + p.longeron_tolerance, h,
+                                    si.vec_m(0, 0, z0)))
 
     # panel slot
-    solid = solid.cut(Part.makeBox(
+    solid = solid.cut(si.box_m(
         2 * p.panel_overlap, 2 * p.panel_thickness + 2 * p.panel_tolerance, h,
-        App.Vector(-2 * p.panel_overlap - p.panel_offset + p.panel_tolerance,
-                   p.corner_radius - p.panel_thickness - p.panel_tolerance, z0)))
+        si.vec_m(-2 * p.panel_overlap - p.panel_offset + p.panel_tolerance,
+                 p.corner_radius - p.panel_thickness - p.panel_tolerance, z0)))
 
     # bulkhead boundary
-    solid = solid.cut(prism([
+    solid = solid.cut(si.prism_m([
         (p.flat_x, p.corner_radius), (p.flat_x, p.flat_y), (p.flat_offset, 0),
         (0, p.flat_offset), (p.flat_y, p.flat_x), (0, -far), (-far, -far), (-far, far)],
         z0, h))
 
     # diagonal mirror-line mask
-    solid = solid.cut(prism([(-far, -far), (far, far), (far, -far)], z0, h))
+    solid = solid.cut(si.prism_m([(-far, -far), (far, far), (far, -far)], z0, h))
 
     # longeron chamfer
-    solid = solid.cut(prism([(0, 0), (-far, 0), (-far, -far), (0, -far)], z0, h))
+    solid = solid.cut(si.prism_m([(0, 0), (-far, 0), (-far, -far), (0, -far)], z0, h))
     return solid
 
 
@@ -389,8 +447,15 @@ def section(p, z0, h):
     return full.removeSplitter()
 
 
-def report(name, shape, ref_volume, tol=1e-4):
+def report(name, shape, ref_volume_m3, tol=1e-4):
     """Print the comparison IP-FC-5 is built to make, and say whether it passed.
+
+    **Compared in SI, printed in millimeters.** The reference is cubic meters like every other
+    stored value, and the measurement is taken through `si.volume_m3` rather than off
+    `shape.Volume`, which is mm3. The figures are *printed* in mm because this is a human-facing
+    report and because every volume this project has recorded is a mm3 figure -- a report that
+    silently changed units would make a decade of recorded numbers unreadable against it. The
+    units are named on each line so the two cannot be confused.
 
     **Found and fixed while writing check_plane2d.py (IP-TEST-7).** This used to print the
     delta and nothing else -- no tolerance, no verdict, no return value -- so `part_corner.py`
@@ -401,17 +466,18 @@ def report(name, shape, ref_volume, tol=1e-4):
     ancestor. Also requires a valid, single-solid shape -- a plausible volume on a shape that
     is not one solid is not a part.
     """
-    bb = shape.BoundBox
+    bb = si.bbox_m(shape)
+    volume_m3 = si.volume_m3(shape)
     valid, n_solids = shape.isValid(), len(shape.Solids)
     print('PART:: %s' % name)
-    print('  volume  = %.6f' % shape.Volume)
-    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f]'
-          % (bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+    print('  volume  = %.6f mm3' % (volume_m3 * si.MM3_PER_M3))
+    print('  bbox    = [%.4f, %.4f, %.4f, %.4f, %.4f, %.4f] mm'
+          % tuple(v * si.MM_PER_M for v in bb.as_tuple()))
     print('  valid   = %s   solids=%d faces=%d' % (valid, n_solids, len(shape.Faces)))
-    print('  ref     = %.6f  (OpenSCAD, faceted)' % ref_volume)
-    d = shape.Volume - ref_volume
-    rel = d / ref_volume
-    print('  delta   = %+.6f  (%+.4f%%)' % (d, 100 * rel))
+    print('  ref     = %.6f mm3  (OpenSCAD, faceted)' % (ref_volume_m3 * si.MM3_PER_M3))
+    d = volume_m3 - ref_volume_m3
+    rel = d / ref_volume_m3
+    print('  delta   = %+.6f mm3  (%+.4f%%)' % (d * si.MM3_PER_M3, 100 * rel))
     ok = valid and n_solids == 1 and abs(rel) <= tol
     print('  result  = %s' % ('PASS' if ok else 'FAIL'))
     return ok

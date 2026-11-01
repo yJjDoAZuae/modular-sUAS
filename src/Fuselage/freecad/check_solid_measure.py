@@ -54,7 +54,7 @@ def main():
     conv_vol, deflection, tri = sm.converged_volume(box)
     check('converged_volume of the same cube', conv_vol, 1000.0)
     check('converged_volume used the second (not the last) deflection tried',
-          deflection, sm.DEFLECTIONS[1], tol=1e-9)
+          deflection, sm.DEFLECTIONS_M[1], tol=1e-9)
 
     # NotConverged -- a box's mesh volume is exactly 1000.0 at EVERY deflection (a planar
     # face tessellates exactly), so even tol=0.0 converges on the box instantly; that is not

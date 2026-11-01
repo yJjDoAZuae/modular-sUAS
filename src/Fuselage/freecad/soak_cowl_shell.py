@@ -44,7 +44,7 @@ spread this soak exists to characterise, so the wrong instrument would be measur
 much larger tail at `U` = 4, that is many hours of measurement the soak was not sized for
 and does not need: it exists to compare repeats against each other, not to pin down any one
 build's absolute volume to its own convergence floor. `mesh_volume` at one fixed deflection
-(`VOLUME_DEFLECTION`, `solid_measure.DEFLECTIONS`'s third rung) is still refined-tessellation
+(`VOLUME_DEFLECTION_M`, `solid_measure.DEFLECTIONS_M`'s third rung) is still refined-tessellation
 volume and still not `Shape.Volume`; every build paying the same discretisation error is what
 makes the *comparison* meaningful; it does not have to be a converged one.
 """
@@ -66,6 +66,7 @@ import Part
 import check_cowl_interior as cci
 import cowl_tree
 import mesh_stats
+import si
 import solid_measure
 from corner_common import is_entry_point
 
@@ -73,10 +74,10 @@ BUILDERS = {'tail_shell': cowl_tree.tail_shell, 'nose_cowl_shell': cowl_tree.nos
 BASE_PARAMS = {'tail_shell': cowl_tree.PARAMS_TAIL_SHELL,
               'nose_cowl_shell': cowl_tree.PARAMS_NOSE_COWL_SHELL}
 
-#: The deflection every build in the soak is measured at -- `solid_measure.DEFLECTIONS`'s
+#: The deflection every build in the soak is measured at, in meters -- `solid_measure.DEFLECTIONS`'s
 #: third rung, the one its own module comment says the tail wall "converges by" in the
 #: adaptive search. Fixed rather than adaptive: see the comment at the `mesh_volume` call.
-VOLUME_DEFLECTION = 0.001
+VOLUME_DEFLECTION_M = 1.0e-6                 # 0.001 mm
 
 
 def _opt(name, default=None):
@@ -220,9 +221,9 @@ def measure(kind, u):
     # dropped. What actually clears it is a different *build* -- the same variant built again
     # tessellates closed often enough that repeats can be compared -- which is a property of
     # this soak's own design rather than something to chase inside one build.
-    volume, facets = solid_measure.mesh_volume(wall, VOLUME_DEFLECTION)
-    deflection = VOLUME_DEFLECTION
-    _points, _tess_facets, open_edge_count = solid_measure.open_edges(wall, VOLUME_DEFLECTION)
+    volume, facets = solid_measure.mesh_volume(wall, VOLUME_DEFLECTION_M)
+    deflection = VOLUME_DEFLECTION_M
+    _points, _tess_facets, open_edge_count = solid_measure.open_edges(wall, VOLUME_DEFLECTION_M)
 
     # **The screen OQ-ARCH-19 decided on, and the reason it comes before any tolerance.**
     # Equal hashes mean the same set of triangles and therefore the same geometry exactly;
@@ -234,7 +235,7 @@ def measure(kind, u):
     tris = [[(verts[i].x, verts[i].y, verts[i].z),
              (verts[j].x, verts[j].y, verts[j].z),
              (verts[k].x, verts[k].y, verts[k].z)]
-            for verts, facet_list in [wall.tessellate(VOLUME_DEFLECTION)]
+            for verts, facet_list in [wall.tessellate(si.mm(VOLUME_DEFLECTION_M))]
             for i, j, k in facet_list]
     wall_hash = mesh_stats.canonical_hash(tris)
 

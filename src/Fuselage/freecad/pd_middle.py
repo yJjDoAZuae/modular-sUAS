@@ -21,9 +21,17 @@ import FreeCAD as App
 import Part
 import Sketcher
 
+import si
 from corner_common import Params, half_shape, is_entry_point, out_path, section
 
 V = App.Vector
+
+# ---------------------------------------------------------------------------------
+# The sketcher boundary. A sketch is a FreeCAD document artifact and its coordinates
+# are millimeters by FreeCAD's own definition, the same as the parameter spreadsheet.
+# These five helpers take SI and convert where they write it, so the builders below
+# read as plain SI geometry and these are the only places a factor appears.
+# ---------------------------------------------------------------------------------
 
 
 def origin_feature(body, role):
@@ -33,30 +41,40 @@ def origin_feature(body, role):
     raise KeyError(role)
 
 
-def sketch_at(doc, body, plane, z):
+def sketch_at(doc, body, plane, z_m):
+    """A sketch on `plane`, offset to `z_m` meters."""
     sk = doc.addObject('Sketcher::SketchObject', 'Sketch')
     body.addObject(sk)
     sk.AttachmentSupport = [(plane, '')]
     sk.MapMode = 'FlatFace'
-    sk.AttachmentOffset = App.Placement(V(0, 0, z), App.Rotation())
+    sk.AttachmentOffset = App.Placement(si.vec_m(0, 0, z_m), App.Rotation())
     return sk
 
 
 def add_polygon(sk, points):
+    """A closed polygon of `(x, y)` points in meters."""
     for i in range(len(points)):
         a, b = points[i], points[(i + 1) % len(points)]
-        sk.addGeometry(Part.LineSegment(V(a[0], a[1], 0), V(b[0], b[1], 0)), False)
+        sk.addGeometry(Part.LineSegment(si.vec_m(a[0], a[1], 0.0),
+                                        si.vec_m(b[0], b[1], 0.0)), False)
 
 
 def add_rect(sk, x0, y0, x1, y1):
+    """An axis-aligned rectangle from two corners, in meters."""
     add_polygon(sk, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 
 
-def pad(doc, body, sk, length):
+def add_circle(sk, radius_m):
+    """A circle about the sketch origin, radius in meters."""
+    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), si.mm(radius_m)), False)
+
+
+def pad(doc, body, sk, length_m):
+    """Pad the sketch through `length_m` meters."""
     f = doc.addObject('PartDesign::Pad', 'Pad')
     body.addObject(f)
     f.Profile = sk
-    f.Length = length
+    f.Length = si.mm(length_m)
     doc.recompute()
     return f
 
@@ -79,7 +97,7 @@ def build_half(doc, p, z0, h):
     far = p.far
 
     sk = sketch_at(doc, body, xy, z0)
-    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), p.corner_radius), False)
+    add_circle(sk, p.corner_radius)
     pad(doc, body, sk, h)
 
     # rectangular extension carrying the panel interface outboard
@@ -90,8 +108,7 @@ def build_half(doc, p, z0, h):
 
     # longeron bore
     sk = sketch_at(doc, body, xy, z0 + h / 2.0)
-    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1),
-                               p.longeron_radius + p.longeron_tolerance), False)
+    add_circle(sk, p.longeron_radius + p.longeron_tolerance)
     pocket(doc, body, sk)
 
     # panel slot

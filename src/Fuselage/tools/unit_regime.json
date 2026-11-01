@@ -1,0 +1,823 @@
+{
+  "note": "Generated inventory of the FreeCAD port's module-level numeric constants, classified by the unit each one carries, plus a per-module ceiling on bare inline dimensional literals. See tools/unit_regime.py for what the classifications mean and what this instrument cannot see.",
+  "regimes": {
+    "build_sheet": "presentation",
+    "clearance_figure": "presentation",
+    "clearance_sheet": "presentation",
+    "dimension_placement": "presentation",
+    "drawing": "presentation",
+    "drawing_standard": "presentation",
+    "oml_blank": "boundary",
+    "render_pages": "presentation",
+    "sheet_annotations": "presentation",
+    "sheet_table": "presentation",
+    "si": "boundary"
+  },
+  "constants": {
+    "boom_bulkhead.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "boom_key.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "boom_key.REF_AREA": {
+      "unit": "m2"
+    },
+    "build_part.ANGULAR_DEFLECTION_RAD": {
+      "unit": "rad"
+    },
+    "build_part.COWL_LINEAR_DEFLECTION_M": {
+      "unit": "m"
+    },
+    "build_part.LINEAR_DEFLECTION_M": {
+      "unit": "m"
+    },
+    "bulkhead_cuts.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "bulkhead_cuts.REF": {
+      "unit": "m3"
+    },
+    "bulkhead_full.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "bulkhead_full.EXPECT_BBOX_COWLING": {
+      "unit": "m"
+    },
+    "bulkhead_full.EXPECT_BBOX_INTERCONNECT": {
+      "unit": "m"
+    },
+    "bulkhead_full.REF": {
+      "unit": "m3"
+    },
+    "bulkhead_full.REF_COWLING": {
+      "unit": "m3"
+    },
+    "bulkhead_full.REF_INTERCONNECT": {
+      "unit": "m3"
+    },
+    "bulkhead_positive.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "bulkhead_positive.REF": {
+      "unit": "m3"
+    },
+    "bulkhead_section.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "bulkhead_section.REF": {
+      "unit": "m3"
+    },
+    "bulkhead_tree.REF_TOOL": {
+      "unit": "m3"
+    },
+    "bulkhead_web.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "bulkhead_web.REF_AREA": {
+      "unit": "m2"
+    },
+    "clearance_figure.CONTACT_FACTOR": {
+      "unit": "none"
+    },
+    "clearance_figure.CONTACT_MIN_MM": {
+      "unit": "mm",
+      "reason": "a figure of the geometry, laid out in page millimeters"
+    },
+    "clearance_figure.EDGE_POINTS": {
+      "unit": "none"
+    },
+    "clearance_figure.SURFACE_POINTS": {
+      "unit": "none"
+    },
+    "clearance_figure.TOOL_MARGIN_MM": {
+      "unit": "mm",
+      "reason": "a figure of the geometry, laid out in page millimeters"
+    },
+    "clearance_sheet.CELL_AT": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.CENSUS_STEP_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.DETAIL_AT": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.DETAIL_SCALE": {
+      "unit": "none"
+    },
+    "clearance_sheet.DETAIL_X_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.DETAIL_Y_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.DIM_TICK_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.DIM_X_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.METRIC_A_DENSITIES": {
+      "unit": "none"
+    },
+    "clearance_sheet.METRIC_A_SHIPPED": {
+      "unit": "none"
+    },
+    "clearance_sheet.NOTE_AT": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "clearance_sheet.SHEET_MM": {
+      "unit": "mm",
+      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
+    },
+    "cowl.FLANGE_OFFSET_SAMPLES": {
+      "unit": "none"
+    },
+    "cowl_interior.ANGLE_WINDOW": {
+      "unit": "rad"
+    },
+    "cowl_interior.CHECK_ARC": {
+      "unit": "m"
+    },
+    "cowl_interior.CHECK_MAX": {
+      "unit": "none"
+    },
+    "cowl_interior.CHECK_MIN": {
+      "unit": "none"
+    },
+    "cowl_interior.CHEEK_DOT": {
+      "unit": "none"
+    },
+    "cowl_interior.CLEARANCE_MARGIN_MM": {
+      "unit": "m"
+    },
+    "cowl_interior.CROSSING_SAMPLES": {
+      "unit": "none"
+    },
+    "cowl_interior.DENSE_FACTOR": {
+      "unit": "none"
+    },
+    "cowl_interior.EDGE_SCAN_MARGIN": {
+      "unit": "m"
+    },
+    "cowl_interior.EDGE_SCAN_STEP": {
+      "unit": "m"
+    },
+    "cowl_interior.END_INSET": {
+      "unit": "m"
+    },
+    "cowl_interior.END_OVERRUN": {
+      "unit": "m"
+    },
+    "cowl_interior.FACE_IMAGE_TOL": {
+      "unit": "none"
+    },
+    "cowl_interior.FINISHED_PLANE_TOL": {
+      "unit": "m"
+    },
+    "cowl_interior.FIT_ARC": {
+      "unit": "m"
+    },
+    "cowl_interior.FIT_MAX": {
+      "unit": "none"
+    },
+    "cowl_interior.FIT_MIN": {
+      "unit": "none"
+    },
+    "cowl_interior.FLAT_TOL": {
+      "unit": "none"
+    },
+    "cowl_interior.FLOOR_DOT": {
+      "unit": "none"
+    },
+    "cowl_interior.MIN_INTERVAL": {
+      "unit": "m"
+    },
+    "cowl_interior.OUTWARD_STEP_MM": {
+      "unit": "m"
+    },
+    "cowl_interior.PARTITION_TOL": {
+      "unit": "none"
+    },
+    "cowl_interior.POST_CUT_RESCAN_MARGIN": {
+      "unit": "m"
+    },
+    "cowl_interior.POST_CUT_ROUNDS": {
+      "unit": "none"
+    },
+    "cowl_interior.REFIT_TOL": {
+      "unit": "m"
+    },
+    "cowl_interior.RIB_FACETS": {
+      "unit": "none"
+    },
+    "cowl_interior.RIB_RESIDUE": {
+      "unit": "m3"
+    },
+    "cowl_interior.SAMPLE_MAX": {
+      "unit": "none"
+    },
+    "cowl_interior.SAMPLE_MIN": {
+      "unit": "none"
+    },
+    "cowl_interior.SAMPLE_SPACING": {
+      "unit": "m"
+    },
+    "cowl_interior.SEED_LONG_MM": {
+      "unit": "m"
+    },
+    "cowl_interior.SEED_MAX": {
+      "unit": "none"
+    },
+    "cowl_interior.SEED_MIN": {
+      "unit": "none"
+    },
+    "cowl_interior.SLIVER_AREA": {
+      "unit": "m2"
+    },
+    "cowl_interior.SLIVER_LENGTH": {
+      "unit": "m"
+    },
+    "cowl_interior.SLOPE_SLACK": {
+      "unit": "rad"
+    },
+    "cowl_interior.TAU": {
+      "unit": "m"
+    },
+    "cowl_interior.WALL_TOL": {
+      "unit": "m"
+    },
+    "cowl_interior.Z_TOL": {
+      "unit": "m"
+    },
+    "dimension_placement.ARROWHEAD_LENGTH_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.ELBOW_MARGIN_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.FIRST_LANE_GAP_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.LANE_PITCH_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.MAX_NOTE_ASSIGNMENTS": {
+      "unit": "none"
+    },
+    "dimension_placement.NOTE_LINE_PITCH_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.TEXT_CLEARANCE_HEIGHTS": {
+      "unit": "none"
+    },
+    "dimension_placement.ZERO_MM": {
+      "unit": "mm",
+      "reason": "a page-space zero test for TechDraw geometry"
+    },
+    "drawing.PREFERRED_SCALES": {
+      "unit": "none"
+    },
+    "drawing.REFERENCE_DEFLECTION_MM": {
+      "unit": "mm",
+      "reason": "TechDraw's own reference deflection, in millimeters"
+    },
+    "drawing.SCALE_FLOOR_FRACTION": {
+      "unit": "none"
+    },
+    "drawing.VIEW_FILL": {
+      "unit": "none"
+    },
+    "drawing_standard.ARROW_SIZE_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.CENTER_LINE_OVERRUN_HEIGHTS": {
+      "unit": "none"
+    },
+    "drawing_standard.CENTER_MARK_OVERRUN": {
+      "unit": "none"
+    },
+    "drawing_standard.CONSTRUCTION_COLOR": {
+      "unit": "none"
+    },
+    "drawing_standard.DECIMAL_PLACES": {
+      "unit": "none"
+    },
+    "drawing_standard.DECIMAL_POINT_UNITS": {
+      "unit": "none"
+    },
+    "drawing_standard.LINE_CENTER": {
+      "unit": "none"
+    },
+    "drawing_standard.LINE_CONTINUOUS": {
+      "unit": "none"
+    },
+    "drawing_standard.LINE_DASHED": {
+      "unit": "none"
+    },
+    "drawing_standard.LINE_DOTTED": {
+      "unit": "none"
+    },
+    "drawing_standard.LINE_PHANTOM": {
+      "unit": "none"
+    },
+    "drawing_standard.MINUS_UNITS": {
+      "unit": "none"
+    },
+    "drawing_standard.NARROW_LINE_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TABLE_COLUMN_GUTTER_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TABLE_COLUMN_PADDING_HEIGHTS": {
+      "unit": "none"
+    },
+    "drawing_standard.TABLE_ROW_CLEARANCE_HEIGHTS": {
+      "unit": "none"
+    },
+    "drawing_standard.TABLE_ROW_PITCH_HEIGHTS": {
+      "unit": "none"
+    },
+    "drawing_standard.TABLE_TEXT_HEIGHTS_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TABLE_TEXT_HEIGHT_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TEMPLATE_FRAME_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TEMPLATE_HEIGHT_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TEMPLATE_TITLE_BLOCK_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TEMPLATE_WIDTH_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TEXT_HEIGHT_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "drawing_standard.TYPO_ASCENDER_UNITS": {
+      "unit": "none"
+    },
+    "drawing_standard.UNITS_PER_EM": {
+      "unit": "none"
+    },
+    "drawing_standard.VIEW_SHARE": {
+      "unit": "none"
+    },
+    "drawing_standard.WIDEST_CALLOUT_UNITS": {
+      "unit": "none"
+    },
+    "drawing_standard.WIDEST_DIGIT_UNITS": {
+      "unit": "none"
+    },
+    "drawing_standard.WIDE_LINE_MM": {
+      "unit": "mm",
+      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
+    },
+    "fit_amplification.DELTA": {
+      "unit": "m"
+    },
+    "fit_amplification.N_FIT": {
+      "unit": "none"
+    },
+    "fit_amplification.REAL_PAIRS": {
+      "unit": "m"
+    },
+    "fit_amplification.TIGHTNESS": {
+      "unit": "none"
+    },
+    "fit_amplification.WALL_MM": {
+      "unit": "m"
+    },
+    "flange_base.INTERCONNECT_REF_VOL": {
+      "unit": "m3"
+    },
+    "flange_base.REF_VOL": {
+      "unit": "m3"
+    },
+    "geometry_branches._AT": {
+      "unit": "none"
+    },
+    "greeble_web.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "greeble_web.REF_VOL": {
+      "unit": "m3"
+    },
+    "input_screen.HASH_DEFLECTION_M": {
+      "unit": "m"
+    },
+    "measure_octant_micro.DEFAULT_TOL": {
+      "unit": "none"
+    },
+    "mesh_to_brep.DEFAULT_POINTS": {
+      "unit": "none"
+    },
+    "mesh_to_brep.DEFAULT_TOL_MM": {
+      "unit": "m"
+    },
+    "mesh_to_brep.TIP_CHECK_REL": {
+      "unit": "none"
+    },
+    "normal_check.AROUND_MM": {
+      "unit": "m"
+    },
+    "normal_check.FALLBACK_TOL": {
+      "unit": "m"
+    },
+    "normal_check.NOMINAL": {
+      "unit": "m"
+    },
+    "normal_check.WORST": {
+      "unit": "none"
+    },
+    "oml_blank.MAX_SPANS": {
+      "unit": "none"
+    },
+    "oml_blank.MODEL_UNIT_MM": {
+      "unit": "mm",
+      "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in"
+    },
+    "oml_blank.NATIVE_PER_MODEL_UNIT": {
+      "unit": "mm",
+      "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in"
+    },
+    "oml_blank.RATIO_SPREAD_TOL": {
+      "unit": "none"
+    },
+    "oml_blank.VOLUME_DEFLECTION_M": {
+      "unit": "m"
+    },
+    "oml_blank._COPLANAR": {
+      "unit": "none"
+    },
+    "oml_blank._EPS": {
+      "unit": "none"
+    },
+    "oml_blank._FLAT": {
+      "unit": "none"
+    },
+    "oml_blank._SAMPLES": {
+      "unit": "none"
+    },
+    "panel_oml.REF_EXPOSED_SPAN": {
+      "unit": "m"
+    },
+    "panel_oml.REF_INNER_FACE": {
+      "unit": "m"
+    },
+    "panel_oml.REF_LENGTH": {
+      "unit": "m"
+    },
+    "panel_oml.REF_OUTER_FACE": {
+      "unit": "m"
+    },
+    "panel_oml.REF_POCKET_DEPTH": {
+      "unit": "m"
+    },
+    "panel_oml.REF_WIDTH": {
+      "unit": "m"
+    },
+    "part_corner.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "part_end.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "part_middle.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "part_transition.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "pd_end.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "preview.ANGULAR_RAD": {
+      "unit": "rad"
+    },
+    "preview.DEVIATION_M": {
+      "unit": "m"
+    },
+    "refused_wall.LOCAL_HALF_MM": {
+      "unit": "m"
+    },
+    "refused_wall.LOCAL_STEP_MM": {
+      "unit": "m"
+    },
+    "render_pages.FIGURE_MARGIN_MM": {
+      "unit": "mm",
+      "reason": "raster and page geometry for a rendered sheet"
+    },
+    "render_pages.MIN_BYTES": {
+      "unit": "none"
+    },
+    "render_pages.MM_PER_INCH": {
+      "unit": "mm",
+      "reason": "raster and page geometry for a rendered sheet"
+    },
+    "render_pages.MM_PER_SCENE_UNIT": {
+      "unit": "mm",
+      "reason": "raster and page geometry for a rendered sheet"
+    },
+    "render_pages.RASTER_DPI": {
+      "unit": "none"
+    },
+    "render_pages.SETTLE_POLL_S": {
+      "unit": "s"
+    },
+    "render_pages.SETTLE_STABLE_POLLS": {
+      "unit": "none"
+    },
+    "render_pages.SETTLE_TIMEOUT_S": {
+      "unit": "s"
+    },
+    "render_pages.SPILL_TOLERANCE_MM": {
+      "unit": "mm",
+      "reason": "raster and page geometry for a rendered sheet"
+    },
+    "render_pages.THIN_SCENE": {
+      "unit": "none"
+    },
+    "rib_edge_check.CREASE_SAMPLES": {
+      "unit": "none"
+    },
+    "rib_edge_check.KERNEL_CHECK": {
+      "unit": "none"
+    },
+    "rib_edge_check.NORMAL_PROBES": {
+      "unit": "none"
+    },
+    "rib_edge_check.PATCH_PROBES": {
+      "unit": "none"
+    },
+    "rib_proximity.FAR_IN_T": {
+      "unit": "none"
+    },
+    "ring_scan.AROUND_MM": {
+      "unit": "m"
+    },
+    "ring_scan.AXIAL_MM": {
+      "unit": "m"
+    },
+    "sever_doses.BREAK_Z": {
+      "unit": "m"
+    },
+    "sever_doses.DOSES": {
+      "unit": "none"
+    },
+    "sever_doses.HEALTHY_MM": {
+      "unit": "m"
+    },
+    "sever_doses.HISTORIC_Z": {
+      "unit": "m"
+    },
+    "sever_doses.SCAN_MM": {
+      "unit": "m"
+    },
+    "sever_doses.SILENT_MM": {
+      "unit": "m"
+    },
+    "sheet_annotations.DETAIL_MARGIN": {
+      "unit": "none"
+    },
+    "si.CUT_FUZZ_LADDER_MM": {
+      "unit": "mm",
+      "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
+    },
+    "si.RIB_CUT_FUZZ_MM": {
+      "unit": "mm",
+      "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
+    },
+    "simple_positives.EXPECT_BBOX": {
+      "unit": "m"
+    },
+    "simple_positives.REF_VOL": {
+      "unit": "m3"
+    },
+    "soak_compare.GAP_TOL": {
+      "unit": "none"
+    },
+    "soak_compare.SAMPLES": {
+      "unit": "none"
+    },
+    "soak_compare.SEEDS": {
+      "unit": "none"
+    },
+    "soak_compare.XOR_TOL": {
+      "unit": "none"
+    },
+    "soak_cowl_shell.VOLUME_DEFLECTION_M": {
+      "unit": "m"
+    },
+    "solid_measure.CONVERGENCE": {
+      "unit": "none"
+    },
+    "solid_measure.DEFLECTIONS_M": {
+      "unit": "m"
+    },
+    "solid_measure.DIFFERENCE_CONVERGENCE": {
+      "unit": "none"
+    },
+    "solid_measure.SURFACE_SAMPLES": {
+      "unit": "none"
+    },
+    "station_gaps.SHOW": {
+      "unit": "none"
+    },
+    "tau_study.DEFAULT_TAUS": {
+      "unit": "m"
+    },
+    "tau_study.SPACING": {
+      "unit": "m"
+    },
+    "units.MM_PER_M": {
+      "unit": "none"
+    },
+    "units.M_PER_MM": {
+      "unit": "none"
+    },
+    "units.PA_PER_MPA": {
+      "unit": "none"
+    },
+    "variants.TABLE_M": {
+      "unit": "m"
+    },
+    "verify_pd_end.PART_VOL_M3": {
+      "unit": "m3"
+    },
+    "verify_pd_end.REF_VOL_M3": {
+      "unit": "m3"
+    },
+    "wall_vanish.DOSES": {
+      "unit": "none"
+    },
+    "wall_vanish.HISTORIC_Z": {
+      "unit": "m"
+    },
+    "wall_vanish.SCAN_MM": {
+      "unit": "m"
+    },
+    "web.REF_VOL": {
+      "unit": "m3"
+    }
+  },
+  "inline": {
+    "boom_bulkhead": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "boom_web": {
+      "allowed": 10,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "build_part": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "bulkhead_cuts": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "bulkhead_full": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "bulkhead_positive": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "bulkhead_section": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "clearance_figure": {
+      "allowed": 8,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "clearance_sheet": {
+      "allowed": 44,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "corner_common": {
+      "allowed": 5,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "corner_tree": {
+      "allowed": 9,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "cowl": {
+      "allowed": 13,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "cowl_interior": {
+      "allowed": 13,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "drawing": {
+      "allowed": 8,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "drawing_standard": {
+      "allowed": 6,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "fillets": {
+      "allowed": 2,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "fit_amplification": {
+      "allowed": 4,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "greeble_web": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "input_screen": {
+      "allowed": 2,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "oml_blank": {
+      "allowed": 9,
+      "reason": "values belonging to what is on the other side of this module's boundary"
+    },
+    "pd_end": {
+      "allowed": 2,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "plane2d": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "rib_proximity": {
+      "allowed": 2,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "ring_scan": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "sheet_annotations": {
+      "allowed": 38,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "sheet_table": {
+      "allowed": 3,
+      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+    },
+    "simple_positives": {
+      "allowed": 1,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "soak_cowl_shell": {
+      "allowed": 3,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "solid_measure": {
+      "allowed": 3,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "tau_study": {
+      "allowed": 2,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "units": {
+      "allowed": 3,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "variants": {
+      "allowed": 3,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "web": {
+      "allowed": 6,
+      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    }
+  }
+}

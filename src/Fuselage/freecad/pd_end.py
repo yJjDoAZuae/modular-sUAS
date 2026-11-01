@@ -24,10 +24,12 @@ import Sketcher
 
 from corner_common import Params, is_entry_point, out_path, through_cut
 from part_end import nub_profile, revolve, wedge
-from pd_middle import add_polygon, add_rect, origin_feature, pad, pocket, sketch_at
+import si
+from pd_middle import (add_circle, add_polygon, add_rect, origin_feature, pad, pocket,
+                       sketch_at)
 
 V = App.Vector
-REF_VOL = 551.8157396
+REF_VOL_M3 = 5.518157396e-7           # 551.8157396 mm3
 
 
 def build_section(doc, body, p, z0, h):
@@ -36,7 +38,7 @@ def build_section(doc, body, p, z0, h):
     far, zm = p.far, z0 + h / 2.0
 
     sk = sketch_at(doc, body, xy, z0)
-    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), p.corner_radius), False)
+    add_circle(sk, p.corner_radius)
     pad(doc, body, sk, h)
 
     w = p.panel_overlap + p.panel_offset - p.panel_tolerance
@@ -45,8 +47,7 @@ def build_section(doc, body, p, z0, h):
     pad(doc, body, sk, h)
 
     sk = sketch_at(doc, body, xy, zm)
-    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1),
-                               p.longeron_radius + p.longeron_tolerance), False)
+    add_circle(sk, p.longeron_radius + p.longeron_tolerance)
     pocket(doc, body, sk)
 
     sk = sketch_at(doc, body, xy, zm)
@@ -112,14 +113,15 @@ def main():
     body = doc.addObject('PartDesign::Body', 'Body')
     build_section(doc, body, p, 0.0, h)
     print('PARTDESIGN:: corner_end')
-    print('  section         = %.6f' % body.Shape.Volume)
+    print('  section         = %.6f mm3'
+          % (si.volume_m3(body.Shape) * si.MM3_PER_M3))
 
     xy = origin_feature(body, 'XY_Plane')
     g = p.greeble_radius
 
     # the through bore
     sk = sketch_at(doc, body, xy, h / 2.0)
-    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), g), False)
+    add_circle(sk, g)
     pocket(doc, body, sk)
 
     # the mouth, a square on the mirror diagonal
@@ -144,9 +146,10 @@ def main():
         print('  full Groove     FAILED: %s' % groove.State)
         native = None
     else:
-        native = body.Shape.Volume
-        print('  + full Groove   = %.6f   (reference %.6f, off by %+.6f)'
-              % (native, REF_VOL, native - REF_VOL))
+        native = si.volume_m3(body.Shape)
+        print('  + full Groove   = %.6f mm3 (reference %.6f, off by %+.6f)'
+              % (native * si.MM3_PER_M3, REF_VOL_M3 * si.MM3_PER_M3,
+                 (native - REF_VOL_M3) * si.MM3_PER_M3))
 
     # 3. the interrupted groove, cutting with a Part:: tool through PartDesign::Boolean
     doc.removeObject(groove.Name)
@@ -169,12 +172,15 @@ def main():
         print('  PartDesign::Boolean FAILED: %s' % boolean.State)
     else:
         s = body.Shape
-        d = s.Volume - REF_VOL
-        print('  + Boolean cut   = %.6f   (reference %.6f, %+.6f  %+.4f%%)'
-              % (s.Volume, REF_VOL, d, 100 * d / REF_VOL))
+        volume_m3 = si.volume_m3(s)
+        d = volume_m3 - REF_VOL_M3
+        print('  + Boolean cut   = %.6f mm3 (reference %.6f, %+.6f  %+.4f%%)'
+              % (volume_m3 * si.MM3_PER_M3, REF_VOL_M3 * si.MM3_PER_M3,
+                 d * si.MM3_PER_M3, 100 * d / REF_VOL_M3))
         print('  valid           = %s  solids=%d faces=%d'
               % (s.isValid(), len(s.Solids), len(s.Faces)))
-        boolean_ok = s.isValid() and len(s.Solids) == 1 and abs(d) <= 1e-3 * REF_VOL
+        boolean_ok = (s.isValid() and len(s.Solids) == 1
+                      and abs(d) <= 1e-3 * REF_VOL_M3)
     print('  result          = %s' % ('PASS' if boolean_ok else 'FAIL'))
 
     out = out_path('pd_end.FCStd')

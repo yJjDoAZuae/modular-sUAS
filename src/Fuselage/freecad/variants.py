@@ -13,20 +13,22 @@ for the smallest corner and the sweep never generates that combination. panel.ov
 max(panel_thickness, 4), as fuselage_variants.py computes it.
 """
 
-# U -> (bulkhead_thickness, panel_thickness)
-TABLE = [
-    (0.5, 4.0, 2.0),
-    (1.0, 6.0, 4.77),
-    (2.0, 8.0, 4.77),
-    (4.0, 16.0, 4.77),
+# U -> (bulkhead_thickness, panel_thickness). `U` is dimensionless; both thicknesses
+# are **meters**, with the millimeter figure beside each row.
+TABLE_M = [
+    (0.5, 0.004, 0.002),                 # 4.0 mm, 2.0 mm
+    (1.0, 0.006, 0.00477),               # 6.0 mm, 4.77 mm
+    (2.0, 0.008, 0.00477),               # 8.0 mm, 4.77 mm
+    (4.0, 0.016, 0.00477),               # 16.0 mm, 4.77 mm
 ]
 
 
 def panel_overlap(panel_thickness):
-    return max(panel_thickness, 4.0)
+    """`max(panel_thickness, 4 mm)`, as fuselage_variants.py computes it. Meters."""
+    return max(panel_thickness, 0.004)
 
 
-def max_panel_thickness(U, longeron_tolerance=0.05, extrusion_width=0.6,
+def max_panel_thickness(U, longeron_tolerance=0.00005, extrusion_width=0.0006,
                         greeble_wall_extrusions=2.0):
     """fuselage_variants.py's upper bound on a legal panel.
 
@@ -45,5 +47,5 @@ def max_panel_thickness(U, longeron_tolerance=0.05, extrusion_width=0.6,
     greeble_thickness = max(greeble_wall_extrusions * (U ** 0.5) * extrusion_width,
                             greeble_wall_extrusions * extrusion_width)
     greeble_nub_thickness = greeble_thickness
-    return (10.0 * U) - (2.0 * U + longeron_tolerance + greeble_thickness
-                         + greeble_nub_thickness)
+    return (0.010 * U) - (0.002 * U + longeron_tolerance + greeble_thickness
+                          + greeble_nub_thickness)

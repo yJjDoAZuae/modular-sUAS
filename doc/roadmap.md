@@ -253,25 +253,46 @@ on one of them — IP-FC-13.**
       bigger rewrite. **Decided** as OQ-ARCH-1 (2026-08-07): build both, then choose; and as
       OQ-ARCH-11 (2026-08-15): constraints, with `PartDesign::` the staged target state.
       Stage 3 of that conversion is IP-FC-75, blocked on IP-FC-13.
-- [ ] **Adopt SI internally in the ported code — not done, and now an open question.** The design
-      intent was that the port is new code, written in meters, seconds, kilograms and radians from
-      the start, with conversion confined to the file interface, since FreeCAD's own API is
-      millimeters and its FEM stack is N/mm². **The conversion layer was built**
-      ([`freecad/units.py`](../src/Fuselage/freecad/units.py), IP-FC-8) and **nothing in the
-      geometry imports it**: measured 2026-10-31, its only importer is its own regression test,
-      while the port is millimeters end to end because it reads the same parameter sheets and OML
-      meshes the OpenSCAD path reads. Nothing built is wrong — millimeters throughout is
-      self-consistent — but the authority and the code disagree. Whether to record millimeters as
-      the port's regime or to adopt SI as designed is
-      [OQ-ARCH-23](architecture/freecad_migration.md#open-questions), tracked as IP-FC-158.
+- [ ] **Adopt SI internally in the ported code — not done, and the gap is measured.** The
+      standard requires every stored value to be SI and confines non-SI to a narrow file-interface
+      layer that never propagates inward. Measured 2026-10-31: **46 of 79 port modules hold 173
+      module-level numeric constants in millimeters**, 46 of them declaring it in the name
+      (`*_MM`), with `cowl_interior` alone carrying 40 — `WALL_TOL` = 0.01, a wall `t` of 0.600,
+      stations at `z` = -283.9951. The parameters arrive in millimeters too, from
+      `fuselage_variants.derived_parameters()`, so the regime propagates through every argument and
+      return value in the geometry pipeline rather than sitting in a constants block.
 
-      Hard constraint that does not change either way: **exported STL and 3MF stay in
-      millimeters.** Those formats carry no unit metadata and a slicer reads them as mm regardless.
+      **This is not the OpenSCAD exemption reaching further than intended.** There the geometry
+      layer is a separate language in a generated file, which makes the emission step a real file
+      interface — the guidelines say so explicitly. The port's geometry layer is project Python
+      with no file between it and the kernel, so nothing in it qualifies.
+
+      **The conversion does not belong inside the geometry modules either** — the guidelines
+      forbid that and say what to do instead: move the boundary.
+
+      **Two of the four repair items are delivered (2026-10-31).**
+      [`freecad/si.py`](../src/Fuselage/freecad/si.py) (IP-FC-158) is the boundary: it owns the
+      kernel calls that carry a number, takes SI in and gives SI back, and holds the
+      OpenCASCADE fuzz values that moved out of `cowl_interior`. Verified by 36 checks in
+      `check_si.py` under `freecadcmd`, each expectation written as plain arithmetic on the SI
+      inputs so a squared-instead-of-cubed factor cannot pass.
+      [`tools/unit_regime.py`](../src/Fuselage/tools/unit_regime.py) (IP-FC-161) is the gate and
+      the worklist at once — 213 constants classified by reading each use site, an unclassified
+      one fails, 30 tests. **Measured worklist: 90 dimensional constants to convert**, 89
+      dimensionless, 32 legitimately millimeters at a declared boundary.
+
+      **What remains is IP-FC-159 and IP-FC-160** — the port's own SI parameter layer, then the
+      per-module conversion against `variant_output_baseline`, callee-first by import layer with
+      `cowl_interior` last because that is where the kernel's reproducibility floor makes a
+      passing comparison weakest evidence.
 
       The check this item names — a ported part's bounding box in meters equalling the OpenSCAD
-      part's in millimeters divided by 1 000 — exists as `units.bbox_m_matches_mm` and is dead code
-      until that question is answered. This is still the single easiest place in the project to be
-      silently wrong by 1 000×.
+      part's in millimeters divided by 1 000 — exists as `units.bbox_m_matches_mm` and goes live
+      with the SI parameter layer.
+
+      Hard constraint throughout: **exported STL and 3MF stay in millimeters.** Those formats
+      carry no unit metadata and a slicer reads them as mm regardless. This is still the single
+      easiest place in the project to be silently wrong by 1 000×.
 - [x] **Validate equivalence, not appearance.** Compare ported parts against OpenSCAD
       output by measured properties — bounding box, volume, hole positions — not by eye. Delivered
       as the reference-corpus and tolerance machinery of OQ-ARCH-12, OQ-ARCH-15, OQ-ARCH-16,

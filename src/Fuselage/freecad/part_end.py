@@ -15,10 +15,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
+import si
+
 from corner_common import (Params, is_entry_point, out_path, report, section,
                            through_cut)
 
-REF_VOL = 551.8157396
+REF_VOL_M3 = 5.518157396e-7           # 551.8157396 mm3
 
 
 def nub_profile(p):
@@ -44,7 +46,7 @@ def nub_profile(p):
 
 def revolve(points):
     """Revolve a (radius, z) polygon a full turn about the z axis."""
-    pts = [App.Vector(r, 0.0, z) for r, z in points]
+    pts = [si.vec_m(r, 0.0, z) for r, z in points]
     pts.append(pts[0])
     return Part.Face(Part.makePolygon(pts)).revolve(
         App.Vector(0, 0, 0), App.Vector(0, 0, 1), 360)
@@ -65,9 +67,9 @@ def wedge(p):
         (-p.greeble_radius, -p.greeble_nub_thickness),
         (-(p.greeble_nub_radius + p.eps), 0.0),
     ]
-    pts = [App.Vector(x, y, -depth / 2.0) for x, y in poly]
+    pts = [si.vec_m(x, y, -depth / 2.0) for x, y in poly]
     pts.append(pts[0])
-    prism = Part.Face(Part.makePolygon(pts)).extrude(App.Vector(0, 0, depth))
+    prism = Part.Face(Part.makePolygon(pts)).extrude(si.vec_m(0, 0, depth))
     return prism.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), -45)
 
 
@@ -77,12 +79,12 @@ def build(p):
     solid = section(p, 0.0, p.bulkhead_thickness + p.eps)
 
     # the through bore
-    solid = solid.cut(Part.makeCylinder(p.greeble_radius, depth,
-                                        App.Vector(0, 0, -depth / 2.0)))
+    solid = solid.cut(si.cylinder_m(p.greeble_radius, depth,
+                                    si.vec_m(0, 0, -depth / 2.0)))
 
     # the mouth: a square opening the bore to one side, on the mirror diagonal
     g = p.greeble_radius
-    mouth = Part.makeBox(2 * g, 2 * g, depth, App.Vector(-2 * g, -g, -depth / 2.0))
+    mouth = si.box_m(2 * g, 2 * g, depth, si.vec_m(-2 * g, -g, -depth / 2.0))
     solid = solid.cut(mouth.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 45))
 
     # the snap groove, interrupted where the mouth is
@@ -92,7 +94,7 @@ def build(p):
 def main():
     App.newDocument('part_end')
     shape = build(Params())
-    ok = report('corner_end', shape, REF_VOL)
+    ok = report('corner_end', shape, REF_VOL_M3)
 
     out = out_path('part_end.step')
     shape.exportStep(out)

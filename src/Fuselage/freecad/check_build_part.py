@@ -122,17 +122,17 @@ def _check_load_seed():
 def _check_export_deflection():
     ok = True
     cases = [
-        ('bulkhead', {}, bp.LINEAR_DEFLECTION),
-        ('bulkhead', {'U': 4.0}, bp.LINEAR_DEFLECTION),   # non-cowl: U must not matter
-        ('tail', {'U': 2.0}, bp.COWL_LINEAR_DEFLECTION * 2.0),
-        ('tail', {}, bp.COWL_LINEAR_DEFLECTION * 1.0),    # no U in seed -> falls back to 1.0
-        ('nose_cowl_shell', {'U': 0.5}, bp.COWL_LINEAR_DEFLECTION * 0.5),
+        ('bulkhead', {}, bp.LINEAR_DEFLECTION_M),
+        ('bulkhead', {'U': 4.0}, bp.LINEAR_DEFLECTION_M),   # non-cowl: U must not matter
+        ('tail', {'U': 2.0}, bp.COWL_LINEAR_DEFLECTION_M * 2.0),
+        ('tail', {}, bp.COWL_LINEAR_DEFLECTION_M * 1.0),    # no U in seed -> falls back to 1.0
+        ('nose_cowl_shell', {'U': 0.5}, bp.COWL_LINEAR_DEFLECTION_M * 0.5),
         # IP-FC-136 (freecad_migration.md): nose_plate is three primitives with no freeform
         # surface, so it must NOT be in COWL_KINDS and must NOT scale with U -- being meshed
         # at the freeform cowls' deflection (20x looser) failed its own cross-backend
         # tolerance at every U from 1 upward until this was fixed. Regression: at any U it
-        # must fall through to the fixed LINEAR_DEFLECTION, not COWL_LINEAR_DEFLECTION * U.
-        ('nose_plate', {'U': 3.0}, bp.LINEAR_DEFLECTION),
+        # must fall through to the fixed LINEAR_DEFLECTION_M, not COWL_LINEAR_DEFLECTION * U.
+        ('nose_plate', {'U': 3.0}, bp.LINEAR_DEFLECTION_M),
     ]
     for kind, seed, want in cases:
         got = bp.export_deflection(kind, seed)

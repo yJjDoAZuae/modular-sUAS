@@ -13,9 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 import Part
 
+import si
+
 from corner_common import Params, is_entry_point, out_path, report, section
 
-REF_VOL = 607.6699024
+REF_VOL_M3 = 6.076699024e-7           # 607.6699024 mm3
 
 
 def relief(p):
@@ -36,9 +38,9 @@ def relief(p):
         (-(lr + p.longeron_tolerance), 0.75 * bt + eps),
         (-p.greeble_radius, -eps),
     ]
-    pts = [App.Vector(x, y, 0.0) for x, y in poly]
+    pts = [si.vec_m(x, y, 0.0) for x, y in poly]
     pts.append(pts[0])
-    shape = Part.Face(Part.makePolygon(pts)).extrude(App.Vector(0, 0, depth))
+    shape = Part.Face(Part.makePolygon(pts)).extrude(si.vec_m(0, 0, depth))
     shape.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 90)
     shape.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), -45)
     return shape
@@ -49,19 +51,19 @@ def build(p):
     solid = section(p, z0, p.bulkhead_thickness)
 
     # the bore tapering from the socket down to the longeron
-    solid = solid.cut(Part.makeCone(
+    solid = solid.cut(si.cone_m(
         p.greeble_radius, p.longeron_radius + p.longeron_tolerance,
-        p.bulkhead_thickness + 2 * p.eps, App.Vector(0, 0, z0 - p.eps)))
+        p.bulkhead_thickness + 2 * p.eps, si.vec_m(0, 0, z0 - p.eps)))
 
     tool = relief(p)
-    tool.translate(App.Vector(0, 0, z0 - p.eps))
+    tool.translate(si.vec_m(0, 0, z0 - p.eps))
     return solid.cut(tool)
 
 
 def main():
     App.newDocument('part_transition')
     shape = build(Params())
-    ok = report('corner_transition', shape, REF_VOL)
+    ok = report('corner_transition', shape, REF_VOL_M3)
 
     out = out_path('part_transition.step')
     shape.exportStep(out)
