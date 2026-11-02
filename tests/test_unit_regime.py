@@ -471,3 +471,82 @@ class TestTheRenameSweepFindsWhatATestRunDoesNot:
         """The condition the conversion drove to zero, and the one a later rename breaks."""
         rows = ur.sweep_undefined()
         assert rows == [], 'dangling reference(s): %s' % rows[:8]
+
+
+class TestTheCountSweepFindsAUnitDependentCount:
+    r"""`int(span / step)` is not unit-invariant, and a regex cannot be trusted to find it.
+
+    The sweep that first looked for this class was written as `int\([^)]*/[^)]*` and missed two
+    of the four sites in `cowl_interior`, because `int(si.length_m(arc) / SAMPLE_SPACING_M)` has
+    a closing parenthesis before the divide. Both were found by reading. These cases pin the
+    expression-tree version against that blind spot and against the distinctions that keep its
+    report honest.
+    """
+
+    def test_a_bare_truncating_division_is_a_finding(self, tmp_path):
+        write(tmp_path, 'm.py', 'def f(span_m, step_m):\n    return int(span_m / step_m)\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [(line, verdict) for line, _t, verdict in rows] == [(2, 'bare')]
+
+    def test_a_call_before_the_divide_does_not_hide_it(self, tmp_path):
+        """The exact shape the regex could not see."""
+        write(tmp_path, 'm.py',
+              'def f(wire, step_m):\n    return int(length_m(wire) / step_m)\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [verdict for _l, _t, verdict in rows] == ['bare']
+
+    def test_a_slack_term_clears_it(self, tmp_path):
+        write(tmp_path, 'm.py',
+              'STEP_SLACK = 1e-09\n\n\ndef f(span, step):\n'
+              '    return int(span / step + STEP_SLACK)\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [verdict for _l, _t, verdict in rows] == ['slack']
+
+    def test_rounding_is_reported_but_is_not_a_finding(self, tmp_path):
+        """`round`'s boundaries are the half-integers, which a ratio of lengths does not sit on."""
+        write(tmp_path, 'm.py', 'def f(a_m, b_m):\n    return round(a_m / b_m)\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [verdict for _l, _t, verdict in rows] == ['round']
+
+    def test_an_int_around_a_round_is_classified_by_the_round(self, tmp_path):
+        """`int(round(x))` is one site and its fragility is `round`'s, not `int`'s."""
+        write(tmp_path, 'm.py', 'def f(a_m, b_m):\n    return int(round(a_m / b_m))\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert len(rows) == 1, 'the inner call is not a second site: %s' % (rows,)
+        assert rows[0][2] == 'round'
+
+    def test_integer_arithmetic_on_counts_is_not_a_unit_question(self, tmp_path):
+        """`//` is ordinary integer division far more often than it is a length over a length."""
+        write(tmp_path, 'm.py',
+              'def f(pts, n, available, per_worker):\n'
+              '    a = len(pts) // 2\n'
+              '    b = n // 8\n'
+              '    c = available // (per_worker * 1024 * 1024)\n'
+              '    return a, b, c\n')
+        assert ur.truncating_counts(str(tmp_path / 'm.py')) == []
+
+    def test_a_floor_division_of_two_lengths_is_a_finding(self, tmp_path):
+        write(tmp_path, 'm.py',
+              'def f(height):\n    return int(band_depth_mm() // row_pitch_mm(height))\n')
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [verdict for _l, _t, verdict in rows] == ['bare']
+
+    def test_the_allowlist_needs_the_expression_not_the_line(self, tmp_path, monkeypatch):
+        """A line number moves with every edit above it; the expression does not."""
+        write(tmp_path, 'm.py',
+              '# a comment that moves the line\ndef f(a_m, b_m):\n    return int(a_m / b_m)\n')
+        monkeypatch.setitem(ur.COUNT_ALLOWED, 'm', {'int(a_m / b_m)': 'a stated reason'})
+        rows = ur.truncating_counts(str(tmp_path / 'm.py'))
+        assert [verdict for _l, _t, verdict in rows] == ['allowed']
+
+    def test_every_allowlist_entry_states_a_reason(self):
+        """An allowlist whose entries carry no reason is a suppression list."""
+        for module, entries in ur.COUNT_ALLOWED.items():
+            for expression, reason in entries.items():
+                assert isinstance(reason, str) and len(reason) > 20, \
+                    '%s: %s has no stated reason' % (module, expression)
+
+    def test_the_real_tree_has_no_bare_unit_dependent_count(self):
+        """The condition this was driven to, and the one a later edit breaks."""
+        bare = [r for r in ur.sweep_counts() if r[3] == 'bare']
+        assert bare == [], 'bare truncating division(s): %s' % (bare[:6],)

@@ -1077,7 +1077,7 @@ def resolve_reference_parts(params_path, construction, say=None):
     bore is the longeron -- a third part, on a sheet that is about the bulkhead. What the
     reader needs is where the corner's material is.
 
-    Straight edges stay straight and curved ones are discretised, rather than discretising
+    Straight edges stay straight and curved ones are discretized, rather than discretizing
     everything: a mold line arc wants points and a seating flat does not, and a flat drawn as
     forty collinear segments is forty chances for a rounding difference to show as a kink.
     """

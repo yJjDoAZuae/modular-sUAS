@@ -81,7 +81,7 @@ class TestMeshVolume:
 
     def test_the_deflection_does_not_change_a_planar_result(self, sm, cube):
         """The property that makes the cube the right instrument: planar faces are exact at any
-        refinement, so this is the one case where a mesh volume has no discretisation error."""
+        refinement, so this is the one case where a mesh volume has no discretization error."""
         coarse, _ = sm.mesh_volume(cube, 0.1)
         fine, _ = sm.mesh_volume(cube, 0.001)
         assert coarse == pytest.approx(fine, rel=1e-12)

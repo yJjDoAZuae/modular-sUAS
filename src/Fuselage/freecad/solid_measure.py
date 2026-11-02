@@ -48,7 +48,7 @@ differently, or it is not measured.** For a thin shell the independent one is a 
 integral: it uses neither booleans nor tessellation nor point sampling.
 
 **And a measurement that converges is still only a measurement of what it was pointed at.**
-`converged_difference` cancels the discretisation error between two solids by tessellating both
+`converged_difference` cancels the discretization error between two solids by tessellating both
 the same way, which requires them to be *cut into faces* the same way. Pointed at two identical
 walls with different face layouts it returned a settled, converged, entirely false 112.46 mm3
 (IP-FC-115). It now refuses that case. The measurements that are indifferent to face layout are
@@ -93,7 +93,7 @@ CONVERGENCE = 1.0e-4
 #: The same test for a *difference*, and it is ten times tighter for a reason.
 #:
 #: A difference converges where an absolute does not, because two solids tessellated at one
-#: deflection carry nearly the same discretisation error and it cancels. So it can afford the
+#: deflection carry nearly the same discretization error and it cancels. So it can afford the
 #: tighter bar -- and it needs it. At 1e-4 the tail pair stopped at deflection 0.005 reporting
 #: 0.169929 mm3, when one more refinement gives 0.006186: the step was 1.19 mm3, which is only
 #: 5e-5 *of the part*, so it passed while the answer was still an order of magnitude out. At
@@ -114,9 +114,10 @@ class TopologyMismatch(Exception):
 
 
 def mesh_volume(shape, deflection):
-    """Mesh volume at `deflection` meters. A deflection is a length and crosses to
-    the kernel's millimeters at the tessellation call, like any other."""
-    """Volume of `shape`'s tessellation at `deflection`, by the divergence theorem.
+    """Volume of `shape`'s tessellation at `deflection` meters, by the divergence theorem.
+
+    A deflection is a length and crosses to the kernel's millimeters at the tessellation call,
+    like any other.
 
     Signed tetrahedra from the origin, summed and taken absolute so winding does not change the
     answer -- the same integral `tools/mesh_stats.py` performs on an STL, done here on the solid
@@ -135,6 +136,98 @@ def mesh_volume(shape, deflection):
                   - b.x * (a.y * c.z - c.y * a.z)
                   + c.x * (a.y * b.z - b.y * a.z))
     return abs(total) / 6.0, len(facets)
+
+
+def solid_identity(shape):
+    """Everything about `shape` that is a property of the solid rather than of a mesh of it.
+
+    **This exists because a units conversion was signed off against the wrong instrument.**
+    IP-FC-160 compared each reference module's printed output, and `cowl.py` prints its cowl
+    volumes from `oml_blank.volume_m3`, which tessellates. Two of those figures moved, were read
+    as a geometry change, and were written up as one. They were not: measured afterwards, the
+    nose's solid had the same 88 faces, 212 edges and 126 vertexes, a bit-identical bounding box
+    and an analytic volume agreeing to 1 ulp, while its mesher had chosen 104 triangles fewer out
+    of 156 228. The disagreement also shrank as the mesh refined -- 1.97e-8, 5.51e-9, 1.85e-9 --
+    which is what a discretization artifact does and a real difference does not.
+
+    So nothing here tessellates. An absolute mesh volume carries an error of order 1e-4 that does
+    not settle (`converged_volume`), and a shape also hands back whatever triangulation it is
+    already carrying, which is why the tail's figure moved on a live shape and not on the same
+    solid reloaded from a BREP.
+
+    `volume_m3` is `Shape.Volume`, which is unreliable in *absolute* terms on freeform faces --
+    6.79% here, OQ-DES-CW12 -- and is used anyway, deliberately: the question this answers is
+    whether two solids are the same object, not how big either one is, and for that a
+    deterministic functional of the B-rep is exactly what is wanted.
+
+    Every length is in meters. The shape's own coordinates are the kernel's millimeters, so each
+    one crosses through `si`, once, here -- this record is a project measurement and not a window
+    onto the kernel's numbers.
+
+    Returns a dict, so a caller can print it, store it as a baseline, or hand it to `same_solid`.
+    """
+    return {
+        'solids': len(shape.Solids),
+        'faces': len(shape.Faces),
+        'edges': len(shape.Edges),
+        'vertexes': len(shape.Vertexes),
+        'valid': bool(shape.isValid()),
+        'volume_m3': si.volume_m3(shape),
+        'area_m2': si.area_m2(shape),
+        'bbox_m': si.bbox_m(shape).as_tuple(),
+        # Sorted, because two builds of one part can enumerate the same vertices in a different
+        # order while being the same set of points -- the order-invariance `mesh_stats`'s own
+        # hash needs for the same reason.
+        'vertices_m': sorted(si.point_m(v.Point) for v in shape.Vertexes),
+    }
+
+
+#: How far a vertex may move and still be the same point, in meters. 1e-9 m is 1e-6 mm, ten
+#: times OpenCASCADE's own `Precision::Confusion` of 1e-7 mm. Measured across the cowl family's
+#: SI conversion, the worst vertex disagreement was 9.8e-15 mm on the nose and 1.0e-13 mm on the
+#: tail -- four orders inside this -- so it is a wide bar that still fails on any real move.
+POINT_TOL_M = 1.0e-9
+
+
+def same_solid(a, b, rel_tol=1.0e-12, point_tol_m=POINT_TOL_M):
+    """Judge two `solid_identity` records. Returns `(ok, report)`, `report` naming each mismatch.
+
+    **The topology is judged exactly and the coordinates are not**, which is the whole point of
+    having two tolerances. A differing face or vertex count means the construction took a
+    different path, and no tolerance makes that acceptable. A coordinate that differs in its last
+    bits means arithmetic happened in a different order, which a unit conversion guarantees and
+    which no amount of care removes: a single stored value round trips exactly, but a sum or
+    difference of two of them does not.
+
+    `rel_tol` is dimensionless and applies to the volume, the area and the bounding box, the last
+    relative to the part's own largest extent so that a face sitting on the origin is not compared
+    against zero.
+    """
+    report = []
+    for key in ('solids', 'faces', 'edges', 'vertexes', 'valid'):
+        if a[key] != b[key]:
+            report.append('%s: %r against %r' % (key, a[key], b[key]))
+    for key in ('volume_m3', 'area_m2'):
+        scale = max(abs(a[key]), abs(b[key])) or 1.0
+        if abs(a[key] - b[key]) / scale > rel_tol:
+            report.append('%s: %.17g against %.17g (%.3g relative)'
+                          % (key, a[key], b[key], abs(a[key] - b[key]) / scale))
+
+    extent_m = max((abs(v) for v in a['bbox_m']), default=1.0) or 1.0
+    for name, x, y in zip(('xmin', 'ymin', 'zmin', 'xmax', 'ymax', 'zmax'),
+                          a['bbox_m'], b['bbox_m']):
+        if abs(x - y) > extent_m * rel_tol:
+            report.append('bbox %s: %.17g against %.17g m' % (name, x, y))
+
+    if a['vertexes'] == b['vertexes']:
+        worst_m = 0.0
+        for p, q in zip(a['vertices_m'], b['vertices_m']):
+            worst_m = max(worst_m,
+                          abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2]))
+        if worst_m > point_tol_m:
+            report.append('worst vertex coordinate moved %.3g m, over the %.3g allowed'
+                          % (worst_m, point_tol_m))
+    return not report, report
 
 
 def open_edges(shape, deflection):
@@ -173,14 +266,23 @@ def open_edges(shape, deflection):
 SURFACE_SAMPLES = 800
 
 
-def _area_sampler(shape, deflection=0.02):
+def _area_sampler(shape, deflection_m=DEFLECTIONS_M[0]):
     """`(sample(rng), total area)` -- points on the surface, uniform by area.
 
     Triangles are drawn with probability proportional to area and a point is taken uniformly
     inside the chosen one, which is what makes the sample mean an estimate of the area-weighted
     mean rather than of a per-triangle one.
+
+    **The default is `DEFLECTIONS_M[0]` rather than a literal, and that is not tidiness.**
+    IP-FC-160 converted this signature's `si.mm(deflection)` without converting the default
+    beside it, so `0.02` -- the millimeter figure -- was being read as meters and tessellating at
+    20 mm, a thousand times too coarse, on a part 100 mm across. Nothing caught it: the parameter
+    name did not change, so no rename sweep saw it; `check_solid_measure` exercises it on a box,
+    which tessellates exactly at any deflection; and the ratios `soak_compare` builds from it are
+    nondimensional, so a coarse mesh moves them without making either one absurd. Naming the
+    coarsest entry of the ladder the whole module already uses leaves one place for the figure.
     """
-    verts, facets = shape.tessellate(si.mm(deflection))
+    verts, facets = shape.tessellate(si.mm(deflection_m))
     cumulative, total = [], 0.0
     for i, j, k in facets:
         a, b, c = verts[i], verts[j], verts[k]
@@ -208,11 +310,18 @@ def _area_sampler(shape, deflection=0.02):
     return sample, total
 
 
-def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection=0.02):
+def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection_m=DEFLECTIONS_M[0]):
     """The symmetric difference of two solids, estimated by sampling one's surface.
 
+    `deflection_m` is in meters, like every other length this module takes.
+
     Returns `(estimate, standard_error, area, mean_gap, max_gap)`, all in millimeters and cubic
-    millimeters.
+    millimeters -- **the one deliberate exception, and it is declared rather than accidental.**
+    Every figure here is read straight off `distToShape` and a tessellation, both kernel calls,
+    and the only consumer is `soak_compare`, which divides each one by a length to reach the
+    nondimensional form OQ-ARCH-19 decided its thresholds in. Converting out and back would add
+    rounding to a sampled estimate without changing a single comparison, and the records already
+    written to `soak_results.jsonl` name their field `xor_mm3`.
 
     **Why this exists: the boolean symmetric difference does not work between two solids that
     were built independently.** Measured 2026-09-06 on two `tail_shell` builds from identical
@@ -251,7 +360,7 @@ def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection=0.02):
     """
     import random
 
-    sample, area = _area_sampler(a, deflection)
+    sample, area = _area_sampler(a, deflection_m)
     own = Part.makeCompound(a.Faces)
     other = Part.makeCompound(b.Faces)
     rng = random.Random(seed)
@@ -321,7 +430,7 @@ def converged_difference(a, b, tol=DIFFERENCE_CONVERGENCE, deflections=DEFLECTIO
     """How much two solids' volumes differ, refined until *the difference* stops moving.
 
     **This is the well-conditioned measurement, and `converged_volume` is not.** An absolute
-    mesh volume carries a discretisation error of order 1e-4 that does not settle. But two
+    mesh volume carries a discretization error of order 1e-4 that does not settle. But two
     nearly-identical solids tessellated at the *same* deflection carry nearly the same error,
     and it cancels in the difference -- which is why the difference converges cleanly where the
     absolutes do not. Measured 2026-09-05 on two `tail_shell` builds: the difference falls
@@ -335,7 +444,7 @@ def converged_difference(a, b, tol=DIFFERENCE_CONVERGENCE, deflections=DEFLECTIO
     The sign is `volume(b) - volume(a)`, measured at one deflection for both.
 
     **The cancellation has a precondition, and it is not "the solids are similar".** The two
-    have to be cut into faces the *same way*, because the discretisation error is a property of
+    have to be cut into faces the *same way*, because the discretization error is a property of
     the face layout and not only of the surface. Two solids that are geometrically identical but
     partitioned differently do not cancel at all.
 
@@ -367,7 +476,7 @@ def converged_difference(a, b, tol=DIFFERENCE_CONVERGENCE, deflections=DEFLECTIO
     if len(a.Faces) != len(b.Faces):
         raise TopologyMismatch(
             'the two solids have %d and %d faces, so they are not cut up the same way and the '
-            'discretisation error does not cancel between their meshes -- which is the whole '
+            'discretization error does not cancel between their meshes -- which is the whole '
             'basis of this measurement. Two identical walls partitioned differently measured '
             '112.46 mm3 apart this way, 4.7e-03 of the part, while their symmetric difference '
             'was empty; two others, also identical and also partitioned differently, agreed to '

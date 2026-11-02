@@ -613,6 +613,17 @@
     "normal_check.WORST": {
       "unit": "none"
     },
+    "offset_ladder.CURVATURE_SAMPLES": {
+      "unit": "none"
+    },
+    "offset_ladder.DUPLICATE_TOL_M": {
+      "reason": "below this, two consecutive sample positions count as the same point; 1e-9 m is ten times OpenCASCADE's Precision::Confusion of 1e-7 mm",
+      "unit": "m"
+    },
+    "offset_ladder.RUNGS": {
+      "reason": "multipliers on the construction's own first sample count, so nondimensional by construction",
+      "unit": "none"
+    },
     "oml_blank.MAX_SPANS": {
       "unit": "none"
     },
@@ -822,6 +833,10 @@
     "solid_measure.DIFFERENCE_CONVERGENCE": {
       "unit": "none"
     },
+    "solid_measure.POINT_TOL_M": {
+      "reason": "how far a vertex may move and still be the same point, for `same_solid`; 1e-9 m is ten times OpenCASCADE's own Precision::Confusion of 1e-7 mm",
+      "unit": "m"
+    },
     "solid_measure.SURFACE_SAMPLES": {
       "unit": "none"
     },
@@ -931,6 +946,10 @@
     "input_screen": {
       "allowed": 2,
       "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+    },
+    "offset_ladder": {
+      "allowed": 1,
+      "reason": "the numerator of a reciprocal -- curvature is 1/length, so `1.0 / kappa` is the radius. The classifier reads it as a dimension because no structural marker fits a reciprocal, which is the case its own docstring says it is most likely to get wrong"
     },
     "oml_blank": {
       "allowed": 7,

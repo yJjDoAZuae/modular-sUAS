@@ -569,21 +569,155 @@ where the kernel's reproducibility floor makes a passing comparison weakest evid
 HEAD rather than against recollection.** **24 of the 25 reference modules reproduce every
 printed figure exactly** — they build through the parameter sheet, so the conversion touches
 only the measurement arithmetic and the geometry provably cannot move. The 25th is `cowl.py`,
-whose two freeform volumes moved by ~4e-6 for the reason below; its other two parts reproduce
-exactly. `check_cowl_interior` reproduces, on both cowl kinds, every
-wall-thickness reading, every station position, every rib gap and its verdict count; on the tail
-the smooth interior, the closed cavity and the worst finished-wall error are bit-identical.
+and `check_cowl_interior` is a separate case again; the two subsections below are about those,
+because the first version of this entry drew the wrong conclusion from both.
 
-**Two things did move, and both are characterised rather than tolerated.** First, the freeform
-cowl volumes shifted by about 4e-6 relative, because the arithmetic now happens in meters:
-`50.0 - 6.0` is exactly 44 while `0.05 - 0.006` is 0.044000000000000004, one ulp, which a boolean
-against a B-spline OML amplifies. The converse was tested — pristine and converted code each
-reproduce their own figures bit-for-bit across two runs — so determinism is preserved and only
-the before/after comparison differs. Second, `int(span / step)` turned out **not to be
-unit-invariant**: a scan window of exactly two margins is `2.0 / 0.5 = 4` in millimeters and
-3.9999999999999964 in meters, which truncates to 3. That is a latent defect the conversion
-exposed rather than one it introduced, and it is fixed where it lives, in a `_steps` helper with
-a slack of one part in a billion.
+**The two questions are not the same question**, which is why they are answered separately.
+`cowl.py` marshals parameters into cutting tools: its arithmetic is a dozen sums and the
+conversion cannot do more than move their last bits. `cowl_interior` *computes* a surface — it
+fits one, offsets it, and iterates — so the conversion moves the last bits of thousands of
+intermediate results, and whether that matters depends entirely on how the construction responds
+to them. It turned out to respond very differently in the two cases.
+
+**That first version used the wrong instrument, and this corrects it.** The test compared each
+reference module's printed output, and `cowl.py` prints the nose and tail volumes from
+`oml_blank.volume_m3`, which tessellates the solid and sums its facets. Those two figures moved
+— 372507.974 to 372507.966 and 594055.793 to 594055.791 — and were recorded here as a geometry
+change that meter arithmetic had caused. **They are not a geometry change.** An absolute mesh
+volume carries a discretization error of order 1e-4 that does not settle, which
+`solid_measure.converged_volume` states in its own docstring, so a figure printed to 1e-9
+relative is reporting the mesher's choices and not the part.
+
+**Measured 2026-11-01, on the solids instead of their meshes.** Each cowl was built from the
+pristine revision and from the converted one, exported as a BREP, and compared by the properties
+of the solid itself:
+
+| Property | nose | tail |
+| --- | --- | --- |
+| solids, faces, edges, vertexes | 1, 88, 212, 126 — identical | 1, 286, 743, 399 — identical |
+| bounding box | bit-identical, all six components | bit-identical, all six components |
+| `Shape.Volume` | agrees to 1 ulp, 3e-16 relative | **bit-identical** |
+| vertex coordinates | 94 of 126 bit-identical, worst 9.8e-15 mm | 387 of 399 bit-identical, worst 1.0e-13 mm |
+| tessellation at 0.002, 0.001, 0.0005 mm | 104 triangles fewer, of 156 228 | **bit-identical at all three** |
+
+So the kernel's solution did not change. What changed on the nose is that the mesher cut the same
+surface into a slightly different triangle set, and the volume disagreement that follows from it
+**shrinks as the mesh refines** — 1.97e-8, then 5.51e-9, then 1.85e-9 — which is what a
+discretization artifact does and a real difference does not. For scale, the printed figure sits
+7.57 mm3 from the solid's own analytic volume, a thousand times the 0.007 mm3 that was treated as
+significant. The tail's wobble is smaller still and does not survive a BREP round trip, so it came
+from triangulation cached on the live shape rather than from the geometry.
+
+**What the conversion does change is the last bit of five kernel arguments, and nothing beyond
+that.** At the nose's reference configuration, 5 of the 20 numbers reaching `si.prism_m`,
+`si.vec_m` and `si.box_m` differ by exactly 1 ulp, because a sum or difference of two stored
+dimensions is taken in meters and converted afterward: `50.0 - 6.0` is exactly 44 while
+`(0.05 - 0.006) * 1000` is 44.000000000000007. The other 15 are bit-identical, including every
+parameter that crosses on its own — a single value round trips exactly, and only arithmetic
+between two of them does not. A 1-ulp argument moves the forward cut plane by 7e-15 mm and the
+solid's volume by 3e-16 relative, which is linear propagation with no amplification anywhere in
+the boolean tree.
+
+**Bit-identical kernel arguments are not reachable while the parameters are authored in
+millimeters**, and that is worth stating rather than leaving as an aspiration. Two of the five
+could be removed by having the boundary difference two stated plane positions in millimeters
+instead of converting a span computed in meters. The other three are coordinate sums inside
+`buttress_shape`, which is a pure geometry function, and making those exact would require
+millimeter arithmetic in geometry code — the thing the standard forbids and this item removed. A
+partial fix would not establish the property, so none was made. The question stops arising once
+IP-FC-159 gives the port SI parameters of its own: `0.0066` becomes the authored value and the
+millimeter table becomes the derived one, leaving no millimeter arithmetic for a conversion to
+disagree with.
+
+**The lesson is an instrument, not a tolerance.** The project had already decided what "the
+geometry did not change" means — OQ-ARCH-19 screens on `mesh_stats.canonical_hash` and
+adjudicates what that flags against two nondimensional thresholds — and `solid_measure` had
+already recorded that an absolute mesh volume is unfit for the job. Diffing printed output
+bypassed both. `solid_measure.solid_identity` now returns the invariants the table above
+compares, and `same_solid` judges two of them, so a conversion can be checked on the solid in one
+call instead of on whatever its module happens to print.
+
+**`cowl_interior`'s wall did move, and the answer there is the opposite one.** Corrected
+2026-11-01, having first been recorded as "every wall-thickness reading identical". It is not:
+against a pristine export, the nose's fitted interior reads 47347.4763 mm3 against 47347.4847,
+its cell wall 1215.6365 against 1215.6298, and its wall **9722.4455 against 9722.4078** — a
+relative 3.9e-6. The tail's wall moves 23617.3047 against 23617.2932. These are
+`si.volume_m3`, the kernel's own analytic volume, not a tessellation, and **each revision
+reproduces itself bit-for-bit across two runs**, so this is a real and deterministic difference
+rather than noise.
+
+**The nose and the tail do not share a cause, and that was asserted here before it was checked.**
+Measured 2026-11-02: on the tail the fitted interior (294462.4022 mm3), the closed cavity
+(290850.6976 mm3) and the notched blank are all **bit-identical** across the two revisions, and
+only the cell-wall step differs. The offset ladder described below runs *before* the cavity, so it
+explains the nose and cannot explain the tail. The tail's 5e-7 remains **unexplained**: identical
+operands into `notched.cut(inside)`, `_extend_across_cell`, `_strip_seam` and the cell `common`
+should give an identical result. It is recorded as a limit in
+[cowl_interior_surface.md §10.0](../design/cowl_interior_surface.md) rather than attributed.
+
+**What is unchanged is everything the check is for**: all ten station positions, the 120 fit and
+480 check points, the 43 + 20 → 63 scan grid, the worst fit residual at 0.0129 mm, the worst
+finished-wall error at 0.0037 mm, the notched blank's volume exactly, all three rib gaps, every
+within-tolerance count, every THIN flag and its magnitude, and the verdict count. What moves with
+the wall is one station's `selected` figure in its fourth decimal, one station's `max` from 0.6404
+to 0.6403, and the count of samples agreeing with the selected value at six stations.
+
+**The cause is a kernel failure boundary, not a converted number.** Traced through: the station
+positions are computed, so they differ by 0 to 7 ulp; a 1-ulp station moves its slice plane by
+7e-15 mm; the sliced arc then differs in its last bits; and at 2 of the nose's 10 stations
+`makeOffset2D` sits exactly on its own success boundary, raising *result of offsetting is null*
+on one side of that last bit and succeeding on the other. `eroded_arc` answers a failure by
+doubling its sample count and trying again, so the two runs come out on different rungs of that
+ladder — and the rungs are not interchangeable. The offset argument itself is bit-identical
+(−0.59999999999999998 in both), the arcs going in have bit-identical lengths, and the sample
+count is pinned at its floor of 400 in every call.
+
+| run | z = −41.199 | z = −32.400 | wall, mm3 |
+| --- | --- | --- | --- |
+| pristine | n = 800 (400 raised) | n = 1600 (400, 800 raised) | 9722.4078 |
+| converted | n = 400 succeeded | n = 800 (400 raised) | 9722.4455 |
+| converted, pristine stations | n = 400 succeeded | n = 1600 (400, 800 raised) | 9722.2935 |
+
+The third row is the converse test and it is the one that settles it: substituting the pristine
+revision's own station positions, a shift of 7.1e-15 mm, gives a **third** answer, further from
+pristine than the conversion was. So the station positions are not "the cause" either — a single
+ulp anywhere upstream of this ladder is worth about 1e-5 of the wall volume, and the units change
+is simply one way to supply one. A FreeCAD point release or a different processor would be
+another.
+
+**Three hypotheses were measured and refuted before that one, and the refutations are the useful
+part.** A mis-scaled constant: all 19 renamed figures divide by exactly the right power, checked
+mechanically by pairing them against the pristine revision's. A unit-dependent sample count: `n0`
+is identical at all 14 calls. Diffuse last-bit accumulation through the fit: eight of the ten
+stations' contours agree to 1e-14 mm, so the difference is localized at two stations rather than
+spread, and 119 of 120 points move at each of those.
+
+**Nothing in the units layer can fix this, and the construction's own dependence on an offset
+failure was raised as [OQ-DES-CW36](../design/cowl.md), resolved 2026-11-02 to state the
+reproducibility floor and log which rung of the ladder each station used.** The resulting contour
+difference is 2.0e-4 mm, which is 25 times inside `REFIT_TOL_M` and 50 times inside the 0.010 mm
+the wall is accepted to, so no stated requirement is violated and the part is the same part to
+every criterion the design states. What is not acceptable is that the figure is reproducible only
+by accident, and choosing between the alternatives there is a design decision rather than a
+conversion one. **Two questions that resolution left open are filed in their own right** rather
+than carried inside a closed item: [OQ-DES-CW37](../design/cowl.md), whether the refit's sample
+density should come down given that the coarsest density measured was the only one that never
+failed, and [OQ-DES-CW38](../design/cowl.md), a `tail_shell` wall volume that moves while every
+operand the instrument can see is identical.
+
+**One more thing did move, and it is a latent defect the conversion exposed rather than one it
+introduced.** `int(span / step)` is **not unit-invariant**: a scan window of exactly two margins
+is `2.0 / 0.5 = 4` in millimeters and 3.9999999999999964 in meters, which truncates to 3. It is
+fixed where it lives, in a `_steps` helper with a slack of one part in a billion. Four further
+counts of the same shape were routed through it afterward and **the change moved no geometry,
+which was verified rather than assumed.** On the nose all four sit on their clamp floor — 400,
+400, 120 and 480 — so the truncation cannot be reached there. On the tail two of them clear their
+floors, at 191 fit and 957 check points, and 957 is the case worth checking: a 191.4 mm perimeter
+over a 0.2 mm spacing puts the ratio on an integer boundary, which is exactly where a slack term
+could move a count. It does not — `tail_shell` returned 191 and 957 unchanged, with its wall
+unmoved at 23617.3047 mm3. `unit_regime.py --counts` now finds this class with an expression tree,
+because the regex first used for it missed two of the four sites:
+`int(si.length_m(arc) / SAMPLE_SPACING_M)` closes a parenthesis before the divide.
 
 **Three defects the conversion created, each caught by a check that exists for that class.**
 `SLOPE_SLACK` became radians while `_check_slope` still computed degrees, which stopped the P1
@@ -1557,7 +1691,7 @@ reclaimed, so the full volume is identical to seven figures either way), OpenSCA
 preserved at +0.00023%, and the `8 × octant` check gets stronger rather than weaker. Recorded
 in [IP-FC-49](../implementation/freecad_migration.md).
 
-**The generalisable mistake.** The earlier two work items failed the judgment-versus-
+**The generalizable mistake.** The earlier two work items failed the judgment-versus-
 observation test outright. This one *looked* like a judgment because it presented as a
 trade-off with three costed alternatives, and every one of those alternatives was real —
 they were just all answers to the wrong question. A constant inherited from a port is a claim
@@ -3508,7 +3642,7 @@ boundary — rather than by a claim that measurement contradicts.
 
 Alternative 3 is the better long-run answer **if** the soak shows `MARGINAL` is common rather
 than a one-off at the small end — but it requires re-deriving a calibrated threshold, so it
-should be decided on the soak's evidence rather than in advance of it. The `U`-normalisation
+should be decided on the soak's evidence rather than in advance of it. The `U`-normalization
 question above is in the same position and for the same reason.
 
 ### OQ-ARCH-23 — The port's unit regime — WITHDRAWN 2026-10-31

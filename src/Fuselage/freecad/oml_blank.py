@@ -219,7 +219,7 @@ def repair_closure(shape):
 #: Three is the measured requirement; see `condition()`.
 MAX_SPANS = 3
 
-#: How far a joint's speed ratio may vary along that joint before the reparameterisation is
+#: How far a joint's speed ratio may vary along that joint before the reparameterization is
 #: declined as inexact. The measured spreads are 2.7e-11 in u and 5.7e-08 in v.
 RATIO_SPREAD_TOL = 1e-4
 
@@ -232,7 +232,7 @@ def _joint_ratios(surf, direction):
 
     A ratio of 1 is a joint that is already C1. Anything else is a joint whose two sides agree
     in tangent *direction* but not in speed -- which is what makes these surfaces C0 in
-    parameterisation while being smooth in space.
+    parameterization while being smooth in space.
     """
     u0, u1, v0, v1 = surf.bounds()
     if direction == 'u':
@@ -268,7 +268,7 @@ def _respaced(knots, ratios):
 
     C1 at a joint wants `d_before / dv_before == d_after / dv_after`, so the interval after a
     joint is the interval before it times that joint's speed ratio. The result is rescaled onto
-    the original range, which is a linear reparameterisation and so changes nothing further.
+    the original range, which is a linear reparameterization and so changes nothing further.
     """
     deltas = [1.0]
     for ratio, _spread in ratios:
@@ -343,7 +343,7 @@ def condition(solid, max_spans=MAX_SPANS):
 
     Two operations, neither of which changes the geometry:
 
-    * **Reparameterise, then reduce multiplicity.** OpenVSP's STEP writer emits its native
+    * **Reparameterize, then reduce multiplicity.** OpenVSP's STEP writer emits its native
       piecewise-Bezier form, with interior knot multiplicity equal to the degree. That is C0 by
       definition even though the surface is smooth in space -- the worst tangent break across a
       face's 45 interior knots measures 0.000029 degrees. The joints are G1 but not C1: the
@@ -357,11 +357,11 @@ def condition(solid, max_spans=MAX_SPANS):
     **Both are wanted and neither is sufficient.** A blank made genuinely C1 but left at 9
     faces still returns -3573.933 mm3 at `U` = 4; a blank left C0 and subdivided is correct.
     So legality is not the mechanism -- a subdivided blank still carrying 256 C0 errors builds
-    the part to +0.0036%. What the reparameterisation buys is *margin*: with it the cut
+    the part to +0.0036%. What the reparameterization buys is *margin*: with it the cut
     survives `max_spans` = 6, without it 6 returns a negative volume and 3 is the limit. Three
     is used because it costs nothing.
 
-    The reparameterisation is exact only where a joint's speed ratio is the same all along it.
+    The reparameterization is exact only where a joint's speed ratio is the same all along it.
     That holds for OpenVSP's dyadic subdivision -- the ratios are exact powers of two -- and is
     **checked per direction**, not assumed: a direction whose spread exceeds
     `RATIO_SPREAD_TOL` is left alone and named in `declined`, with subdivision still carrying

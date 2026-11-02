@@ -216,7 +216,7 @@ GUI drivers computed it — `unit_length = 100*U*FX` — solely to pass it in.
 
 That is the same shape as OQ-DES-B6 but worse in kind. A dead `greeble_tolerance` merely
 did nothing. A dead `unit_length` *asserted a dependency on bay length*, which is exactly
-what the parameterisation is built to avoid: it invited the next reader to believe a
+what the parameterization is built to avoid: it invited the next reader to believe a
 bulkhead has to be regenerated per `FX`, when the whole point is that one bulkhead serves
 every bay length.
 
@@ -422,7 +422,7 @@ Two generic copy loops needed rewriting rather than translating. `for k in c["om
 became `for f in fields(c.oml)`, and the buttress loop the same. The behavior is
 preserved exactly — a key missing from the JSON is still a `KeyError`, an extra key in
 the file is still ignored — but the schema being iterated is now the dataclass
-declaration rather than whatever the dict happened to have been initialised with.
+declaration rather than whatever the dict happened to have been initialized with.
 
 **Proven by `scad_snapshot.py`.** All 576 parts across all five sweeps — corner,
 bulkhead, boom, nose, tail — generate byte-identical `.scad` before and after. This is
@@ -798,7 +798,7 @@ checking the code against it, which is the whole argument for IP-GEO-11 existing
   a local zero. Fixed in IP-GEO-21.
 - **OQ-DES-C3** — `unit_length`, threaded through three signatures and used by none.
   Worse in kind than B6: it did not merely do nothing, it asserted that a bulkhead
-  depends on bay length, which is the one thing the parameterisation exists to avoid.
+  depends on bay length, which is the one thing the parameterization exists to avoid.
   Fixed in IP-GEO-23.
 
 **OQ-DES-B3 has a third kind of answer: the intent is not recoverable.** Whether the

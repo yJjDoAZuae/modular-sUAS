@@ -719,6 +719,231 @@ def sweep_undefined(dirs=SWEEP_DIRS):
     return out
 
 
+#: Calls that turn a real-valued expression into a whole number.
+_TRUNCATING = frozenset(('int', 'round', 'floor', 'ceil', 'trunc'))
+
+
+def _has_division(node):
+    """Does this expression divide anywhere inside itself, in a way a unit could reach?
+
+    A true division counts wherever it appears. A `//` counts only when an operand plainly
+    carries a length, because `len(x) // 2` and `available // (per_worker * 1024 * 1024)` are
+    integer arithmetic on counts and bytes and no unit can reach them.
+    """
+    for child in ast.walk(node):
+        if isinstance(child, ast.BinOp):
+            if isinstance(child.op, ast.Div):
+                return True
+            if isinstance(child.op, ast.FloorDiv) and _dimensional_operand(child):
+                return True
+    return False
+
+
+def _rounds(node):
+    """Is this truncation a `round`, or does it wrap one?
+
+    **`round` is materially safer than `int` here and the report says so rather than treating
+    them alike.** `int(a / b)` has a boundary at every integer and approaches it from one side,
+    so a last-bit change in either operand flips it whenever the ratio is just above a whole
+    number -- which is the common case for a span that is a whole number of steps.  `round`'s
+    boundaries are the half-integers, and a ratio of two lengths sits within an ulp of one of
+    those only by coincidence. Both are reported; only the truncating form is a finding.
+    """
+    name = node.func.id if isinstance(node.func, ast.Name) else (
+        node.func.attr if isinstance(node.func, ast.Attribute) else None)
+    if name == 'round':
+        return True
+    for child in ast.walk(node.args[0]) if node.args else ():
+        if isinstance(child, ast.Call):
+            inner = child.func.id if isinstance(child.func, ast.Name) else (
+                child.func.attr if isinstance(child.func, ast.Attribute) else None)
+            if inner == 'round':
+                return True
+    return False
+
+
+#: Name endings that say an operand carries a length. The unit suffixes the standard already
+#: requires, plus the millimeter ones the presentation and OpenSCAD layers keep.
+_DIMENSIONAL_SUFFIX = ('_m', '_mm', '_m2', '_m3', '_M', '_MM', '_M2', '_M3')
+
+
+def _dimensional_operand(node):
+    """Does either side of this division plainly carry a length?
+
+    Used only for `//`, which is integer arithmetic on counts far more often than it is one
+    length over another. A float literal or a unit-suffixed name is the signal; a `len()` call,
+    an index or an integer literal is not. The test is the name, so it stays readable and cannot
+    depend on this tool knowing any module's figures -- and it errs toward reporting, since a
+    name with no suffix at all is exactly what the standard forbids for a dimension.
+    """
+    for side in (node.left, node.right):
+        for child in ast.walk(side):
+            if isinstance(child, ast.Constant) and isinstance(child.value, float):
+                return True
+            name = None
+            if isinstance(child, ast.Name):
+                name = child.id
+            elif isinstance(child, ast.Attribute):
+                name = child.attr
+            elif isinstance(child, ast.Call):
+                name = child.func.id if isinstance(child.func, ast.Name) else (
+                    child.func.attr if isinstance(child.func, ast.Attribute) else None)
+            if name and name.endswith(_DIMENSIONAL_SUFFIX):
+                return True
+    return False
+
+
+def _has_slack(node):
+    """Does this expression add a named slack term, the way `_steps` does?
+
+    The marker is a name ending in `SLACK`, which is what makes the count land on the same side
+    of the boundary whichever unit its operands are written in. Matching the name rather than a
+    magnitude keeps this checkable without the tool knowing any module's figures.
+    """
+    for child in ast.walk(node):
+        if isinstance(child, ast.BinOp) and isinstance(child.op, (ast.Add, ast.Sub)):
+            for side in (child.left, child.right):
+                if isinstance(side, ast.Name) and side.id.endswith('SLACK'):
+                    return True
+    return False
+
+
+#: Truncating divisions that are allowed to stand, by module, with the reason each is safe.
+#: Keyed on the unparsed expression rather than a line number, because a line moves with every
+#: edit above it. A site not listed here and carrying no slack term is reported.
+#:
+#: **The reason has to be that no unit crosses, not that the count looks harmless.** This tool
+#: asks one question -- can this count change because its operands were converted -- so a ratio
+#: of two millimeter figures inside a declared millimeter module is genuinely out of scope,
+#: while an SI ratio in geometry code is not, however small the consequence looks.
+COUNT_ALLOWED = {
+    'check_cowl_interior': {
+        'int((edge_mm + margin_mm - (edge_mm - margin_mm)) / step_mm_)':
+            'the millimeter half of the `_steps` unit-invariance case, written out on purpose '
+            'so the two units can be compared; converting it would delete the test',
+        'int(span / step)':
+            'the expression `_steps` replaced, written out so the clamp-commutation case can '
+            'compare the two; routing it through the helper would compare the helper with '
+            'itself',
+    },
+    'cowl_interior': {
+        'int(math.ceil(math.pi / math.asin(min(1.0, in_plane_m / (2.0 * t_m)))))':
+            'inside a `PreconditionFailed` message, computing the facet count it suggests; no '
+            'geometry reads it',
+    },
+    'check_table_width': {
+        'int((block_b[1] - frame_b[1]) // (ds.TABLE_ROW_PITCH_HEIGHTS * ds.TEXT_HEIGHT_MM))':
+            'page geometry, millimeters on both sides, in a declared presentation module',
+        'int((block[1] - frame[1]) // (ds.TABLE_ROW_PITCH_HEIGHTS * ds.TEXT_HEIGHT_MM))':
+            'page geometry, millimeters on both sides, in a declared presentation module',
+    },
+    'drawing_standard': {
+        'int(table_band_depth_mm() // table_row_pitch_mm(height))':
+            'page geometry, millimeters on both sides, in a declared presentation module',
+    },
+    'clearance_sheet': {
+        'int((bb.ZMax - bb.ZMin) / step)':
+            'the drawing\'s own model-space window, millimeters on both sides off a kernel '
+            'bounding box, in a declared presentation module',
+    },
+    'check_derivation': {
+        'math.ceil(offset / quantum)':
+            'the OpenSCAD path, which is millimeters throughout by the exemption in '
+            'doc/guidelines/general.md and is never converted',
+    },
+    'fuselage_variants': {
+        'math.ceil(panel_offset / PANEL_OFFSET_QUANTUM_MM)':
+            'the OpenSCAD path, which is millimeters throughout by the exemption in '
+            'doc/guidelines/general.md and is never converted',
+    },
+    'test_drawing_standard': {
+        'int(ds.table_band_depth_mm() // real_pitch)':
+            'mirrors the presentation module it tests, millimeters on both sides',
+    },
+}
+
+
+def truncating_counts(path):
+    """Every `int(a / b)`-shaped expression in `path`, as `(line, text, verdict)`.
+
+    **This is the fourth instrument, and it exists because a regex missed the site that
+    mattered.** `int(span / step)` is not unit-invariant -- a window of exactly two margins is
+    `2.0 / 0.5 = 4` in millimeters and 3.9999999999999964 in meters, which truncates to 3 -- so
+    every count of that shape has to be found, not most of them. The grep first used for it was
+    `int\\([^)]*/[^)]*`, which cannot match `int(si.length_m(arc) / SAMPLE_SPACING_M)`: there is a
+    closing parenthesis before the divide. Two of the four sites in `cowl_interior` were invisible
+    to it and were found by reading. An expression tree has no such blind spot.
+
+    `verdict` is `'slack'` when the expression adds a named slack term, `'allowed'` when
+    `COUNT_ALLOWED` lists it with a reason, and `'bare'` otherwise. Only `'bare'` is a finding:
+    a bare truncating division is a count whose value can depend on the unit its operands are
+    written in, which is a defect on its own terms whether or not it currently bites.
+    """
+    with io.open(path, encoding='utf-8', newline='') as handle:
+        tree = ast.parse(handle.read(), path)
+    module = os.path.basename(path)[:-3]
+    allowed = COUNT_ALLOWED.get(module, {})
+
+    out = []
+    for node in ast.walk(tree):
+        argument = None
+        if isinstance(node, ast.Call):
+            name = node.func.id if isinstance(node.func, ast.Name) else (
+                node.func.attr if isinstance(node.func, ast.Attribute) else None)
+            if name in _TRUNCATING and node.args and _has_division(node.args[0]):
+                argument = node.args[0]
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.FloorDiv):
+            # `//` is ordinary integer arithmetic far more often than it is a length over a
+            # length, so it counts only when an operand is plainly dimensional. `len(x) // 2`
+            # and `flat // d2.shape[1]` are counts and cannot depend on a unit; `depth_mm() //
+            # pitch_mm(h)` can.
+            if _dimensional_operand(node):
+                argument = node
+        if argument is None:
+            continue
+        text = ast.unparse(node) if hasattr(ast, 'unparse') else '<expression>'
+        if _has_slack(argument):
+            verdict = 'slack'
+        elif text in allowed:
+            verdict = 'allowed'
+        elif isinstance(node, ast.Call) and _rounds(node):
+            verdict = 'round'
+        else:
+            verdict = 'bare'
+        out.append((node.lineno, text, verdict))
+
+    # A second pass is cheaper than tracking parents: drop any row whose text is a strict
+    # substring of another row's on the same line, which is exactly the nested case.
+    keep = []
+    for line, text, verdict in sorted(out):
+        if any(line == other_line and text != other and text in other
+               for other_line, other, _v in out):
+            continue
+        keep.append((line, text, verdict))
+    return keep
+
+
+def sweep_counts(dirs=SWEEP_DIRS):
+    """`truncating_counts` over every Python file in `dirs`, as `(path, line, text, verdict)`."""
+    out = []
+    for directory in dirs:
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if not name.endswith('.py'):
+                continue
+            path = os.path.join(directory, name)
+            rel = os.path.relpath(path, ROOT)
+            try:
+                rows = truncating_counts(path)
+            except SyntaxError as exc:
+                out.append((rel, exc.lineno or 0, 'SYNTAX ERROR: %s' % exc.msg, 'bare'))
+                continue
+            for line, text, verdict in rows:
+                out.append((rel, line, text, verdict))
+    return out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--strict', action='store_true',
@@ -727,7 +952,25 @@ def main(argv=None):
                         help='report only findings of this kind')
     parser.add_argument('--undefined', action='store_true',
                         help='sweep for names a rename left behind, instead of auditing units')
+    parser.add_argument('--counts', action='store_true',
+                        help='sweep for truncating divisions, whose value can depend on the '
+                             'unit their operands are written in')
     args = parser.parse_args(argv)
+
+    if args.counts:
+        rows = sweep_counts()
+        bare = [r for r in rows if r[3] == 'bare']
+        for path, line, text, verdict in rows:
+            if verdict == 'bare' or args.strict:
+                print('%-44s:%-5d %-8s %s' % (path, line, verdict, text))
+        print('')
+        print('%d division(s) turned into a whole number: %d bare, %d rounded, %d with slack, '
+              '%d allowed'
+              % (len(rows), len(bare),
+                 sum(1 for r in rows if r[3] == 'round'),
+                 sum(1 for r in rows if r[3] == 'slack'),
+                 sum(1 for r in rows if r[3] == 'allowed')))
+        return 1 if bare else 0
 
     if args.undefined:
         rows = sweep_undefined()

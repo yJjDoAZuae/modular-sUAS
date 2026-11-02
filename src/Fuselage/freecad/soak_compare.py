@@ -3,7 +3,7 @@
     freecadcmd soak_compare.py --pass --results=DIR/soak_results.jsonl
 
 `soak_cowl_shell.py` builds one variant per process and keeps its wall as a BREP, because the
-spread this row exists to characterise was found *between* processes and the criterion is
+spread this row exists to characterize was found *between* processes and the criterion is
 pairwise. This is the other half: it reads those records, groups the repeats by (kind, `U`),
 and compares each pair.
 

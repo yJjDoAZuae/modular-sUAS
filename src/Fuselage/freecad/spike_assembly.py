@@ -68,7 +68,7 @@ def _joint(doc, assembly, name, kind, ref1, ref2):
     # the joint coordinate systems -- Placement1 and Placement2, which are what the solver
     # actually constrains -- stay at the identity, so the solve converges immediately having
     # been asked for nothing. Worse, `setJointConnectors(joint, [])` *clears* both
-    # references, which is how the constructor initialises them, so calling it afterwards to
+    # references, which is how the constructor initializes them, so calling it afterwards to
     # "refresh" the placements silently undoes the assignment. Passing the pair is the whole
     # operation: it sets the references, derives each placement with findPlacement, and
     # solves.

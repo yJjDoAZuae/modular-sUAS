@@ -63,7 +63,7 @@ KINDS = {kind: (module, getattr(parameters, table))
 #
 # **Refining past 1e-3 makes agreement worse and then stops improving.** That floor is not
 # the mesher: binary STL stores coordinates as float32, so a 45 mm part carries about 3e-6 mm
-# of quantisation per vertex no matter how many vertices there are. Past ~26k facets the
+# of quantization per vertex no matter how many vertices there are. Past ~26k facets the
 # error is dominated by the file format, and the extra facets buy five times the meshing time
 # and six times the file for a worse number. 1e-3 also lands within a facet count of the
 # OpenSCAD reference, which keeps IP-FC-13 comparing geometry rather than mesh density.

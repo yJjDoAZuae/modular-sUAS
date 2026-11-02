@@ -4,7 +4,7 @@ constraint geometry instead (`_fillet_tangency_sketch()`), with real coverage in
 check_tangency.py -- kept in place rather than archived, for the historical links into it; do
 not add test coverage here.
 
-IP-FC-9: is Part::Fillet safe in a generated, re-parameterisable document?
+IP-FC-9: is Part::Fillet safe in a generated, re-parameterizable document?
 
 OQ-DES-B9 settles that the port uses real fillets. Part::Fillet is the obvious tool, but it
 stores its targets as EDGE INDICES -- and IP-FC-5 already measured the corner's face count

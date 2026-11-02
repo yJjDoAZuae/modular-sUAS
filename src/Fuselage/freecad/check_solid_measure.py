@@ -10,6 +10,7 @@ two solids are all known exactly, which a real cowl never gives you.
 
 Run: freecadcmd check_solid_measure.py
 """
+import math
 import os
 import sys
 
@@ -38,8 +39,12 @@ def main():
     # no curvature approximation), so its mesh volume is exactly 1000.0 at any deflection and
     # it must report a closed surface.
     # ------------------------------------------------------------
+    # 1.0e-4 m is 0.1 mm. It was `0.1` until 2026-11-01, a millimeter figure left behind when
+    # `mesh_volume` started converting its deflection -- so this case was asking for a 100 mm
+    # deflection on a 10 mm box and passing anyway, because a box tessellates exactly at any
+    # deflection. A case that cannot fail on the thing it names is why the figure is stated here.
     box = Part.makeBox(10.0, 10.0, 10.0)
-    vol, facets = sm.mesh_volume(box, 0.1)
+    vol, facets = sm.mesh_volume(box, 1.0e-4)
     check('mesh_volume of a 10mm cube', vol, 1000.0)
     check('a box tessellates to at least 12 triangles (2 per face)', facets >= 12, True)
 
@@ -132,6 +137,46 @@ def main():
         raised_topo = True
     check('converged_difference raises TopologyMismatch on unequal face counts',
           raised_topo, True)
+
+    # ------------------------------------------------------------
+    # solid_identity / same_solid -- the comparison IP-FC-160 should have been judged against.
+    # A box 1 nanometer wider is still the same solid, because that is the last-bit noise a unit
+    # conversion cannot avoid; a micron wider is not; and neither is the same size cut into a
+    # different number of faces, which is the case a tessellated volume cannot see at all.
+    # ------------------------------------------------------------
+    identity_a = sm.solid_identity(box_a)
+    check('solid_identity reports a 10mm box as 1e-6 m3', identity_a['volume_m3'], 1.0e-6,
+          tol=1e-9)
+    check('solid_identity counts 6 faces', identity_a['faces'], 6)
+    check('solid_identity counts 8 vertexes', identity_a['vertexes'], 8)
+
+    ok_same, report_same = sm.same_solid(identity_a, sm.solid_identity(box_b))
+    check('same_solid accepts two identical boxes', ok_same, True)
+    check('and reports nothing for them', len(report_same), 0)
+
+    # One ulp wider in x, which is what last-bit noise actually is: 1.8e-15 mm on 10 mm, a
+    # relative 1.8e-16, the same order as the 3e-16 the cowl's volume moved across its
+    # conversion. **A nanometer is not this case and was tried first by mistake** -- 1e-6 mm on a
+    # 10 mm box is 1e-7 of its volume, five orders coarser than anything a conversion produces,
+    # and `same_solid` rejecting it is the right answer rather than a tolerance to widen.
+    ok_ulp, _ulp = sm.same_solid(
+        identity_a,
+        sm.solid_identity(Part.makeBox(math.nextafter(10.0, 11.0), 10.0, 10.0)))
+    check('same_solid accepts one ulp of last-bit noise', ok_ulp, True)
+
+    # 1 micron wider in x: a thousand times the bar, and a real move.
+    ok_micron, report_micron = sm.same_solid(
+        identity_a, sm.solid_identity(Part.makeBox(10.0 + 1.0e-3, 10.0, 10.0)))
+    check('same_solid rejects a micron of real movement', ok_micron, False)
+    check('and says which quantities moved', len(report_micron) > 0, True)
+
+    # Same material, different partition: a coincident cut leaves the volume and the box alone
+    # and adds faces. This is the loophole OQ-ARCH-19 names, and the face count closes it.
+    split = box_a.cut(Part.makeBox(10.0, 10.0, 5.0)).fuse(Part.makeBox(10.0, 10.0, 5.0))
+    ok_split, report_split = sm.same_solid(identity_a, sm.solid_identity(split))
+    check('same_solid rejects the same size cut into different faces', ok_split, False)
+    check('and names the face count rather than a tolerance',
+          any('faces' in line for line in report_split), True)
 
     print('')
     print('check_solid_measure: %d failure(s)' % len(failures))
