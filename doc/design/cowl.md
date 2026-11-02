@@ -787,6 +787,8 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW32 | The rib dilation is a union of `RIB_FACETS` = 48 translated copies on a circle of radius `t`, so it is a solid only while `in_plane / t > 2·sin(π/48)` = 0.130806 — a fixed **count** standing against a ratio that two design rows move. The parameter sheet sits at 0.16667, **1.274× the floor**, and a single-parameter excursion crosses it in either direction: measured 2026-10-14, `buttress_cut_thickness` 0.1 → 0.07 mm, `extrusion_width` 0.6 → 0.8 mm and `cowl_n_perimeters` 1 → 2 are each refused by the precondition, needing 55, 52 and 77 facets. So the bounds are `buttress_cut_thickness` > 0.0785 mm and `cowl_n_perimeters × extrusion_width` < 0.7644 mm, and **a two-perimeter cowl does not build at all**. The same three are refused on a `tail_shell` at `U` = 0.5, where the binding tool is an axial slab reading 0.1004 mm in-plane rather than the nose's exact 0.1000. Whether to derive the count per tool, raise it to one larger fixed value, or document the region and leave it, is the decision | Not blocking any shipped wall — every value on the parameter sheet builds, with 27 % margin in the ratio; it blocks a two-perimeter cowl and bounds how far IP-WTM-41's input screen can reach |
 | OQ-DES-CW33 | Every wall-thickness measure in this subsystem is **in-plane**, and a plane cutting a slab inclined at θ reads `thickness / cos θ` — always thicker than the slab is. Measured with a new 3-D normal-distance measure verified first against closed-form fixtures: across four saved walls, **66 readings on the fitted interior surface, every one confirmed thin and thinner than the plane said, none exonerated**. Real worst deficits **0.0943 mm (tail `U` = 0.5), 0.0790 (nose `U` = 4.0) and 0.0645 (tail `U` = 1.0) — six to nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and 0.0226, understating by 2.9–7.0×. The surface is inclined 21.5–30.8° there and `normal / cos θ` reproduces every in-plane figure to 0.0037 mm; the in-plane column independently reproduces IP-WTM-45's 0.01345 and OQ-DES-CW28's 0.01403. **Not localized**: on the tail at `U` = 1.0, 1 954 of one station's 4 267 samples are thin on the fitted surface, 46 % of the circumference. **No measure the gate has or is choosing between can see any of it**, and in-plane severity is measured to rank the real readings *last*, so a cheap worst-`N` confirmation pass selects against the defect. Whether to filter by face class and measure, document the bias and leave the gate in-plane, or something else, is the decision | **Blocking** any claim that an in-plane pass means a wall meets `WALL_TOL`; not blocking a build, and an in-plane *failure* is still evidence of a defect |
 | OQ-DES-CW35 | `cowl_interior.py` carries a **test-only seam in production code**. A module-level `_probe`, `None` in every build, is read at two call sites through two identity accessors, so a measurement can reach the two decisions `cavity` makes for itself and nothing outside can otherwise touch: the eroded cross-section each fit row is built from, and the minimum station separation `station_floor(t)` = 0.600 mm at the current wall. It is about **eight lines of a 3 541-line module**, neither entry point's signature mentions measurement, and `_probe is None` is the only state any build has had — so no shipped geometry depends on the answer. What it costs is a reader of the construction seeing two calls that do nothing, one further accessor per future question asked, and a later edit being able to route *around* the accessor and silently disable a measurement rather than fail it, which is the exact fault that has already produced two convincing null results in this subsystem. Removing it means decomposing `cavity`: **847 lines, eight named nested functions, 21 captured names**, and the kernel's reproducibility floor makes a passing regression weak evidence that a decomposition changed nothing. Whether to keep the seam, decompose, substitute the production functions by name instead, or promote the seam to a designed extension point, is the decision | Not blocking (the seam is inert — no build, measurement or recorded figure changes whichever way this goes) |
+| OQ-DES-CW37 | The interior construction samples each station's cross-section at `n` points, clamped to `[SAMPLE_MIN, SAMPLE_MAX]` = [400, 3000], and hands those samples in as a cubic B-spline's **poles** — so **one integer sets both where the arc is observed and how many degrees of freedom describe it**, and the curve does not pass through its own samples (measured: 0.177923 mm off them on a 12-point circle, where `interpolate` is exact and tracks the circle 69x closer). When `makeOffset2D` refuses the offset the construction doubles `n` over a three-rung ladder, and that ladder is measured to point the wrong way: the curve's minimum radius falls as `n` rises (5.35 to 0.70 mm across five rungs) and failure is **not monotonic in `n`**. Walked with both constructions over identical samples, **`n` = 200 — half the shipped floor — offset 10 of 10 stations under both, while the shipped `SAMPLE_MIN` = 400 measured worst under both at 8 and 9 of 10**; interpolating buys 2.9x accuracy but **no reliability** (47 of 50 rungs against 46). Whether to add a coarser rung, lower the floor, separate the sampling from the fit, or leave it, is the decision | Not blocking (no build fails on this, and no figure in the corpus is wrong today); what it governs is the 1e-5 reproducibility floor OQ-DES-CW36 was resolved to state |
+| OQ-DES-CW38 | A `tail_shell` wall volume moved 23617.2932 → 23617.3047 mm3, 4.9e-7 relative, between two revisions whose **fitted interior (294462.4022 mm3), closed cavity (290850.6976 mm3) and notched blank are all bit-identical**, with the divergence appearing only at the cell-wall step and **no offset retry anywhere in the build** — so OQ-DES-CW36's mechanism is excluded from both sides and no cause is identified. The bit-identical claim rests on `solid_measure.solid_identity`, which compares topology counts, vertex coordinates, bounding box, area and volume and **does not compare the underlying surfaces' poles, knots or multiplicities**, so the operands are identical *by that instrument* and not yet by a stronger one. Whether to sharpen the instrument, bisect the boolean chain, or accept the effect as already covered by the stated floor, is the decision | Not blocking (nothing fails, and 4.9e-7 on a volume approaches no tolerance); what it governs is whether the floor in [cowl_interior_surface.md §10.0](cowl_interior_surface.md) stays partly unattributed |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -1886,7 +1888,7 @@ of one preference set on each machine that opens the file. That is alternative 6
 and this comparison needs re-measuring before alternative 6 is acted on.** `74 faces tail, 64
 nose` was measured against the OML blank as it stood on 2026-09-01 — nine raw faces per
 surface. [OQ-DES-CW17](#open-questions), resolved 2026-09-09, landed
-`oml_blank.condition()` afterward, reparameterising and subdividing that same blank into 129
+`oml_blank.condition()` afterward, reparameterizing and subdividing that same blank into 129
 faces (measured directly, `condition()`'s own report: `faces_in=9, faces_out=129`) as part of
 fixing the tail's off-`U`=1 correctness. Building the current `tail_cowl()`/`nose_cowl()` at
 the reference configuration today gives **306 faces (tail), 88 faces (nose)** — both valid,
@@ -2202,10 +2204,10 @@ matter of the slot being too narrow.
 
 ### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1 — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
 
-**Resolution note (2026-09-09).** The measured cure below — the blank reparameterised to C1,
+**Resolution note (2026-09-09).** The measured cure below — the blank reparameterized to C1,
 subdivided at every third knot into 129 faces, and the eleven tail tools cut individually
 rather than fused — is not just recommended, it is in the shipped code:
-[`oml_blank.condition()`](../../src/Fuselage/freecad/oml_blank.py) carries the reparameterisation
+[`oml_blank.condition()`](../../src/Fuselage/freecad/oml_blank.py) carries the reparameterization
 and the subdivision and is called from `surface()`, and
 [`cowl_tree.tail_cowl()`](../../src/Fuselage/freecad/cowl_tree.py) builds one `Safe` cut per
 tool rather than cutting by a fused group. The domain check in alternative 1 was never added as
@@ -2327,7 +2329,7 @@ check and every cutting tool passes it:
 `U` = 1 too, where the part comes out right.
 
 **And legality is not what matters.** Two experiments settle it, and they point the same way.
-First, the C0 condition can be removed *exactly*: reparameterising the V knot intervals so the
+First, the C0 condition can be removed *exactly*: reparameterizing the V knot intervals so the
 Bézier segments join at matching parametric speed makes the surface genuinely C1 (measured
 below), after which the interior multiplicity drops from 3 to 2 at **all 45 joints** and
 `check(True)` returns **CLEAN** on a 9-face blank. The cut still fails — `U` = 4 returns a
@@ -2374,7 +2376,7 @@ dyadically). So propagating `Δv[i+1] = Δv[i] · r[i]` along the chain makes it
 control point moved**: measured deviation **2.9e-14 mm**, knot-interval dynamic range 512×.
 Multiplicity then reduces 3 → 2 at all 45 joints at a further 3.1e-10 mm. Multiplicity 2 at
 degree 3 is exactly C1, so the ten corner curvature breaks survive — unlike every refit. A
-corroboration worth keeping: before reparameterisation `removeVKnot` succeeded at exactly 6 of
+corroboration worth keeping: before reparameterization `removeVKnot` succeeded at exactly 6 of
 45 joints, which are exactly the 6 whose speed ratio was already 1.0.
 
 **Where the C0 comes from.** The blank is imported from `vsp_tail.step`, and OpenVSP's internal
@@ -2415,7 +2417,7 @@ curvature discontinuities**, up to a 99.3% jump (κ = 0.0687 → 9.4528 at knot 
 of 0.106 mm — the same order as the 0.1 mm cut itself). A C1 smoothing approximation was tried
 and flattened all ten: curvature breaks over 5% went from 10 to 0, the maximum jump from 99.3%
 to 0.1%, deviation reached 4.2e-03 mm against a 1e-04 mm budget, and the result would not sew
-into a closed solid. Any free re-parameterisation smooths the corners, because the fit has no
+into a closed solid. Any free re-parameterization smooths the corners, because the fit has no
 reason to keep knots where the curvature breaks are.
 
 **Splitting at the C0 seams changes no geometry and removes the scale dependence.** A B-rep is
@@ -2537,7 +2539,7 @@ continuity, and without unfusing, `U` = 1 silently loses 91.491 mm³ — the fus
    be solved. *Drawbacks:* abandons the port's purpose for this one part, and the migration's
    value comes from covering the whole space. *Prerequisites:* none.
 
-3. **Convert the blank to C1 after import.** Reparameterise the V knot intervals so the Bézier
+3. **Convert the blank to C1 after import.** Reparameterize the V knot intervals so the Bézier
    segments join at matching parametric speed, then reduce interior multiplicity 3 → 2. Both
    steps are exact — no control point moves — and the whole conversion runs in **0.5 s** at a
    measured deviation of **5.8e-10 mm**. *Benefits:* it does not fix the cut on its own, but it
@@ -2636,7 +2638,7 @@ is OpenVSP's internal representation and an exporter option to change it may not
 Alternative 2 is the fallback if both fail, and should be stated openly rather than arrived at by
 default. Alternative 5 should not be adopted: it trades the printed part for a convenient
 toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
-closed — the section is C1-but-not-C2 by design and no free re-parameterisation preserves that.
+closed — the section is C1-but-not-C2 by design and no free re-parameterization preserves that.
 
 ### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`? — RESOLVED: alternative 2 adopted
 
@@ -2981,7 +2983,7 @@ the reasons already recorded against them above.
 
 **Not yet implemented, and one open measurement remains from before this was decided**: alternative
 1's window was measured on a single station on `tail_shell` `U` = 1.0 only, not yet confirmed to
-generalise to a station near a patch boundary or to the nose's octant cell (two construction planes
+generalize to a station near a patch boundary or to the nose's octant cell (two construction planes
 rather than one); alternative 3's own up-front prediction accuracy (how well notch-edge proximity
 alone predicts which stations end up needed) is likewise still unmeasured. Both remain open
 implementation questions for IP-FC-143 to resolve with evidence as it proceeds, not blocking
@@ -4669,6 +4671,367 @@ it. Closing this and leaving the plan item blocked on a resolved question would 
 [OQ-DES-CW34](#open-questions) carried until 2026-10-29, where a live decision sat inside a closed
 note. It closes when a trigger fires and the decomposition is either done or declined on its own
 evidence.
+
+### OQ-DES-CW36 — The interior contour is selected by whether a kernel offset happens to fail — RESOLVED 2026-11-02
+
+**Chosen: alternative 3, record the floor and print the rung, with alternative 4's investigation
+run first to find out what the mechanism is not.** Alternatives 1, 2 and 5 were declined.
+
+**The decision.** The construction keeps `eroded_arc`'s retry ladder. The reproducibility floor it
+implies is now a stated property of the interior surface rather than a surprise —
+[cowl_interior_surface.md §10.0](cowl_interior_surface.md) — and `cavity` logs which rung each
+station landed on whenever any station needed a retry:
+
+    offset ladder: 1 of 10 station(s) retried -- z -32.3996 to n=800 (from 400)
+
+So a wall volume that moves by a few parts in a million is attributable from the log instead of
+being investigated from a standing start, which is what it cost the first time. The floor is about
+**1e-5 relative on a wall volume**, from contours up to 2.0e-4 mm apart — 25 times inside
+`REFIT_TOL_M` and 50 times inside `WALL_TOL`, so no stated tolerance is involved. A wall volume is
+therefore not a regression signal below 1e-5, and the station set, the wall-thickness statistics
+and the verdict, all of which reproduce bit-for-bit, carry that job instead.
+
+**What the investigation found, and why it changes the shape of the remaining question.**
+`offset_ladder.py` walks the ladder at five rungs per station and records the refit curve's own
+properties. Full figures are in §10.0.1; the result in brief is that **three mechanisms are
+refuted and the one the question itself named as most likely is among them**:
+
+* Not near-duplicate sample points — distinct positions equal `n` at all fifty rungs measured.
+* Not the refit's accuracy — every rung reproduced its arc inside `REFIT_TOL_M`, including every
+  rung whose offset was refused.
+* **Not the curve bending tighter than the wall.** The offset was refused at `radius / t` of 8.59,
+  6.72, 4.67 and 2.26, and succeeded at the two tightest readings in the study, 1.16 and 1.23.
+  Refuted in its own predicted direction.
+
+Two findings stand. **Refining makes the curve worse**: the refit's minimum radius of curvature
+falls monotonically as `n` rises — 5.35, 2.80, 1.74, 1.35, 0.70 mm at one station — because
+interpolating through more densely sampled points injects tighter oscillation. **And failure is
+not monotonic in `n`**: one station succeeds at 200, is refused at 400, succeeds at 800, is
+refused at 1600 and succeeds at 3200. Together those say the ladder is a sequence of independent
+attempts whose direction is wrong, not a refinement that converges.
+
+**That is why alternative 1 was declined** rather than deferred on cost. Always using the finest
+rung would adopt the *worst* curve available, and the investigation is what established it; before
+the measurement, alternative 1 looked like the safe expensive option.
+
+**Alternative 2 was declined for the same reason**: a sampling rule derived now would be derived
+from the belief that denser is better, which is measured to be false.
+
+**Alternative 5 was declined** because a volume still catches gross faults, and giving up a signal
+that works at 1e-2 to avoid a wobble at 1e-5 is the wrong trade.
+
+**A measured lead is left open rather than taken.** The coarsest rung tried, `n` = 200, is half the
+construction's `SAMPLE_MIN` floor and **offset successfully at all ten stations**, with a refit
+deviation of 1.2e-3 to 1.7e-3 mm against the 5.0e-3 mm allowed. A coarser refit is both reliable
+here and still verified-accurate. Lowering the floor would change every wall figure in the corpus
+at once, so it is a separate decision and needs the same evidence on a `tail_shell` and across the
+`U` range first, which this run did not gather.
+
+**What stays unknown, stated so it is not mistaken for settled.** What inside OpenCASCADE's offset
+decides the outcome is not identified. It tracks the small-scale oscillation the refit develops but
+neither monotonically nor through the curvature extremum, and chasing it further is work on the
+offset algorithm rather than on this project's geometry. This item is closed because the
+consequence is bounded, logged and stated — not because the cause is known.
+
+**And this explains the nose only.** A `tail_shell` wall moves by the same order, 23617.2932 to
+23617.3047 mm3, and it is **not** this mechanism: measured 2026-11-02, the tail's fitted interior
+(294462.4022 mm3), closed cavity (290850.6976 mm3) and notched blank are all bit-identical across
+the two revisions, and only the cell-wall step differs — which is downstream of the ladder. That
+second effect, about 5e-7 on a tail wall, is unexplained and is recorded as a limit in
+[cowl_interior_surface.md §10.0](cowl_interior_surface.md) rather than attributed to this one. It
+was written up as sharing this cause before it was checked, which is the slip this paragraph
+exists to correct.
+
+**Not merged with IP-FC-137's notch-edge thread**, which concerns the rib boolean rather than this
+offset, and nothing measured here shows they share a cause.
+
+**Two questions this one left open are filed separately** rather than carried inside a resolved
+item: OQ-DES-CW37 (whether the sample density should come down) and OQ-DES-CW38 (the tail's
+unexplained 5e-7).
+
+### OQ-DES-CW37 — The refit's sample density is a floor, and the one density measured below it was the only one that never failed
+
+**Problem.** Each cowl is built by fitting an interior surface inside the outer mould line at a
+constant wall thickness `t`. The surface is built station by station along the part's axis. At a
+station, `eroded_arc` takes that station's cross-section arc, samples it at `n` evenly spaced
+points, builds a cubic B-spline from those points, and then asks OpenCASCADE for a copy of that
+curve offset inward by `t` — `makeOffset2D(-t)`. The offset contour is what the interior surface is
+lofted through, so it is what sets the finished wall.
+
+**A sample and a fit are two different things, and the construction uses one number for both.** A
+sample is an *observation* of the arc — a position on it, from `discretize(Number=n)`. A fit is a
+*parameterization* of the arc — a curve with a degree, a knot vector and a set of control points.
+Those are independent in principle: one can observe a curve at a thousand places and describe it
+with eight control points, or the reverse. `eroded_arc` does not separate them. It passes the `n`
+samples straight into `Part.BSplineCurve(pts, None, None, False, 3, None, False)`, whose first
+argument is the curve's **poles** — so the samples *become* the control points, and the single
+integer `n` fixes both where the arc is observed and how many degrees of freedom the description
+gets. Neither can be varied without the other, which is why the evidence below cannot separate a
+density effect from a parameterization effect.
+
+**One consequence is that the curve does not pass through its samples at all.** Measured 2026-11-02
+on a 10 mm circle observed at 12 points, which is the smallest case that shows it cleanly:
+
+| construction over the same 12 samples | poles | curve-to-sample distance | curve-to-circle deviation |
+| --- | --- | --- | --- |
+| `BSplineCurve(pts, …)` — as shipped | 12 | **0.177923 mm** | **0.178070 mm** |
+| `interpolate(pts)` | 14 | 0.000000 mm | **0.002571 mm** |
+
+The shipped construction is a *smoother*, not an interpolant — the module names it `smoothed`, and
+that is accurate. What was not accurate is the module's own comment claiming "the curve interpolates
+the `n` samples exactly", and a docstring describing a B-spline "through `n` points"; both said the
+opposite of what runs and are corrected. The check the construction performs was already measuring
+the right quantity — how far the curve sits from the *arc*, not from the samples — so no recorded
+figure depended on the false statement, only the stated reason for the check did.
+
+`n` is a density rather than a fixed count: it is the arc's length divided by `SAMPLE_SPACING_M` =
+0.25 mm, clamped to `[SAMPLE_MIN, SAMPLE_MAX]` = [400, 3000]. The curve is checked against the arc
+it was sampled from, and must sit within `REFIT_TOL_M` = 0.005 mm of it — half of `WALL_TOL` =
+0.010 mm, the tolerance the finished wall must meet.
+
+`makeOffset2D` sometimes refuses, answering *result of offsetting is null*. When it does, the
+construction retries on a **ladder**: it doubles `n` and tries again, up to three rungs in all
+(`n`, `2n`, `4n`). The rung that succeeds is the one the part is built from. That ladder is the
+subject of OQ-DES-CW36 above, which was resolved by bounding and logging its effect: the rungs
+produce contours up to 2.0e-4 mm apart, so a build's wall volume is reproducible to about 1e-5
+relative and no better.
+
+**What was measured, and why it makes the ladder's direction a question.** `offset_ladder.py` walks
+five rungs per station (`0.5n` through `8n`) on a `nose_cowl_shell` at `U` = 1, ten stations, fifty
+rungs, recording the refit's own properties at each. Two results bear on the density directly.
+
+*Sampling more densely makes the curve bend tighter.* The curve's minimum radius of curvature falls
+monotonically as `n` rises — at `z` = −23.6001 mm it runs 5.35, 2.80, 1.74, 1.35 and 0.70 mm across
+the five rungs. An inward offset by `t` is singular wherever the radius falls below `t`, so by the
+top rung the curve bends tighter than the wall it is about to be offset by. The ladder climbs toward
+the condition that makes an offset impossible. The *mechanism* for that trend is open: it was first
+written up as denser interpolation injecting oscillation, which cannot be right because nothing here
+interpolates. The candidate worth testing is that denser poles let the control polygon resolve a
+genuinely tight corner of the section that coarse poles round off — in which case the falling radius
+is a real feature being approached rather than an artifact being introduced. Untested.
+
+*Failure is not monotonic in `n`.* At that same station the offset succeeds at 200, is refused at
+400, succeeds at 800, is refused at 1600 and succeeds at 3200. The ladder is therefore a sequence
+of independent attempts, not a refinement, and three rungs can all fail at a station where a fourth
+would have worked.
+
+*The doubling does not alias the sample positions*, which was worth checking because a shared
+periodicity between rungs would make any comparison across them meaningless.
+`discretize(Number=n)` returns `n` points including both ends, so a rung has `n−1` intervals, and
+399, 799 and 1599 are pairwise coprime: rungs `n₀` and `2n₀` share 2 sample positions out of 400,
+and `n₀` and `4n₀` share 4. A coprime-increment ladder — 401, 601, 801 — shares exactly as few, so
+changing the increment would not change the overlap and is not the lever it looks like. One
+invariant does run through every rung: for even `n₀` the interval count is always odd, so **no rung
+ever places a sample at the arc's midpoint.**
+
+*And the construction's own floor is the worst density tested, while half of it is the best.* The
+ladder was then walked a second time, 2026-11-02, with both constructions over identical samples at
+each rung — the shipped poles construction and `interpolate` — so that reliability and accuracy
+could be read separately from the `n` that drives both:
+
+| `n` | poles: offset succeeded | `interpolate`: offset succeeded |
+| --- | --- | --- |
+| **200** | **10 of 10** | **10 of 10** |
+| 400 — `SAMPLE_MIN`, the shipped floor | **8 of 10** | 9 of 10 |
+| 800 | 9 of 10 | 9 of 10 |
+| 1600 | 9 of 10 | 10 of 10 |
+| 3200 | 10 of 10 | 9 of 10 |
+| **all rungs** | **46 of 50** | **47 of 50** |
+| worst curve deviation from the arc | **1.710e-3 mm** | **5.985e-04 mm** |
+| rungs inside `REFIT_TOL_M` | 50 of 50 | 50 of 50 |
+
+Three things follow. `n` = 200 — half the `SAMPLE_MIN` floor — offset successfully at all ten
+stations under **both** constructions, so that lead is a property of the density and not an artifact
+of how the curve is built. The shipped floor of 400 is the **worst** density measured, under both.
+And **interpolating does not fix the refusals**: 47 of 50 against 46 of 50 is no improvement worth
+the name, so the poles construction is not the cause of the failure either — the fourth mechanism
+this question has refuted. What interpolation does buy is accuracy: 2.9 times closer to the arc at
+the worst rung and 28 times closer at the best, from the same observations.
+
+**Impact.** Nothing is wrong today: every figure in the corpus was built from a contour that passed
+its own refit check, and 2.0e-4 mm of rung-to-rung difference is 50 times inside `WALL_TOL`. What
+is at stake is the reproducibility floor. A density at which no station retries has no ladder, and
+therefore no 1e-5 floor on a wall volume — a unit conversion, a FreeCAD point release or a
+different processor would stop being able to move a recorded figure.
+
+**What is not measured, and must be before any change is adopted.** The evidence is one cowl kind,
+one `U`, ten stations. A `tail_shell` has 23 stations, a different cross-section family and
+corners the nose does not have. Nothing has been measured at `n` below 200, so 200 is the coarsest
+point sampled and not a located boundary. And the effect of a lower density on the **fitted
+surface's** accuracy — as opposed to a single station's curve against a single station's arc, which
+is all `REFIT_TOL_M` governs — has not been measured at all. Those are different quantities, and §6
+judges the first.
+
+**Alternatives.**
+
+1. **Leave `SAMPLE_MIN` and the ladder as they are.** Keep 400 as the floor and keep doubling on
+   refusal. *Benefits:* no figure in the corpus moves, nothing needs re-measuring, and the
+   consequence is already bounded, logged and documented. The measurement above is preserved as a
+   finding without being acted on. *Drawbacks:* the construction keeps a retry rule that is
+   measured to climb in the wrong direction, so a future part may exhaust all three rungs at a
+   station a coarser attempt would have cleared. The 1e-5 floor stays. *Prerequisites:* none.
+
+2. **Lower `SAMPLE_MIN` to 200.** Change the floor so most stations sample coarser, leaving the
+   doubling ladder in place above it. *Benefits:* applies the measurement directly; likely removes
+   most or all retries and with them the floor. *Drawbacks:* every wall figure in the corpus moves
+   at once, so every recorded number in `cowl_interior_surface.md` and every gate verdict must be
+   re-measured and re-stated. The evidence supporting it is one nose at one `U`, and this is the
+   largest change the evidence could be used to justify. *Prerequisites:* the same ladder study on
+   a `tail_shell` and across the `U` range, plus a measurement of the **fitted surface's** accuracy
+   at the lower density, not only the refit's.
+
+3. **Add a coarser rung below the current one.** Leave `SAMPLE_MIN` at 400, and on refusal try
+   `n/2` first, before `2n` and `4n`. *Benefits:* changes nothing at any station that succeeds
+   first time — on the nose, 9 of 10 — so the blast radius is the retrying stations alone, where
+   the difference is already bounded at 2.0e-4 mm. It tests the finding in production without
+   betting the corpus on it, and it is the smallest change that uses what was measured.
+   *Drawbacks:* keeps the ladder and therefore keeps a floor, only a smaller one; and it adds a
+   rung to a mechanism whose selection rule is still "whichever the kernel happens to accept".
+   *Prerequisites:* one nose and one tail build to confirm which stations move and by how much.
+
+4. **Stop building a curve before offsetting.** Offset the station's own arc, or its discretized
+   polyline, rather than a B-spline derived from samples of it. *Benefits:* removes `n` from the
+   offset's success condition entirely, which is the thing all of the above are working around.
+   *Drawbacks:* the largest change by far; the smoothing exists because the arc the station yields
+   is a chain of up to 64 fragments that `makeOffset2D` refuses outright — 19 of 81 stations failed
+   that way in 2026-09-02's measurement, and a 1600-point polygon did not help — so this is a
+   redesign of §4.3 rather than a parameter choice, and it would move every figure in the corpus as
+   surely as alternative 2. *Prerequisites:* establishing what `makeOffset2D` will accept directly,
+   which was not part of either study.
+
+5. **Separate the sampling from the fit.** Keep observing the arc at `n` points, but stop using
+   those observations as the curve's control points: interpolate them, or approximate them with a
+   pole count chosen against `REFIT_TOL_M` instead of inherited from `n`. Density and degrees of
+   freedom then become two knobs, and the ladder can move either one. *Benefits:* measured to be
+   **2.9 times more accurate at the worst rung and 28 times at the best**, from identical
+   observations, so most of the deviation budget the construction currently spends is recoverable;
+   and it makes every later question about density answerable, which no other alternative does. It
+   also removes a genuine conceptual defect — an observation count standing in for a model's
+   complexity. *Drawbacks:* **measured not to improve reliability** (47 of 50 rungs against 46 of
+   50), so it is an accuracy change and not a fix for the refusals, and anyone adopting it for
+   reliability would be adopting it for a reason that has been tested and failed. It moves every
+   figure in the corpus, like alternatives 2 and 4. Interpolating observations of a sectioned
+   surface can also oscillate where the smoother would not, and only `REFIT_TOL_M` currently stands
+   against that. **And offset cost is measured not to be construction-neutral**, which is a
+   drawback found while building the regression for this study rather than predicted: on an exact
+   quarter-circle of radius 10 mm sampled at 150 points, `makeOffset2D` on the *interpolated* curve
+   did not return in several minutes, while the poles curve over the same samples offset in
+   0.261 s. It does not happen on real cowl sections — the comparison run above offsets both
+   constructions at `n` = 200 through 3200 across fifty rungs without incident — so it is a
+   property of that synthetic arc and is unexplained. It is recorded because it shows the cost of
+   an interpolated offset is not bounded by the poles version's, and a build-time regression is
+   exactly the kind of thing that would be discovered late. *Prerequisites:* the same
+   both-constructions comparison on a `tail_shell`, whose sections have corners the nose does not;
+   a build-time measurement on both kinds, not only a per-station one; and a decision on whether
+   `REFIT_TOL_M` should then be tightened, since the measured headroom would otherwise go unused.
+
+**Recommendation.** Alternative 3 now, alternative 5 next, and not alternative 2 yet.
+
+Alternative 3 is the only change that uses the measurement without resting the whole corpus on ten
+stations of one part. It changes figures only where a retry already happens, at those stations the
+difference is bounded by a figure already stated, and it puts the best-measured density — 200, which
+succeeded 10 of 10 under both constructions — in front of the two rungs that measured worst. It
+also produces the tail evidence the other alternatives need as a by-product of running normally.
+
+Alternative 5 is the one that addresses what is actually wrong rather than routing around it, and
+its accuracy gain is large and already measured. It is second only because it moves every recorded
+figure and because its benefit is accuracy, not the reliability this question started from — so it
+should be adopted deliberately, with the corpus re-measured in one pass, rather than folded into a
+retry change.
+
+Alternative 2 is where the density should probably end up, since 400 measured worst and 200 measured
+best under both constructions, but adopting it now would re-state every number in the
+interior-surface document on the strength of one cowl kind at one `U`. Alternative 3 is the cheap way
+to collect what it needs.
+
+One caution for whoever takes this: the refusals have now survived four refutations — not duplicate
+samples, not curve accuracy, not curvature, and not the poles construction. Nothing here is a
+diagnosis of `makeOffset2D`, and the two reliable observations are only that 200 works everywhere
+measured and 400 works least often. Choose on that basis and not on a mechanism.
+
+### OQ-DES-CW38 — A tail wall's volume moves while every operand the instrument can see is identical
+
+**Problem.** Between the revision before the units conversion and the revision after it, a
+`tail_shell`'s finished wall volume moved from 23617.2932 to 23617.3047 mm3 — 4.9e-7 relative. The
+conversion changed stored constants from millimeters to meters and changed no geometry, so a moved
+figure is a defect in the conversion, a kernel effect, or a measurement artifact, and it has to be
+one of the three.
+
+Measured 2026-11-02, it is none of the ones already understood. The nose's equivalent movement has
+a known cause, resolved as OQ-DES-CW36: a kernel offset sitting on its own failure boundary, so a
+last-bit difference in a station position flips which retry rung builds the part. **That mechanism
+is excluded here from both sides.** Going forward through the construction, the tail's fitted
+interior surface (294462.4022 mm3), its closed cavity (290850.6976 mm3) and its notched blank are
+**bit-identical** across the two revisions; the divergence appears only at the cell-wall step —
+`notched.cut(inside)`, `_extend_across_cell`, `_strip_seam` and the `common` with the cell — which
+is downstream of the offset entirely. Going backward from the mechanism, a tail build prints **no
+offset-ladder line at all**, meaning every one of its 23 stations offset at the first rung, so
+there is no rung difference available to explain anything.
+
+Each revision also reproduces *itself* bit-for-bit on repeated builds, so this is not run-to-run
+noise. It is a deterministic difference between two revisions, arising at a step whose inputs
+compare as identical.
+
+**The instrument is the part of this that is least established.** "Bit-identical" above means
+identical under `solid_measure.solid_identity`, which compares solid, face, edge and vertex counts,
+the validity flag, the analytic volume and area, the bounding box, and every vertex coordinate.
+It does **not** compare the underlying surfaces — a B-spline face's poles, knots, multiplicities or
+parametrization. Two faces can therefore agree on every quantity that function records while
+differing in the last bits of their control points, and a boolean cut is computed from the surfaces,
+not from the vertices. This subsystem has produced four instruments that each gave a plausible
+wrong answer about a distance, and the whole of OQ-DES-CW36 began with a volume comparison made on
+a tessellation instead of a solid, so an unexamined instrument is the first thing to doubt here
+rather than the last.
+
+**Impact.** Small and bounded, which is why this is a question about what the documentation may
+claim rather than about a part. 4.9e-7 on a volume approaches no tolerance; `WALL_TOL` is 0.010 mm
+and the wall-thickness statistics, station set, THIN flags and verdicts for this part are all
+bit-identical across the two revisions. The practical consequence is that
+[cowl_interior_surface.md §10.0](cowl_interior_surface.md) states a 1e-5 reproducibility floor whose
+stated mechanism covers the nose only, and tells a tail reader to apply the same floor for a reason
+that is explicitly not the stated one.
+
+**Alternatives.**
+
+1. **Accept it as covered by the stated floor.** Leave §10.0 as it is: the floor is 1e-5, this
+   effect is 5e-7, and the document already says the cause is unidentified. *Benefits:* costs
+   nothing, and the statement is honest as written. *Drawbacks:* an unattributed deterministic
+   difference is the shape of a real defect that happens to be small today, and nothing would
+   notice if a later change made it large. It also leaves the project asserting a floor it has
+   explained for one cowl kind out of two. *Prerequisites:* none.
+
+2. **Sharpen the instrument, then re-compare.** Extend `solid_identity` to compare the surfaces
+   themselves — poles, knots and multiplicities per face, under a canonical face ordering — and
+   re-run the comparison on the two revisions' saved cell-wall operands. *Benefits:* settles
+   whether the premise of this question is even true. If the operands differ, the question becomes
+   an ordinary one about where in the conversion they diverged; if they genuinely do not, the
+   question becomes a real one about the kernel and is worth the cost of alternative 3. It also
+   leaves a better instrument behind for every future comparison of this kind. *Drawbacks:* face
+   ordering is not stable between builds, so the comparison needs a canonical ordering before it
+   can mean anything, which is the bulk of the work. *Prerequisites:* a `tail_shell` build at each
+   revision — roughly 20 minutes each — unless the shapes from the 2026-11-02 runs are still saved.
+
+3. **Bisect the cell-wall step.** Capture and compare each intermediate solid through
+   `notched.cut(inside)`, `_extend_across_cell`, `_strip_seam` and the `common`, to find the first
+   one that differs. *Benefits:* localizes the effect to a single kernel call, which is what any
+   real explanation has to start from. *Drawbacks:* without alternative 2 it compares those
+   intermediates with the same instrument that produced the puzzle, so a null result at every step
+   would be uninformative in exactly the way this question is about. *Prerequisites:* alternative 2,
+   or an explicit decision to accept the weaker instrument.
+
+4. **Treat it as kernel non-determinism and check for it.** Add a repeated-build check that fails
+   when two builds of one part at one revision disagree. *Benefits:* catches the general class
+   rather than this instance. *Drawbacks:* measured not to apply — each revision already reproduces
+   itself exactly, so this check would pass today and say nothing about the difference actually
+   seen. *Prerequisites:* none, but the evidence currently contradicts the premise.
+
+**Recommendation.** Alternative 2, before deciding anything else. The question as written rests on
+"identical operands, different result", and that claim is only as strong as a function that does not
+look at the surfaces the boolean actually consumes. It is cheap relative to the others, it is the
+only one that can make the question go away rather than grow, and whichever way it comes out the
+project is left with an instrument that can tell two solids apart properly. If it shows the
+operands truly are identical, alternative 3 becomes worth its cost; if it shows they are not, this
+stops being a kernel question at all.
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

@@ -75,7 +75,7 @@ Your document
    from an unsaved document.
 2. **Run the generator into it**, naming the variant you are starting from. It creates the
    parameter sheet and the geometry nodes.
-3. **Edit the parameter sheet** for anything the original already parameterises — a
+3. **Edit the parameter sheet** for anything the original already parameterizes — a
    tolerance, a bolt diameter, the size multiplier `U`. The geometry follows.
 4. **Add your own features downstream of `Tip`.** Fuse a bracket on, cut a notch out.
    Reference `Tip` and nothing else inside the generated tree.
@@ -178,5 +178,5 @@ fixes it.
 
 The parameter sheet is the documentation of what is adjustable. If something you want to
 change is not in it, that is a signal: either the parameter exists upstream and should be
-exposed, or the change is new design work rather than re-parameterisation. Both are fine —
+exposed, or the change is new design work rather than re-parameterization. Both are fine —
 they are just different jobs.

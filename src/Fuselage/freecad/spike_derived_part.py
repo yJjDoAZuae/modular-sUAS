@@ -7,7 +7,7 @@ do not add test coverage here.
 IP-FC-38: the derived-part workflow -- own the parameters, keep your own geometry.
 
 The wanted workflow is a modified part that takes the generated part as its starting point,
-where the user can BOTH re-parameterise the original (a tolerance, a bolt diameter) AND add
+where the user can BOTH re-parameterize the original (a tolerance, a bolt diameter) AND add
 or subtract their own geometry (a mounting bracket, a clearance notch).
 
 A link does not deliver the first half. App::Link and SubShapeBinder reference the source's
@@ -59,7 +59,7 @@ def emit(doc):
     """Create or update the generated part in `doc`. Returns the stable tip object.
 
     Safe to call repeatedly. Parameter *values* are only written when the sheet is first
-    created -- a regenerate must not silently undo the user's re-parameterisation.
+    created -- a regenerate must not silently undo the user's re-parameterization.
     """
     fresh = doc.getObject('Params') is None
     sheet = doc.getObject('Params') or doc.addObject('Spreadsheet::Sheet', 'Params')
@@ -142,7 +142,7 @@ def main():
     sheet = doc.getObject('Params')
 
     print('')
-    print('1. Re-parameterise the original from the user document')
+    print('1. Re-parameterize the original from the user document')
     sheet.set('B2', '0.25')                    # longeron_tolerance 0.05 -> 0.25
     doc.recompute()
     show(doc, 'tolerance 0.05->0.25', tip, final)

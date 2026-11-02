@@ -355,11 +355,11 @@ RIB_RESIDUE_M3 = 1.0e-11                     # 0.01 mm3
 #: paying for an open-ended retry loop on a build that will not close the gap regardless.
 POST_CUT_ROUNDS = 6
 
-#: How close (mm) a discretised section point may sit to a cell construction plane before
+#: How close (mm) a discretized section point may sit to a cell construction plane before
 #: section 5's second pass drops it, on both sides of every comparison it makes.
 #:
 #: **Shared by `_finished_wall_gap`'s own default and `cavity`'s `finished_outer_at`, and it
-#: must stay shared.** Both slice a cell-shaped solid and discretise the whole closed loop
+#: must stay shared.** Both slice a cell-shaped solid and discretize the whole closed loop
 #: rather than `open_arc`'s stripped one -- `_finished_wall_gap` for the cavity's own boundary,
 #: `finished_outer_at` for the buttress-cut cell's exterior -- so the same zone has to be
 #: excluded from each side of the same comparison, or the surviving points on one side would be
@@ -433,7 +433,7 @@ POST_CUT_RESCAN_MARGIN_M = 2.0e-2            # 20 mm
 #: `TAU_M`. Eight cost 40,832 points per contour on the tail -- one `discretize` and one polyline
 #: build of that size for every station -- and measured 463 s a contour for accuracy nothing
 #: needed.
-#: **The measurement is curve-to-curve and the discretisation error has to sit well below
+#: **The measurement is curve-to-curve and the discretization error has to sit well below
 #: `TAU_M`.** Measured 2026-09-02: comparing 160 sampled points against a 160-point
 #: parameter-spaced polyline of the same contour reported 0.076 mm where the true deviation
 #: was 0.003 mm -- twenty-five times over, and over `TAU_M`, so the refinement chased its own
@@ -512,7 +512,7 @@ END_OVERRUN_M = 1.0e-3                       # 1.0 mm
 #: Two stations closer than this are one station.
 Z_TOL_M = 1.0e-9                             # 1e-6 mm
 
-#: Slack on the P1 slope assertion, in degrees, for the discretisation the check runs on.
+#: Slack on the P1 slope assertion, in degrees, for the discretization the check runs on.
 SLOPE_SLACK_RAD = 8.726646259971648e-3       # 0.5 deg
 
 #: Angular half-window, in bins of one degree, searched when measuring a point against a
@@ -578,7 +578,7 @@ CLEARANCE_MARGIN_M = 1.0e-5                  # 0.01 mm
 # about the curve is wrong. Only `Face.Area` is, and it is wrong by up to 23% and by a
 # different amount at every station, which makes it read as a real geometric signal. This is
 # `Shape.Volume` on a NURBS solid one dimension down (OQ-DES-CW12). Count faces, or take the
-# signed area of the discretised wire.
+# signed area of the discretized wire.
 
 
 def note(text):
@@ -656,9 +656,9 @@ def _parallel_to(axis, normal, tol=None):
     return abs(abs(axis.dot(normal)) - 1.0) < (CELL_DIRECTION_TOL if tol is None else tol)
 
 
-def _steps(span, step, minimum):
+def _steps(span, step, minimum, maximum=None):
     """How many whole steps of `step` fit across `span`, **independently of the unit both are
-    measured in**.
+    measured in**, clamped to `minimum` and optionally to `maximum`.
 
     `int(span / step)` is not unit-invariant, and this conversion is how that was found rather
     than something it introduced. The post-cut scan takes a window of `EDGE_SCAN_MARGIN_M`
@@ -666,14 +666,36 @@ def _steps(span, step, minimum):
     at -10.1006 gives `-9.1006 - -11.1006 = 2.0` exactly and `2.0 / 0.5 = 4`; in meters the
     same subtraction gives a ratio of 3.9999999999999964, which truncates to **3**. Measured:
     one of the nose's four notch edges flipped that way, taking the edge-focused scan from 20
-    points to 19 while every other figure in the build agreed to 4e-6.
+    points to 19.
 
-    A sample count that depends on the unit its inputs are written in is a defect on its own
-    terms, so the floor is taken with `STEP_SLACK` of slack rather than the arithmetic being
-    left to land where it falls. Truncation is kept, not replaced by rounding: a span of three
-    and a half steps still yields three, which is what every caller here means.
+    **Four further counts came through here on 2026-11-01, and the change moved no geometry.**
+    `eroded_arc`'s sample count, the superseded `eroded_body`'s, `fit_samples` and
+    `check_samples` all read `int(length / spacing)` with both operands in meters. They were
+    routed through this helper because a count that depends on the unit its inputs are written in
+    is a defect on its own terms, and the result was verified rather than assumed:
+
+    * On the nose all four sit on their clamp floor -- 400, 400, 120 and 480 -- so the truncation
+      is unreachable there, and `nose_cowl_shell` reproduced every figure exactly.
+    * On the tail `fit_samples` and `check_samples` clear their floors, at 191 and 957, so the
+      truncation *is* live. 957 is the interesting one: the perimeter is 191.4 mm and the spacing
+      0.2 mm, which puts the ratio on an integer boundary, exactly where a slack term could move
+      a count. It does not -- `tail_shell` came back with 191 and 957 unchanged and its wall
+      unmoved at 23617.3047 mm3.
+    * `eroded_body` is superseded and has no live caller, so its site is inert either way.
+
+    **A regex is not enough to find this class, which is why `unit_regime.py --counts` exists.**
+    The sweep that found these three was written as `int\\([^)]*/[^)]*` and silently missed the
+    two `eroded_arc` sites, because `int(si.length_m(arc) / SAMPLE_SPACING_M)` has a closing
+    parenthesis before the divide. Both were found by reading, which does not scale.
+
+    The floor is taken with `STEP_SLACK` of slack rather than the arithmetic being left to land
+    where it falls. Truncation is kept, not replaced by rounding: a span of three and a half
+    steps still yields three, which is what every caller here means. The two clamps commute,
+    every `minimum` here being at or below its `maximum`, so this returns what
+    `max(minimum, min(maximum, int(...)))` did at the call sites it replaced.
     """
-    return max(int(span / step + STEP_SLACK), minimum)
+    count = max(int(span / step + STEP_SLACK), minimum)
+    return count if maximum is None else min(count, maximum)
 
 
 def _signed_area(pts):
@@ -883,7 +905,19 @@ def _slice_wires(shape, z_m):
 
 
 def smoothed(wire, n, tol_m=REFIT_TOL_M):
-    """One closed cubic B-spline through a section, replacing the fragment chain OCC returns.
+    """One closed cubic B-spline whose poles are `n` samples of a section, replacing the fragment
+    chain OCC returns.
+
+    **A sample is not a pole, and this function hands the samples in as the poles.** The `n`
+    points are *observations* of `wire` -- `discretize(Number=n)` positions along it -- and they
+    are passed to `Part.BSplineCurve(pts, ...)` as that curve's own *control points*, so the
+    curve does **not** pass through them. Measured 2026-11-02 on a 10 mm circle sampled at 12
+    points: the curve misses its own samples by 0.177923 mm and sits 0.178070 mm off the circle,
+    while `interpolate()` on those same 12 samples honors every one exactly and holds the circle
+    to 0.002571 mm -- 69x closer from identical observations. That is why this is named
+    *smoothed* and why the deviation returned below has to be measured rather than assumed zero.
+    It also means `n` is one knob driving two separate things -- where the arc is observed, and
+    how many degrees of freedom the fit gets -- which is OQ-DES-CW37's subject.
 
     **This is what makes the erosion possible at all, and it is not a nudge.** Sectioning the
     conditioned blank returns the section as one edge per surface patch -- 64 of them on the
@@ -892,7 +926,10 @@ def smoothed(wire, n, tol_m=REFIT_TOL_M):
     `makeOffset2D: result of offsetting is null!`, every one of them forward of z = -42.5 where
     the section has shrunk enough to bring the fragments below a tenth of a millimeter. Neither
     join style, nor `intersection`, nor `removeSplitter`, nor a 1600-point polygon changed any
-    of them; a single B-spline through the same points offset correctly on the first try.
+    of them; a single B-spline built from the same points as its poles offset correctly on the
+    first try. (That 2026-09-02 note said "through the same points", which the paragraph above
+    corrects: the curve was never made to pass through them, and no reading of that measurement
+    depends on it having done so -- what mattered was replacing 64 fragments with one curve.)
 
     That is IP-FC-54's failure exactly -- the algorithm document's section 7 predicts it and
     warns that hunting for an offset distance that works leaves the defect in place. The defect
@@ -919,9 +956,13 @@ def smoothed(wire, n, tol_m=REFIT_TOL_M):
     shape = curve.toShape()
 
     # Measured against a dense polyline of the new curve rather than by `distToShape` per
-    # point: the curve interpolates the `n` samples exactly, so what is being checked is what
-    # it does *between* them, and 4n `distToShape` calls on a B-spline cost more than the
-    # erosion they are guarding.
+    # point, and measured from `wire`'s own samples rather than from `pts`: the curve does not
+    # pass through `pts` at all (they are its poles, see above), so the quantity that matters is
+    # how far the curve sits from the *arc*, everywhere -- not how far it sits from the points
+    # it was built out of. 4n `distToShape` calls on a B-spline also cost more than the erosion
+    # they are guarding. An earlier version of this comment said the curve "interpolates the `n`
+    # samples exactly", which is false and was measured so on 2026-11-02; the check below was
+    # already measuring the right thing, so only the stated reason was wrong.
     dense = _Polyline([(si.m(p.x), si.m(p.y))
                        for p in shape.discretize(Number=4 * n)])
     worst_m = float(dense.distances(
@@ -965,7 +1006,7 @@ def eroded_body(wire, t_m, z_m, tol_m=REFIT_TOL_M):
     Both conditions are checked on every rung, and reaching the end of the ladder is a failure
     to report rather than a coarser answer to accept.
     """
-    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(si.length_m(wire) / SAMPLE_SPACING_M)))
+    n0 = _steps(si.length_m(wire), SAMPLE_SPACING_M, SAMPLE_MIN, SAMPLE_MAX)
     why = None
     for n in (n0, 2 * n0, 4 * n0):
         refit, moved_m = smoothed(wire, n, tol_m)
@@ -1137,7 +1178,7 @@ def open_arc(wire, planes, tol_m=CELL_PLANE_TOL_M):
     physical end of `arc` that actually is depends on wherever OCC happened to start it, which
     is not a promise this function relies on.
 
-    **`flip` says whether a caller's own discretisation of `arc` needs reversing to reach that
+    **`flip` says whether a caller's own discretization of `arc` needs reversing to reach that
     order, and every caller must apply it themselves rather than trust `arc`'s own vertex order
     or a `reversed()` copy of it.** Measured on the nose's octant: `Part.Wire`, both as built
     here and after calling its own `.reversed()`, can report `Vertexes[0]` at the same physical
@@ -1221,8 +1262,12 @@ def open_contour(wire, n, flip=False):
 
 
 def _smoothed_open(wire, n, flip, tol_m=REFIT_TOL_M):
-    """`smoothed`'s open counterpart: one open cubic B-spline through `n` points of `wire`,
-    verified the same way. The deviation it returns is in meters."""
+    """`smoothed`'s open counterpart: one open cubic B-spline whose poles are `n` samples of
+    `wire`, verified the same way. The deviation it returns is in meters.
+
+    See `smoothed` on why the samples are not points the curve passes through, and on `n` being
+    a single knob over both the sampling and the fit.
+    """
     pts = _disc(wire, n, flip)
     curve = Part.BSplineCurve(pts, None, None, False, 3, None, False)
     shape = curve.toShape()
@@ -1233,9 +1278,23 @@ def _smoothed_open(wire, n, flip, tol_m=REFIT_TOL_M):
     return Part.Wire(shape), worst_m
 
 
-def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M):
+def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M, record=None):
     """The open arc, refit and offset inward by `t_m`, its two ends snapped exactly onto the
     cell's own planes. Returns `(x_m, y_m)` pairs.
+
+    **"Refit" here means smoothed, not interpolated.** `_smoothed_open` samples `arc` at `n`
+    points and uses those samples as a cubic B-spline's poles, so the curve approximates the arc
+    rather than passing through the observations -- and `REFIT_TOL_M` bounds how far it may sit
+    from the arc, which is the only sense in which it is a fit. `n` therefore sets the sampling
+    and the fit's degrees of freedom at once; see `smoothed` and OQ-DES-CW37.
+
+    **`record`, when given a dict, is filled with which rung of the ladder below succeeded**, and
+    that is not diagnostic decoration -- it is the one thing that makes a changed wall volume
+    attributable (OQ-DES-CW36). The rung is selected by whether `makeOffset2D` happens to refuse
+    the one before it, so two builds of the same part can come out on different rungs and the
+    rungs produce contours up to 2.0e-4 mm apart. Measured 2026-11-01: a station position
+    differing by one unit in the last place, 7.1e-15 mm, is enough to flip one. Without the rung
+    in the log, a wall volume that moves by 4e-6 looks like a mystery; with it, it is one line.
 
     **Snapped, not trusted.** An inward 2-D offset moves each point along the curve's own local
     normal, which for a genuinely symmetric exterior crossing its own cell plane head-on is
@@ -1249,9 +1308,9 @@ def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M):
     (`flip` applied there), so its own start and end need no further reordering here -- only the
     offset's own start/end get snapped, to `p_start`/`p_end` respectively.
     """
-    n0 = max(SAMPLE_MIN, min(SAMPLE_MAX, int(si.length_m(arc) / SAMPLE_SPACING_M)))
+    n0 = _steps(si.length_m(arc), SAMPLE_SPACING_M, SAMPLE_MIN, SAMPLE_MAX)
     why = None
-    for n in (n0, 2 * n0, 4 * n0):
+    for rung, n in enumerate((n0, 2 * n0, 4 * n0)):
         refit, moved_m = _smoothed_open(arc, n, flip, tol_m)
         if moved_m > tol_m:
             why = ('refitting the arc at %d points moved it %.6f mm, over the %.6f mm '
@@ -1267,7 +1326,7 @@ def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M):
             why = 'the arc refit at %d points offset to nothing' % n
             continue
         # `refit` was built directly from the canonically-ordered points above, so its own
-        # offset's discretisation needs no `flip` -- it already starts at the `p_start` end.
+        # offset's discretization needs no `flip` -- it already starts at the `p_start` end.
         #
         # The snap stays in kernel units: `plane` is a unit normal, so subtracting the
         # projection is exact arithmetic in whatever unit the point carries, and these points
@@ -1278,6 +1337,9 @@ def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M):
         for i, plane in ((0, p_start), (-1, p_end)):
             d = pts[i].dot(plane)
             pts[i] = pts[i] - plane * d
+        if record is not None:
+            record.update({'z_m': z_m, 'rung': rung, 'n': n, 'n0': n0,
+                           'moved_m': moved_m})
         return [(si.m(p.x), si.m(p.y)) for p in pts]
     raise PreconditionFailed(
         'P3: no refit of the %.3f mm cell arc at z = %.4f mm both reproduced it and eroded by '
@@ -1544,7 +1606,7 @@ CROSSING_SAMPLES = 120
 #: out by exactly `t·hypot(n.x, n.y)`, so a contact sitting on that face's dilated image reproduces
 #: the figure; one sitting on a facet that bridges two faces does not, and reads somewhere between
 #: the two faces' own offsets. 1 % of `t` is 0.006 mm, which is coarse enough to absorb the
-#: discretisation of the section wires and far finer than the 0.04 mm discrepancies an edge
+#: discretization of the section wires and far finer than the 0.04 mm discrepancies an edge
 #: contact actually produces.
 FACE_IMAGE_TOL = 0.01
 
@@ -1928,12 +1990,12 @@ def _one_region(shape, z_m, fuzz_mm):
 
 def fit_samples(perimeter_m):
     """How many points of this contour go into the fit grid. See `FIT_ARC_M`."""
-    return max(FIT_MIN, min(FIT_MAX, int(perimeter_m / FIT_ARC_M)))
+    return _steps(perimeter_m, FIT_ARC_M, FIT_MIN, FIT_MAX)
 
 
 def check_samples(perimeter_m):
     """How many points of this contour the wall is evaluated at. See `CHECK_ARC_M`."""
-    return max(CHECK_MIN, min(CHECK_MAX, int(perimeter_m / CHECK_ARC_M)))
+    return _steps(perimeter_m, CHECK_ARC_M, CHECK_MIN, CHECK_MAX)
 
 
 def contour(face_or_wire, n, anchor=0.0):
@@ -1989,7 +2051,7 @@ def contour(face_or_wire, n, anchor=0.0):
     # eight buttresses sit exactly on the +-x and +-y axes -- measured, their sections span
     # x = -0.050..0.050 and y = -0.050..0.050 -- so anchoring on +x put the parameter origin
     # inside a dent. As the dent's depth ramps between stations the crossing jumps from one
-    # side of it to the other, the arc-length parameterisation rotates by that much between
+    # side of it to the other, the arc-length parameterization rotates by that much between
     # neighboring rows, and the fitted surface twists so badly that a z plane no longer cuts
     # it in one closed loop. The refinement then subdivides forever at a *measured gap of
     # zero*, because the intervals never reach the deviation test.
@@ -2014,7 +2076,7 @@ def contour(face_or_wire, n, anchor=0.0):
     # stations depending on the run. Downstream that decided whether the tail's wall closed as
     # one solid or five.
     #
-    # Interpolating the crossing removes the quantisation outright. The anchor is a geometric
+    # Interpolating the crossing removes the quantization outright. The anchor is a geometric
     # feature of the section, so the origin it defines is exact, and what remains is the dense
     # polyline's chord error -- 1e-4 mm at this spacing, three orders under `TAU_M`.
     ux, uy = math.cos(anchor), math.sin(anchor)
@@ -2034,7 +2096,7 @@ def contour(face_or_wire, n, anchor=0.0):
     if cross is None:
         raise PreconditionFailed(
             'the contour at this station never crosses the anchor ray at %.4f rad. The '
-            'correspondence has no origin, and every row would be parameterised from wherever '
+            'correspondence has no origin, and every row would be parameterized from wherever '
             'the sectioning happened to start.' % anchor)
     # The crossing replaces the sample it fell between, so the list still has `m` points and
     # begins exactly on the ray.
@@ -2341,7 +2403,7 @@ def _fit(rows):
 
     The periodicity comes from curves that really have it, and is carried into the surface by
     `buildFromPolesMultsKnots`. Every row carries the same number of points and is given the
-    same explicit parameterisation, so every row curve comes out with the same knot vector and
+    same explicit parameterization, so every row curve comes out with the same knot vector and
     the same pole count -- which is what makes a pole track something it is meaningful to
     interpolate along.
 
@@ -2355,7 +2417,7 @@ def _fit(rows):
     n = len(rows[0][1])
 
     # V: one open curve per row, its two ends the cell's own construction plane. The
-    # parameterisation is given explicitly rather than left to chord length so that every row
+    # parameterization is given explicitly rather than left to chord length so that every row
     # lands on the same knot vector -- rows differ in perimeter, and chord length would give
     # each its own.
     vparams = [i / float(n - 1) for i in range(n)]
@@ -2542,12 +2604,12 @@ def _finished_wall_gap(solid, z_m, t_m, outer_at, planes, n_check,
     body's section, not this shape's. Measured 2026-09-25: calling it here raises
     `PreconditionFailed` (the section's arc edges do not chain into one open run) at the first
     station tried, on a shape that plainly does have a well-formed interior boundary. The whole
-    closed loop is discretised instead, and points within `plane_tol` of a construction plane --
+    closed loop is discretized instead, and points within `plane_tol` of a construction plane --
     the straight edge `open_arc` would otherwise have stripped -- are dropped before measuring.
     Confirmed against `distToShape` and raw coordinates on the same shape before being trusted
     for this measurement.
 
-    Returns `None` when the section is not exactly one closed loop, or when every discretised
+    Returns `None` when the section is not exactly one closed loop, or when every discretized
     point falls within `plane_tol_m` of a construction plane. Both are rare and left unconverted
     rather than raised: this is an additional safety measurement layered on top of section 5's
     existing one, and a station it cannot evaluate is not evidence the wall there is wrong.
@@ -2704,6 +2766,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     arcs = {}
     outers = {}
     fits = {}
+    rungs = {}
     finished_outers = {}
 
     def key(z_m):
@@ -2755,7 +2818,12 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
         k = key(z_m)
         if k not in fits:
             arc, p_start, p_end, flip = body_arc(z_m)
-            pts = _resample_open(eroded_arc(arc, t_m, z_m, p_start, p_end, flip), n_fit)
+            # The rung is recorded per station, for the reason `eroded_arc`'s own docstring
+            # gives: it is selected by whether the kernel refused the rung below, so it is the
+            # one thing that makes a changed wall volume attributable (OQ-DES-CW36).
+            rungs[k] = {}
+            pts = _resample_open(
+                eroded_arc(arc, t_m, z_m, p_start, p_end, flip, record=rungs[k]), n_fit)
             fits[k] = _probe_contour(z_m, pts)
         return fits[k]
 
@@ -2791,7 +2859,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
         ("do not chain into one open run") at the very first station tried, on `tail_shell`
         `U` = 1.0 -- a build with no buttress cut anywhere near a construction plane, so a
         notched cell's section cannot be relied on to chain cleanly even where `body`'s always
-        did. The whole closed loop is discretised instead, with points near a construction plane
+        did. The whole closed loop is discretized instead, with points near a construction plane
         dropped exactly as `_finished_wall_gap` already drops them from `inner`.
 
         **Built open (`closed=False`), never closed, and that is the whole fix.** A first version
@@ -2860,7 +2928,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                 prev_excluded = exc
             if not kept:
                 raise PreconditionFailed(
-                    'P2: every discretised point of the buttress-cut cell\'s section at '
+                    'P2: every discretized point of the buttress-cut cell\'s section at '
                     'z = %.4f mm falls within %.2f mm of a construction plane'
                     % (si.mm(z_m), si.mm(FINISHED_PLANE_TOL_M)))
             if runs > 1:
@@ -3012,6 +3080,25 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
         # a build that lands elsewhere produces a different surface, different end caps and a
         # different wall while the progress line above reads identically.
         note('    at %s mm' % ' '.join('%.4f' % si.mm(z_m) for z_m, _pts in rows))
+        # **Which rung of the offset ladder each station landed on** (OQ-DES-CW36). The rung is
+        # chosen by whether `makeOffset2D` refused the one below, so it can differ between two
+        # builds of the same part while every stated tolerance still holds -- and the contours the
+        # rungs produce differ by up to 2.0e-4 mm, which is what carries into the wall's volume.
+        # Printed only when some station needed a retry, because the common case is every station
+        # on the first rung and a line saying so every build would be noise.
+        #
+        # **Taken from this patch's own rows rather than from `rungs` as a whole**, which
+        # accumulates across patches: `fit_at` caches by station, so a station shared between two
+        # patches is recorded once, in whichever patch reached it first. Every shipped
+        # configuration is `patch 1/1` and the two readings agree there -- this is correct for the
+        # multi-patch case that does not ship, rather than silently counting the whole part.
+        here = [rungs[key(z_m)] for z_m, _pts in rows if key(z_m) in rungs]
+        retried = sorted((r['z_m'], r['n'], r['n0']) for r in here if r.get('rung'))
+        if retried:
+            note('    offset ladder: %d of %d station(s) retried -- %s'
+                 % (len(retried), len(here),
+                    ', '.join('z %.4f to n=%d (from %d)' % (si.mm(z_m), n, n0)
+                              for z_m, n, n0 in retried)))
 
     def fuse_smooth(entries):
         pieces = []

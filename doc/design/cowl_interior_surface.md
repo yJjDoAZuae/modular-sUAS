@@ -4109,7 +4109,7 @@ than accidental. And **the direction of a failure is safe**: a partition effect 
 zero identity read nonzero, which is a check firing, not a check passing something bad. The
 rule that follows is for reading the result rather than for the build — **a residue or slip
 that is small but not zero is not evidence of lost material until it has been re-measured**
-by `solid_measure.converged_difference`, which cancels discretisation between matched
+by `solid_measure.converged_difference`, which cancels discretization between matched
 partitions and refuses mismatched ones, or by `solid_measure.surface_difference`, which is
 indifferent to face layout altogether.
 
@@ -4333,6 +4333,136 @@ figure in this document: the wall is measured in-plane and the surface that carr
 so each figure understates the deficit by a factor of 1.08 to 1.16 (§6.1, §6.8.2.2). A limit on the
 instrument cannot be read the way a limit on the construction is, because it does not say "this
 case is untried" — it says "the numbers you already have mean less than they appear to".
+
+### 10.0 The reproducibility floor of a recorded volume
+
+**A wall volume from this construction is reproducible to about 1e-5 relative, and no better.**
+Recorded 2026-11-01 under [OQ-DES-CW36](cowl.md), which was resolved to state this floor rather
+than remove it. It is first in this list because a reader needs it *before* reading any volume in
+this document.
+
+Everything else reproduces exactly. Two builds of one part on one machine give bit-identical
+station sets, scan grids, wall-thickness statistics, THIN flags and verdicts, and the port's other
+constructions are bit-identical in their volumes as well. The exception is this one quantity, and
+the mechanism is narrow and known.
+
+`eroded_arc` (§4.3) samples a station's cross-section at `n` points, uses those samples as a cubic
+B-spline's **poles** — so the curve approximates the section rather than passing through the
+observations — and offsets that curve inward by the wall thickness. OpenCASCADE's `makeOffset2D` sometimes answers *result of
+offsetting is null*, and the construction responds by doubling `n` over a three-rung ladder. **Two
+of the nose's ten stations sit exactly on that failure boundary**, so a station position differing
+by one unit in the last place — 7.1e-15 mm — flips which rung succeeds. The rungs are not
+interchangeable: their contours differ by up to **2.0e-4 mm**, moving 119 of a station's 120
+points, and that carries into the fitted surface, the smooth interior and the finished wall at
+3.9e-6 relative.
+
+**A tail wall moves too — 23617.2932 to 23617.3047 mm3 — and it is not this mechanism.** Measured
+2026-11-02: on a `tail_shell` the fitted interior (294462.4022 mm3) and the closed cavity
+(290850.6976 mm3) are **bit-identical** across the two revisions, and so is the notched blank. The
+divergence appears only at the cell-wall step, which is downstream of the offset ladder, so the
+ladder cannot have produced it. **The rung log says the same thing from the other side**: a tail
+build prints no ladder line at all, meaning every one of its 23 stations offset at the first rung,
+so there is no rung difference available to explain anything. Its cause is **not identified**:
+identical operands reaching
+`notched.cut(inside)`, `_extend_across_cell`, `_strip_seam` and the `common` with the cell should
+give an identical result, and each revision does reproduce itself bit-for-bit. So there is a
+second effect of about 5e-7 on a tail wall that this entry does not explain, and a tail's volume
+should be read against the same 1e-5 floor for that reason rather than this one. **It is filed as
+[OQ-DES-CW38](cowl.md)**, where the first question raised against it is whether the operands are
+identical at all or only identical under `solid_identity`, which does not compare a face's poles or
+knots.
+
+**Nothing stated in this document is violated by it.** 2.0e-4 mm is 25 times inside the refit's own
+`REFIT_TOL_M` = 0.005 mm and 50 times inside `WALL_TOL` = 0.010 mm, so the part is the same part by
+every criterion §6 applies.
+
+**How to attribute a moved volume instead of investigating it.** The construction logs the rung
+whenever any station needed a retry:
+
+    offset ladder: 1 of 10 station(s) retried -- z -32.3996 to n=800 (from 400)
+
+Two builds whose ladder lines agree and whose volumes differ have some other cause and are worth
+investigating. Two whose ladder lines differ have this one, and the difference is bounded by the
+figures above. What moves a last bit, and therefore a rung: a unit conversion, a FreeCAD point
+release, a different processor's transcendental functions, or any reordering of the arithmetic that
+computes a station position. All four are ordinary events.
+
+**So a wall volume is not a regression signal below 1e-5**, and the quantities that are — the
+station set, the wall-thickness statistics and the verdict — should carry that job instead.
+
+#### 10.0.1 What the offset failure is not — measured 2026-11-01
+
+`offset_ladder.py` walks the same ladder the construction walks, at five rungs per station
+(`0.5n` to `8n`), and records what the refit curve *is* at each. Run on `nose_cowl_shell` at
+`U` = 1, ten stations, fifty rungs. **Three candidate mechanisms are refuted**, which is worth more
+than the one still open:
+
+- **Not near-duplicate sample points.** `discretize` returning one position twice is an
+  established hazard in this project, and a cubic through a repeated point is degenerate. It does
+  not happen here: the count of distinct positions equals `n` at every one of the fifty rungs, and
+  the minimum gap between consecutive points is a clean arc-length over `n`.
+- **Not the refit's accuracy.** The refit reproduced its arc inside `REFIT_TOL_M` at every rung,
+  including every rung whose offset was refused. The failure is in the offset alone.
+- **Not the curve bending tighter than the wall**, which is the mechanism the question itself named
+  as most likely. An inward offset by `t` is singular wherever the radius of curvature falls below
+  `t`, so `min radius / t` should fall to 1 where the offset fails. It does the opposite. The
+  offset was refused at `radius / t` of 8.59, 6.72, 4.67 and 2.26 — and **succeeded at the two
+  tightest readings in the whole study, 1.16 and 1.23**. Refuted in its own predicted direction.
+- **Not the way the curve is built from the samples**, added 2026-11-02. The construction hands its
+  `n` samples in as the B-spline's poles, so the curve is a smoothing of the observations and not an
+  interpolant — a reasonable suspect, since a smoother can wander where an interpolant cannot. The
+  ladder was walked again with both constructions over identical samples at every rung:
+  `interpolate` offset successfully at **47 of 50 rungs against the poles construction's 46**, and
+  at the construction's own first rung 9 of 10 against 8 of 10. That is no improvement worth the
+  name, so the poles construction is not the cause either. It is, however, **2.9 times more
+  accurate at the worst rung and 28 times at the best** — worst deviation from the arc 5.985e-04 mm
+  against 1.710e-03 mm — which is a separate finding, carried by OQ-DES-CW37 rather than here.
+
+**Two findings do stand, and both bear on what to do next.**
+
+**Sampling more densely makes the curve bend tighter.** The curve's minimum radius of curvature
+falls monotonically as `n` rises — at z = −23.6001 mm it runs 5.35, 2.80, 1.74, 1.35 and 0.70 mm
+across the five rungs. By the top rung the curve bends tighter than the wall it is about to be
+offset by. The ladder's direction is therefore wrong on its own terms, and *always using the finest
+rung* would have adopted the tightest curve available. That was one of the alternatives considered
+under OQ-DES-CW36 and this is why it was not taken.
+
+**The explanation first given for that trend was wrong, corrected 2026-11-02.** It was written up
+as interpolation through denser samples injecting oscillation. **There is no interpolation here.**
+`Part.BSplineCurve(pts, None, None, False, 3, None, False)` takes `pts` as the curve's **poles**,
+so the samples are control points and the curve never passes through them — measured on a 10 mm
+circle sampled at 12 points, the curve misses its own samples by 0.177923 mm, where
+`interpolate()` on the same samples honors all twelve exactly and tracks the circle 69 times more
+closely. The measured trend stands; its mechanism does not, and no replacement has been tested. The
+candidate worth testing is that denser poles let the control polygon resolve a genuinely tight
+feature of the section — a corner — that coarse poles round off, in which case the falling radius
+is a feature being approached rather than an artifact being introduced. **Untested**, and it would
+not by itself explain the refusals, which do not track the radius at all.
+
+**Failure is not monotonic in `n`, so the ladder is a sequence of independent attempts rather than
+a refinement.** At z = −23.6001 mm the offset succeeds at 200, is refused at 400, succeeds at 800,
+is refused at 1600 and succeeds at 3200. Three rungs can therefore all fail at a station where a
+fourth would have worked, and a build that currently succeeds is not succeeding because the ladder
+converges.
+
+**A candidate remedy exists and runs the other way, and it survived a second construction.** The
+coarsest rung tried, `n` = 200 — half the construction's own `SAMPLE_MIN` floor of 400 — **offset
+successfully at all ten stations**, with a curve deviation of 1.2e-3 to 1.7e-3 mm against the
+5.0e-3 mm allowed. Re-walked 2026-11-02 with both constructions over identical samples, `n` = 200
+offset 10 of 10 under **each** of them, while **the shipped floor of 400 measured worst under both**,
+at 8 and 9 of 10. So a coarser observation of the arc is reliable here, still verified-accurate, and
+the preference is not an artifact of how the curve is built. Adopting it would change every wall
+figure in this document at once, so it is a design decision and not a repair, and it is filed as
+**[OQ-DES-CW37](cowl.md)** — together with the findings above, which are what make the ladder's
+direction, and the sample/fit conflation underneath it, the question rather than only its
+reproducibility.
+
+**What remains unknown is what inside OpenCASCADE's offset decides the outcome.** Four mechanisms
+have now been refuted — duplicate samples, curve accuracy, curvature, and the poles construction —
+and no replacement has been found. Characterizing it further means working on the offset algorithm
+rather than on this project's geometry, which is why the question was resolved to bound the
+consequence instead. What is left is two reliable observations and no theory: `n` = 200 works at
+every station measured, and `n` = 400 works least often.
 
 - **Both candidate constructions have now run, and the one in use is the better of the two**
   (IP-FC-115, measured 2026-09-05). The cavity is assembled by cutting the dilated ribs out of

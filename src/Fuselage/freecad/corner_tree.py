@@ -480,7 +480,7 @@ def greeble_socket(doc, tag='', pfx='', base_z='0'):
 def end_section(doc, tag, pfx, z0, h, base_z='0'):
     """corner_end: the section, the greeble bore, the mouth, and the interrupted groove.
 
-    Parameterised the same way as greeble_socket, because the bulkhead calls exactly this
+    Parameterized the same way as greeble_socket, because the bulkhead calls exactly this
     with a different thickness and a zero tolerance.
     """
     P = 'Params.'

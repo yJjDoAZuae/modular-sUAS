@@ -416,6 +416,68 @@ def test_fix_spelling_is_idempotent():
 
 
 # ------------------------------------------------------------
+# the generated -ise/-ize family
+#
+# These exist because the hand-written dictionary could not hold: `discretisation`,
+# `parameterisation` and seven more families were invisible to this gate until 2026-11-02, and the
+# reason was circular -- a word absent from the dictionary can never be reported, so it never gets
+# added. A morphological family needs a rule, and these pin the rule rather than the instances.
+
+
+def test_every_ize_stem_generates_every_inflection():
+    fam = dc._ize_family()
+    for stem in dc.IZE_STEMS:
+        for british, american in dc.IZE_ENDINGS:
+            if stem == 'analy' and 'sation' in british:
+                continue
+            assert fam[stem + british] == stem + american
+
+
+def test_the_rule_reproduces_what_was_enumerated_by_hand():
+    # The literal already carried a few `-ise` words. If the rule disagreed with any of them, one
+    # of the two would be wrong, so this is a check on the rule and not only on the merge.
+    fam = dc._ize_family()
+    for word in ('normalise', 'normalised', 'normalising', 'organise', 'organised',
+                 'recognise', 'recognised', 'analyse', 'analysed'):
+        assert fam[word] == dc.BRITISH[word]
+
+
+def test_the_noun_suffixes_are_dropped_for_analyse():
+    # `analysis`/`analyses` keep the `s` in both dialects, so `analysation` is not a word and
+    # generating a correction for it would be inventing one.
+    assert 'analysation' not in dc.BRITISH
+    assert dc.BRITISH['analyse'] == 'analyze'
+
+
+def test_the_families_that_were_invisible_are_now_corrected():
+    for before, after in (('discretisation', 'discretization'),
+                          ('discretised', 'discretized'),
+                          ('parameterisation', 'parameterization'),
+                          ('reparameterising', 'reparameterizing'),
+                          ('serialisation', 'serialization'),
+                          ('quantisation', 'quantization'),
+                          ('generalisable', 'generalizable'),
+                          ('rasterise', 'rasterize'),
+                          ('initialised', 'initialized')):
+        assert dc.fix_spelling('a %s here' % before)[0] == 'a %s here' % after
+
+
+def test_an_ise_word_that_is_correct_in_american_english_is_left_alone():
+    # This is why the stems are enumerated instead of a bare `-ise` suffix rule: these are not
+    # British spellings, and a suffix rule would corrupt every one of them.
+    for word in ('advertise', 'exercise', 'surprise', 'comprise', 'supervise', 'revise',
+                 'precise', 'concise', 'promise', 'devise', 'improvise', 'enterprise',
+                 'merchandise', 'expertise', 'otherwise', 'noise', 'raise', 'wise'):
+        assert dc.fix_spelling('we %s it' % word) == ('we %s it' % word, 0)
+
+
+def test_the_generated_family_is_idempotent_too():
+    once, n = dc.fix_spelling('the discretisation parameterises a normalised serialisation')
+    assert n == 4
+    assert dc.fix_spelling(once) == (once, 0)
+
+
+# ------------------------------------------------------------
 # references and retired series
 # ------------------------------------------------------------
 

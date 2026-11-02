@@ -774,6 +774,63 @@ def main():
         print('  _steps gives the same count in meters as in millimeters, at all four notch '
               'edges, and still truncates a fractional span')
 
+    # `_steps`'s clamps commute, which is what let four call sites that each wrote
+    # `max(MIN, min(MAX, int(...)))` be replaced by one helper. Asserted rather than assumed,
+    # because the replacement is only equivalent while every `minimum` is at or below its
+    # `maximum`, and a future edit could break that silently.
+    clamp_bad = 0
+    for span, step, lo, hi in ((1.0, 1.0e-3, 400, 3000),      # a ratio inside the band
+                               (1.0e-6, 1.0e-3, 400, 3000),   # below the floor
+                               (100.0, 1.0e-3, 400, 3000)):   # above the ceiling
+        want = max(lo, min(hi, int(span / step)))
+        got = ci._steps(span, step, lo, hi)
+        if got != want:
+            print('  _steps(%g, %g, %d, %d) gave %d, not the %d the two clamps gave  <-- FAIL'
+                  % (span, step, lo, hi, got, want))
+            clamp_bad += 1
+    if clamp_bad:
+        bad += clamp_bad
+    else:
+        print('  _steps clamps to the same count the nested min/max it replaced gave, inside '
+              'the band and past both ends')
+
+    # **The offset ladder reports which rung it used** (OQ-DES-CW36). The rung is chosen by
+    # whether `makeOffset2D` refused the one below, so two builds of one part can land on
+    # different rungs and produce contours up to 2.0e-4 mm apart. The log line built from this
+    # record is the only thing that makes a moved wall volume attributable, so the record itself
+    # is checked: a station that needed no retry must report rung 0 at the construction's own
+    # first count, and `n` must be that count rather than whatever the ladder reached.
+    ladder_bad = 0
+    probe = {}
+    mid_m = si.m(-20.0)
+    wires_mid = ci._slice_wires(body, mid_m)
+    if len(wires_mid) != 1:
+        print('  the cell body sections into %d loops at z = -20.0000, not one -- ladder case '
+              'skipped' % len(wires_mid))
+    else:
+        arc, p_start, p_end, flip = ci.open_arc(wires_mid[0], ci.cell_boundary_planes(body))
+        ci.eroded_arc(arc, t_m, mid_m, p_start, p_end, flip, record=probe)
+        expect_n0 = ci._steps(si.length_m(arc), ci.SAMPLE_SPACING_M,
+                              ci.SAMPLE_MIN, ci.SAMPLE_MAX)
+        if probe.get('n0') != expect_n0:
+            print('  the ladder recorded n0 = %r, not the %d `_steps` gives  <-- FAIL'
+                  % (probe.get('n0'), expect_n0))
+            ladder_bad += 1
+        if probe.get('rung') is None or probe.get('n') != expect_n0 * 2 ** probe['rung']:
+            print('  the ladder recorded rung %r with n = %r, which do not agree  <-- FAIL'
+                  % (probe.get('rung'), probe.get('n')))
+            ladder_bad += 1
+        if probe.get('moved_m') is None or probe['moved_m'] > ci.REFIT_TOL_M:
+            print('  the ladder recorded a refit deviation of %r, over REFIT_TOL_M  <-- FAIL'
+                  % (probe.get('moved_m'),))
+            ladder_bad += 1
+        if ladder_bad:
+            bad += ladder_bad
+        else:
+            print('  the offset ladder records its rung: z -20.0000 on rung %d at n = %d '
+                  '(first count %d), refit %.3e mm'
+                  % (probe['rung'], probe['n'], probe['n0'], si.mm(probe['moved_m'])))
+
     # -- the clearance margin (OQ-DES-CW24), opt-in only
     if clearance_check:
         print('  clearance margin (Metric A, OQ-DES-CW24): %d station(s) under %.3f mm, '

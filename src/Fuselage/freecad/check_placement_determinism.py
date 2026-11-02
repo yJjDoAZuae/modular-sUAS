@@ -27,7 +27,7 @@ whatever the digests say. That is the difference between this check and one that
 on a machine where the seeding quietly stopped working.
 
 **The comparison is over a digest of the whole corpus**, not a per-case pass. Placement is
-serialised to text -- letter, side, lane, offset and text box for each dimension; key, side and
+serialized to text -- letter, side, lane, offset and text box for each dimension; key, side and
 box for each note; and the *refusals*, since a refusal that flips between runs is exactly the
 nondeterminism being looked for -- and hashed. Two runs agree or they do not.
 
@@ -128,7 +128,7 @@ def corpus():
     return out
 
 
-def serialise(entries):
+def serialize(entries):
     """The corpus as text, which is what actually gets compared."""
     lines = []
     for label, result in entries:
@@ -157,7 +157,7 @@ def emit():
     if _flag('perturb-search'):
         perturb_search_order()
     print('%s%d' % (PROBE_TAG, hash('probe')))
-    print('%s%s' % (DIGEST_TAG, digest(serialise(corpus()))))
+    print('%s%s' % (DIGEST_TAG, digest(serialize(corpus()))))
     sys.stdout.flush()
     return 0
 
@@ -207,7 +207,7 @@ def main():
     # ---- can accumulate -- caches, counters, anything the second call sees and the first
     # ---- did not. Input-order independence is `check_dimension_placement`'s and is not
     # ---- repeated here.
-    first, second = serialise(corpus()), serialise(corpus())
+    first, second = serialize(corpus()), serialize(corpus())
     print('  same process, placed twice   %s'
           % ('identical' if first == second else 'DIFFERENT'))
     if first != second:

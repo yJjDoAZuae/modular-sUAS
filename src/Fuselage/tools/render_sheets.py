@@ -85,7 +85,7 @@ def render(jobs, out_dir, echo=print):
     environment['RENDER_JOB'] = job_path
     environment['RENDER_LOG'] = log_path
     # **This is what keeps a window off the screen.** Qt's offscreen platform plugin gives the
-    # scene somewhere to rasterise into without a display; TechDraw's renderer is
+    # scene somewhere to rasterize into without a display; TechDraw's renderer is
     # `QGraphicsScene`, so it needs no GPU and nothing to show. Without it the GUI opens on
     # the working machine and steals focus.
     environment['QT_QPA_PLATFORM'] = 'offscreen'

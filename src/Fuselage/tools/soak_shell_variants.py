@@ -5,7 +5,7 @@
 Builds both shelled cowl kinds at every `U` the item names -- 0.5, 1.0, 1.5, 2.0, 3.0, 4.0 --
 with five repeats at `U` = 1.0 and `U` = 4.0 and one elsewhere, each repeat a fresh
 `freecadcmd` process (not a loop in one process): the spread this item exists to
-characterise was found *between* processes, not within one, so a soak that only repeated in
+characterize was found *between* processes, not within one, so a soak that only repeated in
 one process would not exercise the thing in question.
 
 Each (kind, `U`, repeat) triple is one call to `soak_cowl_shell.py`, which does the actual

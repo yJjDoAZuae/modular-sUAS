@@ -9,7 +9,7 @@ implemented under IP-FC-124, and it is **pairwise**: two builds are screened wit
 `mesh_stats.canonical_hash`, and where the hash does not fire the difference is adjudicated
 against `XOR / (A * 100U)` <= 1.0e-6 and `max surface gap / (100U)` <= 5.0e-5. A pairwise
 criterion cannot be evaluated in a process that holds one build, and the spread being
-characterised was found *between* processes, so it must not be. This script therefore emits a
+characterized was found *between* processes, so it must not be. This script therefore emits a
 hash and keeps the wall as a BREP; `soak_compare.py` does the judging afterwards.
 
 **Builds directly against `cowl_tree`'s own parameter rows**, `PARAMS_TAIL_SHELL` /
@@ -36,7 +36,7 @@ or, if a build itself is what has to be reported:
 
 **Volume is a fixed-deflection tessellation, never `Shape.Volume`** (IP-FC-119): this
 project's B-spline solids report `Shape.Volume` wrong by 0.16 to 0.24%, the same order as the
-spread this soak exists to characterise, so the wrong instrument would be measuring itself.
+spread this soak exists to characterize, so the wrong instrument would be measuring itself.
 
 **Not `solid_measure.converged_volume`, though -- measured and rejected for this soak,
 2026-09-11.** The adaptive search ran to its finest rung (0.00025 mm) on the nose at `U` =
@@ -45,7 +45,7 @@ much larger tail at `U` = 4, that is many hours of measurement the soak was not 
 and does not need: it exists to compare repeats against each other, not to pin down any one
 build's absolute volume to its own convergence floor. `mesh_volume` at one fixed deflection
 (`VOLUME_DEFLECTION_M`, `solid_measure.DEFLECTIONS_M`'s third rung) is still refined-tessellation
-volume and still not `Shape.Volume`; every build paying the same discretisation error is what
+volume and still not `Shape.Volume`; every build paying the same discretization error is what
 makes the *comparison* meaningful; it does not have to be a converged one.
 """
 import json
@@ -193,7 +193,7 @@ def measure(kind, u):
     # the far larger tail at U = 4, that difference is hours the soak does not need to spend:
     # it exists to compare repeats against each other, not to pin any one build to its own
     # convergence floor. `mesh_volume` at one fixed deflection is still refined-tessellation
-    # volume and still not `Shape.Volume`; every build paying the *same* discretisation error
+    # volume and still not `Shape.Volume`; every build paying the *same* discretization error
     # is what makes the comparison mean something.
     #
     # **Closure checked, not assumed -- found necessary 2026-09-11.** `mesh_volume`'s own
@@ -240,7 +240,7 @@ def measure(kind, u):
     wall_hash = mesh_stats.canonical_hash(tris)
 
     # **The wall is kept, because the criterion is pairwise and this process only has one
-    # build.** The spread this soak exists to characterise was found *between* processes, so
+    # build.** The spread this soak exists to characterize was found *between* processes, so
     # repeats cannot be compared in one; they are compared afterwards, by `soak_compare.py`,
     # which needs the shapes. BREP rather than `.FCStd`: it is the shape alone, and a round
     # trip through it was checked to preserve the canonical hash exactly.
