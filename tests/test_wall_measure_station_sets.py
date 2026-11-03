@@ -123,12 +123,12 @@ class TestOneRecord:
         """
         rec = station_sets.StationSet('x', _record(patches=[
             _patch(0, union_mm=0.5), _patch(1, union_mm=0.0004578), _patch(2, union_mm=1.2)]))
-        assert rec.tightest_union_mm == pytest.approx(0.0004578)
+        assert rec.tightest_union_m == pytest.approx(0.0004578e-3)
 
     def test_a_patch_with_no_surviving_gap_is_none_and_not_zero(self, tmp_path):
         """A patch that keeps one station has no gap at all; zero would read as a severe breach."""
         rec = station_sets.StationSet('x', _record(patches=[_patch(0, kept_mm=None)]))
-        assert rec.tightest_kept_mm is None
+        assert rec.tightest_kept_m is None
         assert rec.breaches_floor is False
 
     def test_a_breach_is_judged_against_this_record_s_own_floor(self, tmp_path):
@@ -284,8 +284,8 @@ class TestInteractions:
             ('p.json', _record(case='a_lo__b_hi', patches=[_patch(0, union_mm=0.0001)]))])
         found = [i for i in station_sets.interactions(got)]
         assert [i.verdict for i in found] == ['interaction']
-        assert found[0].gaps_mm == (pytest.approx(0.0001), pytest.approx(0.01),
-                                    pytest.approx(0.02))
+        assert found[0].gaps_m == (pytest.approx(0.0001e-3), pytest.approx(0.01e-3),
+                                   pytest.approx(0.02e-3))
 
     def test_a_pair_no_tighter_than_a_member_inherited_it(self, tmp_path):
         """The one that would manufacture 242 findings: every case carries the same notch edges."""
@@ -388,7 +388,7 @@ class TestTheRealRecords:
     def test_every_record_on_disk_parses_and_carries_a_floor(self):
         for rec in station_sets.available():
             assert rec.kind in ('tail_shell', 'nose_cowl_shell')
-            assert rec.floor_mm > 0.0
+            assert rec.floor_m > 0.0
             assert rec.patches
 
     def test_the_floor_removed_every_sub_floor_gap_it_was_given(self):
@@ -396,4 +396,4 @@ class TestTheRealRecords:
         breaches = station_sets.floor_breaches(station_sets.available())
         assert breaches == [], '\n'.join(
             '%s kept %.7f mm under its own %.3f mm floor'
-            % (r.label, r.tightest_kept_mm, r.floor_mm) for r in breaches)
+            % (r.label, r.tightest_kept_m, r.floor_m) for r in breaches)

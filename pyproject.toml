@@ -75,7 +75,11 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src/Fuselage/tools"]
+# `freecad/` is here so `wall_measure` can import `units` (OQ-ARCH-24, alternative 1).
+# The two directories share no module name -- 124 and 46 modules, zero collisions,
+# measured 2026-11-02 -- so neither shadows the other, and being importable is not
+# being imported: the modules in `freecad/` that need FreeCAD still need it.
+pythonpath = ["src/Fuselage/tools", "src/Fuselage/freecad"]
 # -p no:cacheprovider: the repo lives on a network share (\\<server>\<share>\...), and the
 # cache plugin's atomic write of .pytest_cache fails there (WinError 6/5), leaving an
 # orphaned pytest-cache-files-<random>/ directory at the repo root on every run that this

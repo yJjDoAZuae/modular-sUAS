@@ -34,6 +34,10 @@ import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
+# `wall_measure` stores SI and imports `units` from the port (OQ-ARCH-24), so this script
+# needs `freecad/` reachable too -- it is the only script under `tools/` that imports the
+# package.
+sys.path.insert(1, os.path.normpath(os.path.join(_HERE, '..', 'freecad')))
 
 import freecad_render                                                   # noqa: E402
 from wall_measure import inputs                                         # noqa: E402

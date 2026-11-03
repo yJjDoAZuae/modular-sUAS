@@ -46,7 +46,7 @@ that magnitude on this configuration.
 
 **Cost, from the soak corpus's own build times rather than estimated.** One full build a dose, and a
 `tail_shell` build is **727 s at `U` = 0.5 and 4 170 s at `U` = 3.0** -- 5.7x, because the part is
-50 mm against 300 mm. The scan adds roughly 7 s a station, and the station count follows `SCAN_MM`,
+50 mm against 300 mm. The scan adds roughly 7 s a station, and the station count follows `SCAN_M`,
 so `U` = 3.0 pays about 150 slices a dose on top. Budget **about 1.5 hours a dose at `U` = 3.0**,
 against 15 minutes at `U` = 0.5. The six-dose series is therefore around 9 hours at `U` = 3.0, which
 is why the doses are ordered so an interrupted run still answers the question it was started for.
@@ -137,13 +137,13 @@ HISTORIC_Z = -283.9951339
 #: and for the same reason.
 DOSES = (0.0, 0.03, 0.01, 0.02, 0.05, 0.1)
 
-#: **Axial scan spacing, in millimeters -- not a station count.** A count is the mistake this
+#: **Axial scan spacing -- not a station count.** A count is the mistake this
 #: project has made in a published figure already: the cowl's length scales with `U` and the wall it
 #: builds does not, so 24 stations is 2.1 mm apart on a 50 mm `U` = 0.5 tail and **12.5 mm apart on
 #: a 300 mm `U` = 3.0 one**. The break whose axial extent nobody has measured would have to be
 #: longer than the spacing to be seen at all, so holding the spacing is what makes two `U` values
-#: comparable. `wall_vanish` scans at the same 2.0 mm.
-SCAN_MM = 2.0
+#: comparable. `wall_vanish` scans at the same 2.0 mm (2.0e-3 m).
+SCAN_M = 2.0e-3
 
 #: The station floor, the ceiling and the refinement tolerance come from the library module rather
 #: than being restated here, so there is one source for them. 24 stations is the floor however short
@@ -151,7 +151,7 @@ SCAN_MM = 2.0
 #: tail's 150 well inside; 0.25 mm is what an end is resolved to, about three slices an end.
 MIN_STATIONS = rb.MIN_STATIONS
 MAX_STATIONS = rb.MAX_STATIONS
-EXTENT_TOL = rb.EXTENT_TOL
+EXTENT_TOL_M = rb.EXTENT_TOL_M
 
 
 def _opt(name, default=None):
@@ -178,38 +178,43 @@ def ring_state_at(wall, z):
     return 'broken', faces, wire_counts, area
 
 
-def ring_states(wall, z_lo, z_hi, stations=None, scan_mm=SCAN_MM):
+def ring_states(wall, z_lo_m, z_hi_m, stations=None, scan_m=SCAN_M):
     """The annulus identity at each station: `(continuous, broken, unreadable, worst, detail)`.
 
     `worst` names the station with the most arcs, which is where to look first. A station whose
     section will not form a face at all is counted `unreadable` and never folded into either of the
     other two, since "the maker refused" and "the ring is broken" are different answers.
 
-    `stations` defaults to whatever `scan_mm` spacing requires over this span, so the sampling is a
-    spacing and not a count -- see `SCAN_MM`.
+    `stations` defaults to whatever `scan_m` spacing requires over this span, so the sampling is a
+    spacing and not a count -- see `SCAN_M`.
+
+    **The span and the grid are SI and the kernel call converts** (IP-FC-163). `ring_breaks` is
+    SI since that item, so handing it a millimeter grid would refine each end a thousand times
+    finer than `EXTENT_TOL_M` intends and pay for it in kernel sections.
     """
     if stations is None:
-        stations = rb.station_count(z_lo, z_hi, scan_mm, MIN_STATIONS, MAX_STATIONS)
+        stations = rb.station_count(z_lo_m, z_hi_m, scan_m, MIN_STATIONS, MAX_STATIONS)
     continuous, broken, unreadable, worst = 0, 0, 0, None
     detail = []
-    for z in rb.scan_grid(z_lo, z_hi, stations):
+    for z_m in rb.scan_grid(z_lo_m, z_hi_m, stations):
+        z = si.mm(z_m)
         state, faces, wire_counts, area = ring_state_at(wall, z)
         if state == 'unreadable':
             unreadable += 1
-            detail.append({'z': z, 'state': 'unreadable'})
+            detail.append({'z_m': z_m, 'state': 'unreadable'})
         elif state == 'annulus':
             continuous += 1
-            detail.append({'z': z, 'state': 'annulus', 'area': area})
+            detail.append({'z_m': z_m, 'state': 'annulus', 'area': area})
         else:
             broken += 1
-            detail.append({'z': z, 'state': 'broken', 'faces': faces,
+            detail.append({'z_m': z_m, 'state': 'broken', 'faces': faces,
                            'wires': wire_counts, 'area': area})
             if worst is None or faces > worst[1]:
-                worst = (z, faces)
+                worst = (z_m, faces)
     return continuous, broken, unreadable, worst, detail
 
 
-def break_extent(wall, detail, tol=EXTENT_TOL):
+def break_extent(wall, detail, tol_m=EXTENT_TOL_M):
     """Each run of broken stations, with its axial ends refined off the scan grid.
 
     The run-finding and the bisection are `wall_measure.ring_breaks`, which takes the classifier as
@@ -221,10 +226,11 @@ def break_extent(wall, detail, tol=EXTENT_TOL):
     reproduced and its shape discarded, so recovering the figure now would cost another full build
     at the `U` it happened on.
     """
-    grid = [item['z'] for item in detail]
+    grid = [item['z_m'] for item in detail]
     states = [item['state'] for item in detail]
-    found = rb.extents(lambda z: ring_state_at(wall, z)[0], grid, states, tol)
-    faces = dict((item['z'], item.get('faces')) for item in detail)
+    # The grid and the tolerance are SI; only the kernel section is millimeters.
+    found = rb.extents(lambda z_m: ring_state_at(wall, si.mm(z_m))[0], grid, states, tol_m)
+    faces = dict((item['z_m'], item.get('faces')) for item in detail)
     for span in found:
         first, last = span['broken_stations_z']
         inside = [faces.get(z) or 0 for z in grid if first <= z <= last]
@@ -452,7 +458,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                        rib_residue=report.get('rib_residue'),
                        annulus=cont, broken=broken, unreadable=unread,
                        worst_station=worst, stations=detail,
-                       scan_mm=SCAN_MM, scan_stations=len(detail),
+                       scan_mm=si.mm(SCAN_M), scan_stations=len(detail),
                        scan_z=[s_lo, s_hi],
                        incumbent_at_break=thickness_at(wall, BREAK_Z, t),
                        moved_row=_moved(probe))
@@ -468,7 +474,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                 rec['break_extent'] = extents
                 for span in extents:
                     print('          break over %.3f mm, z %.4f to %.4f, up to %s arc(s)%s'
-                          % (span['extent_mm'], span['z_lo'], span['z_hi'],
+                          % (si.mm(span['extent_m']), si.mm(span['z_lo']), si.mm(span['z_hi']),
                              span['max_faces'],
                              ' (reaches the scan end)' if span['reaches_scan_end'] else ''))
                 rec['shape_path'] = _save_wall(wall, out_dir, kind, u, delta)
@@ -530,7 +536,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # top-level `target_z` holding the historical constant reads as though the run had
             # displaced it. At `U` = 3.0 it displaced z = -165.0433 while this said -283.9951339.
             fh.write(json.dumps({'kind': kind, 'u': float(u),
-                                 'historic_z': HISTORIC_Z, 'scan_mm': SCAN_MM,
+                                 'historic_z': HISTORIC_Z, 'scan_mm': si.mm(SCAN_M),
                                  'doses': records}, indent=1, sort_keys=True, default=float))
 
     print('')

@@ -26,7 +26,7 @@ wrong test (IP-FC-137's sliver read 0.000000 mm3 and was a genuine invalid shape
 1. **What wall does that cavity produce?** The three booleans `shell_solid` performs after
    `cavity` returns, run here one at a time so a step that refuses is reported and the result it
    got to is still measured -- which `shell_solid` cannot do, because it is right to refuse.
-2. **Is the ring broken, and where?** The annulus scan at `SCAN_MM`, plus a dense local scan
+2. **Is the ring broken, and where?** The annulus scan at `SCAN_M`, plus a dense local scan
    around the station the refusal named, since a break shorter than the spacing is invisible.
 3. **Did the cavity leave the blank?** Opt-in, last, and unbounded. Cutting the blank out of the
    cavity leaves whatever is not inside it, so a contained cavity leaves nothing -- and it has to
@@ -67,6 +67,7 @@ import Part                                                              # noqa:
 import check_cowl_interior as cci                                        # noqa: E402
 import cowl_interior as ci                                               # noqa: E402
 import cowl_tree                                                         # noqa: E402
+import si                                                                # noqa: E402
 from corner_common import is_entry_point                                 # noqa: E402
 from station_gaps import BUILDERS, PARAMS, with_u                        # noqa: E402
 from wall_measure import refusals as wm_refusals                         # noqa: E402
@@ -76,7 +77,7 @@ from wall_measure import ring_breaks as rb                               # noqa:
 # rather than restated: a refinement that asked the question a second way would be measuring a
 # different quantity, and this script exists to measure the *same* one on a shape that survived.
 # Importing is safe -- that module runs `main()` behind `is_entry_point`.
-from sever_doses import (BREAK_Z, HEALTHY_MM, SCAN_MM, SILENT_MM,        # noqa: E402
+from sever_doses import (BREAK_Z, HEALTHY_MM, SCAN_M, SILENT_MM,         # noqa: E402
                          ring_states, break_extent, thickness_at)
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'refused_wall')
@@ -85,8 +86,8 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'refus
 #: way at 0.25 mm is 41 stations, which resolves a defect an order of magnitude shorter than the
 #: 2.0 mm the part-wide scan can see -- and `ring_breaks` records that a break shorter than the
 #: spacing is missed entirely, so the local pass is not optional.
-LOCAL_HALF_MM = 5.0
-LOCAL_STEP_MM = 0.25
+LOCAL_HALF_M = 5.0e-3
+LOCAL_STEP_M = 2.5e-4
 
 
 def _opt(name, default=None):
@@ -162,7 +163,10 @@ def containment(cavity_shape, blank):
         valid = None
     span = span_of(outside)
     pieces = len(outside.Solids) or len(outside.Faces)
-    verdict, why = wm_refusals.escape(outside.Volume, pieces, valid, span_mm=span)
+    # `escape` stores and compares in SI (IP-FC-163), so the two kernel figures convert here --
+    # this is the named crossing, and `span_of` returns a kernel span in millimeters.
+    verdict, why = wm_refusals.escape(si.volume_m3(outside), pieces, valid,
+                                      span_m=None if span is None else si.m(span))
     rec = {'volume_mm3': outside.Volume, 'solids': len(outside.Solids),
            'faces': len(outside.Faces), 'pieces': pieces, 'valid': valid,
            'narrowest_span_mm': span, 'verdict': verdict, 'why': why,
@@ -254,17 +258,17 @@ def finish(cavity_shape, blank, body, mirrors):
     return wall, stages, True
 
 
-def local_scan(wall, z, half=LOCAL_HALF_MM, step=LOCAL_STEP_MM):
+def local_scan(wall, z_m, half_m=LOCAL_HALF_M, step_m=LOCAL_STEP_M):
     """Question 3, locally: the annulus identity around one station at `step` spacing.
 
-    The part-wide scan runs at `SCAN_MM` = 2.0 mm and `ring_breaks.missable_mm` records what that
+    The part-wide scan runs at `SCAN_M` = 2.0e-3 m and `ring_breaks.missable_m` records what that
     cannot see. A refusal names a station to four decimals, so the one place a dense pass is
     affordable and worth having is right there.
     """
-    lo, hi = z - half, z + half
-    n = int(round((hi - lo) / step)) + 1
-    cont, broken, unread, worst, detail = ring_states(wall, lo, hi, stations=n)
-    return {'z': z, 'z_lo': lo, 'z_hi': hi, 'step_mm': step, 'stations': n,
+    lo_m, hi_m = z_m - half_m, z_m + half_m
+    n = int(round((hi_m - lo_m) / step_m)) + 1
+    cont, broken, unread, worst, detail = ring_states(wall, lo_m, hi_m, stations=n)
+    return {'z_m': z_m, 'z_lo': lo_m, 'z_hi': hi_m, 'step_m': step_m, 'stations': n,
             'annulus': cont, 'broken': broken, 'unreadable': unread,
             'worst_station': worst, 'detail': detail}
 
@@ -283,7 +287,7 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
     scan below finds that directly.
     """
     started = time.time()
-    rec = {'brep': brep, 'kind': kind, 'u': float(u), 'scan_mm': SCAN_MM,
+    rec = {'brep': brep, 'kind': kind, 'u': float(u), 'scan_mm': si.mm(SCAN_M),
            'z_of_interest': z_of_interest}
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
@@ -302,7 +306,7 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
     say('  %s at U = %g' % (kind, u))
     if z_of_interest is not None:
         say('  the refusal named z = %.4f; scanned densely at %.2f mm over +/- %.1f mm'
-            % (z_of_interest, LOCAL_STEP_MM, LOCAL_HALF_MM))
+            % (z_of_interest, si.mm(LOCAL_STEP_M), si.mm(LOCAL_HALF_M)))
     say('  containment check: %s' % ('requested' if want_containment else
                                      'skipped (opt in with --containment=1; it is unbounded)'))
     say('')
@@ -377,15 +381,16 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
         # 2. Is the ring broken, and where?
         w_lo, w_hi = ci.z_extent(wall)
         s_lo, s_hi = w_lo + ci.END_INSET_M, w_hi - ci.END_INSET_M
-        n_scan = rb.station_count(s_lo, s_hi, SCAN_MM, rb.MIN_STATIONS, rb.MAX_STATIONS)
+        n_scan = rb.station_count(s_lo, s_hi, SCAN_M, rb.MIN_STATIONS, rb.MAX_STATIONS)
         # Said *before* the scan, not after. It is a quiet quarter of an hour otherwise, and the
         # whole point of this line is that silence should be expected rather than diagnosed.
         say('  2. the ring: %d stations at %.1f mm over z %.4f..%.4f, about %.0f min at the '
-            '6.8 s a station on record...' % (n_scan, SCAN_MM, s_lo, s_hi, n_scan * 6.8 / 60.0))
+            '6.8 s a station on record...'
+            % (n_scan, si.mm(SCAN_M), si.mm(s_lo), si.mm(s_hi), n_scan * 6.8 / 60.0))
         cont, broken, unread, worst, detail = ring_states(wall, s_lo, s_hi)
         rec['scan'] = {'annulus': cont, 'broken': broken, 'unreadable': unread,
                        'worst_station': worst, 'stations': len(detail),
-                       'missable_mm': rb.missable_mm([d['z'] for d in detail]),
+                       'missable_mm': si.mm(rb.missable_m([d['z_m'] for d in detail])),
                        'detail': detail}
         say('     %d annulus, %d broken, %d unreadable; a break under %.3f mm is invisible here'
             % (cont, broken, unread, rec['scan']['missable_mm']))
@@ -393,7 +398,8 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
             rec['scan']['break_extent'] = break_extent(wall, detail)
             for span in rec['scan']['break_extent']:
                 say('     break over %.3f mm, z %.4f to %.4f, up to %s arc(s)%s'
-                    % (span['extent_mm'], span['z_lo'], span['z_hi'], span['max_faces'],
+                    % (si.mm(span['extent_m']), si.mm(span['z_lo']), si.mm(span['z_hi']),
+                       span['max_faces'],
                        ' (reaches the scan end)' if span['reaches_scan_end'] else ''))
         keep('ring scanned')
 
@@ -401,8 +407,10 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
         if z_of_interest is not None:
             say('')
             say('  3. dense pass at the refusal\'s own station, %.2f mm spacing...'
-                % LOCAL_STEP_MM)
-            local = local_scan(wall, z_of_interest)
+                % si.mm(LOCAL_STEP_M))
+            # `z_of_interest` is the millimeter station a refusal named on the command line;
+            # `local_scan` is SI since IP-FC-163, so this is the named crossing.
+            local = local_scan(wall, si.m(z_of_interest))
             rec['local'] = local
             say('     %d stations: %d annulus, %d broken, %d unreadable'
                 % (local['stations'], local['annulus'], local['broken'], local['unreadable']))
@@ -410,7 +418,8 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
                 local['break_extent'] = break_extent(wall, local['detail'])
                 for span in local['break_extent']:
                     say('     break over %.3f mm, z %.4f to %.4f, up to %s arc(s)'
-                        % (span['extent_mm'], span['z_lo'], span['z_hi'], span['max_faces']))
+                        % (si.mm(span['extent_m']), si.mm(span['z_lo']),
+                           si.mm(span['z_hi']), span['max_faces']))
             rec['local_incumbent'] = thickness_at(wall, z_of_interest, t)
             keep('local scanned')
 

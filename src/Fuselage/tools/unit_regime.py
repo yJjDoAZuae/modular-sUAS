@@ -341,14 +341,49 @@ def inline_literals(path):
     return out
 
 
-def modules(port=PORT):
-    """The port's library modules, in sorted order, as `(name, path)`."""
+#: Directories whose Python the constant audit covers. **`tools/` is here because the standard
+#: covers it**: `doc/guidelines/general.md` says "every variable, field, parameter, function
+#: argument, and return value in the project", and `tools/wall_measure` is 8 022 lines of library
+#: code called directly from the port.
+AUDIT_ROOTS = (PORT, HERE)
+
+#: Directory names never descended into.
+SKIP_DIRS = ('__pycache__', '.pytest_cache', 'variant_output', 'variant_output_original', 'out')
+
+
+def modules(port=None, roots=None):
+    """Every library module the audit covers, in sorted order, as `(name, path)`.
+
+    **Walked, not listed.** Until 2026-11-02 this used `os.listdir` on one directory, so
+    `tools/wall_measure/` -- 19 modules and 8 022 lines, the largest body of unconverted code in
+    the project -- was never opened by this sweep or by `--undefined` or `--counts`. It was not
+    reported clean; it was not reported, and every "0 still stored in millimeters" figure taken
+    before the fix excluded it. A sweep that enumerates less than it claims to audit is worse than
+    no sweep, because its clean reading gets quoted. IP-FC-167 carries the repair.
+
+    **Names are package-qualified** relative to the root they were found under, so
+    `wall_measure.truth.R_OUTER` and a top-level `R_OUTER` cannot share a manifest key and excuse
+    each other. A module directly in a root keeps its bare name, so every existing manifest entry
+    still resolves.
+
+    `port` is accepted for the callers that passed one positionally and audits that directory
+    alone; `roots` overrides the default set.
+    """
+    if roots is None:
+        roots = (port,) if port is not None else AUDIT_ROOTS
     out = []
-    for name in sorted(os.listdir(port)):
-        if not name.endswith('.py') or name.startswith(SKIP_PREFIXES):
-            continue
-        out.append((name[:-3], os.path.join(port, name)))
-    return out
+    for root in roots:
+        for base, dirs, files in os.walk(root):
+            dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+            for name in sorted(files):
+                if not name.endswith('.py') or name.startswith(SKIP_PREFIXES):
+                    continue
+                rel = os.path.relpath(os.path.join(base, name), root)
+                dotted = rel[:-3].replace(os.sep, '.')
+                if dotted.endswith('.__init__'):
+                    dotted = dotted[:-len('.__init__')]
+                out.append((dotted, os.path.join(base, name)))
+    return sorted(out)
 
 
 def load_manifest(path=MANIFEST):
@@ -359,7 +394,7 @@ def load_manifest(path=MANIFEST):
         return json.load(handle)
 
 
-def audit(port=PORT, manifest=None):
+def audit(port=None, manifest=None):
     """Check the port against the manifest. Returns `(findings, summary)`.
 
     `summary` counts what is left to do, so a caller can report progress without re-deriving it:
@@ -451,7 +486,10 @@ def audit(port=PORT, manifest=None):
     # constant of the same name carrying a different unit, which is the one way this manifest
     # could license the error it exists to catch.
     for key in sorted(set(declared) - present):
-        module, _, name = key.partition('.')
+        # `rpartition`, not `partition`: a package-qualified key is `wall_measure.truth.R_OUTER`,
+        # and splitting on the first dot would report the module as `wall_measure` and the
+        # constant as `truth.R_OUTER`.
+        module, _, name = key.rpartition('.')
         findings.append(Finding(module, name, 0, 'stale',
                                 'is in the manifest and not in the tree -- delete the entry, '
                                 'so it cannot excuse a future constant of the same name'))

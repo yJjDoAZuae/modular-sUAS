@@ -264,13 +264,13 @@ def test_the_measured_response_is_zero_at_the_other_rows():
     rows = square_rows([0.0, 1.0, 2.0, 3.0])
     got = fr.response(_LinearFit, rows, 1, 0.01, [0.0, 2.0, 3.0], n_v=24)
     for rec in got:
-        assert rec['moved_mm'] == pytest.approx(0.0, abs=1e-9), rec
+        assert rec['moved_m'] == pytest.approx(0.0, abs=1e-9), rec
 
 
 def test_the_measured_response_is_the_full_nudge_at_the_nudged_row():
     rows = square_rows([0.0, 1.0, 2.0])
     rec = fr.response(_LinearFit, rows, 1, 0.01, [1.0], n_v=24)[0]
-    assert rec['moved_mm'] == pytest.approx(0.01, rel=1e-6)
+    assert rec['moved_m'] == pytest.approx(0.01, rel=1e-6)
     assert rec['gain'] == pytest.approx(1.0, rel=1e-6)
 
 
@@ -287,7 +287,7 @@ def test_a_response_record_carries_the_prediction_beside_the_measurement():
     # is being compared against.
     rows = square_rows([0.0, 1.0, 2.0, 3.0])
     rec = fr.response(_LinearFit, rows, 1, 0.01, [1.5], n_v=16)[0]
-    assert set(rec) == {'z', 'row', 'u', 'moved_mm', 'gain', 'predicted_gain'}
+    assert set(rec) == {'z', 'row', 'u', 'moved_m', 'gain', 'predicted_gain'}
 
 
 def test_the_axial_parameter_is_solved_from_the_surface_not_assumed():

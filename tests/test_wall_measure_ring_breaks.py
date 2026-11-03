@@ -37,12 +37,18 @@ def broken_between(z_start, z_end, unreadable=()):
     return state_at
 
 
-def scan(state_at, z_lo, z_hi, scan_mm):
-    """The grid, its states and the extents, the way a real run would compute them."""
-    n = rb.station_count(z_lo, z_hi, scan_mm)
+def scan(state_at, z_lo, z_hi, scan_m, tol=None):
+    """The grid, its states and the extents, the way a real run would compute them.
+
+    `tol` is forwarded when given, so a test can price a refinement at the precision its own
+    synthetic grid warrants rather than at the production constant's.
+    """
+    n = rb.station_count(z_lo, z_hi, scan_m)
     grid = rb.scan_grid(z_lo, z_hi, n)
     states = [state_at(z) for z in grid]
-    return grid, states, rb.extents(state_at, grid, states)
+    if tol is None:
+        return grid, states, rb.extents(state_at, grid, states)
+    return grid, states, rb.extents(state_at, grid, states, tol_m=tol)
 
 
 class TestTheSamplingIsASpacing:
@@ -55,8 +61,8 @@ class TestTheSamplingIsASpacing:
 
     def test_a_fixed_count_would_have_scanned_a_long_tail_six_times_coarser(self):
         """The arithmetic behind the rule, so the rule is checkable and not just asserted."""
-        at_u05 = rb.missable_mm(rb.scan_grid(-50.0, -1.0, 24))
-        at_u30 = rb.missable_mm(rb.scan_grid(-300.0, -1.0, 24))
+        at_u05 = rb.missable_m(rb.scan_grid(-50.0, -1.0, 24))
+        at_u30 = rb.missable_m(rb.scan_grid(-300.0, -1.0, 24))
         assert at_u05 == pytest.approx(2.13, abs=0.01)
         assert at_u30 == pytest.approx(13.0, abs=0.01)
         assert at_u30 / at_u05 == pytest.approx(6.1, abs=0.1)
@@ -77,8 +83,8 @@ class TestTheSamplingIsASpacing:
         assert len(grid) == 151
 
     def test_the_blind_spot_is_the_widest_spacing_and_is_none_for_one_station(self):
-        assert rb.missable_mm([0.0]) is None
-        assert rb.missable_mm([0.0, 2.0, 5.0]) == pytest.approx(3.0)
+        assert rb.missable_m([0.0]) is None
+        assert rb.missable_m([0.0, 2.0, 5.0]) == pytest.approx(3.0)
 
 
 class TestFindingTheRuns:
@@ -110,9 +116,9 @@ class TestMeasuringTheExtent:
         state_at = broken_between(-120.0, -113.0)
         _grid, _states, found = scan(state_at, -300.0, -1.0, 2.0)
         assert len(found) == 1
-        assert found[0]['extent_mm'] == pytest.approx(7.0, abs=2 * rb.EXTENT_TOL)
-        assert found[0]['z_lo'] == pytest.approx(-120.0, abs=rb.EXTENT_TOL)
-        assert found[0]['z_hi'] == pytest.approx(-113.0, abs=rb.EXTENT_TOL)
+        assert found[0]['extent_m'] == pytest.approx(7.0, abs=2 * rb.EXTENT_TOL_M)
+        assert found[0]['z_lo'] == pytest.approx(-120.0, abs=rb.EXTENT_TOL_M)
+        assert found[0]['z_hi'] == pytest.approx(-113.0, abs=rb.EXTENT_TOL_M)
         assert found[0]['reaches_scan_end'] is False
 
     def test_the_grid_alone_would_have_overstated_it(self):
@@ -120,8 +126,8 @@ class TestMeasuringTheExtent:
         state_at = broken_between(-120.0, -113.0)
         _grid, _states, found = scan(state_at, -300.0, -1.0, 2.0)
         first, last = found[0]['broken_stations_z']
-        assert abs(last - first) < found[0]['extent_mm']
-        assert found[0]['extent_mm'] - abs(last - first) < 2 * 2.0
+        assert abs(last - first) < found[0]['extent_m']
+        assert found[0]['extent_m'] - abs(last - first) < 2 * 2.0
 
     def test_a_break_shorter_than_the_spacing_is_missed_entirely(self):
         """**The sharpest trap here.** A clean scan means "no break longer than the spacing".
@@ -137,7 +143,7 @@ class TestMeasuringTheExtent:
         grid, states, found = scan(state_at, -300.0, -1.0, 2.0)
         assert found == []
         assert all(s == rb.ANNULUS for s in states)
-        assert rb.missable_mm(grid) > (hi - lo)
+        assert rb.missable_m(grid) > (hi - lo)
 
     def test_a_break_running_to_the_scanned_end_is_flagged_as_a_lower_bound(self):
         state_at = broken_between(-300.0, -290.0)
@@ -151,8 +157,8 @@ class TestMeasuringTheExtent:
             return rb.ANNULUS
         _grid, _states, found = scan(state_at, -300.0, -1.0, 2.0)
         assert len(found) == 2
-        assert found[0]['extent_mm'] == pytest.approx(7.0, abs=2 * rb.EXTENT_TOL)
-        assert found[1]['extent_mm'] == pytest.approx(4.0, abs=2 * rb.EXTENT_TOL)
+        assert found[0]['extent_m'] == pytest.approx(7.0, abs=2 * rb.EXTENT_TOL_M)
+        assert found[1]['extent_m'] == pytest.approx(4.0, abs=2 * rb.EXTENT_TOL_M)
 
     def test_an_unreadable_station_inside_a_refinement_is_reported_not_guessed_past(self):
         """The unreadable span sits on the first bisection midpoint and on no station at all.
@@ -181,14 +187,21 @@ class TestMeasuringTheExtent:
         assert found == []
 
     def test_refinement_costs_a_few_classifications_an_end_not_a_rescan(self):
-        """A full re-scan at 0.25 mm would be 1 196 stations; this must be nothing like that."""
+        """A full re-scan at this refinement would be 1 196 stations; this is nothing like it.
+
+        **The tolerance is stated here rather than taken from `rb.EXTENT_TOL_M`.** This grid is
+        a synthetic scale of its own and the production constant is SI since IP-FC-163, so
+        borrowing it would price a refinement a thousand times finer than the grid warrants --
+        which is what it did when the constant converted, and the count went 24 to 26. A cost
+        test has to name the precision it is costing.
+        """
         calls = []
         inner = broken_between(-120.0, -113.0)
 
         def counted(z):
             calls.append(z)
             return inner(z)
-        grid, states, _found = scan(counted, -300.0, -1.0, 2.0)
+        grid, states, _found = scan(counted, -300.0, -1.0, 2.0, tol=0.25)
         refinement = len(calls) - len(grid)
         assert refinement <= 24, refinement
         assert len(states) == 151
@@ -201,12 +214,12 @@ class TestEdgeZ:
         z, unreadable = rb.edge_z(state_at, -122.0, -120.0)
         assert unreadable is False
         assert state_at(z) == rb.BROKEN
-        assert z == pytest.approx(-120.0, abs=rb.EXTENT_TOL)
+        assert z == pytest.approx(-120.0, abs=rb.EXTENT_TOL_M)
 
     def test_it_honors_a_tighter_tolerance(self):
         state_at = broken_between(-120.0, -113.0)
-        coarse, _ = rb.edge_z(state_at, -122.0, -120.0, tol=1.0)
-        fine, _ = rb.edge_z(state_at, -122.0, -120.0, tol=0.01)
+        coarse, _ = rb.edge_z(state_at, -122.0, -120.0, tol_m=1.0)
+        fine, _ = rb.edge_z(state_at, -122.0, -120.0, tol_m=0.01)
         assert abs(fine + 120.0) < abs(coarse + 120.0) + 1.0e-9
         assert fine == pytest.approx(-120.0, abs=0.01)
 

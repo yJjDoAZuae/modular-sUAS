@@ -733,11 +733,18 @@ a dangling reference that raises only on the branch that reaches it, and an attr
 through an import alias (`ci.WALL_TOL`) is invisible to any scope check. It found 7 bare names
 and 58 attribute references, one of them inside a refusal message no passing build executes.
 
-**What remains is 19 constants in seven modules and one decision**, [OQ-ARCH-24](#open-questions):
-`tools/wall_measure` may not import the conversion layer, because a committed test asserts it
+**That decision is made**, [OQ-ARCH-24](#open-questions), resolved 2026-11-02 to alternative 1:
+`tools/wall_measure` could not import the conversion layer, because a committed test asserts it
 depends on nothing outside numpy and the standard library so that it stays loadable under
-FreeCAD's embedded interpreter, and `si.py` imports FreeCAD. IP-FC-159, the port's own SI
-parameter layer, is also still open.
+FreeCAD's embedded interpreter, and `si.py` imports FreeCAD. But `units.py` is not `si.py` — it
+imports only `math`, which IP-FC-8 made deliberate — so admitting `units` to the allowlist costs
+the allowlist's purpose nothing. IP-FC-159, the port's own SI parameter layer, is a separate item
+and still open.
+
+**And the figure above was measured over too small a tree.** Until 2026-11-02 `unit_regime.py`
+enumerated with `os.listdir`, not `os.walk`, so `tools/wall_measure/` was never opened by any
+sweep — every earlier "0 still stored in millimeters" excluded 19 modules and 8 022 lines. The
+sweep is recursive now and the figures below are taken over the whole tree.
 
 **A number printed in a document, a log or a drawing dimension is not a unit-regime statement.**
 The guidelines place display at its own boundary — *"Display, reports, drawings | out | m →
@@ -3692,7 +3699,52 @@ test asserts it depends on nothing outside numpy and the standard library, and c
 therefore needs a decision about that property rather than a conversion. Found 2026-11-01 while
 converting the port's consumers of it.
 
-### OQ-ARCH-24 — How does `wall_measure` reach the unit standard, when it may not import the conversion layer?
+### OQ-ARCH-24 — How does `wall_measure` reach the unit standard, when it may not import the conversion layer? — RESOLVED 2026-11-02
+
+**Resolution: alternative 1 — `freecad/units.py` is admitted to the allowlist.** <user> authorized
+completing the unit repair on 2026-11-02. `tools/wall_measure` now imports `units`, which holds
+`MM_PER_M`, `M_PER_MM`, `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions and imports
+only `math`. There is no new file, no duplicated factor, and exactly one definition of the
+project's only length factor.
+
+**Both of this alternative's premises were checked before acting, and both moved.**
+
+- Its stated drawback — that a `tools/` to `freecad/` dependency is "a direction of dependency the
+  tree does not otherwise have" — is **false**. 13 modules under `tools/` already reach into
+  `freecad/`, among them `freecad_render.py`, which computes a `FREECAD_DIR` for exactly that
+  purpose. The objection was overstated and decides nothing.
+- Its stated prerequisite — that `freecad/` be on `sys.path` wherever `wall_measure` is imported
+  — **was not met**, and in two places rather than the one the question guessed.
+  `pyproject.toml` set `pythonpath = ["src/Fuselage/tools"]` and no test added `freecad/`, which
+  covers about twenty `test_wall_measure_*` files; and `run_input_screen.py` inserts only
+  `tools/`. Both are now fixed, one line each.
+
+**Widening the test path is safe, and that is measured rather than assumed.** The two directories
+share **no module name at all** — 124 modules in `freecad/`, 46 in `tools/`, zero collisions — so
+adding `freecad/` to `pythonpath` shadows nothing in either direction. Being on `sys.path` is not
+importing: the `freecad/` modules that import FreeCAD at module level are no more reachable by
+accident than any other module in the tree.
+
+**Alternative 2 was adopted first and then withdrawn, on the same day, which is worth recording.**
+Moving the factors to a `tools/units.py` with `freecad/units.py` re-exporting them was chosen on an
+unmeasured assumption that widening the test path was expensive. It is not, and alternative 2 turns
+out to carry a real defect the question did not see: `si.py` is imported by nearly every module in
+`freecad/`, so a `units` that re-exported from `tools/` would require `tools/` on `sys.path` in
+every one of those contexts — strictly more path surface than alternative 1 needs, in the opposite
+direction. The collision count is what settled it.
+
+Alternative 4 remains the one to avoid, for the reason recorded below: declaring the package's
+interface a boundary would decide the question by renaming it.
+
+**One thing this question did not see, found 2026-11-02 while answering it.** `unit_regime.py`
+enumerated with `os.listdir` rather than `os.walk` at all three sweep sites, so
+`tools/wall_measure/` — a subdirectory — was never opened by any sweep. Its 19 modules were not
+reported clean; they were not reported. Every "0 still stored in millimeters" reading taken before
+that fix excluded the largest body of unconverted code in the project. The sweep is recursive now,
+and IP-FC-167 carries the fix.
+
+The alternatives as considered are kept below, because the reasoning against 3 and 4 is what keeps
+them from being revisited.
 
 **The subsystem.** `src/Fuselage/tools/wall_measure/` is the wall-thickness measurement
 subsystem: 19 modules, 8 022 lines, 61 module-level numeric constants and 41 bare inline
