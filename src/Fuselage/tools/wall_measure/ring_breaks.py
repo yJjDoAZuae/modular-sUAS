@@ -30,20 +30,26 @@ MIN_STATIONS = 24
 #: A ceiling, so a large `U` cannot turn one scan into an unbounded one.
 MAX_STATIONS = 400
 
-#: How finely an end is resolved, in millimeters.
-EXTENT_TOL = 0.25
+#: How finely an end is resolved. 2.5e-4 m is the 0.25 mm this was before IP-FC-163; a
+#: bisection stop is a length and had to scale with the unit.
+EXTENT_TOL_M = 2.5e-4
 
 #: The three answers a classifier may give. `'unreadable'` is never folded into either of the
 #: others, because "the face maker refused" and "the ring is broken" are different findings.
 ANNULUS, BROKEN, UNREADABLE = 'annulus', 'broken', 'unreadable'
 
 
-def station_count(z_lo, z_hi, scan_mm, min_stations=MIN_STATIONS, max_stations=MAX_STATIONS):
-    """How many stations a span needs at `scan_mm` spacing, clamped to the two limits."""
-    if scan_mm <= 0.0:
-        raise ValueError('scan_mm must be positive, got %r' % (scan_mm,))
+def station_count(z_lo, z_hi, scan_m, min_stations=MIN_STATIONS, max_stations=MAX_STATIONS):
+    """How many stations a span needs at `scan_m` spacing, clamped to the two limits.
+
+    **`round`, not `int`** -- and that was already true before IP-FC-163 converted the module,
+    which is why this count did not move when the unit did. A truncating `int(span / step)` is
+    not unit-invariant; `cowl_interior._steps` carries the same finding and the slack it needed.
+    """
+    if scan_m <= 0.0:
+        raise ValueError('scan_m must be positive, got %r' % (scan_m,))
     span = abs(float(z_hi) - float(z_lo))
-    return max(min_stations, min(max_stations, int(round(span / float(scan_mm))) + 1))
+    return max(min_stations, min(max_stations, int(round(span / float(scan_m))) + 1))
 
 
 def scan_grid(z_lo, z_hi, stations):
@@ -76,7 +82,7 @@ def runs(states):
     return out
 
 
-def edge_z(state_at, z_good, z_bad, tol=EXTENT_TOL):
+def edge_z(state_at, z_good, z_bad, tol_m=EXTENT_TOL_M):
     """Where the ring stops being continuous between a continuous and a broken station.
 
     Returns `(z, unreadable)`, where `z` is the **broken** side of the final bracket. Taking the
@@ -87,7 +93,7 @@ def edge_z(state_at, z_good, z_bad, tol=EXTENT_TOL):
     neither answer applies there and bisecting past it would be guessing.
     """
     z_good, z_bad = float(z_good), float(z_bad)
-    while abs(z_bad - z_good) > tol:
+    while abs(z_bad - z_good) > tol_m:
         mid = 0.5 * (z_good + z_bad)
         state = state_at(mid)
         if state == UNREADABLE:
@@ -99,10 +105,10 @@ def edge_z(state_at, z_good, z_bad, tol=EXTENT_TOL):
     return z_bad, False
 
 
-def extents(state_at, grid, states, tol=EXTENT_TOL):
+def extents(state_at, grid, states, tol_m=EXTENT_TOL_M):
     """Each run of broken stations with its two axial ends refined off the grid.
 
-    Each entry carries `z_lo`, `z_hi`, `extent_mm`, the grid stations it was found between, and two
+    Each entry carries `z_lo`, `z_hi`, `extent_m`, the grid stations it was found between, and two
     honesty flags: `reaches_scan_end` when the break runs to the end of the scanned span, so the
     figure is a lower bound rather than the extent, and `unreadable_in_bracket` when a station
     inside a refinement could not be classified.
@@ -113,13 +119,13 @@ def extents(state_at, grid, states, tol=EXTENT_TOL):
         if first == 0:
             lo = grid[0]
         else:
-            lo, lo_unreadable = edge_z(state_at, grid[first - 1], grid[first], tol)
+            lo, lo_unreadable = edge_z(state_at, grid[first - 1], grid[first], tol_m)
         if last == len(grid) - 1:
             hi = grid[-1]
         else:
-            hi, hi_unreadable = edge_z(state_at, grid[last + 1], grid[last], tol)
+            hi, hi_unreadable = edge_z(state_at, grid[last + 1], grid[last], tol_m)
         out.append({'z_lo': min(lo, hi), 'z_hi': max(lo, hi),
-                    'extent_mm': abs(hi - lo),
+                    'extent_m': abs(hi - lo),
                     'broken_stations_z': [grid[first], grid[last]],
                     'broken_station_count': last - first + 1,
                     'reaches_scan_end': first == 0 or last == len(grid) - 1,
@@ -127,7 +133,7 @@ def extents(state_at, grid, states, tol=EXTENT_TOL):
     return out
 
 
-def missable_mm(grid):
+def missable_m(grid):
     """The longest break this grid could miss entirely: its widest station spacing.
 
     **A scan's own blind spot, printed rather than left to be inferred.** A break shorter than the

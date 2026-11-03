@@ -54,8 +54,14 @@ class TestThePackageIsPortableToTheWorker:
     def test_no_module_imports_anything_beyond_numpy_and_the_stdlib(self):
         import ast
         import pathlib
+        # `units` is `freecad/units.py`: the project's single conversion layer, which
+        # imports only `math` and so loads under FreeCAD's embedded interpreter like any
+        # other pure module. Admitted by OQ-ARCH-24 (alternative 1, 2026-11-02) so the
+        # package can store SI without declaring a second length factor. It is named
+        # explicitly rather than by a `freecad.*` pattern, so admitting one pure module
+        # does not admit `si.py`, which imports FreeCAD and must stay out.
         allowed = {'numpy', 'json', 'os', 're', 'sys', 'time', 'math', 'collections',
-                   'itertools', 'functools'}
+                   'itertools', 'functools', 'units'}
         pkg = pathlib.Path(sweep.__file__).parent
         offenders = []
         for path in sorted(pkg.glob('*.py')):

@@ -46,13 +46,18 @@ import numpy as np
 #: parameters and not at row points.
 N_CIRCUM = 240
 
-#: Bisection tolerance, in mm, when solving the surface's own axial parameter for a target `z`.
-#: The fit's `z` is independent of the circumferential parameter (every pole track interpolates the
-#: same station list), so this solve is one-dimensional and exact to round-off.
-Z_TOL = 1.0e-9
+#: Bisection tolerance when solving the surface's own axial parameter for a target `z`. The fit's
+#: `z` is independent of the circumferential parameter (every pole track interpolates the same
+#: station list), so this solve is one-dimensional and exact to round-off.
+#:
+#: **Scaled with the unit by IP-FC-163**, from 1.0e-9 mm. A bisection tolerance is a length, so
+#: carrying the literal across would have tightened this solve by a thousand and cost iterations
+#: for nothing -- the mirror of the loosening `station_sets.FLOOR_TOL_M` would have suffered.
+Z_TOL_M = 1.0e-12
 
-#: How close two station `z` values must be to count as the same station.
-SAME_STATION = 1.0e-6
+#: How close two station `z` values must be to count as the same station. 1.0e-9 m is the 1.0e-6
+#: mm this was before IP-FC-163.
+SAME_STATION_M = 1.0e-9
 
 
 def centroid(pts):
@@ -110,7 +115,7 @@ def nudge_rows(rows, i_row, delta, center=None):
     return out
 
 
-def plane_ends_held(before, after, normals, tol=1.0e-9):
+def plane_ends_held(before, after, normals, tol_m=1.0e-12):
     """Did a nudge leave every row end on the construction plane it started on?
 
     **The precondition a cell row's perturbation has to satisfy**, and the one worth checking
@@ -135,8 +140,8 @@ def plane_ends_held(before, after, normals, tol=1.0e-9):
             return False
         for i in (0, -1):
             for nx, ny in normals:
-                was = abs(pts_a[i][0] * nx + pts_a[i][1] * ny) <= tol
-                now = abs(pts_b[i][0] * nx + pts_b[i][1] * ny) <= tol
+                was = abs(pts_a[i][0] * nx + pts_a[i][1] * ny) <= tol_m
+                now = abs(pts_b[i][0] * nx + pts_b[i][1] * ny) <= tol_m
                 if was and not now:
                     return False
     return True
@@ -158,15 +163,15 @@ def uparams(rows):
     return [(z - lo) / span for z in zs]
 
 
-def row_index(rows, z, tol=SAME_STATION):
+def row_index(rows, z, tol_m=SAME_STATION_M):
     """Which row sits at `z`, or `None` if `z` falls between rows.
 
     Worth asking before interpreting any response: at a row the fit's response is zero by
-    construction, so a target station that *is* a row and a target station 0.001 mm off one are
+    construction, so a target station that *is* a row and a target station 1.0e-6 m off one are
     completely different measurements.
     """
     for i, (rz, _pts) in enumerate(rows):
-        if abs(float(rz) - float(z)) <= tol:
+        if abs(float(rz) - float(z)) <= tol_m:
             return i
     return None
 
@@ -219,7 +224,7 @@ def cardinal(params, i_row, at):
         + dx * dx * dx * (m[k + 1] - m[k]) / (6.0 * hk))
 
 
-def _solve_u(surf, z, lo=0.0, hi=1.0, tol=Z_TOL):
+def _solve_u(surf, z, lo=0.0, hi=1.0, tol_m=Z_TOL_M):
     """The surface's own axial parameter at height `z`.
 
     **Not `(z - lo) / span`.** That is the parameter the rows were *given*, and it is exact at a
@@ -236,7 +241,7 @@ def _solve_u(surf, z, lo=0.0, hi=1.0, tol=Z_TOL):
     for _step in range(200):
         mid = 0.5 * (lo + hi)
         z_mid = surf.value(mid, 0.0).z
-        if abs(z_mid - z) <= tol:
+        if abs(z_mid - z) <= tol_m:
             return mid
         if (z_mid < z) == rising:
             lo = mid
@@ -261,9 +266,10 @@ def response(fit, rows, i_row, delta, targets, n_v=N_CIRCUM):
     so the two are never reported apart:
 
     - `z`, and `row` -- the row index if the target *is* a row, else `None`
-    - `moved_mm` -- the largest distance the surface moved at that height
-    - `gain` -- `moved_mm / delta`, the response per mm of nudge, which is the figure comparable
-      with OQ-DES-CW26's 0.408
+    - `moved_m` -- the largest distance the surface moved at that height
+    - `gain` -- `moved_m / delta`, which is **dimensionless and therefore the one figure here
+      that did not move when IP-FC-163 converted the module** -- still comparable with
+      OQ-DES-CW26's 0.408
     - `predicted_gain` -- `cardinal` at the same place, the natural-spline expectation
     - `u` -- the surface parameter the measurement was taken at
 
@@ -286,7 +292,7 @@ def response(fit, rows, i_row, delta, targets, n_v=N_CIRCUM):
             'z': float(z),
             'row': row_index(rows, z),
             'u': float(u),
-            'moved_mm': step,
+            'moved_m': step,
             'gain': step / abs(delta),
             'predicted_gain': abs(cardinal(params, i_row, u)),
         })

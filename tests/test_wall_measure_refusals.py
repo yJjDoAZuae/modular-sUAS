@@ -167,7 +167,13 @@ class TestSaving(object):
 
 
 class TestDidTheCavityLeaveTheBlank(object):
-    """`escape`, whose whole reason for existing is that volume alone is the wrong test."""
+    """`escape`, whose whole reason for existing is that volume alone is the wrong test.
+
+    **The arguments are SI since IP-FC-163** -- cubic meters and meters, not mm3 and mm. The
+    figures below are the same physical quantities they always were: IP-FC-137's ten-micron span
+    is 1.0e-5 m, and its 2.0e-6 / 5.0e-7 mm3 pair either side of the floor is 2.0e-15 / 5.0e-16
+    m3. The `why` strings still quote millimeters, because a refusal is read against a kernel log.
+    """
 
     def test_no_residue_is_a_contained_cavity(self):
         verdict, why = refusals.escape(0.0, 0, True)
@@ -180,12 +186,12 @@ class TestDidTheCavityLeaveTheBlank(object):
         # `len(shape.Solids)` hands this function a zero and gets told `contained`. The
         # parameter is pieces of any topology, and the caller counts faces where there are no
         # solids.
-        verdict, why = refusals.escape(0.0, 5, True, span_mm=0.010)
+        verdict, why = refusals.escape(0.0, 5, True, span_m=1.0e-5)
         assert verdict == refusals.SLIVER
         assert '5 piece(s)' in why
 
     def test_real_volume_outside_the_blank_is_an_escape(self):
-        verdict, why = refusals.escape(12.5, 2, True)
+        verdict, why = refusals.escape(12.5e-9, 2, True)
         assert verdict == refusals.ESCAPED
         assert '12.5' in why
 
@@ -193,9 +199,9 @@ class TestDidTheCavityLeaveTheBlank(object):
         # The trap this function exists for, with that finding's own numbers: a residue whose
         # volume reads 0.000000 and which is nonetheless a real invalid five-face shape in a
         # ten-micron bounding box. A volume-only check called this empty and passed it.
-        verdict, _why = refusals.escape(0.0, 1, False, span_mm=0.010)
+        verdict, _why = refusals.escape(0.0, 1, False, span_m=1.0e-5)
         assert verdict == refusals.INVALID
-        verdict, why = refusals.escape(0.0, 1, True, span_mm=0.010)
+        verdict, why = refusals.escape(0.0, 1, True, span_m=1.0e-5)
         assert verdict == refusals.SLIVER
         assert 'near-tangency' in why
         assert 'sliver scale' in why
@@ -203,12 +209,12 @@ class TestDidTheCavityLeaveTheBlank(object):
     def test_invalid_topology_is_reported_ahead_of_any_volume(self):
         # A volume measured on an invalid shape is not a figure. This must not read as an escape
         # just because the number happens to be large.
-        verdict, why = refusals.escape(4349.27, 3, False)
+        verdict, why = refusals.escape(4349.27e-9, 3, False)
         assert verdict == refusals.INVALID
         assert 'not a valid shape' in why
 
     def test_a_sliver_wider_than_sliver_scale_is_still_a_sliver_but_says_so(self):
-        verdict, why = refusals.escape(0.0, 1, True, span_mm=5.0)
+        verdict, why = refusals.escape(0.0, 1, True, span_m=5.0e-3)
         assert verdict == refusals.SLIVER
         assert 'sliver scale' not in why
         assert '5.0' in why
@@ -216,8 +222,8 @@ class TestDidTheCavityLeaveTheBlank(object):
     def test_the_volume_floor_is_a_floor_on_volume_and_not_on_existence(self):
         # Just above the floor with one piece is material; just below it with one piece is a
         # sliver. Neither is `contained`, because a piece exists either way.
-        assert refusals.escape(2.0e-6, 1, True)[0] == refusals.ESCAPED
-        assert refusals.escape(5.0e-7, 1, True)[0] == refusals.SLIVER
+        assert refusals.escape(2.0e-15, 1, True)[0] == refusals.ESCAPED
+        assert refusals.escape(5.0e-16, 1, True)[0] == refusals.SLIVER
 
 
 COWL_INTERIOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',

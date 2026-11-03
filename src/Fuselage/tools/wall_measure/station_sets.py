@@ -35,6 +35,8 @@ import json
 import os
 import sys
 
+import units
+
 #: Where `station_gaps.py` writes, relative to this file.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 RECORDS = os.path.normpath(os.path.join(_HERE, '..', '..', 'freecad', 'out', 'station_gaps'))
@@ -42,9 +44,15 @@ RECORDS = os.path.normpath(os.path.join(_HERE, '..', '..', 'freecad', 'out', 'st
 #: What `pair_cases` joins a pair's two member names with.
 PAIR_JOIN = '__'
 
-#: Float slack when comparing a gap against the floor. The gaps are millimeters near 1e-4 and the
-#: floor is 0.6, so this only absorbs the last bit of a round trip through JSON.
-FLOOR_TOL = 1.0e-12
+#: Float slack when comparing a gap against the floor. It absorbs the last bit of a round trip
+#: through JSON and nothing more.
+#:
+#: **It scaled with the unit when IP-FC-163 converted this module, and had to.** The gaps are
+#: near 1e-7 m where they were near 1e-4 mm, so leaving the old 1.0e-12 in place would have
+#: turned slack of 1e-8 relative into slack of 1e-5 relative -- a thousandfold loosening of the
+#: one comparison this constant exists to keep tight. A tolerance is not unit-invariant, which is
+#: the same lesson `cowl_interior._steps` records for a truncating count.
+FLOOR_TOL_M = 1.0e-15
 
 
 class StationSet(object):
@@ -108,32 +116,36 @@ class StationSet(object):
 
     # -- what it measured ---------------------------------------------------------------------
 
+    # **The record's own key names stay millimeters, because they are a file format.** These
+    # artifacts are written by `station_gaps.run` and already exist on disk; renaming the keys
+    # would orphan every recorded run. So the JSON is a boundary -- read in kernel units,
+    # exposed in SI -- which is what `doc/guidelines/general.md` asks of a file interface.
     @property
-    def floor_mm(self):
+    def floor_m(self):
         """This configuration's own station floor. **Not the baseline's** -- see the module note."""
-        return float(self.row['station_floor_mm'])
+        return float(self.row['station_floor_mm']) * units.M_PER_MM
 
     @property
-    def t_mm(self):
-        return float(self.row['t_mm'])
+    def t_m(self):
+        return float(self.row['t_mm']) * units.M_PER_MM
 
     @property
     def patches(self):
         return list(self.row.get('patches') or [])
 
     @property
-    def tightest_union_mm(self):
+    def tightest_union_m(self):
         """The tightest gap anywhere in the seeded union, over every patch. `None` if unmeasured."""
-        return _min_over(self.patches, 'tightest_union_mm')
+        return _as_m(_min_over(self.patches, 'tightest_union_mm'))
 
     @property
-    def tightest_kept_mm(self):
+    def tightest_kept_m(self):
         """The tightest gap that survived the floor, over every patch.
 
         `None` when no patch reported one, which happens when a patch keeps a single station and so
         has no gap at all. That is not the same as zero and must not be compared against the floor.
         """
-        return _min_over(self.patches, 'tightest_kept_mm')
+        return _as_m(_min_over(self.patches, 'tightest_kept_mm'))
 
     @property
     def under_floor(self):
@@ -155,11 +167,20 @@ class StationSet(object):
         This is IP-FC-144's regression over the whole population: the floor exists to leave no gap
         under it, so a `True` here is a defect in the fix and not a property of the configuration.
         """
-        kept = self.tightest_kept_mm
-        return kept is not None and kept < self.floor_mm - FLOOR_TOL
+        kept = self.tightest_kept_m
+        return kept is not None and kept < self.floor_m - FLOOR_TOL_M
 
     def __repr__(self):
         return '<StationSet %s>' % self.label
+
+
+def _as_m(value_mm):
+    """A millimeter figure off the record, in meters, passing `None` through.
+
+    `None` is not zero here: a patch keeping a single station reports no gap at all, and the
+    distinction is load-bearing in `breaches_floor`.
+    """
+    return None if value_mm is None else value_mm * units.M_PER_MM
 
 
 def _min_over(patches, key):
@@ -266,13 +287,13 @@ def tighter_than_baseline(records, factor=1.0):
     "tighter than" list with nothing on the right-hand side would be meaningless rather than empty.
     """
     base = baseline(records)
-    if base is None or base.tightest_union_mm is None:
+    if base is None or base.tightest_union_m is None:
         return []
-    limit = base.tightest_union_mm * float(factor)
+    limit = base.tightest_union_m * float(factor)
     out = [r for r in records
-           if not r.is_baseline and r.tightest_union_mm is not None
-           and r.tightest_union_mm < limit]
-    out.sort(key=lambda r: r.tightest_union_mm)
+           if not r.is_baseline and r.tightest_union_m is not None
+           and r.tightest_union_m < limit]
+    out.sort(key=lambda r: r.tightest_union_m)
     return out
 
 
@@ -313,11 +334,11 @@ class Interaction(object):
         return [n for n, rec in zip(names, (self.first, self.second)) if rec is None]
 
     @property
-    def gaps_mm(self):
+    def gaps_m(self):
         """The pair's tightest seeded gap and each member's, members `None` when absent."""
-        return (self.pair.tightest_union_mm,
-                None if self.first is None else self.first.tightest_union_mm,
-                None if self.second is None else self.second.tightest_union_mm)
+        return (self.pair.tightest_union_m,
+                None if self.first is None else self.first.tightest_union_m,
+                None if self.second is None else self.second.tightest_union_m)
 
     def __repr__(self):
         return '<Interaction %s %s>' % (self.pair.label, self.verdict)
@@ -346,11 +367,11 @@ def interactions(records, singles=None):
         if first is None or second is None:
             out.append(Interaction(rec, first, second, 'unmeasured'))
             continue
-        mine = rec.tightest_union_mm
-        theirs = [m.tightest_union_mm for m in (first, second)]
+        mine = rec.tightest_union_m
+        theirs = [m.tightest_union_m for m in (first, second)]
         if mine is None or any(t is None for t in theirs):
             out.append(Interaction(rec, first, second, 'unmeasured'))
-        elif mine < min(theirs) - FLOOR_TOL:
+        elif mine < min(theirs) - FLOOR_TOL_M:
             out.append(Interaction(rec, first, second, 'interaction'))
         else:
             out.append(Interaction(rec, first, second, 'inherited'))
@@ -379,8 +400,9 @@ def report(records, show=10, singles=None):
     if base is not None:
         lines.append('baseline %s: floor %.3f mm, tightest seeded %.7f mm, tightest kept %s, '
                      '%d under the floor'
-                     % (base.label, base.floor_mm, base.tightest_union_mm or 0.0,
-                        _mm(base.tightest_kept_mm), base.under_floor))
+                     % (base.label, base.floor_m * units.MM_PER_M,
+                        (base.tightest_union_m or 0.0) * units.MM_PER_M,
+                        _mm(base.tightest_kept_m), base.under_floor))
     census = pair_census(records)
     lines.append('tightest-gap station pair(s) across the population: %d' % len(census))
     for (z_lo, z_hi), holders in census[:show]:
@@ -394,19 +416,22 @@ def report(records, show=10, singles=None):
         lines.append('gaps handed to the floor: %d to %d across the population'
                      % (workload[0].under_floor, workload[-1].under_floor))
         lines.append('  fewest %d: %s (floor %.3f mm)'
-                     % (workload[0].under_floor, workload[0].label, workload[0].floor_mm))
+                     % (workload[0].under_floor, workload[0].label,
+                        workload[0].floor_m * units.MM_PER_M))
         lines.append('  most    %d: %s (floor %.3f mm)'
-                     % (workload[-1].under_floor, workload[-1].label, workload[-1].floor_mm))
+                     % (workload[-1].under_floor, workload[-1].label,
+                        workload[-1].floor_m * units.MM_PER_M))
     breaches = floor_breaches(records)
     lines.append('floor breaches: %d' % len(breaches))
     for rec in breaches[:show]:
         lines.append('  %s kept %.7f mm under its own %.3f mm floor'
-                     % (rec.label, rec.tightest_kept_mm, rec.floor_mm))
+                     % (rec.label, rec.tightest_kept_m * units.MM_PER_M,
+                        rec.floor_m * units.MM_PER_M))
     tighter = tighter_than_baseline(records)
     lines.append('cases seeding a tighter gap than the baseline: %d' % len(tighter))
     for rec in tighter[:show]:
         lines.append('  %12.7f mm  %2d under the floor  %s'
-                     % (rec.tightest_union_mm, rec.under_floor, rec.label))
+                     % (rec.tightest_union_m * units.MM_PER_M, rec.under_floor, rec.label))
     found = interactions(records, singles=singles)
     if found:
         counts = {}
@@ -417,14 +442,17 @@ def report(records, show=10, singles=None):
         for item in found:
             if item.verdict != 'interaction':
                 continue
-            pair, first, second = item.gaps_mm
+            pair, first, second = item.gaps_m
             lines.append('  %s seeded %.7f mm against %.7f and %.7f alone'
-                         % (item.pair.label, pair, first, second))
+                         % (item.pair.label, pair * units.MM_PER_M,
+                            first * units.MM_PER_M, second * units.MM_PER_M))
     return lines
 
 
-def _mm(value):
-    return 'none' if value is None else '%.7f mm' % value
+def _mm(value_m):
+    """A meter figure as millimeter text. **The report is a display boundary**, so every figure
+    in `summary` converts here or at its own format site -- the stored values stay SI."""
+    return 'none' if value_m is None else '%.7f mm' % (value_m * units.MM_PER_M)
 
 
 def main(argv=None):

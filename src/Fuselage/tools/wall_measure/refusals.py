@@ -23,6 +23,8 @@ treats "this refusal has no shape" as the ordinary case it is rather than an err
 """
 import os
 
+import units
+
 #: BREP, not STEP or STL. It is the kernel's own format, so it round-trips the exact topology the
 #: refusal is about -- and a refusal is frequently *about* the topology, invalid faces and all,
 #: which a mesh export silently repairs and a STEP export may reinterpret.
@@ -35,17 +37,19 @@ DIRNAME = 'refusals'
 
 #: Below this, a boolean residue's volume is not distinguishable from the kernel's own noise on
 #: near-tangent operands. It is a floor on *volume only*, never a verdict on its own -- see
-#: `escape`.
-ESCAPE_TOL = 1.0e-6
+#: `escape`. 1.0e-15 m3 is the 1.0e-6 mm3 this was until IP-FC-163 converted it.
+ESCAPE_TOL_M3 = 1.0e-15
 
 #: A piece narrower than this in every direction is at the scale IP-FC-137's sliver was found at
-#: (a ~10 micron bounding box), which is reported as a sliver rather than as material.
-SLIVER_MM = 0.05
+#: (a ~10 micron bounding box), which is reported as a sliver rather than as material. 5.0e-5 m is
+#: the 0.05 mm this was until IP-FC-163 converted it.
+SLIVER_M = 5.0e-5
 
 CONTAINED, ESCAPED, SLIVER, INVALID = 'contained', 'escaped', 'sliver', 'invalid'
 
 
-def escape(volume_mm3, pieces, valid, span_mm=None, tol=ESCAPE_TOL, sliver_mm=SLIVER_MM):
+def escape(volume_m3, pieces, valid, span_m=None, tol_m3=ESCAPE_TOL_M3,
+           sliver_m=SLIVER_M):
     """Did the cavity leave the blank? `(verdict, why)`.
 
     The question is asked by cutting the blank out of the cavity: whatever is left is cavity that
@@ -71,18 +75,22 @@ def escape(volume_mm3, pieces, valid, span_mm=None, tol=ESCAPE_TOL, sliver_mm=SL
     """
     if not pieces:
         return CONTAINED, 'the cut left no topology at all'
+    # **The arithmetic is SI and only the message is millimeters.** A refusal is read by a person
+    # against a kernel log, so the figures it quotes stay in the units that log prints -- which
+    # `doc/guidelines/general.md` places at the display boundary, not the storage one.
+    volume_mm3 = volume_m3 * units.MM3_PER_M3
     if valid is False:
         return INVALID, ('%d piece(s) at %.6f mm3, and the residue is not a valid shape -- its '
                          'volume is not a figure to read' % (pieces, volume_mm3))
-    if volume_mm3 > tol:
+    if volume_m3 > tol_m3:
         return ESCAPED, ('%d piece(s) totalling %.6f mm3 of cavity outside the blank'
                          % (pieces, volume_mm3))
-    narrow = span_mm is not None and span_mm <= sliver_mm
+    narrow = span_m is not None and span_m <= sliver_m
     return SLIVER, ('%d piece(s) with %.6f mm3 between them, under the %.1e mm3 floor%s -- real '
                     'topology with no measurable volume is a near-tangency, not an empty cut'
-                    % (pieces, volume_mm3, tol,
-                       '' if span_mm is None else ', %.6f mm across%s'
-                       % (span_mm, ' (sliver scale)' if narrow else '')))
+                    % (pieces, volume_mm3, tol_m3 * units.MM3_PER_M3,
+                       '' if span_m is None else ', %.6f mm across%s'
+                       % (units.m_to_mm(span_m), ' (sliver scale)' if narrow else '')))
 
 
 def _safe(text):
