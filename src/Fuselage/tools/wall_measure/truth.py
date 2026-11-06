@@ -33,17 +33,31 @@ doc/implementation/wall_thickness_measure.md.
 """
 import math
 
-#: Default tube geometry, in millimeters. `WALL` is the cowl's own wall -- `cowl_n_perimeters` *
-#: `extrusion_width` = 1 * 0.6 -- so readings here are on the same scale as the real part's.
-R_OUTER = 10.0
-WALL = 0.6
-HEIGHT = 20.0
+from . import kern
+
+#: Default tube geometry. `WALL_M` is the cowl's own wall -- `cowl_n_perimeters` *
+#: `extrusion_width` = 1 * 0.6 mm -- so readings here are on the same scale as the real part's.
+#: Converted from 10.0 / 0.6 / 20.0 mm by IP-FC-163; the fixtures are the same size they were.
+R_OUTER_M = 0.010
+WALL_M = 6.0e-4
+HEIGHT_M = 0.020
+
+#: How far a cutting or adding ring reaches past the tube's outer surface, so it cuts cleanly
+#: rather than meeting it tangentially. Named rather than written inline at each of the three
+#: `makeCylinder` calls that use it: a bare `1.0e-3` beside a `kern.mm()` reads as a conversion
+#: artifact, and `tools/unit_regime.py` reports it as an unexplained inline dimension -- which it
+#: was, in the one module where the fixtures' exactness is the whole point.
+RING_PAD_M = 1.0e-3
+
+#: The same thing for `_sector_limiter`'s pie wedge, which has to clear the outer surface by more
+#: because it is cut against a ring that has already been padded.
+SECTOR_PAD_M = 2.0e-3
 
 #: How close to a feature's own edge a sample has to be before its true thickness is ambiguous.
 #: At a patch or rib boundary the wall steps discontinuously, so a sample there has two defensible
 #: answers and scoring it would measure the fixture rather than the candidate. Samples inside this
 #: margin are reported as `None` by `true_thickness_at` and excluded from accuracy scoring.
-EDGE_MARGIN = 0.05
+EDGE_MARGIN_M = 5.0e-5
 
 
 class WallTruth(object):
@@ -81,14 +95,15 @@ class WallTruth(object):
         outer, inner = [], []
         for f in self.features:
             # Angular margin expressed as an arc length, so it means the same thing at any radius.
-            ang_margin = EDGE_MARGIN / radius
-            d_ang = abs(_wrap(angle - f['angle']))
-            near_ang = abs(d_ang - f['half_angle']) < ang_margin
-            near_z = (abs(z - f['z_lo']) < EDGE_MARGIN or abs(z - f['z_hi']) < EDGE_MARGIN)
-            inside_ang = d_ang <= f['half_angle'] - ang_margin
-            inside_z = f['z_lo'] + EDGE_MARGIN <= z <= f['z_hi'] - EDGE_MARGIN
-            spans_z = f['z_lo'] <= z <= f['z_hi']
-            spans_ang = d_ang <= f['half_angle']
+            ang_margin = EDGE_MARGIN_M / radius
+            d_ang = abs(_wrap(angle - f['angle_rad']))
+            near_ang = abs(d_ang - f['half_angle_rad']) < ang_margin
+            near_z = (abs(z - f['z_lo_m']) < EDGE_MARGIN_M
+                      or abs(z - f['z_hi_m']) < EDGE_MARGIN_M)
+            inside_ang = d_ang <= f['half_angle_rad'] - ang_margin
+            inside_z = f['z_lo_m'] + EDGE_MARGIN_M <= z <= f['z_hi_m'] - EDGE_MARGIN_M
+            spans_z = f['z_lo_m'] <= z <= f['z_hi_m']
+            spans_ang = d_ang <= f['half_angle_rad']
             # Only a point near an edge *of a feature it is otherwise in line with* is ambiguous:
             # a sample far round the section from a patch is not made ambiguous by its z.
             if (near_ang and spans_z) or (near_z and spans_ang):
@@ -117,15 +132,15 @@ class WallTruth(object):
         feature covering the point, `r_outer - nominal` reduced by every inner-surface one -- so
         overlapping features compose correctly instead of one shadowing the other.
 
-        `None` means the point sits within `EDGE_MARGIN` of a feature boundary, where the wall steps
+        `None` means the point sits within `EDGE_MARGIN_M` of a feature boundary, where the wall steps
         and two answers are defensible. Scoring such a point would measure the fixture.
         """
         got = self.covering(x, y, z)
         if got == 'ambiguous':
             return None
         outer, inner = got
-        r_out = self.r_outer + sum(f['delta'] for f in outer)
-        r_in = (self.r_outer - self.nominal) + sum(f['delta'] for f in inner)
+        r_out = self.r_outer + sum(f['delta_m'] for f in outer)
+        r_in = (self.r_outer - self.nominal) + sum(f['delta_m'] for f in inner)
         return r_out - r_in
 
 
@@ -138,7 +153,8 @@ def _wrap(a):
     return a
 
 
-def _sector_limiter(Part, App, r_outer, half_angle, z_lo, z_hi, angle=0.0):
+def _sector_limiter(Part, App, r_outer_m, half_angle_rad, z_lo_m, z_hi_m,
+                    angle_rad=0.0):
     """An exact pie wedge spanning `angle +/- half_angle`, generous in radius.
 
     **A true sector, not a box, because the truth function decides a point's feature by angle.**
@@ -148,29 +164,31 @@ def _sector_limiter(Part, App, r_outer, half_angle, z_lo, z_hi, angle=0.0):
     figure measured against it would inherit that. `Part.makeCylinder`'s own sweep-angle argument
     gives the sector exactly: checked against the closed form at 130.899694 mm3 to six decimals.
     """
-    wedge = Part.makeCylinder(r_outer + 2.0, z_hi - z_lo,
-                              App.Vector(0.0, 0.0, z_lo), App.Vector(0.0, 0.0, 1.0),
-                              math.degrees(2.0 * half_angle))
-    # `makeCylinder` sweeps from 0, so rotate the wedge's bisector onto `angle`.
+    # SI in, millimeters only inside the kernel calls (IP-FC-163). `SECTOR_PAD_M` is the 2.0 mm
+    # it always was: enough to clear the outer surface so the sector cuts cleanly.
+    wedge = Part.makeCylinder(kern.mm(r_outer_m + SECTOR_PAD_M), kern.mm(z_hi_m - z_lo_m),
+                              App.Vector(0.0, 0.0, kern.mm(z_lo_m)), App.Vector(0.0, 0.0, 1.0),
+                              math.degrees(2.0 * half_angle_rad))
+    # `makeCylinder` sweeps from 0, so rotate the wedge's bisector onto `angle_rad`.
     wedge.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1),
-                 math.degrees(angle - half_angle))
+                 math.degrees(angle_rad - half_angle_rad))
     return wedge
 
 
-def uniform_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT):
+def uniform_tube(Part, App, r_outer_m=R_OUTER_M, wall_m=WALL_M, height_m=HEIGHT_M):
     """A straight tube of constant wall. True thickness is `wall` everywhere.
 
     Gate G3's fixture. All three candidate definitions of local thickness coincide on an annulus,
     so any deviation a measure reports here is its own error.
     """
-    outer = Part.makeCylinder(r_outer, height)
-    inner = Part.makeCylinder(r_outer - wall, height)
+    outer = Part.makeCylinder(kern.mm(r_outer_m), kern.mm(height_m))
+    inner = Part.makeCylinder(kern.mm(r_outer_m - wall_m), kern.mm(height_m))
     shape = outer.cut(inner)
-    return WallTruth(shape, 'uniform_tube', wall, r_outer)
+    return WallTruth(shape, 'uniform_tube', wall_m, r_outer_m)
 
 
-def thin_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
-                    depth=0.15, arc=0.6, band=4.0, angle=0.0):
+def thin_patch_tube(Part, App, r_outer_m=R_OUTER_M, wall_m=WALL_M, height_m=HEIGHT_M,
+                    depth_m=1.5e-4, arc_m=6.0e-4, band_m=4.0e-3, angle_rad=0.0):
     """A tube with one sector whose outer radius is reduced by `depth`.
 
     True thickness is `wall - depth` inside the patch and `wall` outside it, both exactly, because
@@ -181,27 +199,31 @@ def thin_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     gate G1 requires a measure to see. `depth` defaults to 0.15 mm, 15x `WALL_TOL`, so a measure
     that reports the patch at all reports it unambiguously.
     """
-    tube = uniform_tube(Part, App, r_outer, wall, height).shape
-    z_lo = (height - band) / 2.0
-    z_hi = z_lo + band
-    half_angle = arc / (2.0 * r_outer)
+    tube = uniform_tube(Part, App, r_outer_m, wall_m, height_m).shape
+    z_lo_m = (height_m - band_m) / 2.0
+    z_hi_m = z_lo_m + band_m
+    # A ratio of two lengths, so unit-invariant and unchanged by the conversion.
+    half_angle_rad = arc_m / (2.0 * r_outer_m)
 
-    # An annular ring from `r_outer - depth` outward: cutting it away leaves the patch's outer
+    # An annular ring from `r_outer_m - depth_m` outward: cutting it away leaves the patch's outer
     # surface **on a cylinder**, which is what makes the thickness exact rather than approximate.
-    ring = (Part.makeCylinder(r_outer + 1.0, band, App.Vector(0.0, 0.0, z_lo))
-            .cut(Part.makeCylinder(r_outer - depth, band, App.Vector(0.0, 0.0, z_lo))))
-    cutter = ring.common(_sector_limiter(Part, App, r_outer, half_angle, z_lo, z_hi, angle))
+    ring = (Part.makeCylinder(kern.mm(r_outer_m + RING_PAD_M), kern.mm(band_m),
+                              App.Vector(0.0, 0.0, kern.mm(z_lo_m)))
+            .cut(Part.makeCylinder(kern.mm(r_outer_m - depth_m), kern.mm(band_m),
+                                   App.Vector(0.0, 0.0, kern.mm(z_lo_m)))))
+    cutter = ring.common(_sector_limiter(Part, App, r_outer_m, half_angle_rad,
+                                         z_lo_m, z_hi_m, angle_rad))
     shape = tube.cut(cutter)
 
-    feature = {'kind': 'thin', 'thickness': wall - depth, 'depth': depth,
-               'surface': 'outer', 'delta': -float(depth),
-               'z_lo': z_lo, 'z_hi': z_hi, 'half_angle': half_angle, 'arc': arc,
-               'angle': angle, 'z_mid': (z_lo + z_hi) / 2.0}
-    return WallTruth(shape, 'thin_patch_tube', wall, r_outer, [feature])
+    feature = {'kind': 'thin', 'thickness_m': wall_m - depth_m, 'depth_m': depth_m,
+               'surface': 'outer', 'delta_m': -float(depth_m),
+               'z_lo_m': z_lo_m, 'z_hi_m': z_hi_m, 'half_angle_rad': half_angle_rad,
+               'arc_m': arc_m, 'angle_rad': angle_rad, 'z_mid_m': (z_lo_m + z_hi_m) / 2.0}
+    return WallTruth(shape, 'thin_patch_tube', wall_m, r_outer_m, [feature])
 
 
-def ribbed_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
-                rise=0.4, arc=3.0, band=6.0, angle=0.0):
+def ribbed_tube(Part, App, r_outer_m=R_OUTER_M, wall_m=WALL_M, height_m=HEIGHT_M,
+                rise_m=4.0e-4, arc_m=3.0e-3, band_m=6.0e-3, angle_rad=0.0):
     """A tube with one sector whose inner radius is reduced by `rise`: a rib, with two creases.
 
     True thickness is `wall + rise` inside the rib and `wall` outside it. The point of this fixture
@@ -213,27 +235,31 @@ def ribbed_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     Reproduces the real part's behavior, where the wall legitimately reads *more* than nominal over
     a rib because the inner contour dips with the notch.
     """
-    tube = uniform_tube(Part, App, r_outer, wall, height).shape
-    z_lo = (height - band) / 2.0
-    z_hi = z_lo + band
-    half_angle = arc / (2.0 * r_outer)
+    tube = uniform_tube(Part, App, r_outer_m, wall_m, height_m).shape
+    z_lo_m = (height_m - band_m) / 2.0
+    z_hi_m = z_lo_m + band_m
+    half_angle_rad = arc_m / (2.0 * r_outer_m)
 
-    # Material added inward, from `r_outer - wall - rise` out to the bore, so the rib's own inner
-    # surface is again a cylinder and its thickness is exact.
-    ring = (Part.makeCylinder(r_outer - wall, band, App.Vector(0.0, 0.0, z_lo))
-            .cut(Part.makeCylinder(r_outer - wall - rise, band, App.Vector(0.0, 0.0, z_lo))))
-    rib = ring.common(_sector_limiter(Part, App, r_outer, half_angle, z_lo, z_hi, angle))
+    # Material added inward, from `r_outer_m - wall_m - rise_m` out to the bore, so the rib's own
+    # inner surface is again a cylinder and its thickness is exact.
+    ring = (Part.makeCylinder(kern.mm(r_outer_m - wall_m), kern.mm(band_m),
+                              App.Vector(0.0, 0.0, kern.mm(z_lo_m)))
+            .cut(Part.makeCylinder(kern.mm(r_outer_m - wall_m - rise_m), kern.mm(band_m),
+                                   App.Vector(0.0, 0.0, kern.mm(z_lo_m)))))
+    rib = ring.common(_sector_limiter(Part, App, r_outer_m, half_angle_rad,
+                                      z_lo_m, z_hi_m, angle_rad))
     shape = tube.fuse(rib).removeSplitter()
 
-    feature = {'kind': 'rib', 'thickness': wall + rise, 'rise': rise,
-               'surface': 'inner', 'delta': -float(rise),
-               'z_lo': z_lo, 'z_hi': z_hi, 'half_angle': half_angle, 'arc': arc,
-               'angle': angle, 'z_mid': (z_lo + z_hi) / 2.0}
-    return WallTruth(shape, 'ribbed_tube', wall, r_outer, [feature])
+    feature = {'kind': 'rib', 'thickness_m': wall_m + rise_m, 'rise_m': rise_m,
+               'surface': 'inner', 'delta_m': -float(rise_m),
+               'z_lo_m': z_lo_m, 'z_hi_m': z_hi_m, 'half_angle_rad': half_angle_rad,
+               'arc_m': arc_m, 'angle_rad': angle_rad, 'z_mid_m': (z_lo_m + z_hi_m) / 2.0}
+    return WallTruth(shape, 'ribbed_tube', wall_m, r_outer_m, [feature])
 
 
-def corner_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
-                      depth=0.15, arc=0.6, rise=0.4, rib_arc=3.0, band=4.0):
+def corner_patch_tube(Part, App, r_outer_m=R_OUTER_M, wall_m=WALL_M, height_m=HEIGHT_M,
+                      depth_m=1.5e-4, arc_m=6.0e-4, rise_m=4.0e-4, rib_arc_m=3.0e-3,
+                      band_m=4.0e-3):
     """**The decisive fixture: a thin patch sitting exactly on a concave corner.**
 
     IP-WTM-17. Candidate C4 passes every other gate by *excluding* samples within 0.3 mm of a
@@ -252,36 +278,42 @@ def corner_patch_tube(Part, App, r_outer=R_OUTER, wall=WALL, height=HEIGHT,
     selecting one feature: across the patch the true wall steps from `wall + rise - depth` on the
     rib side of the corner to `wall - depth` on the other, and both are exact.
     """
-    z_lo = (height - band) / 2.0
-    z_hi = z_lo + band
-    rib_half = rib_arc / (2.0 * r_outer)
-    patch_half = arc / (2.0 * r_outer)
+    z_lo_m = (height_m - band_m) / 2.0
+    z_hi_m = z_lo_m + band_m
+    rib_half = rib_arc_m / (2.0 * r_outer_m)
+    patch_half = arc_m / (2.0 * r_outer_m)
     # The rib spans [-rib_half, +rib_half]; its corner is at +rib_half, and the patch is centered
     # there, so half the patch lies over the rib and half over plain wall.
     corner = rib_half
 
-    tube = uniform_tube(Part, App, r_outer, wall, height).shape
-    rib_ring = (Part.makeCylinder(r_outer - wall, band, App.Vector(0.0, 0.0, z_lo))
-                .cut(Part.makeCylinder(r_outer - wall - rise, band,
-                                       App.Vector(0.0, 0.0, z_lo))))
-    rib = rib_ring.common(_sector_limiter(Part, App, r_outer, rib_half, z_lo, z_hi, 0.0))
+    tube = uniform_tube(Part, App, r_outer_m, wall_m, height_m).shape
+    rib_ring = (Part.makeCylinder(kern.mm(r_outer_m - wall_m), kern.mm(band_m),
+                                  App.Vector(0.0, 0.0, kern.mm(z_lo_m)))
+                .cut(Part.makeCylinder(kern.mm(r_outer_m - wall_m - rise_m), kern.mm(band_m),
+                                       App.Vector(0.0, 0.0, kern.mm(z_lo_m)))))
+    rib = rib_ring.common(_sector_limiter(Part, App, r_outer_m, rib_half,
+                                          z_lo_m, z_hi_m, 0.0))
     with_rib = tube.fuse(rib).removeSplitter()
 
-    patch_ring = (Part.makeCylinder(r_outer + 1.0, band, App.Vector(0.0, 0.0, z_lo))
-                  .cut(Part.makeCylinder(r_outer - depth, band, App.Vector(0.0, 0.0, z_lo))))
+    patch_ring = (Part.makeCylinder(kern.mm(r_outer_m + RING_PAD_M), kern.mm(band_m),
+                                    App.Vector(0.0, 0.0, kern.mm(z_lo_m)))
+                  .cut(Part.makeCylinder(kern.mm(r_outer_m - depth_m), kern.mm(band_m),
+                                         App.Vector(0.0, 0.0, kern.mm(z_lo_m)))))
     cutter = patch_ring.common(
-        _sector_limiter(Part, App, r_outer, patch_half, z_lo, z_hi, corner))
+        _sector_limiter(Part, App, r_outer_m, patch_half, z_lo_m, z_hi_m, corner))
     shape = with_rib.cut(cutter)
 
-    rib_feature = {'kind': 'rib', 'thickness': wall + rise, 'rise': rise,
-                   'surface': 'inner', 'delta': -float(rise),
-                   'z_lo': z_lo, 'z_hi': z_hi, 'half_angle': rib_half, 'arc': rib_arc,
-                   'angle': 0.0, 'z_mid': (z_lo + z_hi) / 2.0}
-    patch_feature = {'kind': 'thin', 'thickness': wall - depth, 'depth': depth,
-                     'surface': 'outer', 'delta': -float(depth),
-                     'z_lo': z_lo, 'z_hi': z_hi, 'half_angle': patch_half, 'arc': arc,
-                     'angle': corner, 'z_mid': (z_lo + z_hi) / 2.0, 'on_corner': True}
-    return WallTruth(shape, 'corner_patch_tube', wall, r_outer,
+    rib_feature = {'kind': 'rib', 'thickness_m': wall_m + rise_m, 'rise_m': rise_m,
+                   'surface': 'inner', 'delta_m': -float(rise_m),
+                   'z_lo_m': z_lo_m, 'z_hi_m': z_hi_m, 'half_angle_rad': rib_half,
+                   'arc_m': rib_arc_m, 'angle_rad': 0.0,
+                   'z_mid_m': (z_lo_m + z_hi_m) / 2.0}
+    patch_feature = {'kind': 'thin', 'thickness_m': wall_m - depth_m, 'depth_m': depth_m,
+                     'surface': 'outer', 'delta_m': -float(depth_m),
+                     'z_lo_m': z_lo_m, 'z_hi_m': z_hi_m, 'half_angle_rad': patch_half,
+                     'arc_m': arc_m, 'angle_rad': corner,
+                     'z_mid_m': (z_lo_m + z_hi_m) / 2.0, 'on_corner': True}
+    return WallTruth(shape, 'corner_patch_tube', wall_m, r_outer_m,
                      [rib_feature, patch_feature])
 
 

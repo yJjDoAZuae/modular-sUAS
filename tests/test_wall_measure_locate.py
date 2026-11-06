@@ -10,6 +10,7 @@ an unhealthy one. The real-wall tests then run it on the corpus and skip when th
 
 See doc/implementation/wall_thickness_measure.md.
 """
+import math
 import os
 import sys
 
@@ -34,18 +35,30 @@ def ring(radius, n=360, cx=0.0, cy=0.0, lo=0.0, hi=360.0):
     return np.stack([cx + radius * np.cos(a), cy + radius * np.sin(a), np.zeros_like(a)], axis=1)
 
 
-def annulus(outer_r=20.0, wall=0.6, n=360):
-    return [ring(outer_r, n), ring(outer_r - wall, n)]
+#: The synthetic sections here are built on `locate`'s own SI scale (IP-FC-163): a 0.020 m
+#: bore with the cowl's 6.0e-4 m wall, which is the 20 mm / 0.6 mm pair they always were. The
+#: scale matters even where the arithmetic is scale-free, because these loops are handed to
+#: `station_detail` and `criterion_split`, which compare them against `locate.NOMINAL_M`.
+OUTER_R_M = 0.020
+WALL_M = 6.0e-4
+
+#: The published figures in this file are millimeters; `MM` converts one at its assertion so the
+#: literal still matches the document that quotes it.
+MM = 1.0e-3
 
 
-def c_shape(outer_r=20.0, wall=0.6, gap_deg=20.0, n=240):
+def annulus(outer_r_m=OUTER_R_M, wall_m=WALL_M, n=360):
+    return [ring(outer_r_m, n), ring(outer_r_m - wall_m, n)]
+
+
+def c_shape(outer_r_m=OUTER_R_M, wall_m=WALL_M, gap_deg=20.0, n=240):
     """One severed arc: the outline of a C, traced out along the outside and back along the inside.
 
     This is what a ring broken in **one** place leaves -- a single closed loop with no hole, which
     is a different topology from two arcs and has to be classified differently.
     """
-    out = ring(outer_r, n, lo=0.0, hi=360.0 - gap_deg)
-    back = ring(outer_r - wall, n, lo=360.0 - gap_deg, hi=0.0)
+    out = ring(outer_r_m, n, lo=0.0, hi=360.0 - gap_deg)
+    back = ring(outer_r_m - wall_m, n, lo=360.0 - gap_deg, hi=0.0)
     return [np.concatenate([out, back], axis=0)]
 
 
@@ -58,12 +71,13 @@ class TestRingState:
         state, detail = locate.ring_state(annulus())
         assert state == locate.ANNULUS
         assert detail['loops'] == 2
+        # A ratio of two areas, so unit-invariant: 19.4/20.0 is the same as 0.0194/0.020.
         assert detail['area_ratio'] == pytest.approx((19.4 / 20.0) ** 2, rel=1e-3)
 
     def test_a_thin_wall_gives_an_area_ratio_near_one(self):
         """The scale-free health figure: a 0.6 mm wall on a 20 mm bore keeps the inner area within
         6% of the outer's, so a ratio far from 1 means the inner loop is not a wall bore."""
-        _state, detail = locate.ring_state(annulus(outer_r=20.0, wall=0.6))
+        _state, detail = locate.ring_state(annulus(outer_r_m=OUTER_R_M, wall_m=WALL_M))
         assert 0.90 < detail['area_ratio'] < 1.0
 
     def test_one_severed_arc_is_not_an_annulus(self):
@@ -95,9 +109,10 @@ class TestRingState:
         """The real case: an inner loop tracing into a notch and back out. Its bounding box is
         almost the outer's, so a box test would be useless; crossing-number is not fooled."""
         a = np.radians(np.linspace(0.0, 360.0, 720, endpoint=False))
-        r = 19.4 - 3.0 * (np.cos(8 * a) > 0.9)                 # eight deep notches
+        # Eight deep notches, on the same SI scale as the ring they sit inside.
+        r = (OUTER_R_M - WALL_M) - MM * 3.0 * (np.cos(8 * a) > 0.9)
         notched = np.stack([r * np.cos(a), r * np.sin(a), np.zeros_like(a)], axis=1)
-        state, detail = locate.ring_state([ring(20.0, 720), notched])
+        state, detail = locate.ring_state([ring(OUTER_R_M, 720), notched])
         assert state == locate.ANNULUS
         assert detail['area_ratio'] < 1.0
 
@@ -124,14 +139,15 @@ class TestWindingInside:
 class TestStationDetail:
 
     def test_a_healthy_synthetic_section_reports_its_angle_and_radius(self, monkeypatch):
-        loops = annulus(outer_r=20.0, wall=0.6, n=720)
+        loops = annulus(outer_r_m=OUTER_R_M, wall_m=WALL_M, n=720)
         monkeypatch.setattr(sections, 'station_loops', lambda *a, **k: loops)
-        row = locate.station_detail(None, -5.0)
+        row = locate.station_detail(None, -0.005)
         assert row['state'] == locate.ANNULUS
-        assert row['thickness'] == pytest.approx(0.6, abs=0.01)
-        assert row['worst_thin'] == pytest.approx(0.0, abs=0.01)
-        assert row['radius'] == pytest.approx(19.4, abs=0.01)
-        assert -180.0 <= row['angle_deg'] <= 180.0
+        assert row['thickness_m'] == pytest.approx(WALL_M, abs=MM * 0.01)
+        assert row['worst_thin_m'] == pytest.approx(0.0, abs=MM * 0.01)
+        assert row['radius_m'] == pytest.approx(OUTER_R_M - WALL_M, abs=MM * 0.01)
+        # **Radians now, which is the standard's angle unit**; `table` is where it becomes degrees.
+        assert -math.pi <= row['angle_rad'] <= math.pi
 
     def test_it_finds_a_deliberately_thinned_sector_and_its_angle(self):
         """**The converse that makes the locator worth trusting.** A patch thinned at a known angle
@@ -139,27 +155,28 @@ class TestStationDetail:
         a = np.radians(np.linspace(0.0, 360.0, 1440, endpoint=False))
         target = np.radians(30.0)
         thin = np.abs(np.angle(np.exp(1j * (a - target)))) < np.radians(3.0)
-        r = np.where(thin, 20.0 - 0.2, 20.0 - 0.6)
-        loops = [ring(20.0, 1440), np.stack([r * np.cos(a), r * np.sin(a), np.zeros_like(a)],
-                                            axis=1)]
+        r_m = np.where(thin, OUTER_R_M - MM * 0.2, OUTER_R_M - WALL_M)
+        loops = [ring(OUTER_R_M, 1440),
+                 np.stack([r_m * np.cos(a), r_m * np.sin(a), np.zeros_like(a)], axis=1)]
         state, detail = locate.ring_state(loops)
         assert state == locate.ANNULUS
         outer, inner = loops[0], loops[detail['nested'][0]]
-        pts, d = candidates.nearest_point_min(outer, inner)
-        k = int(np.argmin(d))
-        assert d[k] == pytest.approx(0.2, abs=0.01)
+        pts, d_m = candidates.nearest_point_min(outer, inner)
+        k = int(np.argmin(d_m))
+        assert d_m[k] == pytest.approx(MM * 0.2, abs=MM * 0.01)
         assert float(np.degrees(np.arctan2(pts[k][1], pts[k][0]))) == pytest.approx(30.0, abs=3.0)
 
     def test_a_station_with_no_wall_returns_a_row_not_none(self, monkeypatch):
         """A station with no wall is a finding. Returning `None` is how the soak's own convention
         turned an absent wall into a skipped one (IP-WTM-19)."""
         monkeypatch.setattr(sections, 'station_loops', lambda *a, **k: [])
-        row = locate.station_detail(None, -5.0)
+        row = locate.station_detail(None, -0.005)
         assert row is not None and row['state'] == locate.NO_WALL
-        assert row['worst_thin'] is None
+        assert row['worst_thin_m'] is None
 
 
-def toothed(outer_r=20.0, wall=0.6, n=4000, span_deg=1.0, bump=0.45, at_deg=40.0):
+def toothed(outer_r_m=OUTER_R_M, wall_m=WALL_M, n=4000, span_deg=1.0,
+            bump_m=MM * 0.45, at_deg=40.0):
     """An annulus whose inner loop carries a narrow outward step: a genuinely thin spot.
 
     **This is a thin wall, not a corner artifact, and the difference matters for what can be
@@ -176,10 +193,10 @@ def toothed(outer_r=20.0, wall=0.6, n=4000, span_deg=1.0, bump=0.45, at_deg=40.0
     """
     a = np.radians(np.linspace(0.0, 360.0, n, endpoint=False))
     deg = np.degrees(a)
-    r = np.full_like(a, outer_r - wall)
-    r[(deg > at_deg) & (deg < at_deg + span_deg)] += bump
-    inner = np.stack([r * np.cos(a), r * np.sin(a), np.zeros_like(a)], axis=1)
-    return [ring(outer_r, n), inner]
+    r_m = np.full_like(a, outer_r_m - wall_m)
+    r_m[(deg > at_deg) & (deg < at_deg + span_deg)] += bump_m
+    inner = np.stack([r_m * np.cos(a), r_m * np.sin(a), np.zeros_like(a)], axis=1)
+    return [ring(outer_r_m, n), inner]
 
 
 class TestCriterionSplit:
@@ -191,9 +208,9 @@ class TestCriterionSplit:
     that setting `TAU` = `WALL_TOL` can be judged for what it actually asks.
     """
 
-    def _patch(self, monkeypatch, by_count, perimeter=121.9):
+    def _patch(self, monkeypatch, by_count, perimeter_m=0.1219):
         """Serve a different set of loops per sample count, which is what the two spacings buy."""
-        monkeypatch.setattr(density, 'section_perimeter', lambda *a, **k: perimeter)
+        monkeypatch.setattr(density, 'section_perimeter', lambda *a, **k: perimeter_m)
         monkeypatch.setattr(sections, 'station_loops',
                             lambda shape, z, n, **k: by_count(n))
 
@@ -201,25 +218,27 @@ class TestCriterionSplit:
         """The sampling term's sign is the useful part. A coarser sampling can only *miss* a thin
         spot, never invent one, so when the two differ by sampling alone the coarse reading is the
         smaller thinness and the term is negative."""
-        n_gate = density.counts_for_spacing(121.9, 0.125)
-        n_pass2 = density.counts_for_spacing(121.9, locate.PASS2_ARC)
+        n_gate = density.counts_for_spacing(0.1219, locate.GATE_ARC_M)
+        n_pass2 = density.counts_for_spacing(0.1219, locate.PASS2_ARC_M)
         assert n_pass2 < n_gate, 'the coarse sampling has to be the coarser one'
         fine = toothed(n=n_gate)
-        coarse = annulus(outer_r=20.0, wall=0.6, n=n_pass2)    # the step is not resolved at all
+        # The step is not resolved at all at the coarse spacing.
+        coarse = annulus(outer_r_m=OUTER_R_M, wall_m=WALL_M, n=n_pass2)
         self._patch(monkeypatch, lambda n: fine if n == n_gate else coarse)
-        row = locate.criterion_split(None, [-5.0])[0]
+        row = locate.criterion_split(None, [-0.005])[0]
         assert row['state'] == locate.ANNULUS
-        assert row['thin_incumbent'] == pytest.approx(0.45, abs=1.0e-3)
-        assert row['thin_pass2'] == pytest.approx(0.0, abs=1.0e-3)
-        assert row['sampling_term'] < 0.0
-        assert row['sampling_term'] == pytest.approx(-0.45, abs=1.0e-3)
+        assert row['thin_incumbent_m'] == pytest.approx(MM * 0.45, abs=MM * 1.0e-3)
+        assert row['thin_pass2_m'] == pytest.approx(0.0, abs=MM * 1.0e-3)
+        assert row['sampling_term_m'] < 0.0
+        assert row['sampling_term_m'] == pytest.approx(MM * -0.45, abs=MM * 1.0e-3)
 
     def test_the_two_terms_add_up_to_the_whole_discrepancy(self, monkeypatch):
         """The split is only useful if it is exhaustive: whatever is not sampling is corners."""
         self._patch(monkeypatch, lambda n: toothed(n=max(400, n)))
-        row = locate.criterion_split(None, [-5.0])[0]
-        total = row['thin_pass2'] - row['thin_selected']
-        assert row['sampling_term'] + row['corner_term'] == pytest.approx(total, abs=1.0e-12)
+        row = locate.criterion_split(None, [-0.005])[0]
+        total_m = row['thin_pass2_m'] - row['thin_selected_m']
+        assert row['sampling_term_m'] + row['corner_term_m'] == pytest.approx(total_m,
+                                                                              abs=1.0e-15)
 
     def test_the_corner_term_is_zero_on_a_convex_synthetic_loop(self, monkeypatch):
         """**Recorded as a vacuity note, not as a pass.** The exclusion drops samples on this shape
@@ -228,8 +247,8 @@ class TestCriterionSplit:
         report a corner term would be noticed, since on this geometry that would be a false
         positive."""
         self._patch(monkeypatch, lambda n: toothed(n=max(400, n)))
-        row = locate.criterion_split(None, [-5.0])[0]
-        assert row['corner_term'] == pytest.approx(0.0, abs=1.0e-9)
+        row = locate.criterion_split(None, [-0.005])[0]
+        assert row['corner_term_m'] == pytest.approx(0.0, abs=1.0e-12)
         assert row['subset_violated'] is False
 
     def test_a_selected_reading_thinner_than_the_incumbent_is_reported_not_clamped(
@@ -237,40 +256,41 @@ class TestCriterionSplit:
         """`corner_excluded_min` minimizes over a *subset*, so its thinness can never exceed the
         incumbent's. A violation is a defect in the measure and once was one (0.04806 against
         0.04689 mm on a real wall), so it is surfaced rather than quietly clamped."""
-        self._patch(monkeypatch, lambda n: annulus(outer_r=20.0, wall=0.6, n=max(400, n)))
+        self._patch(monkeypatch,
+                    lambda n: annulus(outer_r_m=OUTER_R_M, wall_m=WALL_M, n=max(400, n)))
         monkeypatch.setattr(candidates, 'corner_excluded_min',
-                            lambda outer, inner, **k: (inner, np.full(len(inner), 0.4)))
-        row = locate.criterion_split(None, [-5.0])[0]
+                            lambda outer, inner, **k: (inner, np.full(len(inner), MM * 0.4)))
+        row = locate.criterion_split(None, [-0.005])[0]
         assert row['subset_violated'] is True
-        assert row['corner_term'] < 0.0
+        assert row['corner_term_m'] < 0.0
         assert 'SUBSET VIOLATED' in locate.criterion_table([row])
 
     def test_a_station_whose_ring_is_not_an_annulus_reports_the_state_and_no_readings(
             self, monkeypatch):
         self._patch(monkeypatch, lambda n: c_shape(n=max(240, n // 8)))
-        row = locate.criterion_split(None, [-5.0])[0]
+        row = locate.criterion_split(None, [-0.005])[0]
         assert row['state'] == locate.SEVERED_ONE
-        assert row['thin_pass2'] is None and row['thin_selected'] is None
-        assert row['sampling_term'] is None
+        assert row['thin_pass2_m'] is None and row['thin_selected_m'] is None
+        assert row['sampling_term_m'] is None
 
     def test_a_station_with_no_measurable_perimeter_returns_a_row(self, monkeypatch):
         """No perimeter means no spacing can be derived, which is an absent reading rather than an
         error -- the same convention `station_detail` follows."""
         monkeypatch.setattr(density, 'section_perimeter', lambda *a, **k: None)
-        row = locate.criterion_split(None, [-5.0])[0]
-        assert row['z'] == -5.0 and row['state'] is None
+        row = locate.criterion_split(None, [-0.005])[0]
+        assert row['z_m'] == -0.005 and row['state'] is None
         assert row['n_pass2'] is None
 
     def test_the_table_reports_each_column_worst_independently(self, monkeypatch):
         """`TAU` and `WALL_TOL` are each compared against the worst reading of their own measure
         over the whole wall, so the three worst figures need not come from one station."""
         rows = [
-            {'z': -1.0, 'thin_pass2': 0.03, 'thin_incumbent': 0.02, 'thin_selected': 0.001,
-             'sampling_term': 0.01, 'corner_term': 0.019, 'subset_violated': False,
-             'state': locate.ANNULUS},
-            {'z': -2.0, 'thin_pass2': 0.01, 'thin_incumbent': 0.05, 'thin_selected': 0.004,
-             'sampling_term': -0.04, 'corner_term': 0.046, 'subset_violated': False,
-             'state': locate.ANNULUS},
+            {'z_m': MM * -1.0, 'thin_pass2_m': MM * 0.03, 'thin_incumbent_m': MM * 0.02,
+             'thin_selected_m': MM * 0.001, 'sampling_term_m': MM * 0.01,
+             'corner_term_m': MM * 0.019, 'subset_violated': False, 'state': locate.ANNULUS},
+            {'z_m': MM * -2.0, 'thin_pass2_m': MM * 0.01, 'thin_incumbent_m': MM * 0.05,
+             'thin_selected_m': MM * 0.004, 'sampling_term_m': MM * -0.04,
+             'corner_term_m': MM * 0.046, 'subset_violated': False, 'state': locate.ANNULUS},
         ]
         text = locate.criterion_table(rows)
         last = text.strip().splitlines()[-1]
@@ -307,9 +327,9 @@ class TestRowSpacingVerdict:
     """IP-WTM-30: thin spots against the local fit row spacing."""
 
     def _row(self, z, interval, inc, exc):
-        return {'z': z, 'interval_mm': interval, 'nearest_row_mm': 0.5 * interval,
-                'interval_lo': z - 0.5 * interval, 'interval_hi': z + 0.5 * interval,
-                'thin_incumbent': inc, 'thin_excluded': exc, 'state': locate.ANNULUS}
+        return {'z_m': z, 'interval_m': interval, 'nearest_row_m': 0.5 * interval,
+                'interval_lo_m': z - 0.5 * interval, 'interval_hi_m': z + 0.5 * interval,
+                'thin_incumbent_m': inc, 'thin_excluded_m': exc, 'state': locate.ANNULUS}
 
     def test_widely_spaced_rows_reading_thinner_gives_a_positive_rho(self):
         rows = [self._row(-1.0, 1.0, 0.001, 0.001), self._row(-2.0, 5.0, 0.005, 0.005),
@@ -339,8 +359,8 @@ class TestRowSpacingVerdict:
     def test_a_station_outside_every_interval_is_counted_but_not_scored(self):
         rows = [self._row(-1.0, 1.0, 0.001, 0.001), self._row(-2.0, 10.0, 0.010, 0.010),
                 self._row(-3.0, 20.0, 0.020, 0.020),
-                {'z': -99.0, 'interval_mm': None, 'nearest_row_mm': None, 'interval_lo': None,
-                 'interval_hi': None, 'thin_incumbent': 0.5, 'thin_excluded': 0.5,
+                {'z_m': -99.0, 'interval_m': None, 'nearest_row_m': None, 'interval_lo_m': None,
+                 'interval_hi_m': None, 'thin_incumbent_m': 0.5, 'thin_excluded_m': 0.5,
                  'state': locate.ANNULUS}]
         v = locate.row_spacing_verdict(rows)
         assert v['stations'] == 4 and v['scored'] == 3
@@ -357,15 +377,15 @@ class TestExteriorVerdict:
     """
 
     def test_a_station_thin_against_both_exteriors_is_unexplained(self):
-        rows = [(-10.0, 0.048, 0.047), (-20.0, 0.002, 0.002)]
+        rows = [(MM * -10.0, MM * 0.048, MM * 0.047), (MM * -20.0, MM * 0.002, MM * 0.002)]
         v = locate.exterior_verdict(rows)
         assert len(v['unexplained']) == 1
-        assert v['unexplained'][0][0] == -10.0
+        assert v['unexplained'][0][0] == MM * -10.0
         assert v['clean'] is False
-        assert v['worst_unexplained_oml'] == pytest.approx(0.047)
+        assert v['worst_unexplained_oml_m'] == pytest.approx(MM * 0.047)
 
     def test_a_station_thin_only_against_the_notched_exterior_is_explained(self):
-        rows = [(-10.0, 0.048, 0.0005), (-20.0, 0.002, 0.002)]
+        rows = [(MM * -10.0, MM * 0.048, MM * 0.0005), (MM * -20.0, MM * 0.002, MM * 0.002)]
         v = locate.exterior_verdict(rows)
         assert len(v['explained']) == 1 and not v['unexplained']
         assert v['clean'] is True
@@ -374,7 +394,8 @@ class TestExteriorVerdict:
         """**The converse has to be exercised.** If no station has the two exteriors agreeing,
         nothing has tested whether a station away from every notch is thin too, and reporting that
         as a clean result is the empty-input cross-check this subsystem has made six times."""
-        rows = [(-10.0, 0.048, 0.0005), (-20.0, 0.030, 0.0004)]
+        rows = [(MM * -10.0, MM * 0.048, MM * 0.0005),
+                (MM * -20.0, MM * 0.030, MM * 0.0004)]
         v = locate.exterior_verdict(rows)
         assert v['vacuous'] is True
         assert v['clean'] is False, 'a vacuous record must not report clean'
@@ -386,39 +407,43 @@ class TestExteriorVerdict:
         tolerance — a compliant build. With nothing thin, `explained` and `unexplained` are both
         empty and an earlier version of this verdict reported CLEAN. A compliant specimen cannot
         test an explanation of non-compliance."""
-        rows = [(-10.0, 0.0037, 0.0034), (-20.0, 0.0012, 0.0012)]
-        v = locate.exterior_verdict(rows, wall_tol=0.01)
+        rows = [(-0.010, MM * 0.0037, MM * 0.0034), (-0.020, MM * 0.0012, MM * 0.0012)]
+        v = locate.exterior_verdict(rows, wall_tol_m=MM * 0.01)
+        # **`thin` is a list of rows, not a length**, so it keeps its own name: the rename pass
+        # over this tier matched it as a key and had to be put back by hand (IP-FC-163).
         assert v['thin'] == []
         assert v['vacuous'] is True
         assert v['clean'] is False, 'a compliant build must not report clean'
         assert any('compliant' in r for r in v['vacuous_because'])
-        assert 'NOTHING TESTED' in locate.exterior_table(rows, wall_tol=0.01)
+        assert 'NOTHING TESTED' in locate.exterior_table(rows, wall_tol_m=MM * 0.01)
 
     def test_both_vacuity_reasons_are_reported_together_when_both_apply(self):
-        rows = [(-10.0, 0.0037, 0.0001), (-20.0, 0.0012, 0.0002)]
-        v = locate.exterior_verdict(rows, wall_tol=0.01)
+        rows = [(-0.010, MM * 0.0037, MM * 0.0001), (-0.020, MM * 0.0012, MM * 0.0002)]
+        v = locate.exterior_verdict(rows, wall_tol_m=MM * 0.01)
         assert len(v['vacuous_because']) == 2
 
     def test_coincident_stations_are_found_by_the_readings_not_by_geometry(self):
         """Two readings that agree to `coincide_tol` mean no buttress tool removed exterior
         material within reach — which is read off the measurement rather than recomputed from the
         tools, so it cannot disagree with what was actually measured."""
-        rows = [(-10.0, 0.0020, 0.0020), (-20.0, 0.048, 0.0005)]
+        rows = [(MM * -10.0, MM * 0.0020, MM * 0.0020),
+                (MM * -20.0, MM * 0.048, MM * 0.0005)]
         v = locate.exterior_verdict(rows)
-        assert [r[0] for r in v['coincident']] == [-10.0]
+        assert [r[0] for r in v['coincident']] == [MM * -10.0]
 
     def test_an_unreadable_station_is_counted_not_dropped(self):
         """`_finished_wall_gap` returns `None` when a section is not one closed loop. A station it
         could not evaluate is not evidence either way, and silently dropping it is how a thin
         reading becomes an absent one (IP-WTM-19, IP-WTM-35)."""
-        rows = [(-10.0, 0.048, 0.0005), (-20.0, None, None), (-30.0, 0.002, 0.002)]
+        rows = [(MM * -10.0, MM * 0.048, MM * 0.0005), (MM * -20.0, None, None),
+                (MM * -30.0, MM * 0.002, MM * 0.002)]
         v = locate.exterior_verdict(rows)
         assert v['unreadable'] == 1 and v['readable'] == 2
         assert v['stations'] == 3
         assert 'unreadable' in locate.exterior_table(rows)
 
     def test_the_table_names_the_unexplained_stations(self):
-        rows = [(-10.0, 0.048, 0.047), (-20.0, 0.002, 0.002)]
+        rows = [(MM * -10.0, MM * 0.048, MM * 0.047), (MM * -20.0, MM * 0.002, MM * 0.002)]
         text = locate.exterior_table(rows)
         assert 'UNEXPLAINED' in text
         assert 'does not explain these' in text
@@ -427,7 +452,7 @@ class TestExteriorVerdict:
 class TestCurvature:
 
     def test_a_circle_reads_its_own_radius(self):
-        r = locate.curvature_profile(ring(37.5, 720), window_mm=2.0)
+        r = locate.curvature_profile(ring(37.5, 720), window_m=2.0)
         assert float(np.median(r)) == pytest.approx(37.5, rel=0.01)
 
     def test_the_window_is_arc_length_so_the_estimate_is_density_independent(self):
@@ -436,12 +461,12 @@ class TestCurvature:
         that made the windowed-normal candidate oscillate. A fixed arc-length window means the
         estimate says the same thing at 360 samples and at 7 200."""
         for n in (360, 1440, 7200):
-            got = float(np.median(locate.curvature_profile(ring(37.5, n), window_mm=2.0)))
+            got = float(np.median(locate.curvature_profile(ring(37.5, n), window_m=2.0)))
             assert got == pytest.approx(37.5, rel=0.02), n
 
     def test_a_straight_run_reads_as_a_very_large_radius(self):
         line = np.stack([np.linspace(0.0, 10.0, 200), np.zeros(200), np.zeros(200)], axis=1)
-        r = locate.curvature_profile(line, window_mm=1.0)
+        r = locate.curvature_profile(line, window_m=1.0)
         assert r[len(r) // 2] > 1.0e6
 
     def test_a_shape_with_two_curvature_scales_separates_them(self):
@@ -452,7 +477,7 @@ class TestCurvature:
         # A four-lobed curve: radius oscillates, so curvature does too, by a wide factor.
         rad = 40.0 + 8.0 * np.cos(4 * a)
         pts = np.stack([rad * np.cos(a), rad * np.sin(a), np.zeros_like(a)], axis=1)
-        r = locate.curvature_profile(pts, window_mm=1.0)
+        r = locate.curvature_profile(pts, window_m=1.0)
         finite = r[np.isfinite(r)]
         assert float(np.max(finite)) / float(np.min(finite)) > 3.0
 
@@ -462,7 +487,7 @@ class TestCurvature:
         a = np.radians(np.linspace(0.0, 360.0, 1800, endpoint=False))
         rad = 40.0 + 8.0 * np.cos(4 * a)
         pts = np.stack([rad * np.cos(a), rad * np.sin(a), np.zeros_like(a)], axis=1)
-        r = locate.curvature_profile(pts, window_mm=1.0)
+        r = locate.curvature_profile(pts, window_m=1.0)
         kappa = 1.0 / np.where(np.isfinite(r), r, np.inf)
         sharpest = int(np.argmax(kappa))
         rank = float(np.count_nonzero(kappa <= kappa[sharpest])) / float(len(kappa))
@@ -506,34 +531,36 @@ class TestDistinctCorpus:
 class TestSummaries:
 
     def test_states_counts_each_classification(self):
-        rows = [{'state': locate.ANNULUS, 'worst_thin': 0.0},
-                {'state': locate.ANNULUS, 'worst_thin': 0.1},
-                {'state': locate.SEVERED_ONE, 'worst_thin': None}]
+        rows = [{'state': locate.ANNULUS, 'worst_thin_m': 0.0},
+                {'state': locate.ANNULUS, 'worst_thin_m': MM * 0.1},
+                {'state': locate.SEVERED_ONE, 'worst_thin_m': None}]
         assert locate.states(rows) == {locate.ANNULUS: 2, locate.SEVERED_ONE: 1}
         assert len(locate.severed(rows)) == 1
-        assert locate.worst(rows)['worst_thin'] == 0.1
+        assert locate.worst(rows)['worst_thin_m'] == MM * 0.1
 
     def test_worst_is_none_when_nothing_was_readable(self):
-        assert locate.worst([{'state': locate.NO_WALL, 'worst_thin': None}]) is None
+        assert locate.worst([{'state': locate.NO_WALL, 'worst_thin_m': None}]) is None
 
     def test_the_table_marks_only_readings_over_the_tolerance(self):
-        rows = [{'z': -1.0, 'state': locate.ANNULUS, 'loops': 2, 'thickness': 0.599,
-                 'worst_thin': 0.001, 'angle_deg': 10.0, 'radius': 5.0},
-                {'z': -2.0, 'state': locate.ANNULUS, 'loops': 2, 'thickness': 0.4,
-                 'worst_thin': 0.2, 'angle_deg': 30.0, 'radius': 5.0},
-                {'z': -3.0, 'state': locate.NO_WALL, 'loops': 0, 'thickness': None,
-                 'worst_thin': None, 'angle_deg': None, 'radius': None}]
-        text = locate.table(rows, tolerance=0.01)
+        rows = [{'z_m': MM * -1.0, 'state': locate.ANNULUS, 'loops': 2,
+                 'thickness_m': MM * 0.599, 'worst_thin_m': MM * 0.001,
+                 'angle_rad': math.radians(10.0), 'radius_m': MM * 5.0},
+                {'z_m': MM * -2.0, 'state': locate.ANNULUS, 'loops': 2,
+                 'thickness_m': MM * 0.4, 'worst_thin_m': MM * 0.2,
+                 'angle_rad': math.radians(30.0), 'radius_m': MM * 5.0},
+                {'z_m': MM * -3.0, 'state': locate.NO_WALL, 'loops': 0, 'thickness_m': None,
+                 'worst_thin_m': None, 'angle_rad': None, 'radius_m': None}]
+        text = locate.table(rows, tolerance_m=MM * 0.01)
         assert text.count('THIN') == 1
         assert len(text.splitlines()) == 5
 
     def test_severed_also_accepts_a_state_only_row(self):
         """`state_profile`'s rows carry no `worst_thin`, and `severed` must still filter them --
         it is the function a dense ring scan reads its verdict from."""
-        rows = [{'z': -1.0, 'state': locate.ANNULUS, 'loops': 2, 'area_ratio': 0.9, 'samples': 800},
-                {'z': -2.0, 'state': locate.SEVERED_MANY, 'loops': 3, 'area_ratio': None,
+        rows = [{'z_m': -1.0, 'state': locate.ANNULUS, 'loops': 2, 'area_ratio': 0.9, 'samples': 800},
+                {'z_m': -2.0, 'state': locate.SEVERED_MANY, 'loops': 3, 'area_ratio': None,
                  'samples': 800}]
-        assert [r['z'] for r in locate.severed(rows)] == [-2.0]
+        assert [r['z_m'] for r in locate.severed(rows)] == [-2.0]
         assert locate.states(rows) == {locate.ANNULUS: 1, locate.SEVERED_MANY: 1}
 
 
@@ -541,8 +568,16 @@ class TestSummaries:
 
 
 class FakeBox(object):
-    def __init__(self, lo, hi):
-        self.ZMin, self.ZMax = float(lo), float(hi)
+    """A kernel `BoundBox`'s `z` pair, **in the kernel's millimeters** (IP-FC-163).
+
+    `dense_grid` reads it through `kern.z_extent_m`, so the stub stays in the unit a real box
+    carries and every assertion below is about meters. Writing the stub in meters would have made
+    the tests pass while the function under test converted a number that was already converted --
+    the error this boundary exists to prevent.
+    """
+
+    def __init__(self, lo_mm, hi_mm):
+        self.ZMin, self.ZMax = float(lo_mm), float(hi_mm)
 
 
 class FakeWall(object):
@@ -558,53 +593,53 @@ class TestDenseGrid:
         """**A spacing, not a count.** The axial extent scales with `U` while a defect's extent
         does not, so a fixed count buys a spacing proportional to `U` -- the same error that made
         the first corpus figures six times too large circumferentially."""
-        zs = locate.dense_grid(FakeWall(-101.0, 0.0), inset=1.0, spacing_mm=1.0)
-        assert len(zs) == 100
-        assert zs[0] == pytest.approx(-100.0) and zs[-1] == pytest.approx(-1.0)
-        step = zs[1] - zs[0]
-        assert step == pytest.approx(1.0, abs=1e-9)
+        zs_m = locate.dense_grid(FakeWall(-101.0, 0.0), inset_m=MM, spacing_m=MM)
+        assert len(zs_m) == 100
+        assert zs_m[0] == pytest.approx(MM * -100.0) and zs_m[-1] == pytest.approx(MM * -1.0)
+        step_m = zs_m[1] - zs_m[0]
+        assert step_m == pytest.approx(MM, abs=1e-12)
 
     def test_the_same_spacing_on_a_longer_part_gives_more_stations_not_coarser_ones(self):
-        short = locate.dense_grid(FakeWall(-51.0, 0.0), inset=1.0, spacing_mm=1.0)
-        long_ = locate.dense_grid(FakeWall(-401.0, 0.0), inset=1.0, spacing_mm=1.0)
+        short = locate.dense_grid(FakeWall(-51.0, 0.0), inset_m=MM, spacing_m=MM)
+        long_ = locate.dense_grid(FakeWall(-401.0, 0.0), inset_m=MM, spacing_m=MM)
         assert len(long_) == 8 * (len(short) - 1) + 1 or len(long_) > len(short)
-        assert (long_[1] - long_[0]) == pytest.approx(short[1] - short[0], abs=1e-9)
+        assert (long_[1] - long_[0]) == pytest.approx(short[1] - short[0], abs=1e-12)
 
     def test_a_count_still_works_for_the_existing_callers(self):
-        zs = locate.dense_grid(FakeWall(-11.0, -1.0), 5, inset=1.0)
-        assert len(zs) == 5
-        assert zs[0] == pytest.approx(-10.0) and zs[-1] == pytest.approx(-2.0)
+        zs_m = locate.dense_grid(FakeWall(-11.0, -1.0), 5, inset_m=MM)
+        assert len(zs_m) == 5
+        assert zs_m[0] == pytest.approx(MM * -10.0) and zs_m[-1] == pytest.approx(MM * -2.0)
 
     def test_without_app_it_falls_back_to_the_box(self):
         """Documented rather than silent: a caller that needs to know asks
         `corpus.sectioning_extent` itself."""
-        zs = locate.dense_grid(FakeWall(-21.0, -1.0), 3, inset=1.0)
-        assert zs[0] == pytest.approx(-20.0) and zs[-1] == pytest.approx(-2.0)
+        zs_m = locate.dense_grid(FakeWall(-21.0, -1.0), 3, inset_m=MM)
+        assert zs_m[0] == pytest.approx(MM * -20.0) and zs_m[-1] == pytest.approx(MM * -2.0)
 
     def test_an_extent_shorter_than_the_inset_returns_one_midpoint_rather_than_raising(self):
-        zs = locate.dense_grid(FakeWall(-1.0, 0.0), inset=1.0, spacing_mm=1.0)
-        assert len(zs) == 1
-        assert zs[0] == pytest.approx(-0.5)
+        zs_m = locate.dense_grid(FakeWall(-1.0, 0.0), inset_m=MM, spacing_m=MM)
+        assert len(zs_m) == 1
+        assert zs_m[0] == pytest.approx(MM * -0.5)
 
     def test_a_spacing_coarser_than_the_part_still_gives_two_stations(self):
-        zs = locate.dense_grid(FakeWall(-4.0, 0.0), inset=1.0, spacing_mm=1000.0)
-        assert len(zs) == 2
+        zs_m = locate.dense_grid(FakeWall(-4.0, 0.0), inset_m=MM, spacing_m=MM * 1000.0)
+        assert len(zs_m) == 2
 
     def test_a_given_extent_wins_over_the_box(self):
         """The box on these solids is an outer bound only -- a nose wall at `U` = 4 has one twice
         the length of the part -- so a caller that has sectioned for the real extent must be able
         to say so."""
-        zs = locate.dense_grid(FakeWall(-400.0, 0.0), inset=1.0, spacing_mm=1.0,
-                               extent=(-101.0, 0.0))
-        assert len(zs) == 100
-        assert zs[0] == pytest.approx(-100.0) and zs[-1] == pytest.approx(-1.0)
+        zs_m = locate.dense_grid(FakeWall(-400.0, 0.0), inset_m=MM, spacing_m=MM,
+                                 extent_m=(MM * -101.0, 0.0))
+        assert len(zs_m) == 100
+        assert zs_m[0] == pytest.approx(MM * -100.0) and zs_m[-1] == pytest.approx(MM * -1.0)
 
     def test_a_given_extent_sections_nothing_at_all(self):
         """**The point of the parameter.** `sectioning_extent` bisects each end to 1e-3 mm, about
         forty sections on a wall whose box spans 400 mm, and a section costs seconds here; a caller
         that already paid must not pay twice. Passing a shape with neither a `BoundBox` nor
         anything sliceable proves no other path was taken."""
-        zs = locate.dense_grid(object(), inset=1.0, spacing_mm=1.0, extent=(-11.0, 0.0),
+        zs = locate.dense_grid(object(), inset_m=1.0, spacing_m=1.0, extent_m=(-11.0, 0.0),
                                App=object())
         assert len(zs) == 10
 
@@ -613,7 +648,7 @@ class TestDenseGrid:
 
 
 def state_row(z, state, loops=2):
-    return {'z': float(z), 'state': state, 'loops': loops, 'area_ratio': None, 'samples': 800}
+    return {'z_m': float(z), 'state': state, 'loops': loops, 'area_ratio': None, 'samples': 800}
 
 
 class TestSliceArtifact:
@@ -653,9 +688,9 @@ class TestSliceArtifact:
         """0.05 mm is the distance at which section 6.1's recorded case already returned a normal
         section, so the set has to include it either side, plus a tighter and a looser pair to tell
         how far a real gap extends."""
-        assert 0.05 in [abs(d) for d in locate.NEARBY_OFFSETS]
-        assert all(-d in locate.NEARBY_OFFSETS for d in locate.NEARBY_OFFSETS)
-        assert 0.0 not in locate.NEARBY_OFFSETS, 'the station itself is added by nearby_states'
+        assert MM * 0.05 in [abs(d) for d in locate.NEARBY_OFFSETS_M]
+        assert all(-d in locate.NEARBY_OFFSETS_M for d in locate.NEARBY_OFFSETS_M)
+        assert 0.0 not in locate.NEARBY_OFFSETS_M, 'the station itself is added by nearby_states'
 
 
 # ------------------------------------------------------- folding a wall-at-a-time scan together
@@ -663,7 +698,9 @@ class TestSliceArtifact:
 
 def wall_record(label, stations=10, annulus=10, severed=(), no_wall=(), artifacts=(),
                 disagreements=(), per_station=2.0):
-    verdicts = [{'z': float(z), 'slice_artifact': bool(a)} for z, a in artifacts]
+    # **A `ring_scan` record, so millimeters**: the file format is frozen and
+    # `locate.scan_verdict` converts at ingest (IP-FC-163).
+    verdicts = [{'z_mm': float(z), 'slice_artifact': bool(a)} for z, a in artifacts]
     states = {}
     if annulus:
         states[locate.ANNULUS] = annulus
@@ -674,7 +711,7 @@ def wall_record(label, stations=10, annulus=10, severed=(), no_wall=(), artifact
     return {'label': label, 'stations': stations, 'states': states,
             'severed': [float(z) for z in severed], 'no_wall': [float(z) for z in no_wall],
             'no_wall_verdicts': verdicts,
-            'real_gaps': [v['z'] for v in verdicts if not v['slice_artifact']],
+            'real_gaps': [v['z_mm'] for v in verdicts if not v['slice_artifact']],
             'kernel_disagreements': list(disagreements), 'axial_mm': 1.0, 'around_mm': 0.2,
             'meta': {'seconds_per_station': per_station, 'faces': 2464}}
 
@@ -692,7 +729,7 @@ class TestScanVerdict:
 
     def test_a_severed_station_is_a_finding_and_names_its_wall(self):
         v = locate.scan_verdict([wall_record('a', annulus=9, severed=(-12.5,))])
-        assert v['severed'] == [('a', -12.5)]
+        assert v['severed_m'] == [('a', MM * -12.5)]
         assert v['flagged'] == ['a']
         assert v['clean'] is False
 
@@ -701,7 +738,7 @@ class TestScanVerdict:
         that would report the plane the scan happened to choose as a defect in the part."""
         v = locate.scan_verdict([wall_record('a', annulus=9, no_wall=(-7.0,),
                                              artifacts=((-7.0, True),))])
-        assert v['real_gaps'] == []
+        assert v['real_gaps_m'] == []
         assert v['artifacts'] == 1
         assert v['clean'] is True
         assert v['states'][locate.NO_WALL] == 1, 'still reported, just not as a defect'
@@ -709,7 +746,7 @@ class TestScanVerdict:
     def test_a_no_wall_absent_either_side_too_is_a_finding(self):
         v = locate.scan_verdict([wall_record('a', annulus=9, no_wall=(-7.0,),
                                              artifacts=((-7.0, False),))])
-        assert v['real_gaps'] == [('a', -7.0)]
+        assert v['real_gaps_m'] == [('a', MM * -7.0)]
         assert v['artifacts'] == 0
         assert v['clean'] is False
 
@@ -718,7 +755,7 @@ class TestScanVerdict:
         shown to be measuring the right thing on this geometry."""
         v = locate.scan_verdict([wall_record('a', disagreements=((-3.0, 'severed_arcs', True),))])
         assert v['clean'] is False
-        assert v['severed'] == [] and v['real_gaps'] == []
+        assert v['severed_m'] == [] and v['real_gaps_m'] == []
 
     def test_an_empty_corpus_is_not_silently_clean_of_anything_it_measured(self):
         v = locate.scan_verdict([])
@@ -783,7 +820,7 @@ class TestOnARealWall:
         _rec, wall = tail_u4
         zs = locate.dense_grid(wall, 8)
         n = density.counts_for_spacing(density.section_perimeter(wall, zs[0], App=App),
-                                       locate.TARGET_SPACING)
+                                       locate.TARGET_SPACING_M)
         assert locate.agrees_with_kernel(wall, zs, Part, App, n_points=n) == []
 
     def test_the_worst_station_is_an_annulus_so_the_wall_is_thin_not_severed(self, tail_u4, App):
@@ -792,8 +829,8 @@ class TestOnARealWall:
         than the thickness work."""
         _rec, wall = tail_u4
         rows = locate.profile(wall, corpus.station_grid(wall), App=App,
-                              spacing=locate.TARGET_SPACING)
+                              spacing_m=locate.TARGET_SPACING_M)
         bad = locate.severed(rows)
-        assert bad == [], 'severed stations: %s' % [(r['z'], r['state']) for r in bad]
+        assert bad == [], 'severed stations: %s' % [(r['z_m'], r['state']) for r in bad]
         w = locate.worst(rows)
         assert w is not None and w['state'] == locate.ANNULUS

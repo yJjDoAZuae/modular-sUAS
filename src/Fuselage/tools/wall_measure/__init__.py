@@ -1,6 +1,6 @@
 """Measuring a wall's local thickness, and deciding which measure to trust.
 
-The acceptance gate on the cowl wall compares a nearest-point minimum against `WALL_TOL` = 0.01 mm,
+The acceptance gate on the cowl wall compares a nearest-point minimum against `WALL_TOL_M` = 1e-5 m,
 and that minimum does not converge: it was still falling at 3840 inner samples at 17 of 24 stations,
 because a nearest-point distance at a concave corner crosses the corner rather than the wall. The
 one measure that does converge is a mean and cannot see a local thin spot. So no figure this project
@@ -59,6 +59,14 @@ This package exists to end that by measurement rather than by argument:
 **Nothing here imports a vendor module at module scope.** The builders take `Part` and `App` as
 arguments -- bridge proxies in a test, real modules under `freecadcmd` -- so this package is
 importable from the project's own interpreter and the measures run client-side.
+
+**Everything stored, compared and returned here is SI** (IP-FC-163), and `kern` is the one module
+that knows a kernel object's attributes are millimeters. Three boundaries are deliberate and are
+the only millimeters left: a kernel call, which `kern` owns; a file already on disk, which
+`sweep.JSONL_LENGTH_KEYS` and `prediction` own between them; and a printed table, where the heading
+says the unit. Everything else ends `_m`, `_m2`, `_m3` or `_rad`, and `tools/unit_regime.py`
+screens for it. The millimeter figures quoted throughout these docstrings are measurements as they
+were published and are left alone on purpose.
 
 The plan is doc/implementation/wall_thickness_measure.md and the design basis is
 doc/design/cowl_interior_surface.md section 5, "The three convergences, and where the chain breaks".

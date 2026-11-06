@@ -10,6 +10,14 @@ is the `(m, 3)` locations the measure reports at, and `thickness` is the `(m,)` 
 it reports there. A measure samples whichever boundary it likes and at whatever density it likes;
 the harness compares its answers against closed-form truth at the points it chose.
 
+**Everything in and out of here is meters** (IP-FC-163): the arrays arrive SI from
+`sections._points_of`, so every distance computed from them is SI without this module converting
+anything. The three places that needed a deliberate change were the window and margin parameters,
+which are lengths and are now `_m`; the geometric epsilons, which are compared against a length
+and so had to move with it; and `survives_erosion`, which is the one function here that hands
+coordinates back to the kernel. The figures quoted in the docstrings stay in the millimeters they
+were measured and reported in.
+
 The incumbent is included as `nearest_point_min` so the candidates are scored against it rather
 than against an impression of it, and `tests/test_wall_measure_gates.py` checks that this
 reimplementation agrees with the real `cowl_interior._Polyline.distance` on the fixtures -- without
@@ -17,10 +25,47 @@ that, the baseline would be a different measure wearing the same name.
 
 See doc/implementation/wall_thickness_measure.md and doc/design/cowl_interior_surface.md section 5.
 """
+import math
+
 import numpy as np
 
+from . import kern
 from . import sections
 
+
+#: A turn at one vertex sharp enough to be a genuine crease rather than a sampled curve. Radians,
+#: because the standard's angle unit is radians; it is the 30 degrees it always was, and
+#: `outer_creases`' own docstring argues why anything from 10 to 60 degrees gives the same answer.
+CREASE_ANGLE_RAD = math.radians(30.0)
+
+#: How far from a crease or a reflex corner a sample is dropped, along the boundary's own arc. Half
+#: an extrusion width. Converted from 0.30 mm by IP-FC-163 and is the same margin.
+MARGIN_M = 3.0e-4
+
+#: The arc-length window a tangent is fitted over in `windowed_normal`. Half an extrusion width:
+#: wide enough to average a crease out, narrow enough that a 0.6 mm defect still has several
+#: independent samples across it. Converted from 0.30 mm.
+WINDOW_M = 3.0e-4
+
+#: How far a ray is cast before it is treated as having missed. Converted from 5.0 mm, which is an
+#: order of magnitude more than any wall this measures and an order less than the section's own
+#: size, so a ray that travels this far has left the ribbon.
+MAX_RAY_M = 5.0e-3
+
+#: Geometric epsilons, **scaled with the coordinates they are compared against** (IP-FC-163).
+#:
+#: This is the trap the conversion keeps setting. `RAY_PARALLEL_M` guards a divide by a cross product
+#: of a unit direction and a segment vector, so it carries one length and had to move by 1000 like
+#: the segment did; `RAY_MIN_M` is a distance along a ray, so it moved too; `REFLEX_AREA_M2` is a
+#: cross product of **two** segment vectors, an area, so it moved by a million. Carrying any of the
+#: three across unchanged would have left the same literal meaning something 1000 or 1e6 times
+#: looser or tighter -- which is the defect `station_sets.FLOOR_TOL_M` and `fit_response.Z_TOL_M`
+#: each had to be rescued from. `RAY_U_EPS` is the one that does **not** move: `u` is a fraction
+#: along a segment and is dimensionless.
+RAY_PARALLEL_M = 1.0e-17
+RAY_MIN_M = 1.0e-12
+RAY_U_EPS = 1.0e-9
+REFLEX_AREA_M2 = 1.0e-18
 
 #: Largest `(m, s)` intermediate `_segment_distances` will allocate at once, in elements. At 8 bytes
 #: a float that is about 200 MB a temporary, and there are a few of them live at once.
@@ -100,7 +145,7 @@ def _segment_nearest(points, poly, max_block=MAX_BLOCK):
     return dist, which
 
 
-def outer_creases(outer, angle_deg=30.0):
+def outer_creases(outer, angle_rad=CREASE_ANGLE_RAD):
     """Which vertices of `outer` are a genuine crease rather than a sampled curve.
 
     **The threshold separates two things that are far apart, not two that are close.** On a cowl
@@ -108,6 +153,10 @@ def outer_creases(outer, angle_deg=30.0):
     arc spans about 63 samples and turns 90 degrees in total, so roughly 1.4 degrees a vertex. A
     notch face meeting the OML turns tens of degrees at a *single* vertex. Anything from about 10
     to 60 degrees separates them, so the exact value is not a tuned parameter.
+
+    **The turn is compared in radians**, which is what the standard's angle unit is; the threshold
+    is unchanged and the comparison is the same one, since `arccos` already answers in radians and
+    the `degrees()` call this used to make was a conversion in both directions.
     """
     xy = outer[:, :2]
     prev, nxt = np.roll(xy, 1, axis=0), np.roll(xy, -1, axis=0)
@@ -117,10 +166,10 @@ def outer_creases(outer, angle_deg=30.0):
     ok = (n1 > 0) & (n2 > 0)
     cos = np.ones(len(xy))
     cos[ok] = np.clip(np.einsum('ij,ij->i', v1[ok], v2[ok]) / (n1[ok] * n2[ok]), -1.0, 1.0)
-    return np.degrees(np.arccos(cos)) >= float(angle_deg)
+    return np.arccos(cos) >= float(angle_rad)
 
 
-def outer_corner_excluded_min(outer, inner, margin_mm=0.30, angle_deg=30.0):
+def outer_corner_excluded_min(outer, inner, margin_m=MARGIN_M, angle_rad=CREASE_ANGLE_RAD):
     """The incumbent, with samples whose nearest *exterior* point sits at a crease dropped.
 
     **A different exclusion from `corner_excluded_min`, and for a different artifact.** That one
@@ -143,13 +192,13 @@ def outer_corner_excluded_min(outer, inner, margin_mm=0.30, angle_deg=30.0):
     tolerance.
     """
     dist, which = _segment_nearest(inner, outer)
-    crease = outer_creases(outer, angle_deg)
+    crease = outer_creases(outer, angle_rad)
     if not crease.any():
         return inner, dist
-    # A sample is dropped when the segment it is nearest to lies within `margin_mm` of a crease,
+    # A sample is dropped when the segment it is nearest to lies within `margin_m` of a crease,
     # measured along the exterior's own arc. `_within_arc_of` works on the vertices; a segment is
     # indexed by its start vertex, so the vertex mask transfers directly.
-    blocked = _within_arc_of(outer[:, :2], crease, float(margin_mm))
+    blocked = _within_arc_of(outer[:, :2], crease, float(margin_m))
     keep = ~blocked[which]
     if not keep.any():
         return inner[:0], np.zeros(0)
@@ -169,7 +218,7 @@ def nearest_point_min(outer, inner):
     return inner, _segment_distances(inner, outer)
 
 
-def windowed_normal(outer, inner, window_mm=0.30, n_samples=None):
+def windowed_normal(outer, inner, window_m=WINDOW_M, n_samples=None):
     """**Candidate C2.** Cast along a normal estimated over an arc-length window, not from
     neighbors.
 
@@ -179,14 +228,20 @@ def windowed_normal(outer, inner, window_mm=0.30, n_samples=None):
     symptom -- the tangent is a least-squares fit over a window of arc length, so a single corner
     perturbs it by a bounded amount instead of dominating it.
 
-    `window_mm` defaults to half an extrusion width: wide enough to average a crease out, narrow
+    `window_m` defaults to half an extrusion width: wide enough to average a crease out, narrow
     enough that a 0.6 mm defect still has several independent samples across it.
+
+    **The window is a count of samples, and it is `round`, not `int`.** Both operands are lengths,
+    so the ratio is unit-invariant and the conversion did not move it -- but only because of the
+    rounding: `int(a / b)` approaches a boundary from one side and flips whenever the ratio sits
+    just above a whole number, which is exactly the `_steps` defect `tools/unit_regime.py
+    --counts` sweeps for.
     """
     pts = sections.resample_by_arc_length(inner, n_samples or inner.shape[0])
     xy = pts[:, :2]
     n = xy.shape[0]
-    step = sections.perimeter(pts) / float(n)
-    half = max(1, int(round((window_mm / 2.0) / step)))
+    step_m = sections.perimeter(pts) / float(n)
+    half = max(1, int(round((window_m / 2.0) / step_m)))
 
     # Least-squares tangent over +/- `half` samples, via the window's principal direction.
     idx = (np.arange(n)[:, None] + np.arange(-half, half + 1)[None, :]) % n
@@ -209,12 +264,15 @@ def windowed_normal(outer, inner, window_mm=0.30, n_samples=None):
     return pts, thick
 
 
-def _ray_to_polyline(origins, dirs, poly, max_t=5.0):
+def _ray_to_polyline(origins, dirs, poly, max_t_m=MAX_RAY_M):
     """First positive intersection distance from each ray to a closed polyline; `inf` if none.
 
     A ray cast, not a nearest point: that is the whole difference from the incumbent. Crossing the
     wall along a direction cannot shortcut across a concave corner, because the direction is fixed
     before the opposite boundary is consulted.
+
+    `dirs` are unit vectors, so `t` comes out in the coordinates' own unit -- meters -- and the
+    three thresholds it meets are the scaled ones from this module's epsilon block.
     """
     a = poly[:, :2]
     b = np.roll(a, -1, axis=0)
@@ -223,11 +281,12 @@ def _ray_to_polyline(origins, dirs, poly, max_t=5.0):
     d = dirs[:, None, :]                                    # (m, 1, 2)
     # Solve o + t*d = a + u*e for each (ray, segment).
     denom = d[:, :, 0] * e[None, :, 1] - d[:, :, 1] * e[None, :, 0]
-    safe = np.where(np.abs(denom) > 1e-14, denom, np.nan)
+    safe = np.where(np.abs(denom) > RAY_PARALLEL_M, denom, np.nan)
     ao = a[None, :, :] - o
     t = (ao[:, :, 0] * e[None, :, 1] - ao[:, :, 1] * e[None, :, 0]) / safe
     u = (ao[:, :, 0] * d[:, :, 1] - ao[:, :, 1] * d[:, :, 0]) / safe
-    ok = np.isfinite(t) & (t > 1e-9) & (t <= max_t) & (u >= -1e-9) & (u <= 1.0 + 1e-9)
+    ok = (np.isfinite(t) & (t > RAY_MIN_M) & (t <= max_t_m)
+          & (u >= -RAY_U_EPS) & (u <= 1.0 + RAY_U_EPS))
     t = np.where(ok, t, np.inf)
     return t.min(axis=1)
 
@@ -293,13 +352,13 @@ def _windowed_normal_field(xy, window_frac=0.01):
     return np.column_stack((-tang[:, 1], tang[:, 0]))
 
 
-def corner_excluded_min(outer, inner, reflex_margin_mm=0.30):
+def corner_excluded_min(outer, inner, reflex_margin_m=MARGIN_M):
     """**Candidate C4.** The incumbent, with samples near a concave corner dropped.
 
     Tests whether the incumbent is salvageable rather than replaceable. Its failure has a known and
     specific cause -- a nearest-point distance taken *at a concave corner* crosses the corner -- so
     the cheapest possible fix is to not take it there. Corners are found as reflex turns in the
-    sampled boundary, and every sample within `reflex_margin_mm` of one along the arc is excluded.
+    sampled boundary, and every sample within `reflex_margin_m` of one along the arc is excluded.
 
     If this passes the gates it is the answer, because it is a few lines on top of a measure the
     project already ships. If it fails, it fails informatively: either the corners are not the whole
@@ -307,7 +366,7 @@ def corner_excluded_min(outer, inner, reflex_margin_mm=0.30):
 
     **The samples are taken exactly as given, and the margin is applied along true arc length.** An
     earlier version resampled `inner` to uniform arc spacing first and then converted
-    `reflex_margin_mm` into a fixed number of steps. That made this measure a different *point set*
+    `reflex_margin_m` into a fixed number of steps. That made this measure a different *point set*
     from `nearest_point_min` rather than a subset of it, which quietly broke the one structural
     relationship between the two: C4 takes its minimum over a subset of C0's distances, so it can
     never report **more** thinness than C0. On a real `tail_shell` at `U` = 3.0 the resampled version
@@ -320,14 +379,16 @@ def corner_excluded_min(outer, inner, reflex_margin_mm=0.30):
     pts = inner
     xy = pts[:, :2]
     prev, nxt = np.roll(xy, 1, axis=0), np.roll(xy, -1, axis=0)
+    # A cross product of two segment vectors, so an **area**: `REFLEX_AREA_M2` is the one epsilon in
+    # this module that moved by a million rather than a thousand.
     cross = ((xy - prev)[:, 0] * (nxt - xy)[:, 1]
              - (xy - prev)[:, 1] * (nxt - xy)[:, 0])
     sign = np.sign(sections.signed_area(pts)) or 1.0
-    reflex = (cross * sign) < -1e-12
+    reflex = (cross * sign) < -REFLEX_AREA_M2
     if not reflex.any():
         return pts, _segment_distances(pts, outer)
 
-    blocked = _within_arc_of(xy, reflex, float(reflex_margin_mm))
+    blocked = _within_arc_of(xy, reflex, float(reflex_margin_m))
     keep = ~blocked
     if not keep.any():                      # every sample sat near a corner; report nothing
         return pts[:0], np.zeros(0)
@@ -335,35 +396,36 @@ def corner_excluded_min(outer, inner, reflex_margin_mm=0.30):
     return kept, _segment_distances(kept, outer)
 
 
-def _within_arc_of(xy, marked, margin):
-    """Which samples of a closed polyline lie within `margin` of a marked one, **along** the boundary.
+def _within_arc_of(xy, marked, margin_m):
+    """Which samples of a closed polyline lie within `margin_m` of a marked one, **along** the
+    boundary.
 
-    Arc distance, not index distance, so the margin means millimeters on any sampling -- uniform or
-    not. Each marked sample contributes an arc interval; the intervals are accumulated with a
+    Arc distance, not index distance, so the margin means a real length on any sampling -- uniform
+    or not. Each marked sample contributes an arc interval; the intervals are accumulated with a
     difference array and the wrap is handled by also placing each interval one perimeter either
     side. Linear in the samples and the marks, because a refined section carries tens of thousands
     of samples and an all-pairs comparison would be the slowest step in the measure.
     """
     n = xy.shape[0]
     seg = np.linalg.norm(np.roll(xy, -1, axis=0) - xy, axis=1)     # seg[i] = i -> i+1
-    total = float(seg.sum())
+    total_m = float(seg.sum())
     s = np.concatenate(([0.0], np.cumsum(seg)[:-1]))               # arc position of each sample
     delta = np.zeros(n + 1, dtype=np.int64)
     centers = s[marked]
-    for shift in (-total, 0.0, total):
-        lo = np.searchsorted(s, centers + shift - margin, side='left')
-        hi = np.searchsorted(s, centers + shift + margin, side='right')
+    for shift in (-total_m, 0.0, total_m):
+        lo = np.searchsorted(s, centers + shift - margin_m, side='left')
+        hi = np.searchsorted(s, centers + shift + margin_m, side='right')
         np.add.at(delta, lo, 1)
         np.add.at(delta, hi, -1)
     return np.cumsum(delta[:-1]) > 0
 
 
-def survives_erosion(Part, App, outer, inner, target):
+def survives_erosion(Part, App, outer, inner, target_m):
     """**Candidate C3, and it answers a different question from the others.**
 
-    Not "how thick is the wall here" but "is the wall at least `target` **anywhere** at this
+    Not "how thick is the wall here" but "is the wall at least `target_m` **anywhere** at this
     station" -- one boolean, sampling-free. The morphological argument is that a ribbon narrower
-    than `target` somewhere comes apart when eroded by half of `target` from each side, so
+    than `target_m` somewhere comes apart when eroded by half of `target_m` from each side, so
     connectivity of the eroded region *is* the compliance test, with no sample spacing to converge
     and no nearest-point artifact to suffer from.
 
@@ -379,14 +441,22 @@ def survives_erosion(Part, App, outer, inner, target):
     cheaply enough to be worth keeping as a build-time *guard* beside whichever measure is selected.
 
     An earlier version of this function faked the morphology by clamping the incumbent's own
-    nearest-point distance at `target`, which made it the incumbent in a hat: it inherited the
+    nearest-point distance at `target_m`, which made it the incumbent in a hat: it inherited the
     incumbent's depth readings and so *passed* the depth gate it is supposed to be unable to pass.
     Caught by the screening's own expectation test.
 
     Returns `(survived, detail)`.
+
+    **This is the only function in this module that hands coordinates back to the kernel**, and so
+    the only one that converts (IP-FC-163). The loops arrive in meters from
+    `sections._points_of`; `Part.makePolygon` and `makeOffset2D` are millimeters. Building the
+    polygon from the meter values directly would have made a ribbon a thousandth of its true size
+    and eroded it by a thousandth of the target -- a pair of errors that cancel in the *ratio* and
+    so would have left the verdict looking plausible while the areas it reports were out by 1e-6.
     """
-    def wire_of(points):
-        vs = [App.Vector(float(x), float(y), float(points[0][2])) for x, y in points[:, :2]]
+    def wire_of(points_m):
+        vs = [kern.vec_mm(App, float(x), float(y), float(points_m[0][2]))
+              for x, y in points_m[:, :2]]
         vs.append(vs[0])
         return Part.makePolygon(vs)
 
@@ -394,19 +464,21 @@ def survives_erosion(Part, App, outer, inner, target):
         face = Part.makeFace([wire_of(outer), wire_of(inner)], 'Part::FaceMakerBullseye')
     except Exception as exc:                                             # noqa: BLE001
         return False, 'the ribbon face would not build: %s' % type(exc).__name__
-    area_before = float(face.Area)
+    area_before_m2 = kern.area_m2(face)
     try:
-        eroded = face.makeOffset2D(-float(target) / 2.0)
+        eroded = face.makeOffset2D(-kern.mm(float(target_m)) / 2.0)
     except Exception as exc:                                             # noqa: BLE001
         # The kernel refusing the offset is itself the answer: nothing survived the erosion.
-        return False, 'erosion refused (%s), so the ribbon is thinner than %.4f somewhere' % (
-            type(exc).__name__, target)
+        return False, (
+            'erosion refused (%s), so the ribbon is thinner than %.4f mm somewhere'
+            % (type(exc).__name__, kern.mm(target_m)))
     faces = len(eroded.Faces)
     wires = len(eroded.Wires)
-    area_after = float(eroded.Area) if faces else 0.0
+    area_after_m2 = kern.area_m2(eroded) if faces else 0.0
     survived = faces == 1 and wires == 2
-    return survived, ('eroded by %.4f: %d face(s), %d wire(s), area %.4f -> %.4f'
-                      % (target / 2.0, faces, wires, area_before, area_after))
+    return survived, ('eroded by %.4f mm: %d face(s), %d wire(s), area %.4f -> %.4f mm2'
+                      % (kern.mm(target_m) / 2.0, faces, wires,
+                         area_before_m2 * kern.MM2_PER_M2, area_after_m2 * kern.MM2_PER_M2))
 
 
 #: The per-sample thickness measures, which is what the five-gate table scores. **C3 is not here**:

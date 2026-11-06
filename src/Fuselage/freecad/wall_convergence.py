@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import FreeCAD as App                                                  # noqa: E402
 import Part                                                            # noqa: E402
 
+import si                                                                # noqa: E402
 from corner_common import is_entry_point                               # noqa: E402
 from wall_measure import candidates, corpus, density                   # noqa: E402
 
@@ -67,7 +68,8 @@ def _opt(name, default=None):
     return default
 
 
-def run(kind, u, stations, spacings, out_dir):
+def run(kind, u, stations, spacings_m, out_dir):
+    """Measure in SI and print in millimeters; the JSON carries `_m` keys (IP-FC-163)."""
     started = time.time()
     record = corpus.one(kind=kind, u=u)
     if record is None:
@@ -77,23 +79,24 @@ def run(kind, u, stations, spacings, out_dir):
     # `App` is not optional here despite its default: `closed_wires` builds the slice direction
     # with it, and without it the kernel is handed a tuple and the grid fails before any
     # measuring starts.
-    zs = corpus.measurable_station_grid(shape, stations=stations, App=App)
+    zs_m = corpus.measurable_station_grid(shape, stations=stations, App=App)
     print('')
-    print('%s U=%g: %d faces, %d station(s), spacings %s'
-          % (kind, u, len(shape.Faces), len(zs),
-             ', '.join('%g' % s for s in spacings)))
+    print('%s U=%g: %d faces, %d station(s), spacings %s mm'
+          % (kind, u, len(shape.Faces), len(zs_m),
+             ', '.join('%g' % si.mm(s_m) for s_m in spacings_m)))
 
     at = [time.time()]
 
     def progress(row):
-        print('   z %9.4f  %-26s settled=%-5s value %s  delta %s   (%.0f s)'
-              % (row['z'], row['measure'], row['settled'],
-                 'n/a' if row['value'] is None else '%.6f' % row['value'],
-                 'n/a' if row['last_delta'] is None else '%+.6f' % row['last_delta'],
+        print('   z %9.4f mm  %-26s settled=%-5s value %s  delta %s   (%.0f s)'
+              % (si.mm(row['z_m']), row['measure'], row['settled'],
+                 'n/a' if row['value_m'] is None else '%.6f mm' % si.mm(row['value_m']),
+                 'n/a' if row['last_delta_m'] is None
+                 else '%+.6f mm' % si.mm(row['last_delta_m']),
                  time.time() - at[0]))
         at[0] = time.time()
 
-    rows = density.convergence_survey(shape, zs, MEASURES, App=App, spacings=spacings,
+    rows = density.convergence_survey(shape, zs_m, MEASURES, App=App, spacings_m=spacings_m,
                                       on_station=progress)
 
     print('')
@@ -108,8 +111,8 @@ def run(kind, u, stations, spacings, out_dir):
         os.makedirs(out_dir)
     stem = os.path.join(out_dir, '%s_U%g' % (kind, u))
     with io.open(stem + '.json', 'w', encoding='utf-8') as fh:
-        fh.write(json.dumps({'kind': kind, 'u': float(u), 'stations': len(zs),
-                             'spacings': list(spacings), 'summary': summary,
+        fh.write(json.dumps({'kind': kind, 'u': float(u), 'stations': len(zs_m),
+                             'spacings_m': list(spacings_m), 'summary': summary,
                              'rows': rows}, indent=1, sort_keys=True, default=float))
     print('')
     print('  wrote %s.json in %.0f s' % (stem, time.time() - started))
@@ -120,10 +123,11 @@ def main():
     kind = _opt('kind', 'nose_cowl_shell')
     u = float(_opt('u', '1.0'))
     stations = int(_opt('stations', '24'))
-    spacings = _opt('spacings')
-    spacings = (tuple(float(s) for s in spacings.split(','))
-                if spacings else density.SPACINGS)
-    run(kind, u, stations, spacings, os.path.normpath(_opt('out-dir', OUT_DIR)))
+    # **The flag names its unit**, which `--spacings` did not (IP-FC-163).
+    spacings_text = _opt('spacings-mm')
+    spacings_m = (tuple(si.m(float(s)) for s in spacings_text.split(','))
+                  if spacings_text else density.SPACINGS_M)
+    run(kind, u, stations, spacings_m, os.path.normpath(_opt('out-dir', OUT_DIR)))
 
 
 if is_entry_point(__name__):

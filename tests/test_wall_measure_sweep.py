@@ -18,27 +18,38 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 'src', 'Fuselage', 'tools'))
 
-from wall_measure import candidates, corpus, sweep                         # noqa: E402
+from wall_measure import candidates, corpus, prediction, sweep             # noqa: E402
 
 from conftest import requires_freecad                                      # noqa: E402
 
 requires_corpus = pytest.mark.skipif(not corpus.available(),
                                      reason='no saved soak walls to sweep')
 
-TOL = 0.01
+#: `WALL_TOL_M`, the figure the corpus is judged against. SI since IP-FC-163; the rows below
+#: quote their thinness in millimeters, as every published figure for them does, and `_row`
+#: converts once -- so a literal here still matches the document that cites it.
+TOL = 1.0e-5
+MM = 1.0e-3
 
 
 NEW, OLD = 'C4_corner_excluded_min', 'C0_nearest_point_min'
 
 
-def _row(label, worst, incumbent, kind='tail_shell', u=1.0, repeat=0, coverage=12,
-         stations=12, soak=None):
-    """One sweep row in the shape `sweep.sweep` produces: a figure per measure, on one grid."""
+def _row(label, worst_mm, incumbent_mm, kind='tail_shell', u=1.0, repeat=0, coverage=12,
+         stations=12, soak_mm=None):
+    """One sweep row in the shape `sweep.sweep` produces: a figure per measure, on one grid.
+
+    **The arguments are millimeters and the row is SI**, because the figures these cases are
+    written from are the published ones. `sweep`'s in-memory rows are meters since IP-FC-163; its
+    JSONL is still millimeters, and `write_jsonl` is the one place that converts back.
+    """
     return {'kind': kind, 'u': u, 'repeat': repeat, 'label': label,
-            'worst_thin': {NEW: worst, OLD: incumbent},
+            'worst_thin_m': {NEW: MM * worst_mm, OLD: MM * incumbent_mm},
             'stations_measured': {NEW: coverage, OLD: coverage},
-            'median_of_medians': {NEW: 0.6, OLD: 0.6},
-            'stations': stations, 'soak_recorded_worst': soak, 'elapsed_s': 1.0}
+            'median_of_medians_m': {NEW: MM * 0.6, OLD: MM * 0.6},
+            'stations': stations,
+            'soak_recorded_worst_m': None if soak_mm is None else MM * soak_mm,
+            'elapsed_s': 1.0}
 
 
 class TestThePackageIsPortableToTheWorker:
@@ -142,7 +153,7 @@ class TestTheVerdictArithmetic:
     def test_it_reports_the_worst_wall(self):
         rows = [_row('mild', 0.002, 0.01), _row('bad', 0.150, 0.20)]
         v = sweep.verdict(rows, TOL, NEW)
-        assert v['worst_label'] == 'bad' and v['worst_thin'] == pytest.approx(0.150)
+        assert v['worst_label'] == 'bad' and v['worst_thin_m'] == pytest.approx(MM * 0.150)
 
     def test_exactly_at_the_tolerance_counts_as_meeting_it(self):
         """One-sided and inclusive, matching `check_cowl_interior`'s own `lowv < t - WALL_TOL`."""
@@ -163,8 +174,8 @@ class TestTheVerdictArithmetic:
 
     def test_the_soak_column_is_carried_but_never_differenced(self):
         """It is an answer about different places, so the sweep must not subtract it."""
-        r = _row('a', 0.002, 0.004, soak=0.0384)
-        assert r['soak_recorded_worst'] == pytest.approx(0.0384)
+        r = _row('a', 0.002, 0.004, soak_mm=0.0384)
+        assert r['soak_recorded_worst_m'] == pytest.approx(MM * 0.0384)
         assert 'delta_vs_incumbent' not in r
 
     def test_the_table_shows_coverage_beside_every_figure(self):
@@ -180,7 +191,14 @@ class TestTheVerdictArithmetic:
         p = sweep.write_jsonl(rows, str(tmp_path / 's.jsonl'))
         back = [json.loads(ln) for ln in open(p, encoding='utf-8')]
         assert [r['label'] for r in back] == ['a', 'b']
+        # **The file carries `worst_thin` in millimeters, not `worst_thin_m` in meters.** That is
+        # the frozen format `sweep.JSONL_LENGTH_KEYS` defines, and checking the written line
+        # rather than the row is what holds the two sides of that boundary together.
         assert back[0]['worst_thin'][NEW] == pytest.approx(0.002)
+        assert 'worst_thin_m' not in back[0], 'the file format is millimeters, by its keys'
+        # And it reads back as SI, which is the inverse half.
+        again = prediction.from_file_row(back[0])
+        assert again['worst_thin_m'][NEW] == pytest.approx(MM * 0.002)
 
 
 #: Where a corpus sweep is persisted, if one has been run.
@@ -193,9 +211,17 @@ SWEEP_RESULTS = os.path.join(corpus.SOAK_DIR, 'sweep_spacing.jsonl')
 
 
 def _persisted_sweep():
+    """The persisted corpus sweep as **SI** rows.
+
+    The file is millimeters -- a frozen format, see `sweep.JSONL_LENGTH_KEYS` -- so it goes
+    through `prediction.from_file_row`, which is the one reader of it. Reading the raw lines and
+    asserting against them in meters is the mistake this function exists to prevent: it would
+    compare a 0.15 mm figure against a 1e-5 m tolerance and call every wall thin (IP-FC-163).
+    """
     if not os.path.isfile(SWEEP_RESULTS):
         return None
-    return [json.loads(ln) for ln in open(SWEEP_RESULTS, encoding='utf-8') if ln.strip()]
+    return [prediction.from_file_row(json.loads(ln))
+            for ln in open(SWEEP_RESULTS, encoding='utf-8') if ln.strip()]
 
 
 requires_sweep = pytest.mark.skipif(
@@ -240,7 +266,7 @@ class TestThePersistedCorpusSweep:
         for key, members in sorted(measured.items()):
             if len(members) < 2:
                 continue
-            values = set(round(m['worst_thin'][NEW], 9) for m in members)
+            values = set(round(m['worst_thin_m'][NEW], 9) for m in members)
             assert len(values) == 1, '%s disagrees across %d repeats: %s' % (
                 key, len(members), sorted(values))
 
@@ -264,7 +290,8 @@ class TestThePersistedCorpusSweep:
         must read about 0.6 everywhere, or the sections being measured are not the wall."""
         rows = _persisted_sweep()
         for r in rows:
-            assert r['median_of_medians'][NEW] == pytest.approx(0.6, abs=0.02), r['label']
+            assert r['median_of_medians_m'][NEW] == pytest.approx(MM * 0.6,
+                                                                  abs=MM * 0.02), r['label']
 
     def test_the_selected_measure_can_never_report_more_thinness(self):
         """**A structural invariant, and it has now caught a defect in the measure itself.**
@@ -285,11 +312,12 @@ class TestThePersistedCorpusSweep:
         arc length, so the invariant holds exactly rather than by luck.
         """
         rows = _persisted_sweep()
-        offenders = [(r['label'], r['worst_thin'][NEW] - r['worst_thin'][OLD])
-                     for r in rows if r['worst_thin'][NEW] > r['worst_thin'][OLD] + 1e-12]
+        offenders = [(r['label'], r['worst_thin_m'][NEW] - r['worst_thin_m'][OLD])
+                     for r in rows if r['worst_thin_m'][NEW] > r['worst_thin_m'][OLD] + 1e-15]
         assert not offenders, 'C4 reported more thinness than C0 on %s' % offenders
         # And it must sometimes be strictly better, or the corner exclusion does nothing at all.
-        assert any(r['worst_thin'][NEW] < r['worst_thin'][OLD] - 0.005 for r in rows)
+        assert any(r['worst_thin_m'][NEW] < r['worst_thin_m'][OLD] - MM * 0.005
+                   for r in rows)
 
     def test_the_selected_measure_takes_its_samples_as_given(self):
         """The property the invariant above rests on, asserted directly on the measure rather than
@@ -347,7 +375,7 @@ class TestMeasuringOneRealWall:
         readings, worst = sweep.measure_wall(candidates.corner_excluded_min, shape, App, 0.6,
                                              level=720)
         assert len(readings) == corpus.STATIONS
-        got = [r for r in readings if r.worst is not None]
+        got = [r for r in readings if r.worst_m is not None]
         # **Not 12.** On this wall-based station grid the nose loses 3 to 7 of 12 stations, because
         # the grid is not the body-based one the acceptance check uses -- see
         # `corpus.station_grid`. The floor here is what the corpus actually delivers.
@@ -359,16 +387,16 @@ class TestMeasuringOneRealWall:
         """A wall reading *thicker* than nominal is not a defect -- over a rib it legitimately
         does -- so the reported figure must never go negative."""
         _rec, shape = wall
-        _readings, worst = sweep.measure_wall(candidates.corner_excluded_min, shape, App, 0.6,
-                                              level=720)
-        assert worst >= 0.0
+        _readings, worst_m = sweep.measure_wall(candidates.corner_excluded_min, shape, App,
+                                                MM * 0.6, level=720)
+        assert worst_m >= 0.0
 
     def test_the_medians_sit_near_nominal(self, wall, App):
         """A sanity floor on the whole pipeline: whatever the minimum does, a 0.6 mm wall's median
         thickness has to read about 0.6, or the sections being measured are not the wall."""
         import numpy as np
         _rec, shape = wall
-        readings, _worst = sweep.measure_wall(candidates.corner_excluded_min, shape, App, 0.6,
-                                              level=720)
-        meds = [r.median for r in readings if r.median is not None]
-        assert np.median(meds) == pytest.approx(0.6, abs=0.01)
+        readings, _worst_m = sweep.measure_wall(candidates.corner_excluded_min, shape, App,
+                                                MM * 0.6, level=720)
+        meds_m = [r.median_m for r in readings if r.median_m is not None]
+        assert np.median(meds_m) == pytest.approx(MM * 0.6, abs=MM * 0.01)

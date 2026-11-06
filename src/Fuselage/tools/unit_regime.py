@@ -234,6 +234,16 @@ INLINE_KINDS = ('structural', 'count', 'fraction', 'epsilon', 'default', 'angle'
                 'dimension')
 
 
+#: Name endings that say an operand carries a unit. The suffixes the standard already requires,
+#: plus the millimeter ones the presentation and OpenSCAD layers keep.
+#:
+#: **Declared here rather than beside `_dimensional_operand`, because two separate checks read
+#: it** -- that one, for a `//`, and `_carries_a_unit`, for the left operand of a `*`. Keeping one
+#: list is what stops the two answering differently about the same name.
+_DIMENSIONAL_SUFFIX = ('_m', '_mm', '_m2', '_m3', '_rad',
+                       '_M', '_MM', '_M2', '_M3', '_RAD')
+
+
 def _factor_positions(tree):
     """Literals used as a scale factor rather than as a dimension.
 
@@ -247,6 +257,19 @@ def _factor_positions(tree):
     A dimension is assigned, added, or passed; it is not what you divide or scale *by*. So a
     literal on the right of `/` or `*`, or anywhere in `**` or `%`, is a factor, and a literal
     on the left of `*` is not excused -- which is what keeps `0.010 * U` visible.
+
+    **One exception on that last rule, added by IP-FC-163: the left operand of a `*` whose other
+    side plainly carries a unit.**
+
+        2.0 * r_outer_m       the NAME carries the unit, so the literal is a multiplier
+        0.010 * U             `U` is dimensionless, so the literal is the dimension
+
+    The distinction is the same one the `//` rule already uses -- `_dimensional_operand`, which
+    reads the suffix the standard requires. Without it, converting a module *creates* findings:
+    `arc / (2.0 * r_outer)` reported nothing and `arc_m / (2.0 * r_outer_m)` reported the `2.0`,
+    so the SI conversion turned 37 correct lines in `wall_measure` into inline-dimension
+    findings purely by renaming their operands. A sweep that fires on a conversion done right is
+    one that gets ignored.
     """
     out = set()
     for node in ast.walk(tree):
@@ -254,14 +277,40 @@ def _factor_positions(tree):
             continue
         if isinstance(node.op, (ast.Pow, ast.Mod)):
             sides = (node.left, node.right)
-        elif isinstance(node.op, (ast.Div, ast.Mult, ast.FloorDiv)):
+        elif isinstance(node.op, (ast.Div, ast.FloorDiv)):
             sides = (node.right,)
+        elif isinstance(node.op, ast.Mult):
+            sides = [node.right]
+            # A literal times something that names its own unit is a multiplier, not a dimension.
+            if isinstance(node.left, ast.Constant) and _carries_a_unit(node.right):
+                sides.append(node.left)
         else:
             continue
         for side in sides:
             if isinstance(side, ast.Constant):
                 out.add((side.lineno, side.col_offset))
     return out
+
+
+def _carries_a_unit(node):
+    """Does this expression name a unit-suffixed value anywhere inside it?
+
+    Deliberately the *same* suffix list `_dimensional_operand` uses, so the two places that ask
+    this question cannot drift apart. A literal is not enough on its own -- `2.0 * 0.6` says
+    nothing about which number is the dimension -- so only a name, attribute or call counts.
+    """
+    for child in ast.walk(node):
+        name = None
+        if isinstance(child, ast.Name):
+            name = child.id
+        elif isinstance(child, ast.Attribute):
+            name = child.attr
+        elif isinstance(child, ast.Call):
+            name = child.func.id if isinstance(child.func, ast.Name) else (
+                child.func.attr if isinstance(child.func, ast.Attribute) else None)
+        if name and name.endswith(_DIMENSIONAL_SUFFIX):
+            return True
+    return False
 
 
 class _InlineWalk(ast.NodeVisitor):
@@ -800,9 +849,9 @@ def _rounds(node):
     return False
 
 
-#: Name endings that say an operand carries a length. The unit suffixes the standard already
-#: requires, plus the millimeter ones the presentation and OpenSCAD layers keep.
-_DIMENSIONAL_SUFFIX = ('_m', '_mm', '_m2', '_m3', '_M', '_MM', '_M2', '_M3')
+#: Calls whose result is a count whatever their argument is, so a unit suffix inside one says
+#: nothing about the division it feeds.
+_COUNTING_CALLS = frozenset(('len',))
 
 
 def _dimensional_operand(node):
@@ -813,9 +862,32 @@ def _dimensional_operand(node):
     an index or an integer literal is not. The test is the name, so it stays readable and cannot
     depend on this tool knowing any module's figures -- and it errs toward reporting, since a
     name with no suffix at all is exactly what the standard forbids for a dimension.
+
+    **The inside of a `len(...)` is not read, and the conversion is what exposed that it had to
+    be skipped** (IP-FC-163). This function's own docstring named `len(x) // 2` as the case it
+    must not flag, and that held only while `x` had no unit suffix: once `tau_study`'s station
+    list became `zs_m`, `len(zs_m) // 2` walked down to a `_m` name and was reported as a
+    dimensional count. It is the midpoint of a list -- as unit-invariant as an expression gets --
+    so the finding was the instrument's, not the code's. A sweep that cries wolf on a correct site
+    is how a real one gets dismissed, which is the whole reason this tool reports a ceiling rather
+    than a verdict.
+
+    The skip is computed as a set of nodes and not by breaking out of the walk, because
+    `ast.walk` is breadth-first: breaking at the `len` call would also abandon the rest of that
+    side, so `len(x) + y_m` would stop before reaching `y_m`.
     """
     for side in (node.left, node.right):
+        skip = set()
         for child in ast.walk(side):
+            if not isinstance(child, ast.Call):
+                continue
+            called = child.func.id if isinstance(child.func, ast.Name) else (
+                child.func.attr if isinstance(child.func, ast.Attribute) else None)
+            if called in _COUNTING_CALLS:
+                skip.update(id(inner) for inner in ast.walk(child))
+        for child in ast.walk(side):
+            if id(child) in skip:
+                continue
             if isinstance(child, ast.Constant) and isinstance(child.value, float):
                 return True
             name = None

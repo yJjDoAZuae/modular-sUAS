@@ -8,15 +8,20 @@ pre-committed tie-break. Nothing in this module reserves a judgment call.
 | gate | asks | threshold |
 | --- | --- | --- |
 | G1 locality | does it see a thin patch one extrusion width long? | >= 80% of the patch's true depth |
-| G2 convergence | does the reported value settle under refinement? | <= 0.001 mm between the two finest levels, and shrinking |
-| G3 accuracy | does it read a known constant wall correctly? | <= 0.001 mm from closed form |
-| G4 discrimination | does it say how deep the defect is, and where? | depth within 0.002 mm, location within 2 mm |
+| G2 convergence | does the reported value settle under refinement? | <= 1e-6 m between the two finest levels, and shrinking |
+| G3 accuracy | does it read a known constant wall correctly? | <= 1e-6 m from closed form |
+| G4 discrimination | does it say how deep the defect is, and where? | depth within 2e-6 m, location within 2e-3 m |
 | G5 cost | can it run in a build and in the suite? | <= 60 s for 12 stations of a real tail wall |
 
-The 0.001 mm figures are a tenth of `WALL_TOL` = 0.01 mm, so an instrument's own residual can never
-be confused with the quantity it measures. G1's 0.6 mm patch length is one extrusion width
-(`cowl_n_perimeters * extrusion_width` = 1 x 0.6), the shortest thin spot a single-perimeter
+The 1e-6 m figures are a tenth of `WALL_TOL_M` = 1e-5 m, so an instrument's own residual can never
+be confused with the quantity it measures. G1's 6e-4 m patch length is one extrusion width
+(`cowl_n_perimeters * extrusion_width` = 1 x 0.6 mm), the shortest thin spot a single-perimeter
 spiral-vase wall can actually fail at.
+
+**Every threshold here is SI (IP-FC-163), and the conversion changed none of them.** A gate's
+limit is a length, so it moved by 1000 and means exactly what it meant; the figures quoted in the
+docstrings below are left in the millimeters they were measured and reported in, because they are
+a record of a measurement rather than a value this module compares against.
 
 G5 needs a real wall and is therefore opt-in: `cost_gate` takes a shape the caller has loaded, so
 the other four gates stay in the fast test tier. The 28 finished walls the 2026-10-06 soak saved as
@@ -28,16 +33,29 @@ import time
 
 import numpy as np
 
+from . import kern
 from . import sections
 
-#: Gate thresholds. A tenth of `WALL_TOL` wherever the gate is about the instrument's own residual.
-ACCURACY_TOL = 0.001          # G3: mm from the closed-form answer
-CONVERGE_TOL = 0.001          # G2: mm of movement between the two finest refinements
+#: Gate thresholds. A tenth of `WALL_TOL_M` wherever the gate is about the instrument's own
+#: residual. Converted from 0.001 / 0.001 / 0.002 / 2.0 mm by IP-FC-163; the gates are as tight
+#: as they were.
+ACCURACY_TOL_M = 1.0e-6       # G3: meters from the closed-form answer
+CONVERGE_TOL_M = 1.0e-6       # G2: meters of movement between the two finest refinements
 LOCALITY_FRAC = 0.80          # G1: fraction of a patch's true depth that must be seen
-DEPTH_TOL = 0.002             # G4: mm of error allowed on the reported depth
-LOCATION_TOL = 2.0            # G4: mm along the section the reported minimum may be out by
+DEPTH_TOL_M = 2.0e-6          # G4: meters of error allowed on the reported depth
+LOCATION_TOL_M = 2.0e-3       # G4: meters along the section the reported minimum may be out by
 COST_LIMIT_S = 60.0           # G5: seconds for 12 stations of the largest real wall
 CONTRACTION = 0.6             # G2: how much each refinement step must shrink the one before
+
+#: How far G5's timing run stands off each end of a real wall, so it sections material rather than
+#: a tangent face. Was 1.0 mm and is the same standoff.
+END_INSET_M = 1.0e-3
+
+#: Where a gate measures a fixture that has no feature to measure through. The tubes are
+#: `truth.HEIGHT_M` = 0.020 m tall, so this is a twentieth of the way up: clear of the end and of
+#: nothing in particular, which is the point -- a plain tube reads the same anywhere. Was 1.0 mm
+#: before IP-FC-163 and is the same station it was.
+PLAIN_STATION_M = 1.0e-3
 
 #: Refinement levels for G2, each a doubling, so "movement between the two finest" is a halving of
 #: the sample spacing and not an arbitrary pair.
@@ -62,18 +80,25 @@ class GateResult(object):
 
 
 def _fmt(v):
+    """A gate value as text. `%g`, not `%f`, **because the values are now SI** (IP-FC-163).
+
+    A gate's residual limit is 1e-6 m, and `'%.6f' % 1e-06` is `'0.000001'` -- every digit of a
+    reading at the threshold rounds away, so two candidates one of which passes and one of which
+    does not would print the same string. The same column also carries a fraction (G1) and a
+    duration (G5), and `%.6g` is readable for all three.
+    """
     if v is None:
         return '-'
     if isinstance(v, float):
-        return '%.6f' % v
+        return '%.6g' % v
     return str(v)
 
 
 def _truth_vector(truth_obj, points):
-    """Closed-form thickness at each sample, with ambiguous samples masked out.
+    """Closed-form thickness at each sample **in meters**, with ambiguous samples masked out.
 
-    A sample within `EDGE_MARGIN` of a feature boundary has two defensible answers, so scoring it
-    would measure the fixture. Those are dropped rather than guessed.
+    A sample within `truth.EDGE_MARGIN_M` of a feature boundary has two defensible answers, so
+    scoring it would measure the fixture. Those are dropped rather than guessed.
     """
     want = np.array([truth_obj.true_thickness_at(p[0], p[1], p[2])
                      if truth_obj.true_thickness_at(p[0], p[1], p[2]) is not None else np.nan
@@ -91,7 +116,8 @@ def accuracy_gate(measure, uniform_truth, loops_at, level=LEVELS[-1]):
     outer, inner = loops_at(uniform_truth, _station_for(uniform_truth), level)
     pts, thick = measure(outer, inner)
     if pts.shape[0] == 0:
-        return GateResult('G3 accuracy', False, None, ACCURACY_TOL, 'measure reported no samples')
+        return GateResult('G3 accuracy', False, None, ACCURACY_TOL_M,
+                          'measure reported no samples')
     # **Against the per-sample truth, not against `nominal`.** An earlier version compared every
     # sample to the fixture's nominal wall, which is only right where the fixture has no feature.
     # On `ribbed_tube` that scored the rib's own 0.4 mm rise as a 0.4 mm measurement error and
@@ -101,12 +127,13 @@ def accuracy_gate(measure, uniform_truth, loops_at, level=LEVELS[-1]):
     err = np.abs(thick - want)
     scored = int(np.sum(np.isfinite(err)))
     if scored == 0:
-        return GateResult('G3 accuracy', False, None, ACCURACY_TOL,
+        return GateResult('G3 accuracy', False, None, ACCURACY_TOL_M,
                           'every sample fell on a feature edge; nothing to score')
     worst = float(np.nanmax(err))
-    return GateResult('G3 accuracy', worst <= ACCURACY_TOL, worst, ACCURACY_TOL,
-                      'worst of %d scored samples (%d masked at edges); median %.6f'
-                      % (scored, pts.shape[0] - scored, float(np.nanmedian(err))))
+    return GateResult('G3 accuracy', worst <= ACCURACY_TOL_M, worst, ACCURACY_TOL_M,
+                      'worst of %d scored samples (%d masked at edges); median %.6f mm'
+                      % (scored, pts.shape[0] - scored,
+                         kern.mm(float(np.nanmedian(err)))))
 
 
 def refinement_sweep(measure, loops_at_level, levels=LEVELS):
@@ -132,20 +159,23 @@ def refinement_sweep(measure, loops_at_level, levels=LEVELS):
     return minima, medians
 
 
-def converged(values, tol=CONVERGE_TOL, contraction=CONTRACTION):
-    """Did a refinement series settle? Returns `(ok, last_delta, deltas, contracting)`.
+def converged(values_m, tol_m=CONVERGE_TOL_M, contraction=CONTRACTION):
+    """Did a refinement series settle? Returns `(ok, last_delta_m, deltas_m, contracting)`.
 
     Two conditions, not one: the last step must be small **and** the steps must be contracting. A
     measure that moves 0.0009 mm per doubling forever has small steps and has not converged -- and
     that is the incumbent's actual behavior, so a gate that missed it would be worthless. Split out
     of the gate so the same verdict can be applied to a real wall's series and to a fixture's.
+
+    `contraction` is a ratio of two deltas and so is unit-invariant; `tol_m` is a length and was
+    converted with the series it judges (IP-FC-163).
     """
-    deltas = [abs(values[i + 1] - values[i]) for i in range(len(values) - 1)]
+    deltas = [abs(values_m[i + 1] - values_m[i]) for i in range(len(values_m) - 1)]
     if not deltas:
         return False, float('nan'), deltas, False
     last = deltas[-1]
     contracting = last <= deltas[-2] * contraction if len(deltas) >= 2 else True
-    return (last <= tol and contracting), last, deltas, contracting
+    return (last <= tol_m and contracting), last, deltas, contracting
 
 
 def convergence_gate(measure, uniform_truth, loops_at, levels=LEVELS):
@@ -162,10 +192,11 @@ def convergence_gate(measure, uniform_truth, loops_at, levels=LEVELS):
     vals, _med = refinement_sweep(
         measure, lambda n: loops_at(uniform_truth, station, n), levels)
     ok, last, deltas, contracting = converged(vals)
-    return GateResult('G2 convergence', ok, last, CONVERGE_TOL,
-                      'on %s; levels %s -> %s; deltas %s%s'
-                      % (uniform_truth.label, list(levels), ['%.6f' % v for v in vals],
-                         ['%.6f' % d for d in deltas],
+    return GateResult('G2 convergence', ok, last, CONVERGE_TOL_M,
+                      'on %s; levels %s -> %s mm; deltas %s mm%s'
+                      % (uniform_truth.label, list(levels),
+                         ['%.6f' % kern.mm(v) for v in vals],
+                         ['%.6f' % kern.mm(d) for d in deltas],
                          '' if contracting else ', NOT contracting'))
 
 
@@ -177,15 +208,16 @@ def locality_gate(measure, patch_truth, loops_at, level=LEVELS[-1]):
     at a point.
     """
     f = patch_truth.features[0]
-    outer, inner = loops_at(patch_truth, f['z_mid'], level)
+    outer, inner = loops_at(patch_truth, f['z_mid_m'], level)
     pts, thick = measure(outer, inner)
     if pts.shape[0] == 0:
         return GateResult('G1 locality', False, None, LOCALITY_FRAC, 'no samples')
-    seen = patch_truth.nominal - float(np.nanmin(thick))
-    frac = seen / f['depth']
+    seen_m = patch_truth.nominal - float(np.nanmin(thick))
+    # A ratio of two depths, so the fraction this gate compares is unit-invariant.
+    frac = seen_m / f['depth_m']
     return GateResult('G1 locality', frac >= LOCALITY_FRAC, frac, LOCALITY_FRAC,
                       'saw %.6f mm of a %.6f mm patch over %.2f mm of arc'
-                      % (seen, f['depth'], f['arc']))
+                      % (kern.mm(seen_m), kern.mm(f['depth_m']), kern.mm(f['arc_m'])))
 
 
 def discrimination_gate(measure, patch_truth, loops_at, level=LEVELS[-1]):
@@ -195,23 +227,23 @@ def discrimination_gate(measure, patch_truth, loops_at, level=LEVELS[-1]):
     to know how thin and where, or the figure cannot be compared against `WALL_TOL` or acted on.
     """
     f = patch_truth.features[0]
-    outer, inner = loops_at(patch_truth, f['z_mid'], level)
+    outer, inner = loops_at(patch_truth, f['z_mid_m'], level)
     pts, thick = measure(outer, inner)
     if pts.shape[0] == 0:
-        return GateResult('G4 discrimination', False, None, DEPTH_TOL, 'no samples')
+        return GateResult('G4 discrimination', False, None, DEPTH_TOL_M, 'no samples')
     k = int(np.nanargmin(thick))
-    depth_err = abs((patch_truth.nominal - float(thick[k])) - f['depth'])
+    depth_err_m = abs((patch_truth.nominal - float(thick[k])) - f['depth_m'])
     # Where the patch actually is, on the outer surface, projected to the sampled boundary's radius.
-    r = float(np.hypot(pts[k, 0], pts[k, 1]))
-    want = np.array([np.cos(f['angle']), np.sin(f['angle'])]) * r
-    miss = float(np.hypot(pts[k, 0] - want[0], pts[k, 1] - want[1]))
-    ok = depth_err <= DEPTH_TOL and miss <= LOCATION_TOL
-    return GateResult('G4 discrimination', ok, depth_err, DEPTH_TOL,
-                      'depth error %.6f mm, located %.3f mm from the patch center (limit %.1f)'
-                      % (depth_err, miss, LOCATION_TOL))
+    r_m = float(np.hypot(pts[k, 0], pts[k, 1]))
+    want_m = np.array([np.cos(f['angle_rad']), np.sin(f['angle_rad'])]) * r_m
+    miss_m = float(np.hypot(pts[k, 0] - want_m[0], pts[k, 1] - want_m[1]))
+    ok = depth_err_m <= DEPTH_TOL_M and miss_m <= LOCATION_TOL_M
+    return GateResult('G4 discrimination', ok, depth_err_m, DEPTH_TOL_M,
+                      'depth error %.6f mm, located %.3f mm from the patch center (limit %.1f mm)'
+                      % (kern.mm(depth_err_m), kern.mm(miss_m), kern.mm(LOCATION_TOL_M)))
 
 
-def convergence_gate_on_section(measure, shape, z, App, levels=LEVELS):
+def convergence_gate_on_section(measure, shape, z_m, App, levels=LEVELS):
     """**G2, the authoritative form: does the measure converge on a real section?**
 
     IP-WTM-15. This is the gate that matters, because the defect being screened for lives in the
@@ -228,23 +260,26 @@ def convergence_gate_on_section(measure, shape, z, App, levels=LEVELS):
     `shape` is a real wall, normally one of the soak's saved BREPs via `corpus.load`.
     """
     def at(n):
-        loops = sections.station_loops(shape, z, n, App=App)
+        loops = sections.station_loops(shape, z_m, n, App=App)
         if len(loops) < 2:
-            raise ValueError('station z=%.4f has %d closed loops, not two' % (z, len(loops)))
+            raise ValueError('station z=%.4f mm has %d closed loops, not two'
+                             % (kern.mm(z_m), len(loops)))
         return loops[0], loops[1]
 
     minima, medians = refinement_sweep(measure, at, levels)
     ok, last, deltas, contracting = converged(minima)
-    med_spread = float(np.nanmax(medians) - np.nanmin(medians))
+    med_spread_m = float(np.nanmax(medians) - np.nanmin(medians))
     return GateResult(
-        'G2 convergence', ok, last, CONVERGE_TOL,
-        'on a real section at z=%.4f; levels %s -> %s; deltas %s%s; median spread %.6f'
-        % (z, list(levels), ['%.6f' % v for v in minima], ['%.6f' % d for d in deltas],
-           '' if contracting else ', NOT contracting', med_spread))
+        'G2 convergence', ok, last, CONVERGE_TOL_M,
+        'on a real section at z=%.4f mm; levels %s -> %s mm; deltas %s mm%s; '
+        'median spread %.6f mm'
+        % (kern.mm(z_m), list(levels), ['%.6f' % kern.mm(v) for v in minima],
+           ['%.6f' % kern.mm(d) for d in deltas],
+           '' if contracting else ', NOT contracting', kern.mm(med_spread_m)))
 
 
-def cost_gate(measure, shape, z_lo, z_hi, App, stations=12, level=LEVELS[1],
-              limit=COST_LIMIT_S):
+def cost_gate(measure, shape, z_lo_m, z_hi_m, App, stations=12, level=LEVELS[1],
+              limit_s=COST_LIMIT_S):
     """**G5.** Time the measure over a real wall's stations.
 
     Opt-in, because it needs a real wall: the caller loads one of the soak's saved BREPs and passes
@@ -254,14 +289,14 @@ def cost_gate(measure, shape, z_lo, z_hi, App, stations=12, level=LEVELS[1],
     started = time.time()
     n_done = 0
     for i in range(stations):
-        z = z_lo + (z_hi - z_lo) * i / float(stations - 1)
-        loops = sections.station_loops(shape, z, level, App=App)
+        z_m = z_lo_m + (z_hi_m - z_lo_m) * i / float(stations - 1)
+        loops = sections.station_loops(shape, z_m, level, App=App)
         if len(loops) < 2:
             continue
         measure(loops[0], loops[1])
         n_done += 1
-    took = time.time() - started
-    return GateResult('G5 cost', took <= limit and n_done > 0, took, limit,
+    took_s = time.time() - started
+    return GateResult('G5 cost', took_s <= limit_s and n_done > 0, took_s, limit_s,
                       '%d of %d stations measured' % (n_done, stations))
 
 
@@ -272,8 +307,8 @@ def _station_for(truth_obj):
     that fixture exists; a plain tube is measured anywhere.
     """
     if truth_obj.features:
-        return truth_obj.features[0]['z_mid']
-    return 1.0
+        return truth_obj.features[0]['z_mid_m']
+    return PLAIN_STATION_M
 
 
 def screen(measure, fixtures, loops_at):
@@ -325,7 +360,7 @@ def screen(measure, fixtures, loops_at):
     return out
 
 
-def screen_full(measures, fixtures, loops_at, real_shape=None, real_z=None, App=None,
+def screen_full(measures, fixtures, loops_at, real_shape=None, real_z_m=None, App=None,
                 levels=LEVELS, cost_stations=12):
     """Score every candidate against all five gates. **The screening run, as one callable.**
 
@@ -343,7 +378,7 @@ def screen_full(measures, fixtures, loops_at, real_shape=None, real_z=None, App=
 
         smooth = convergence_gate(measure, fixtures['uniform_tube'], loops_at, levels)
         if real_shape is not None:
-            conv = convergence_gate_on_section(measure, real_shape, real_z, App, levels)
+            conv = convergence_gate_on_section(measure, real_shape, real_z_m, App, levels)
             conv.detail += '  [smooth fixture: %s %s]' % (
                 'pass' if smooth.passed else 'FAIL', _fmt(smooth.value))
         else:
@@ -366,8 +401,10 @@ def screen_full(measures, fixtures, loops_at, real_shape=None, real_z=None, App=
 
         cost = None
         if real_shape is not None:
-            bb = real_shape.BoundBox
-            g5 = cost_gate(measure, real_shape, bb.ZMin + 1.0, bb.ZMax - 1.0, App,
+            # Inset from both ends by `END_INSET_M` so the timing run sections material rather
+            # than a tangent face. SI off the box, SI into the gate (IP-FC-163).
+            z_lo_m, z_hi_m = kern.z_extent_m(real_shape)
+            g5 = cost_gate(measure, real_shape, z_lo_m + END_INSET_M, z_hi_m - END_INSET_M, App,
                            stations=cost_stations)
             res.append(g5)
             cost = g5.value

@@ -1,1007 +1,1848 @@
 {
-  "note": "Generated inventory of the FreeCAD port's module-level numeric constants, classified by the unit each one carries, plus a per-module ceiling on bare inline dimensional literals. See tools/unit_regime.py for what the classifications mean and what this instrument cannot see.",
-  "regimes": {
-    "build_sheet": "presentation",
-    "clearance_figure": "presentation",
-    "clearance_sheet": "presentation",
-    "dimension_placement": "presentation",
-    "drawing": "presentation",
-    "drawing_standard": "presentation",
-    "oml_blank": "boundary",
-    "render_pages": "presentation",
-    "sheet_annotations": "presentation",
-    "sheet_table": "presentation",
-    "si": "boundary"
+ "constants": {
+  "audit_call_args.SCAD": {
+   "reason": "an argv index, then a path",
+   "unit": "none"
   },
-  "constants": {
-    "boom_bulkhead.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "boom_bulkhead.LOWER_REFS_M2": {
-      "unit": "m2"
-    },
-    "boom_bulkhead.VARIANTS": {
-      "reason": "rows are Variant(name, volume_m3, overrides); `overrides` are expression strings bound for the parameter sheet and so millimeters, which is the sheet boundary",
-      "unit": "record"
-    },
-    "boom_key.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "boom_key.REF_AREA_M2": {
-      "unit": "m2"
-    },
-    "boom_oml.REFS": {
-      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
-      "unit": "record"
-    },
-    "boom_web.REFS": {
-      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
-      "unit": "record"
-    },
-    "boom_webs.REFS": {
-      "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
-      "unit": "record"
-    },
-    "build_part.ANGULAR_DEFLECTION_RAD": {
-      "unit": "rad"
-    },
-    "build_part.COWL_LINEAR_DEFLECTION_M": {
-      "unit": "m"
-    },
-    "build_part.LINEAR_DEFLECTION_M": {
-      "unit": "m"
-    },
-    "bulkhead_cuts.CUTS_BBOX_TOL_M": {
-      "unit": "m"
-    },
-    "bulkhead_cuts.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "bulkhead_cuts.REF_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_full.EXPECT_BBOX_COWLING_M": {
-      "unit": "m"
-    },
-    "bulkhead_full.EXPECT_BBOX_INTERCONNECT_M": {
-      "unit": "m"
-    },
-    "bulkhead_full.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "bulkhead_full.REF_COWLING_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_full.REF_INTERCONNECT_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_full.REF_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_full.STAGES": {
-      "unit": "none"
-    },
-    "bulkhead_positive.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "bulkhead_positive.REF_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_section.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "bulkhead_section.REF_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_section.REF_VARIANT": {
-      "unit": "none"
-    },
-    "bulkhead_tree.REF_TOOL_M3": {
-      "unit": "m3"
-    },
-    "bulkhead_tree.SHEET_TOL_M": {
-      "unit": "m"
-    },
-    "bulkhead_web.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "bulkhead_web.REF_AREA_M2": {
-      "unit": "m2"
-    },
-    "clearance_figure.CONTACT_FACTOR": {
-      "unit": "none"
-    },
-    "clearance_figure.CONTACT_MIN_MM": {
-      "unit": "mm",
-      "reason": "a figure of the geometry, laid out in page millimeters"
-    },
-    "clearance_figure.EDGE_POINTS": {
-      "unit": "none"
-    },
-    "clearance_figure.SURFACE_POINTS": {
-      "unit": "none"
-    },
-    "clearance_figure.TOOL_MARGIN_MM": {
-      "unit": "mm",
-      "reason": "a figure of the geometry, laid out in page millimeters"
-    },
-    "clearance_sheet.CELL_AT": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.CENSUS_STEP_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.DETAIL_AT": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.DETAIL_SCALE": {
-      "unit": "none"
-    },
-    "clearance_sheet.DETAIL_X_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.DETAIL_Y_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.DIM_TICK_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.DIM_X_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.METRIC_A_DENSITIES": {
-      "unit": "none"
-    },
-    "clearance_sheet.METRIC_A_SHIPPED": {
-      "unit": "none"
-    },
-    "clearance_sheet.NOTE_AT": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.SHEET_MM": {
-      "unit": "mm",
-      "reason": "TechDraw sheet and view coordinates, which are page millimeters"
-    },
-    "clearance_sheet.STATIONS": {
-      "reason": "the drawn stations of a clearance sheet, in the millimeters the sheet is dimensioned in",
-      "unit": "mm"
-    },
-    "corner_common.BBOX_TOL_M": {
-      "unit": "m"
-    },
-    "corner_tree.DRIVER_REFS_M3": {
-      "unit": "m3"
-    },
-    "corner_tree.SWEPT_REFS_M3": {
-      "unit": "m3"
-    },
-    "cowl.CUT_EPS_M": {
-      "unit": "m"
-    },
-    "cowl.FLANGE_OFFSET_SAMPLES": {
-      "unit": "none"
-    },
-    "cowl.PARAMS_NOSE_COWL": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl.PARAMS_NOSE_PLATE": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl.PARAMS_NOSE_TIP": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl.PARAMS_TAIL": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl._COMMON": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl._OML": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_interior.ANGLE_WINDOW_RAD": {
-      "unit": "rad"
-    },
-    "cowl_interior.ARC_END_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CELL_DIRECTION_TOL": {
-      "unit": "none"
-    },
-    "cowl_interior.CELL_ORIGIN_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CELL_PLANE_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CHAIN_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CHECK_ARC_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CHECK_MAX": {
-      "unit": "none"
-    },
-    "cowl_interior.CHECK_MIN": {
-      "unit": "none"
-    },
-    "cowl_interior.CHEEK_DOT": {
-      "unit": "none"
-    },
-    "cowl_interior.CLEARANCE_MARGIN_M": {
-      "unit": "m"
-    },
-    "cowl_interior.CROSSING_SAMPLES": {
-      "unit": "none"
-    },
-    "cowl_interior.DEGENERATE_DIRECTION": {
-      "unit": "none"
-    },
-    "cowl_interior.DENSE_FACTOR": {
-      "unit": "none"
-    },
-    "cowl_interior.EDGE_SCAN_MARGIN_M": {
-      "unit": "m"
-    },
-    "cowl_interior.EDGE_SCAN_STEP_M": {
-      "unit": "m"
-    },
-    "cowl_interior.END_INSET_M": {
-      "unit": "m"
-    },
-    "cowl_interior.END_OVERRUN_M": {
-      "unit": "m"
-    },
-    "cowl_interior.FACE_IMAGE_TOL": {
-      "unit": "none"
-    },
-    "cowl_interior.FINISHED_PLANE_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.FIT_ARC_M": {
-      "unit": "m"
-    },
-    "cowl_interior.FIT_MAX": {
-      "unit": "none"
-    },
-    "cowl_interior.FIT_MIN": {
-      "unit": "none"
-    },
-    "cowl_interior.FLAT_TOL": {
-      "unit": "none"
-    },
-    "cowl_interior.FLOOR_DOT": {
-      "unit": "none"
-    },
-    "cowl_interior.MIN_INTERVAL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.OUTWARD_STEP_M": {
-      "unit": "m"
-    },
-    "cowl_interior.PARTITION_TOL": {
-      "unit": "none"
-    },
-    "cowl_interior.POST_CUT_RESCAN_MARGIN_M": {
-      "unit": "m"
-    },
-    "cowl_interior.POST_CUT_ROUNDS": {
-      "unit": "none"
-    },
-    "cowl_interior.POST_CUT_SCAN_STEP_M": {
-      "unit": "m"
-    },
-    "cowl_interior.REFIT_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.RIB_FACETS": {
-      "unit": "none"
-    },
-    "cowl_interior.RIB_RESIDUE_M3": {
-      "unit": "m3"
-    },
-    "cowl_interior.SAMPLE_MAX": {
-      "unit": "none"
-    },
-    "cowl_interior.SAMPLE_MIN": {
-      "unit": "none"
-    },
-    "cowl_interior.SAMPLE_SPACING_M": {
-      "unit": "m"
-    },
-    "cowl_interior.SEED_LONG_M": {
-      "unit": "m"
-    },
-    "cowl_interior.SEED_MAX": {
-      "unit": "none"
-    },
-    "cowl_interior.SEED_MIN": {
-      "unit": "none"
-    },
-    "cowl_interior.SLIVER_AREA_M2": {
-      "unit": "m2"
-    },
-    "cowl_interior.SLIVER_LENGTH_M": {
-      "unit": "m"
-    },
-    "cowl_interior.SLOPE_SLACK_RAD": {
-      "unit": "rad"
-    },
-    "cowl_interior.STEP_SLACK": {
-      "unit": "none"
-    },
-    "cowl_interior.TAU_M": {
-      "unit": "m"
-    },
-    "cowl_interior.WALL_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_interior.Z_TOL_M": {
-      "unit": "m"
-    },
-    "cowl_tree.PARAMS_NOSE_COWL": {
-      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_tree.PARAMS_NOSE_PLATE": {
-      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_tree.PARAMS_NOSE_TIP": {
-      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_tree.PARAMS_TAIL": {
-      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_tree._OML_ROWS": {
-      "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "cowl_tree._WALL_ROWS": {
-      "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
-      "regime": "boundary",
-      "unit": "record"
-    },
-    "dimension_placement.ARROWHEAD_LENGTH_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.ELBOW_MARGIN_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.FIRST_LANE_GAP_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.LANE_PITCH_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.MAX_NOTE_ASSIGNMENTS": {
-      "unit": "none"
-    },
-    "dimension_placement.NEWLINE": {
-      "unit": "none"
-    },
-    "dimension_placement.NOTE_LINE_PITCH_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.TEXT_CLEARANCE_HEIGHTS": {
-      "unit": "none"
-    },
-    "dimension_placement.ZERO_MM": {
-      "unit": "mm",
-      "reason": "a page-space zero test for TechDraw geometry"
-    },
-    "drawing.ARRANGEMENTS": {
-      "unit": "none"
-    },
-    "drawing.LINE_SPACE_PERCENT": {
-      "unit": "none"
-    },
-    "drawing.NEWLINE": {
-      "unit": "none"
-    },
-    "drawing.PREFERRED_SCALES": {
-      "unit": "none"
-    },
-    "drawing.REFERENCE_DEFLECTION_MM": {
-      "unit": "mm",
-      "reason": "TechDraw's own reference deflection, in millimeters"
-    },
-    "drawing.SCALE_FLOOR_FRACTION": {
-      "unit": "none"
-    },
-    "drawing.VIEW_DIRECTION": {
-      "unit": "none"
-    },
-    "drawing.VIEW_FILL": {
-      "unit": "none"
-    },
-    "drawing_standard.ARROW_SIZE_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.CENTER_LINE_OVERRUN_HEIGHTS": {
-      "unit": "none"
-    },
-    "drawing_standard.CENTER_MARK_OVERRUN": {
-      "unit": "none"
-    },
-    "drawing_standard.CONSTRUCTION_COLOR": {
-      "unit": "none"
-    },
-    "drawing_standard.DECIMAL_PLACES": {
-      "unit": "none"
-    },
-    "drawing_standard.DECIMAL_POINT_UNITS": {
-      "unit": "none"
-    },
-    "drawing_standard.LINE_CENTER": {
-      "unit": "none"
-    },
-    "drawing_standard.LINE_CONTINUOUS": {
-      "unit": "none"
-    },
-    "drawing_standard.LINE_DASHED": {
-      "unit": "none"
-    },
-    "drawing_standard.LINE_DOTTED": {
-      "unit": "none"
-    },
-    "drawing_standard.LINE_PHANTOM": {
-      "unit": "none"
-    },
-    "drawing_standard.MINUS_UNITS": {
-      "unit": "none"
-    },
-    "drawing_standard.NARROW_LINE_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TABLE_COLUMN_GUTTER_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TABLE_COLUMN_PADDING_HEIGHTS": {
-      "unit": "none"
-    },
-    "drawing_standard.TABLE_ROW_CLEARANCE_HEIGHTS": {
-      "unit": "none"
-    },
-    "drawing_standard.TABLE_ROW_PITCH_HEIGHTS": {
-      "unit": "none"
-    },
-    "drawing_standard.TABLE_TEXT_HEIGHTS_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TABLE_TEXT_HEIGHT_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TEMPLATE_FRAME_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TEMPLATE_HEIGHT_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TEMPLATE_TITLE_BLOCK_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TEMPLATE_WIDTH_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TEXT_HEIGHT_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "drawing_standard.TYPO_ASCENDER_UNITS": {
-      "unit": "none"
-    },
-    "drawing_standard.UNITS_PER_EM": {
-      "unit": "none"
-    },
-    "drawing_standard.VIEW_SHARE": {
-      "unit": "none"
-    },
-    "drawing_standard.WIDEST_CALLOUT_UNITS": {
-      "unit": "none"
-    },
-    "drawing_standard.WIDEST_DIGIT_UNITS": {
-      "unit": "none"
-    },
-    "drawing_standard.WIDE_LINE_MM": {
-      "unit": "mm",
-      "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters"
-    },
-    "fillets.REF_VOLS_M3": {
-      "unit": "m3"
-    },
-    "fillets.SQ2": {
-      "unit": "none"
-    },
-    "fit_amplification.DELTA": {
-      "unit": "m"
-    },
-    "fit_amplification.N_FIT": {
-      "unit": "none"
-    },
-    "fit_amplification.REAL_PAIRS": {
-      "unit": "m"
-    },
-    "fit_amplification.TIGHTNESS": {
-      "unit": "none"
-    },
-    "fit_amplification.WALL_MM": {
-      "unit": "m"
-    },
-    "flange_base.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "flange_base.INTERCONNECT_REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "flange_base.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "flange_boss.REF_VOLS_M3": {
-      "unit": "m3"
-    },
-    "geometry_branches._AT": {
-      "unit": "none"
-    },
-    "greeble_web.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "greeble_web.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "input_screen.HASH_DEFLECTION_M": {
-      "unit": "m"
-    },
-    "measure_octant_micro.DEFAULT_TOL": {
-      "unit": "none"
-    },
-    "mesh_to_brep.DEFAULT_POINTS": {
-      "unit": "none"
-    },
-    "mesh_to_brep.DEFAULT_TOL_M": {
-      "unit": "m"
-    },
-    "mesh_to_brep.TIP_CHECK_REL": {
-      "unit": "none"
-    },
-    "normal_check.AROUND_MM": {
-      "unit": "m"
-    },
-    "normal_check.FALLBACK_TOL": {
-      "unit": "m"
-    },
-    "normal_check.NOMINAL": {
-      "unit": "m"
-    },
-    "normal_check.WORST": {
-      "unit": "none"
-    },
-    "offset_ladder.CURVATURE_SAMPLES": {
-      "unit": "none"
-    },
-    "offset_ladder.DUPLICATE_TOL_M": {
-      "reason": "below this, two consecutive sample positions count as the same point; 1e-9 m is ten times OpenCASCADE's Precision::Confusion of 1e-7 mm",
-      "unit": "m"
-    },
-    "offset_ladder.RUNGS": {
-      "reason": "multipliers on the construction's own first sample count, so nondimensional by construction",
-      "unit": "none"
-    },
-    "oml_blank.MAX_SPANS": {
-      "unit": "none"
-    },
-    "oml_blank.MODEL_UNIT_MM": {
-      "unit": "mm",
-      "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in"
-    },
-    "oml_blank.NATIVE_PER_MODEL_UNIT": {
-      "unit": "mm",
-      "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in"
-    },
-    "oml_blank.RATIO_SPREAD_TOL": {
-      "unit": "none"
-    },
-    "oml_blank.SCALE_TOL_M": {
-      "unit": "m"
-    },
-    "oml_blank.UNIT_WIDTH_M": {
-      "unit": "m"
-    },
-    "oml_blank.VOLUME_DEFLECTION_M": {
-      "unit": "m"
-    },
-    "oml_blank._COPLANAR": {
-      "unit": "none"
-    },
-    "oml_blank._EPS": {
-      "unit": "none"
-    },
-    "oml_blank._FLAT": {
-      "unit": "none"
-    },
-    "oml_blank._SAMPLES": {
-      "unit": "none"
-    },
-    "panel_oml.FACE_TOL_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_EXPOSED_SPAN_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_INNER_FACE_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_LENGTH_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_OUTER_FACE_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_POCKET_DEPTH_M": {
-      "unit": "m"
-    },
-    "panel_oml.REF_WIDTH_M": {
-      "unit": "m"
-    },
-    "part_corner.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "part_end.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "part_middle.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "part_transition.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "pd_end.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "plane2d.BBOX_TOL_M": {
-      "unit": "m"
-    },
-    "plane2d.ENCLOSURE_FLOOR_M": {
-      "unit": "m"
-    },
-    "preview.ANGULAR_RAD": {
-      "unit": "rad"
-    },
-    "preview.DEVIATION_M": {
-      "unit": "m"
-    },
-    "preview.VIEWS": {
-      "unit": "none"
-    },
-    "refused_wall.LOCAL_HALF_MM": {
-      "unit": "m"
-    },
-    "refused_wall.LOCAL_STEP_MM": {
-      "unit": "m"
-    },
-    "render_pages.FIGURE_MARGIN_MM": {
-      "unit": "mm",
-      "reason": "raster and page geometry for a rendered sheet"
-    },
-    "render_pages.MIN_BYTES": {
-      "unit": "none"
-    },
-    "render_pages.MM_PER_INCH": {
-      "unit": "mm",
-      "reason": "raster and page geometry for a rendered sheet"
-    },
-    "render_pages.MM_PER_SCENE_UNIT": {
-      "unit": "mm",
-      "reason": "raster and page geometry for a rendered sheet"
-    },
-    "render_pages.RASTER_DPI": {
-      "unit": "none"
-    },
-    "render_pages.SETTLE_POLL_S": {
-      "unit": "s"
-    },
-    "render_pages.SETTLE_STABLE_POLLS": {
-      "unit": "none"
-    },
-    "render_pages.SETTLE_TIMEOUT_S": {
-      "unit": "s"
-    },
-    "render_pages.SPILL_TOLERANCE_MM": {
-      "unit": "mm",
-      "reason": "raster and page geometry for a rendered sheet"
-    },
-    "render_pages.THIN_SCENE": {
-      "unit": "none"
-    },
-    "rib_edge_check.CREASE_SAMPLES": {
-      "unit": "none"
-    },
-    "rib_edge_check.KERNEL_CHECK": {
-      "unit": "none"
-    },
-    "rib_edge_check.NORMAL_PROBES": {
-      "unit": "none"
-    },
-    "rib_edge_check.PATCH_PROBES": {
-      "unit": "none"
-    },
-    "rib_proximity.FAR_IN_T": {
-      "unit": "none"
-    },
-    "ring_scan.AROUND_MM": {
-      "unit": "m"
-    },
-    "ring_scan.AXIAL_MM": {
-      "unit": "m"
-    },
-    "sever_doses.BREAK_Z": {
-      "unit": "m"
-    },
-    "sever_doses.DOSES": {
-      "unit": "none"
-    },
-    "sever_doses.HEALTHY_MM": {
-      "unit": "m"
-    },
-    "sever_doses.HISTORIC_Z": {
-      "unit": "m"
-    },
-    "sever_doses.SCAN_MM": {
-      "unit": "m"
-    },
-    "sever_doses.SILENT_MM": {
-      "unit": "m"
-    },
-    "sheet_annotations.DETAIL_MARGIN": {
-      "unit": "none"
-    },
-    "sheet_annotations.DIA": {
-      "unit": "none"
-    },
-    "si.CUT_FUZZ_LADDER_MM": {
-      "unit": "mm",
-      "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
-    },
-    "si.RIB_CUT_FUZZ_MM": {
-      "unit": "mm",
-      "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs"
-    },
-    "simple_positives.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "simple_positives.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "soak_compare.GAP_TOL": {
-      "unit": "none"
-    },
-    "soak_compare.SAMPLES": {
-      "unit": "none"
-    },
-    "soak_compare.SEEDS": {
-      "unit": "none"
-    },
-    "soak_compare.XOR_TOL": {
-      "unit": "none"
-    },
-    "soak_cowl_shell.VOLUME_DEFLECTION_M": {
-      "unit": "m"
-    },
-    "solid_measure.CONVERGENCE": {
-      "unit": "none"
-    },
-    "solid_measure.DEFLECTIONS_M": {
-      "unit": "m"
-    },
-    "solid_measure.DIFFERENCE_CONVERGENCE": {
-      "unit": "none"
-    },
-    "solid_measure.POINT_TOL_M": {
-      "reason": "how far a vertex may move and still be the same point, for `same_solid`; 1e-9 m is ten times OpenCASCADE's own Precision::Confusion of 1e-7 mm",
-      "unit": "m"
-    },
-    "solid_measure.SURFACE_SAMPLES": {
-      "unit": "none"
-    },
-    "station_gaps.SHOW": {
-      "unit": "none"
-    },
-    "tau_study.DEFAULT_TAUS": {
-      "unit": "m"
-    },
-    "tau_study.SPACING": {
-      "unit": "m"
-    },
-    "units.MM_PER_M": {
-      "unit": "none"
-    },
-    "units.M_PER_MM": {
-      "unit": "none"
-    },
-    "units.PA_PER_MPA": {
-      "unit": "none"
-    },
-    "variants.TABLE_M": {
-      "unit": "m"
-    },
-    "verify_pd_end.PART_VOL_M3": {
-      "unit": "m3"
-    },
-    "verify_pd_end.REF_VOL_M3": {
-      "unit": "m3"
-    },
-    "verify_pd_end.TOL_M3": {
-      "unit": "m3"
-    },
-    "wall_vanish.DOSES": {
-      "unit": "none"
-    },
-    "wall_vanish.HISTORIC_Z": {
-      "unit": "m"
-    },
-    "wall_vanish.SCAN_MM": {
-      "unit": "m"
-    },
-    "web.EXPECT_BBOX_M": {
-      "unit": "m"
-    },
-    "web.REF_VOL_M3": {
-      "unit": "m3"
-    }
+  "baseline_manifest.MANIFEST_VERSION": {
+   "reason": "a schema version",
+   "unit": "none"
   },
-  "inline": {
-    "boom_web": {
-      "allowed": 10,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "build_part": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "bulkhead_cuts": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "bulkhead_positive": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "clearance_figure": {
-      "allowed": 8,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "clearance_sheet": {
-      "allowed": 44,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "corner_common": {
-      "allowed": 5,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "corner_tree": {
-      "allowed": 9,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "cowl_interior": {
-      "allowed": 12,
-      "reason": "converted to SI (IP-FC-160); what remains is dimensionless and the ceiling is at it, so a new bare dimension here fails"
-    },
-    "drawing": {
-      "allowed": 8,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "drawing_standard": {
-      "allowed": 6,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "fillets": {
-      "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "fit_amplification": {
-      "allowed": 4,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "greeble_web": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "input_screen": {
-      "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "offset_ladder": {
-      "allowed": 1,
-      "reason": "the numerator of a reciprocal -- curvature is 1/length, so `1.0 / kappa` is the radius. The classifier reads it as a dimension because no structural marker fits a reciprocal, which is the case its own docstring says it is most likely to get wrong"
-    },
-    "oml_blank": {
-      "allowed": 7,
-      "reason": "values belonging to what is on the other side of this module's boundary"
-    },
-    "pd_end": {
-      "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "rib_proximity": {
-      "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "ring_scan": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "sheet_annotations": {
-      "allowed": 38,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "sheet_table": {
-      "allowed": 3,
-      "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
-    },
-    "simple_positives": {
-      "allowed": 1,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "soak_cowl_shell": {
-      "allowed": 3,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "solid_measure": {
-      "allowed": 3,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "tau_study": {
-      "allowed": 2,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "units": {
-      "allowed": 3,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "variants": {
-      "allowed": 3,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    },
-    "web": {
-      "allowed": 6,
-      "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
-    }
+  "bbf_analysis.measure_bbf_context.DEFL": {
+   "reason": "a tessellation deflection on the OpenSCAD path",
+   "unit": "mm"
+  },
+  "bbf_analysis.measure_bbf_context.TILING": {
+   "reason": "eight sign triples, each +-1 or 0",
+   "unit": "none"
+  },
+  "bbf_analysis.probe_bbf_degeneracy.DELTAS": {
+   "reason": "the perturbation series, in the OpenSCAD path's own millimeters",
+   "unit": "mm"
+  },
+  "bbf_analysis.probe_bbf_degeneracy.TINY_EDGE": {
+   "reason": "below this an edge is degenerate",
+   "unit": "mm"
+  },
+  "bbf_analysis.probe_bbf_degeneracy.TINY_FACE": {
+   "reason": "below this a face is degenerate",
+   "unit": "mm2"
+  },
+  "boom_bulkhead.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "boom_bulkhead.LOWER_REFS_M2": {
+   "unit": "m2"
+  },
+  "boom_bulkhead.VARIANTS": {
+   "reason": "rows are Variant(name, volume_m3, overrides); `overrides` are expression strings bound for the parameter sheet and so millimeters, which is the sheet boundary",
+   "unit": "record"
+  },
+  "boom_key.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "boom_key.REF_AREA_M2": {
+   "unit": "m2"
+  },
+  "boom_oml.REFS": {
+   "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+   "unit": "record"
+  },
+  "boom_web.REFS": {
+   "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+   "unit": "record"
+  },
+  "boom_webs.REFS": {
+   "reason": "rows are plane2d.Ref2D(area_m2, bbox_m, tol)",
+   "unit": "record"
+  },
+  "branching_dimensions.TIE": {
+   "reason": "a sentinel meaning \"no winner\", not a measurement",
+   "unit": "none"
+  },
+  "branching_dimensions._AT": {
+   "reason": "a one-element call counter",
+   "unit": "none"
+  },
+  "build_part.ANGULAR_DEFLECTION_RAD": {
+   "unit": "rad"
+  },
+  "build_part.COWL_LINEAR_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "build_part.LINEAR_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "bulkhead_cuts.CUTS_BBOX_TOL_M": {
+   "unit": "m"
+  },
+  "bulkhead_cuts.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "bulkhead_cuts.REF_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_full.EXPECT_BBOX_COWLING_M": {
+   "unit": "m"
+  },
+  "bulkhead_full.EXPECT_BBOX_INTERCONNECT_M": {
+   "unit": "m"
+  },
+  "bulkhead_full.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "bulkhead_full.REF_COWLING_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_full.REF_INTERCONNECT_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_full.REF_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_full.STAGES": {
+   "unit": "none"
+  },
+  "bulkhead_positive.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "bulkhead_positive.REF_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_section.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "bulkhead_section.REF_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_section.REF_VARIANT": {
+   "unit": "none"
+  },
+  "bulkhead_tree.REF_TOOL_M3": {
+   "unit": "m3"
+  },
+  "bulkhead_tree.SHEET_TOL_M": {
+   "unit": "m"
+  },
+  "bulkhead_web.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "bulkhead_web.REF_AREA_M2": {
+   "unit": "m2"
+  },
+  "chamfer_analysis.measure_chamfer_context.DEFL": {
+   "reason": "a tessellation deflection on the OpenSCAD path",
+   "unit": "mm"
+  },
+  "clearance_figure.CONTACT_FACTOR": {
+   "unit": "none"
+  },
+  "clearance_figure.CONTACT_MIN_MM": {
+   "reason": "a figure of the geometry, laid out in page millimeters",
+   "unit": "mm"
+  },
+  "clearance_figure.EDGE_POINTS": {
+   "unit": "none"
+  },
+  "clearance_figure.SURFACE_POINTS": {
+   "unit": "none"
+  },
+  "clearance_figure.TOOL_MARGIN_MM": {
+   "reason": "a figure of the geometry, laid out in page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.CELL_AT": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.CENSUS_STEP_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.DETAIL_AT": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.DETAIL_SCALE": {
+   "unit": "none"
+  },
+  "clearance_sheet.DETAIL_X_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.DETAIL_Y_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.DIM_TICK_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.DIM_X_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.METRIC_A_DENSITIES": {
+   "unit": "none"
+  },
+  "clearance_sheet.METRIC_A_SHIPPED": {
+   "unit": "none"
+  },
+  "clearance_sheet.NOTE_AT": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.SHEET_MM": {
+   "reason": "TechDraw sheet and view coordinates, which are page millimeters",
+   "unit": "mm"
+  },
+  "clearance_sheet.STATIONS": {
+   "reason": "the drawn stations of a clearance sheet, in the millimeters the sheet is dimensioned in",
+   "unit": "mm"
+  },
+  "compare_backends.BBOX_PLACES": {
+   "reason": "decimal places a box figure is rounded to",
+   "unit": "none"
+  },
+  "compare_backends.BBOX_TOL_FLOOR_U": {
+   "reason": "`U` is a dimensionless scale factor",
+   "unit": "none"
+  },
+  "compare_backends.BBOX_TOL_PER_U": {
+   "reason": "millimeters at `U` = 1, compared against an OpenSCAD STL's own bounding box",
+   "unit": "mm"
+  },
+  "compare_backends.COWL_EXPORT_DEFLECTION": {
+   "reason": "a tessellation deflection handed to the exporter, in the kernel's own unit",
+   "unit": "mm"
+  },
+  "compare_backends.TOL_EXACT": {
+   "reason": "a relative volume tolerance -- a fraction of the part's own volume",
+   "unit": "none"
+  },
+  "compare_backends.TOL_FILLETED": {
+   "reason": "a relative volume tolerance",
+   "unit": "none"
+  },
+  "compare_backends.TOL_FREEFORM": {
+   "reason": "a relative volume tolerance",
+   "unit": "none"
+  },
+  "compare_backends.TOL_OFFSET": {
+   "reason": "a relative volume tolerance",
+   "unit": "none"
+  },
+  "corner_common.BBOX_TOL_M": {
+   "unit": "m"
+  },
+  "corner_tree.DRIVER_REFS_M3": {
+   "unit": "m3"
+  },
+  "corner_tree.SWEPT_REFS_M3": {
+   "unit": "m3"
+  },
+  "cowl.CUT_EPS_M": {
+   "unit": "m"
+  },
+  "cowl.FLANGE_OFFSET_SAMPLES": {
+   "unit": "none"
+  },
+  "cowl.PARAMS_NOSE_COWL": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl.PARAMS_NOSE_PLATE": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl.PARAMS_NOSE_TIP": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl.PARAMS_TAIL": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl._COMMON": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl._OML": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_interior.ANGLE_WINDOW_RAD": {
+   "unit": "rad"
+  },
+  "cowl_interior.ARC_END_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CELL_DIRECTION_TOL": {
+   "unit": "none"
+  },
+  "cowl_interior.CELL_ORIGIN_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CELL_PLANE_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CHAIN_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CHECK_ARC_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CHECK_MAX": {
+   "unit": "none"
+  },
+  "cowl_interior.CHECK_MIN": {
+   "unit": "none"
+  },
+  "cowl_interior.CHEEK_DOT": {
+   "unit": "none"
+  },
+  "cowl_interior.CLEARANCE_MARGIN_M": {
+   "unit": "m"
+  },
+  "cowl_interior.CROSSING_SAMPLES": {
+   "unit": "none"
+  },
+  "cowl_interior.DEGENERATE_DIRECTION": {
+   "unit": "none"
+  },
+  "cowl_interior.DENSE_FACTOR": {
+   "unit": "none"
+  },
+  "cowl_interior.EDGE_SCAN_MARGIN_M": {
+   "unit": "m"
+  },
+  "cowl_interior.EDGE_SCAN_STEP_M": {
+   "unit": "m"
+  },
+  "cowl_interior.END_INSET_M": {
+   "unit": "m"
+  },
+  "cowl_interior.END_OVERRUN_M": {
+   "unit": "m"
+  },
+  "cowl_interior.FACE_IMAGE_TOL": {
+   "unit": "none"
+  },
+  "cowl_interior.FINISHED_PLANE_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.FIT_ARC_M": {
+   "unit": "m"
+  },
+  "cowl_interior.FIT_MAX": {
+   "unit": "none"
+  },
+  "cowl_interior.FIT_MIN": {
+   "unit": "none"
+  },
+  "cowl_interior.FLAT_TOL": {
+   "unit": "none"
+  },
+  "cowl_interior.FLOOR_DOT": {
+   "unit": "none"
+  },
+  "cowl_interior.MIN_INTERVAL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.OUTWARD_STEP_M": {
+   "unit": "m"
+  },
+  "cowl_interior.PARTITION_TOL": {
+   "unit": "none"
+  },
+  "cowl_interior.POST_CUT_RESCAN_MARGIN_M": {
+   "unit": "m"
+  },
+  "cowl_interior.POST_CUT_ROUNDS": {
+   "unit": "none"
+  },
+  "cowl_interior.POST_CUT_SCAN_STEP_M": {
+   "unit": "m"
+  },
+  "cowl_interior.REFIT_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.RIB_FACETS": {
+   "unit": "none"
+  },
+  "cowl_interior.RIB_RESIDUE_M3": {
+   "unit": "m3"
+  },
+  "cowl_interior.SAMPLE_MAX": {
+   "unit": "none"
+  },
+  "cowl_interior.SAMPLE_MIN": {
+   "unit": "none"
+  },
+  "cowl_interior.SAMPLE_SPACING_M": {
+   "unit": "m"
+  },
+  "cowl_interior.SEED_LONG_M": {
+   "unit": "m"
+  },
+  "cowl_interior.SEED_MAX": {
+   "unit": "none"
+  },
+  "cowl_interior.SEED_MIN": {
+   "unit": "none"
+  },
+  "cowl_interior.SLIVER_AREA_M2": {
+   "unit": "m2"
+  },
+  "cowl_interior.SLIVER_LENGTH_M": {
+   "unit": "m"
+  },
+  "cowl_interior.SLOPE_SLACK_RAD": {
+   "unit": "rad"
+  },
+  "cowl_interior.STEP_SLACK": {
+   "unit": "none"
+  },
+  "cowl_interior.TAU_M": {
+   "unit": "m"
+  },
+  "cowl_interior.WALL_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_interior.Z_TOL_M": {
+   "unit": "m"
+  },
+  "cowl_tree.PARAMS_NOSE_COWL": {
+   "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_tree.PARAMS_NOSE_PLATE": {
+   "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_tree.PARAMS_NOSE_TIP": {
+   "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_tree.PARAMS_TAIL": {
+   "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_tree._OML_ROWS": {
+   "reason": "a parameter-sheet alias table: millimeters and degrees, because a Spreadsheet::Sheet evaluates in millimeters and its seed is derived_parameters(), the exempt OpenSCAD path. The oml_*_m rows are meters and say so in their names (OQ-DES-CW1). cowl.from_flat is where the whole set crosses into SI",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "cowl_tree._WALL_ROWS": {
+   "reason": "a parameter-sheet alias table. Most rows are fractions of unit_width, so dimensionless; the rest are absolute millimeters (buttress_cut_thickness, nose_flange_height/inset, plate_thickness/tol, extrusion_width) and the angles are degrees. A Spreadsheet::Sheet evaluates in millimeters, so this is the sheet boundary, not library storage",
+   "regime": "boundary",
+   "unit": "record"
+  },
+  "dimension_alternatives.measure_sections.CAP_COSINE": {
+   "reason": "a dot product, used to pick out a cap face by its normal",
+   "unit": "none"
+  },
+  "dimension_alternatives.measure_sections.DEFLECTION": {
+   "reason": "a tessellation deflection on the OpenSCAD path",
+   "unit": "mm"
+  },
+  "dimension_alternatives.measure_sections.EXTRUSION_WIDTH": {
+   "reason": "the slicer's own extrusion width, read off the OpenSCAD parameter sheet",
+   "unit": "mm"
+  },
+  "dimension_placement.ARROWHEAD_LENGTH_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.ELBOW_MARGIN_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.FIRST_LANE_GAP_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.LANE_PITCH_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.MAX_NOTE_ASSIGNMENTS": {
+   "unit": "none"
+  },
+  "dimension_placement.NEWLINE": {
+   "unit": "none"
+  },
+  "dimension_placement.NOTE_LINE_PITCH_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.TEXT_CLEARANCE_HEIGHTS": {
+   "unit": "none"
+  },
+  "dimension_placement.ZERO_MM": {
+   "reason": "a page-space zero test for TechDraw geometry",
+   "unit": "mm"
+  },
+  "doc_check.SEPARATOR": {
+   "reason": "a regex over two dash characters; the number is a code point",
+   "unit": "none"
+  },
+  "draw_fillet_scope.BUILT_OVER_R2": {
+   "reason": "an area divided by r2, so dimensionless",
+   "unit": "none"
+  },
+  "draw_fillet_scope.FILLET_OVER_R2": {
+   "reason": "an area divided by r2, so dimensionless",
+   "unit": "none"
+  },
+  "draw_fillet_scope.SHARE": {
+   "reason": "rows are a fillet's area share per label -- all three members are areas over the same r2, so each is dimensionless",
+   "unit": "record"
+  },
+  "draw_flange_chamfer.BIG": {
+   "reason": "a sentinel standing in for \"no bound\", large enough that no page coordinate reaches it",
+   "unit": "none"
+  },
+  "draw_flange_chamfer.SQ2": {
+   "reason": "root two",
+   "unit": "none"
+  },
+  "draw_flat_offset.CASES": {
+   "reason": "rows are a label and the page coordinates of one case, all millimeters on paper",
+   "unit": "record"
+  },
+  "draw_flat_offset.FAR": {
+   "reason": "a page distance standing in for \"off the sheet\" in a schematic figure",
+   "unit": "mm"
+  },
+  "draw_register_rows.P": {
+   "reason": "the parameter sheet's own row values, which a Spreadsheet evaluates in millimeters -- the same exemption `cowl.PARAMS_TAIL` carries",
+   "unit": "record"
+  },
+  "draw_set.REPRESENTATIVE_U": {
+   "reason": "`U` is a dimensionless scale factor",
+   "unit": "none"
+  },
+  "draw_sheet_alternatives.NL": {
+   "reason": "a newline, by code point",
+   "unit": "none"
+  },
+  "draw_sheet_alternatives.OWN_BLOCK_MM": {
+   "reason": "a title block on paper",
+   "unit": "mm"
+  },
+  "draw_sheet_alternatives.PX_PER_MM": {
+   "reason": "pixels per millimeter: a ratio, which is what makes it the scale factor",
+   "unit": "none"
+  },
+  "draw_sheet_alternatives.SMALL_BLOCK_MM": {
+   "reason": "a title block on paper",
+   "unit": "mm"
+  },
+  "drawing.ARRANGEMENTS": {
+   "unit": "none"
+  },
+  "drawing.LINE_SPACE_PERCENT": {
+   "unit": "none"
+  },
+  "drawing.NEWLINE": {
+   "unit": "none"
+  },
+  "drawing.PREFERRED_SCALES": {
+   "unit": "none"
+  },
+  "drawing.REFERENCE_DEFLECTION_MM": {
+   "reason": "TechDraw's own reference deflection, in millimeters",
+   "unit": "mm"
+  },
+  "drawing.SCALE_FLOOR_FRACTION": {
+   "unit": "none"
+  },
+  "drawing.VIEW_DIRECTION": {
+   "unit": "none"
+  },
+  "drawing.VIEW_FILL": {
+   "unit": "none"
+  },
+  "drawing_families.MARGIN_ROWS": {
+   "reason": "table rows kept clear, a count",
+   "unit": "none"
+  },
+  "drawing_standard.ARROW_SIZE_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.CENTER_LINE_OVERRUN_HEIGHTS": {
+   "unit": "none"
+  },
+  "drawing_standard.CENTER_MARK_OVERRUN": {
+   "unit": "none"
+  },
+  "drawing_standard.CONSTRUCTION_COLOR": {
+   "unit": "none"
+  },
+  "drawing_standard.DECIMAL_PLACES": {
+   "unit": "none"
+  },
+  "drawing_standard.DECIMAL_POINT_UNITS": {
+   "unit": "none"
+  },
+  "drawing_standard.LINE_CENTER": {
+   "unit": "none"
+  },
+  "drawing_standard.LINE_CONTINUOUS": {
+   "unit": "none"
+  },
+  "drawing_standard.LINE_DASHED": {
+   "unit": "none"
+  },
+  "drawing_standard.LINE_DOTTED": {
+   "unit": "none"
+  },
+  "drawing_standard.LINE_PHANTOM": {
+   "unit": "none"
+  },
+  "drawing_standard.MINUS_UNITS": {
+   "unit": "none"
+  },
+  "drawing_standard.NARROW_LINE_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TABLE_COLUMN_GUTTER_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TABLE_COLUMN_PADDING_HEIGHTS": {
+   "unit": "none"
+  },
+  "drawing_standard.TABLE_ROW_CLEARANCE_HEIGHTS": {
+   "unit": "none"
+  },
+  "drawing_standard.TABLE_ROW_PITCH_HEIGHTS": {
+   "unit": "none"
+  },
+  "drawing_standard.TABLE_TEXT_HEIGHTS_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TABLE_TEXT_HEIGHT_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TEMPLATE_FRAME_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TEMPLATE_HEIGHT_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TEMPLATE_TITLE_BLOCK_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TEMPLATE_WIDTH_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TEXT_HEIGHT_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "drawing_standard.TYPO_ASCENDER_UNITS": {
+   "unit": "none"
+  },
+  "drawing_standard.UNITS_PER_EM": {
+   "unit": "none"
+  },
+  "drawing_standard.VIEW_SHARE": {
+   "unit": "none"
+  },
+  "drawing_standard.WIDEST_CALLOUT_UNITS": {
+   "unit": "none"
+  },
+  "drawing_standard.WIDEST_DIGIT_UNITS": {
+   "unit": "none"
+  },
+  "drawing_standard.WIDE_LINE_MM": {
+   "reason": "ASME Y14.5 sheet, text and line sizes, which are page millimeters",
+   "unit": "mm"
+  },
+  "fillet_intent.EPSILON": {
+   "reason": "guards a division in a closed-form ratio; both operands are dimensionless",
+   "unit": "none"
+  },
+  "fillet_intent.SQ2": {
+   "reason": "root two",
+   "unit": "none"
+  },
+  "fillet_scope_analysis.measure_clamped_gtw.SQ2": {
+   "reason": "root two",
+   "unit": "none"
+  },
+  "fillet_scope_analysis.measure_fillet_context.DEFL": {
+   "reason": "a tessellation deflection on the OpenSCAD path",
+   "unit": "mm"
+  },
+  "fillet_scope_analysis.measure_fillet_context.TILING": {
+   "reason": "eight sign triples",
+   "unit": "none"
+  },
+  "fillet_scope_analysis.measure_fillet_share.NIL": {
+   "reason": "an area *share*, so dimensionless",
+   "unit": "none"
+  },
+  "fillet_scope_analysis.sweep_clamped_gtw.NIL": {
+   "reason": "an area share, so dimensionless",
+   "unit": "none"
+  },
+  "fillet_scope_analysis.sweep_fillet_share.NIL": {
+   "reason": "an area share, so dimensionless",
+   "unit": "none"
+  },
+  "fillets.REF_VOLS_M3": {
+   "unit": "m3"
+  },
+  "fillets.SQ2": {
+   "unit": "none"
+  },
+  "fit_amplification.DELTA_M": {
+   "unit": "m"
+  },
+  "fit_amplification.N_FIT": {
+   "unit": "none"
+  },
+  "fit_amplification.REAL_PAIRS_M": {
+   "unit": "m"
+  },
+  "fit_amplification.TAPER_PER_M": {
+   "reason": "a reciprocal length -- a fraction of the section per meter of `z` -- so converting the lengths it multiplies meant scaling it the other way",
+   "unit": "none"
+  },
+  "fit_amplification.TIGHTNESS": {
+   "unit": "none"
+  },
+  "fit_amplification.WALL_M": {
+   "unit": "m"
+  },
+  "flange_base.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "flange_base.INTERCONNECT_REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "flange_base.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "flange_boss.REF_VOLS_M3": {
+   "unit": "m3"
+  },
+  "freecad_render.FCSTD_MAX": {
+   "reason": "a count of documents a session may hold open",
+   "unit": "none"
+  },
+  "fuselage_variants.RENDER_MEMORY_PER_WORKER_MB": {
+   "reason": "megabytes, a memory budget",
+   "unit": "none"
+  },
+  "fuselage_variants._RENDER_QUEUE": {
+   "reason": "a worker count inside a queue object",
+   "unit": "none"
+  },
+  "fuselage_variants._RESUME_COUNTS": {
+   "reason": "two counters, `skipped` and `changed`",
+   "unit": "record"
+  },
+  "geometry_branches._AT": {
+   "unit": "none"
+  },
+  "geometry_bridge.api.HANDLE_CEILING": {
+   "reason": "live handles a session may hold",
+   "unit": "none"
+  },
+  "geometry_bridge.codec.MAX_VALUE_DEPTH": {
+   "reason": "nesting depth a value may carry",
+   "unit": "none"
+  },
+  "geometry_bridge.ops.MAX_BASES": {
+   "reason": "operands one boolean may take",
+   "unit": "none"
+  },
+  "geometry_bridge.session.RELEASE_BATCH": {
+   "reason": "handles released per round trip",
+   "unit": "none"
+  },
+  "geometry_bridge.wire.HEARTBEAT_S": {
+   "unit": "s"
+  },
+  "geometry_bridge.wire.LIVENESS_S": {
+   "unit": "s"
+  },
+  "geometry_bridge.wire.MAX_LINE_BYTES": {
+   "reason": "bytes on one protocol line",
+   "unit": "none"
+  },
+  "greeble_web.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "greeble_web.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "input_screen.HASH_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "joint_analysis.measure_corner_joint.CC": {
+   "reason": "a corner-center offset derived from two parameter-sheet cells, which a Spreadsheet evaluates in millimeters",
+   "unit": "mm"
+  },
+  "joint_analysis.measure_corner_joint.DEFL": {
+   "reason": "a tessellation deflection on the OpenSCAD path",
+   "unit": "mm"
+  },
+  "make_sheet_template.BLOCK_MM": {
+   "reason": "the title block on that paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.FRAME_LINE_MM": {
+   "reason": "a pen width on paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.FRAME_MM": {
+   "reason": "the drawing frame on that paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.LINE_MM": {
+   "reason": "a pen width on paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.LINE_SPACING_HEIGHTS": {
+   "reason": "a multiple of the text height, so dimensionless",
+   "unit": "none"
+  },
+  "make_sheet_template.NL": {
+   "reason": "a newline, by code point",
+   "unit": "none"
+  },
+  "make_sheet_template.PAD_MM": {
+   "reason": "cell padding on that paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.ROWS_MM": {
+   "reason": "row heights on that paper",
+   "unit": "mm"
+  },
+  "make_sheet_template.SHEET_MM": {
+   "reason": "ANSI A, which is a paper size",
+   "unit": "mm"
+  },
+  "make_sheet_template.TABLE_MM": {
+   "reason": "the value table on that paper",
+   "unit": "mm"
+  },
+  "measure_octant_micro.DEFAULT_TOL": {
+   "unit": "none"
+  },
+  "mesh_stats.BBOX_TOL_FLOOR_U": {
+   "reason": "`U` is a dimensionless scale factor",
+   "unit": "none"
+  },
+  "mesh_stats.BBOX_TOL_PER_U": {
+   "reason": "millimeters at `U` = 1, against an STL's own box",
+   "unit": "mm"
+  },
+  "mesh_stats.HASH_PLACES": {
+   "reason": "decimal places a coordinate is quantized to for hashing",
+   "unit": "none"
+  },
+  "mesh_stats.VOLUME_TOL": {
+   "reason": "relative to the part's own volume, so dimensionless",
+   "unit": "none"
+  },
+  "mesh_stats._FACET_BYTES": {
+   "reason": "bytes per binary STL facet",
+   "unit": "none"
+  },
+  "mesh_stats._HEADER_BYTES": {
+   "reason": "bytes in an STL header",
+   "unit": "none"
+  },
+  "mesh_to_brep.DEFAULT_POINTS": {
+   "unit": "none"
+  },
+  "mesh_to_brep.DEFAULT_TOL_M": {
+   "unit": "m"
+  },
+  "mesh_to_brep.TIP_CHECK_REL": {
+   "unit": "none"
+  },
+  "normal_check.AROUND_M": {
+   "unit": "m"
+  },
+  "normal_check.FALLBACK_TOL_M": {
+   "unit": "m"
+  },
+  "normal_check.NOMINAL_M": {
+   "unit": "m"
+  },
+  "normal_check.WORST": {
+   "unit": "none"
+  },
+  "offset_ladder.CURVATURE_SAMPLES": {
+   "unit": "none"
+  },
+  "offset_ladder.DUPLICATE_TOL_M": {
+   "reason": "below this, two consecutive sample positions count as the same point; 1e-9 m is ten times OpenCASCADE's Precision::Confusion of 1e-7 mm",
+   "unit": "m"
+  },
+  "offset_ladder.RUNGS": {
+   "reason": "multipliers on the construction's own first sample count, so nondimensional by construction",
+   "unit": "none"
+  },
+  "oml_blank.MAX_SPANS": {
+   "unit": "none"
+  },
+  "oml_blank.MODEL_UNIT_MM": {
+   "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in",
+   "unit": "mm"
+  },
+  "oml_blank.NATIVE_PER_MODEL_UNIT": {
+   "reason": "OpenVSP's own model-unit conventions, which belong to the file being read and are what the millimeters on disk are expressed in",
+   "unit": "mm"
+  },
+  "oml_blank.RATIO_SPREAD_TOL": {
+   "unit": "none"
+  },
+  "oml_blank.SCALE_TOL_M": {
+   "unit": "m"
+  },
+  "oml_blank.UNIT_WIDTH_M": {
+   "unit": "m"
+  },
+  "oml_blank.VOLUME_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "oml_blank._COPLANAR": {
+   "unit": "none"
+  },
+  "oml_blank._EPS": {
+   "unit": "none"
+  },
+  "oml_blank._FLAT": {
+   "unit": "none"
+  },
+  "oml_blank._SAMPLES": {
+   "unit": "none"
+  },
+  "oml_export.MODEL_UNIT_MM": {
+   "reason": "one model unit is one meter by project convention, stated in millimeters because that is the unit the exported file is read in",
+   "unit": "mm"
+  },
+  "oml_export.USER_SET": {
+   "reason": "an OpenVSP set index",
+   "unit": "none"
+  },
+  "oml_export._MM_PER_DECLARED_FOOT": {
+   "reason": "what the header's FOOT label makes a consumer apply; a property of the file format, not of the part",
+   "unit": "mm"
+  },
+  "panel_oml.FACE_TOL_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_EXPOSED_SPAN_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_INNER_FACE_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_LENGTH_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_OUTER_FACE_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_POCKET_DEPTH_M": {
+   "unit": "m"
+  },
+  "panel_oml.REF_WIDTH_M": {
+   "unit": "m"
+  },
+  "part_corner.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "part_end.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "part_middle.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "part_transition.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "pd_end.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "plane2d.BBOX_TOL_M": {
+   "unit": "m"
+  },
+  "plane2d.ENCLOSURE_FLOOR_M": {
+   "unit": "m"
+  },
+  "preview.ANGULAR_RAD": {
+   "unit": "rad"
+  },
+  "preview.DEVIATION_M": {
+   "unit": "m"
+  },
+  "preview.VIEWS": {
+   "unit": "none"
+  },
+  "refused_wall.LOCAL_HALF_M": {
+   "unit": "m"
+  },
+  "refused_wall.LOCAL_STEP_M": {
+   "unit": "m"
+  },
+  "render_pages.FIGURE_MARGIN_MM": {
+   "reason": "raster and page geometry for a rendered sheet",
+   "unit": "mm"
+  },
+  "render_pages.MIN_BYTES": {
+   "unit": "none"
+  },
+  "render_pages.MM_PER_INCH": {
+   "reason": "raster and page geometry for a rendered sheet",
+   "unit": "mm"
+  },
+  "render_pages.MM_PER_SCENE_UNIT": {
+   "reason": "raster and page geometry for a rendered sheet",
+   "unit": "mm"
+  },
+  "render_pages.RASTER_DPI": {
+   "unit": "none"
+  },
+  "render_pages.SETTLE_POLL_S": {
+   "unit": "s"
+  },
+  "render_pages.SETTLE_STABLE_POLLS": {
+   "unit": "none"
+  },
+  "render_pages.SETTLE_TIMEOUT_S": {
+   "unit": "s"
+  },
+  "render_pages.SPILL_TOLERANCE_MM": {
+   "reason": "raster and page geometry for a rendered sheet",
+   "unit": "mm"
+  },
+  "render_pages.THIN_SCENE": {
+   "unit": "none"
+  },
+  "render_sheets.TIMEOUT_BASE": {
+   "unit": "s"
+  },
+  "render_sheets.TIMEOUT_PER_SHEET": {
+   "unit": "s"
+  },
+  "rib_edge_check.CREASE_SAMPLES": {
+   "unit": "none"
+  },
+  "rib_edge_check.KERNEL_CHECK": {
+   "unit": "none"
+  },
+  "rib_edge_check.NORMAL_PROBES": {
+   "unit": "none"
+  },
+  "rib_edge_check.PATCH_PROBES": {
+   "unit": "none"
+  },
+  "rib_proximity.FAR_IN_T": {
+   "unit": "none"
+  },
+  "ring_scan.AROUND_M": {
+   "unit": "m"
+  },
+  "ring_scan.AXIAL_M": {
+   "unit": "m"
+  },
+  "scan_octant_micro.BANDS": {
+   "reason": "rows are a millimeter upper bound and its label, read off an OpenSCAD mesh",
+   "unit": "record"
+  },
+  "scan_octant_micro.REFINE_FLOOR": {
+   "reason": "the finest refinement step of a scan over OpenSCAD geometry",
+   "unit": "mm"
+  },
+  "section_figure.DOT_PX": {
+   "reason": "pixels, a raster count",
+   "unit": "none"
+  },
+  "section_figure.FONT_LABEL": {
+   "reason": "a font size in points, a typographic unit",
+   "unit": "none"
+  },
+  "section_figure.FONT_SMALL": {
+   "reason": "a font size in points",
+   "unit": "none"
+  },
+  "section_figure.FONT_TITLE": {
+   "reason": "a font size in points",
+   "unit": "none"
+  },
+  "section_figure.PAD_PX": {
+   "reason": "pixels of page padding, a raster count",
+   "unit": "none"
+  },
+  "section_figure.ROLE_STYLE": {
+   "reason": "rows are a stroke width and a color per role; the widths are the page lengths above and the colors carry no unit",
+   "unit": "record"
+  },
+  "section_figure.WIDTH_GEOMETRY": {
+   "reason": "an SVG stroke width, which is a page length",
+   "unit": "mm"
+  },
+  "section_figure.WIDTH_HAIRLINE": {
+   "reason": "an SVG stroke width",
+   "unit": "mm"
+  },
+  "section_figure.WIDTH_MEASURE": {
+   "reason": "an SVG stroke width",
+   "unit": "mm"
+  },
+  "section_figure.WIDTH_TOOL": {
+   "reason": "an SVG stroke width",
+   "unit": "mm"
+  },
+  "sever_doses.BREAK_Z_M": {
+   "unit": "m"
+  },
+  "sever_doses.DOSES": {
+   "unit": "none"
+  },
+  "sever_doses.HEALTHY_M": {
+   "unit": "m"
+  },
+  "sever_doses.HISTORIC_Z_M": {
+   "unit": "m"
+  },
+  "sever_doses.SCAN_M": {
+   "unit": "m"
+  },
+  "sever_doses.SILENT_M": {
+   "unit": "m"
+  },
+  "sheet_annotations.DETAIL_MARGIN": {
+   "unit": "none"
+  },
+  "sheet_annotations.DIA": {
+   "unit": "none"
+  },
+  "si.CUT_FUZZ_LADDER_MM": {
+   "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs",
+   "unit": "mm"
+  },
+  "si.RIB_CUT_FUZZ_MM": {
+   "reason": "an OpenCASCADE boolean fuzz is a kernel argument in millimeters, calibrated against the kernel's own Precision::Confusion of 1e-7 mm, so it is not a dimension of the part -- this module is the boundary and is the one place it belongs",
+   "unit": "mm"
+  },
+  "simple_positives.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "simple_positives.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "soak_compare.GAP_TOL": {
+   "unit": "none"
+  },
+  "soak_compare.SAMPLES": {
+   "unit": "none"
+  },
+  "soak_compare.SEEDS": {
+   "unit": "none"
+  },
+  "soak_compare.XOR_TOL": {
+   "unit": "none"
+  },
+  "soak_cowl_shell.VOLUME_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "soak_shell_variants.REPEATS": {
+   "reason": "keyed by `U`, which is dimensionless, with a repeat count as the value",
+   "unit": "record"
+  },
+  "soak_shell_variants.U_VALUES": {
+   "reason": "`U` is a dimensionless scale factor",
+   "unit": "none"
+  },
+  "solid_measure.CONVERGENCE": {
+   "unit": "none"
+  },
+  "solid_measure.DEFLECTIONS_M": {
+   "unit": "m"
+  },
+  "solid_measure.DIFFERENCE_CONVERGENCE": {
+   "unit": "none"
+  },
+  "solid_measure.POINT_TOL_M": {
+   "reason": "how far a vertex may move and still be the same point, for `same_solid`; 1e-9 m is ten times OpenCASCADE's own Precision::Confusion of 1e-7 mm",
+   "unit": "m"
+  },
+  "solid_measure.SURFACE_SAMPLES": {
+   "unit": "none"
+  },
+  "station_gaps.SHOW": {
+   "unit": "none"
+  },
+  "stl_preview.AMBIENT": {
+   "reason": "a lighting fraction",
+   "unit": "none"
+  },
+  "stl_preview.BACKGROUND": {
+   "reason": "an RGB triple",
+   "unit": "none"
+  },
+  "stl_preview.CAMERA_ROTATION_DEG": {
+   "reason": "a camera orientation for one preview image; degrees are what the view spec carries and no geometry reads it",
+   "unit": "deg"
+  },
+  "stl_preview.CREASE_ANGLE_DEG": {
+   "reason": "the shading crease threshold for one preview image; a display decision, and no geometry reads it",
+   "unit": "deg"
+  },
+  "stl_preview.DEFAULT_MARGIN": {
+   "reason": "a framing fraction of the part's own size",
+   "unit": "none"
+  },
+  "stl_preview.DEFAULT_SIZE": {
+   "reason": "an image size in pixels",
+   "unit": "none"
+  },
+  "stl_preview.DEFAULT_SUPERSAMPLE": {
+   "reason": "a raster oversampling factor",
+   "unit": "none"
+  },
+  "stl_preview.EDGE_COLOR": {
+   "reason": "an RGB triple",
+   "unit": "none"
+  },
+  "stl_preview.FACE_BACK": {
+   "reason": "an RGB triple",
+   "unit": "none"
+  },
+  "stl_preview.FACE_FRONT": {
+   "reason": "an RGB triple",
+   "unit": "none"
+  },
+  "surface_distance.CHUNK": {
+   "reason": "sample points per vectorized block",
+   "unit": "none"
+  },
+  "surface_distance.DEFAULT_SAMPLES": {
+   "reason": "sample points",
+   "unit": "none"
+  },
+  "surface_distance.DEFAULT_SEED": {
+   "reason": "a fixed random seed, so a run reproduces",
+   "unit": "none"
+  },
+  "surface_distance.SURFACE_TOL_FLOOR_U": {
+   "reason": "`U` is a dimensionless scale factor",
+   "unit": "none"
+  },
+  "surface_distance.SURFACE_TOL_PER_U": {
+   "reason": "millimeters at `U` = 1, measured between two STL surfaces",
+   "unit": "mm"
+  },
+  "surface_distance.VERTEX_SHARE": {
+   "reason": "a fraction of the samples taken at vertices",
+   "unit": "none"
+  },
+  "tau_study.DEFAULT_TAUS_M": {
+   "unit": "m"
+  },
+  "tau_study.SPACING_M": {
+   "unit": "m"
+  },
+  "unit_regime.FRACTIONS": {
+   "reason": "values that are a proportion of something else wherever they appear",
+   "unit": "none"
+  },
+  "unit_regime.STRUCTURAL": {
+   "reason": "integers that cannot be a dimension in any context -- this tool's own classifier input, not a figure about the part",
+   "unit": "none"
+  },
+  "units.MM_PER_M": {
+   "unit": "none"
+  },
+  "units.M_PER_MM": {
+   "unit": "none"
+  },
+  "units.PA_PER_MPA": {
+   "unit": "none"
+  },
+  "variants.TABLE_M": {
+   "unit": "m"
+  },
+  "verify_pd_end.PART_VOL_M3": {
+   "unit": "m3"
+  },
+  "verify_pd_end.REF_VOL_M3": {
+   "unit": "m3"
+  },
+  "verify_pd_end.TOL_M3": {
+   "unit": "m3"
+  },
+  "wall_measure.boolean_edges.BOX_PAD_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.FUZZ_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.KERNEL_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.LENGTH_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.MAX_BLOCK": {
+   "reason": "array elements, the cap on one intermediate allocation",
+   "unit": "none"
+  },
+  "wall_measure.boolean_edges.NORMAL_DIRECTIONS": {
+   "reason": "six unit direction vectors; a direction carries no unit, which is why `plane_set` must not rescale an axis",
+   "unit": "none"
+  },
+  "wall_measure.boolean_edges.NORMAL_STEP_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.PARAM_QUANTUM": {
+   "reason": "a quantum for a surface PARAMETER -- a knot, a weight, a multiplicity -- all dimensionless, which is why this one deliberately did not move with the coordinates in IP-FC-163",
+   "unit": "none"
+  },
+  "wall_measure.boolean_edges.PATCH_BANDS_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.PROBE_DEFLECTION_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.SAMPLE_ARC_M": {
+   "unit": "m"
+  },
+  "wall_measure.boolean_edges.WALL_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.candidates.CREASE_ANGLE_RAD": {
+   "unit": "rad"
+  },
+  "wall_measure.candidates.MARGIN_M": {
+   "unit": "m"
+  },
+  "wall_measure.candidates.MAX_BLOCK": {
+   "reason": "array elements, the cap on one intermediate allocation",
+   "unit": "none"
+  },
+  "wall_measure.candidates.MAX_RAY_M": {
+   "unit": "m"
+  },
+  "wall_measure.candidates.RAY_MIN_M": {
+   "unit": "m"
+  },
+  "wall_measure.candidates.RAY_PARALLEL_M": {
+   "unit": "m"
+  },
+  "wall_measure.candidates.RAY_U_EPS": {
+   "reason": "`u` is a fraction along a segment, so this is the one epsilon in the module that is dimensionless",
+   "unit": "none"
+  },
+  "wall_measure.candidates.REFLEX_AREA_M2": {
+   "unit": "m2"
+  },
+  "wall_measure.candidates.WINDOW_M": {
+   "unit": "m"
+  },
+  "wall_measure.corpus.END_INSET_M": {
+   "unit": "m"
+  },
+  "wall_measure.corpus.STATIONS": {
+   "reason": "the acceptance gate's own station count",
+   "unit": "none"
+  },
+  "wall_measure.density.CONSTRUCTION_ARC_M": {
+   "unit": "m"
+  },
+  "wall_measure.density.GATE_ARC_M": {
+   "unit": "m"
+  },
+  "wall_measure.density.GATE_MAX": {
+   "reason": "a ceiling on a derived sample count",
+   "unit": "none"
+  },
+  "wall_measure.density.GATE_MIN": {
+   "reason": "a floor on a derived sample count",
+   "unit": "none"
+  },
+  "wall_measure.density.LOCATE_SPACING_M": {
+   "unit": "m"
+  },
+  "wall_measure.density.MAX_POINTS": {
+   "reason": "a cap on one loop's discretization",
+   "unit": "none"
+  },
+  "wall_measure.density.NOMINAL_M": {
+   "unit": "m"
+  },
+  "wall_measure.density.PRIOR_GATE_AROUND": {
+   "reason": "the fixed inner sample count the gate used before IP-WTM-25; a count is exactly the defect `prior_gate_spacing` exists to quantify",
+   "unit": "none"
+  },
+  "wall_measure.density.PRIOR_GATE_OUTER_FACTOR": {
+   "reason": "how many times the outer loop was oversampled; a ratio of two counts",
+   "unit": "none"
+  },
+  "wall_measure.density.SETTLE_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.density.SPACINGS_M": {
+   "unit": "m"
+  },
+  "wall_measure.fit_response.N_CIRCUM": {
+   "reason": "samples around one ring",
+   "unit": "none"
+  },
+  "wall_measure.fit_response.SAME_STATION_M": {
+   "unit": "m"
+  },
+  "wall_measure.fit_response.Z_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.ACCURACY_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.CONTRACTION": {
+   "reason": "G2's contraction is a ratio of two successive deltas",
+   "unit": "none"
+  },
+  "wall_measure.gates.CONVERGE_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.COST_LIMIT_S": {
+   "unit": "s"
+  },
+  "wall_measure.gates.DEPTH_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.END_INSET_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.LEVELS": {
+   "reason": "four sample counts a loop, each a doubling",
+   "unit": "none"
+  },
+  "wall_measure.gates.LOCALITY_FRAC": {
+   "reason": "G1's threshold is a fraction of a patch's own depth, so it is a ratio and is unit-invariant",
+   "unit": "none"
+  },
+  "wall_measure.gates.LOCATION_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.gates.PLAIN_STATION_M": {
+   "unit": "m"
+  },
+  "wall_measure.inputs.EXCURSIONS": {
+   "reason": "rows are `Excursion(alias, delta, unit, why, signs)`, and the `unit` field carries each delta's own -- millimeters for a sheet cell, dimensionless for a fraction of `unit_width`. One suffix on the table could not say both",
+   "unit": "record"
+  },
+  "wall_measure.inputs.FINGERPRINT_DECIMALS": {
+   "reason": "decimal places, not a length: a count of digits the screen record is rounded to. The record itself is millimeters, which the constant's own note states",
+   "unit": "none"
+  },
+  "wall_measure.locate.COINCIDE_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.COLLINEAR_AREA_M2": {
+   "unit": "m2"
+  },
+  "wall_measure.locate.CURV_WINDOW_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.DENSE_INSET_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.GATE_ARC_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.NEARBY_OFFSETS_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.NOMINAL_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.N_POINTS": {
+   "reason": "samples a loop; the constant's own note records that a fixed count is the wrong parameterization and that callers should pass a spacing",
+   "unit": "none"
+  },
+  "wall_measure.locate.PASS2_ARC_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.SUBSET_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.TARGET_SPACING_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.TAU_M": {
+   "unit": "m"
+  },
+  "wall_measure.locate.WALL_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.ALIGN_RAD": {
+   "unit": "rad"
+  },
+  "wall_measure.normal_distance.CONSISTENCY_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.DEPTH_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.ENTRY_LADDER_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.ENTRY_STEP_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.FALLBACK_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.INSIDE_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.LIMIT_FACTOR": {
+   "reason": "how many nominal wall thicknesses a probe may travel; a multiple of a length, so a ratio",
+   "unit": "none"
+  },
+  "wall_measure.normal_distance.NOMINAL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.ON_FACE_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.normal_distance.WALL_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.prediction.TAU_M": {
+   "unit": "m"
+  },
+  "wall_measure.prediction.WALL_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.refusals.ESCAPE_TOL_M3": {
+   "unit": "m3"
+  },
+  "wall_measure.refusals.SLIVER_M": {
+   "unit": "m"
+  },
+  "wall_measure.report.NOMINAL_M": {
+   "unit": "m"
+  },
+  "wall_measure.ring_breaks.EXTENT_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.ring_breaks.MAX_STATIONS": {
+   "reason": "a ceiling on a scan's station count",
+   "unit": "none"
+  },
+  "wall_measure.ring_breaks.MIN_STATIONS": {
+   "reason": "a floor on a scan's station count",
+   "unit": "none"
+  },
+  "wall_measure.station_sets.FLOOR_TOL_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.EDGE_MARGIN_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.HEIGHT_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.RING_PAD_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.R_OUTER_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.SECTOR_PAD_M": {
+   "unit": "m"
+  },
+  "wall_measure.truth.WALL_M": {
+   "unit": "m"
+  },
+  "wall_vanish.DOSES_M": {
+   "unit": "m"
+  },
+  "wall_vanish.HISTORIC_Z_M": {
+   "unit": "m"
+  },
+  "wall_vanish.SAME_STATION_M": {
+   "unit": "m"
+  },
+  "wall_vanish.SCAN_M": {
+   "unit": "m"
+  },
+  "web.EXPECT_BBOX_M": {
+   "unit": "m"
+  },
+  "web.REF_VOL_M3": {
+   "unit": "m3"
   }
+ },
+ "inline": {
+  "bbf_analysis.report_bbf_gap": {
+   "allowed": 1,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "boom_web": {
+   "allowed": 10,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "build_part": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "bulkhead_cuts": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "bulkhead_positive": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "clearance_figure": {
+   "allowed": 8,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "clearance_sheet": {
+   "allowed": 44,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "compare_backends": {
+   "allowed": 2,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "corner_common": {
+   "allowed": 5,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "corner_tree": {
+   "allowed": 9,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "cowl_interior": {
+   "allowed": 9,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "draw_bolt_flange_fillet": {
+   "allowed": 20,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_corner_joint": {
+   "allowed": 12,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_dimension_alternatives": {
+   "allowed": 68,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_fillet_scope": {
+   "allowed": 2,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_flange_chamfer": {
+   "allowed": 8,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_flat_offset": {
+   "allowed": 9,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_register_rows": {
+   "allowed": 16,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "draw_sheet_alternatives": {
+   "allowed": 3,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "drawing": {
+   "allowed": 8,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "drawing_standard": {
+   "allowed": 6,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "fillets": {
+   "allowed": 2,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "fit_amplification": {
+   "allowed": 2,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "fuselage_splode": {
+   "allowed": 1,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "fuselage_variants": {
+   "allowed": 12,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "geometry_bridge.wire": {
+   "allowed": 1,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "greeble_web": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "mesh_stats": {
+   "allowed": 2,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "offset_ladder": {
+   "allowed": 1,
+   "reason": "the numerator of a reciprocal -- curvature is 1/length, so `1.0 / kappa` is the radius. The classifier reads it as a dimension because no structural marker fits a reciprocal, which is the case its own docstring says it is most likely to get wrong"
+  },
+  "oml_blank": {
+   "allowed": 6,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "pd_end": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "render_variant": {
+   "allowed": 1,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "scan_octant_micro": {
+   "allowed": 1,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "section_figure": {
+   "allowed": 18,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "sheet_annotations": {
+   "allowed": 38,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "sheet_table": {
+   "allowed": 3,
+   "reason": "page geometry in a human-facing view -- label positions, text sizes and widths on a sheet, which are millimeters through the display boundary"
+  },
+  "simple_positives": {
+   "allowed": 1,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "solid_measure": {
+   "allowed": 3,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "stl_preview": {
+   "allowed": 16,
+   "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "surface_distance": {
+   "allowed": 7,
+   "reason": "figures belonging to the OpenSCAD path or to an STL read back from it, which doc/guidelines/general.md exempts and which this module exists to compare the port against. Not a conversion backlog (IP-FC-167 made this module visible to the sweep)"
+  },
+  "unit_regime": {
+   "allowed": 1,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "units": {
+   "allowed": 3,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "variants": {
+   "allowed": 3,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "wall_measure.boolean_edges": {
+   "allowed": 1,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.candidates": {
+   "allowed": 10,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.fit_response": {
+   "allowed": 7,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.locate": {
+   "allowed": 4,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.normal_distance": {
+   "allowed": 3,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.truth": {
+   "allowed": 4,
+   "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "web": {
+   "allowed": 6,
+   "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  }
+ },
+ "note": "Generated inventory of the FreeCAD port's module-level numeric constants, classified by the unit each one carries, plus a per-module ceiling on bare inline dimensional literals. See tools/unit_regime.py for what the classifications mean and what this instrument cannot see.",
+ "regimes": {
+  "bbf_analysis.measure_bbf_context": "external",
+  "bbf_analysis.probe_bbf_degeneracy": "external",
+  "bbf_analysis.report_bbf_gap": "external",
+  "build_sheet": "presentation",
+  "chamfer_analysis.measure_chamfer_context": "external",
+  "clearance_figure": "presentation",
+  "clearance_sheet": "presentation",
+  "compare_backends": "external",
+  "dimension_alternatives.measure_sections": "external",
+  "dimension_placement": "presentation",
+  "draw_bolt_flange_fillet": "presentation",
+  "draw_corner_joint": "presentation",
+  "draw_dimension_alternatives": "presentation",
+  "draw_fillet_scope": "presentation",
+  "draw_flange_chamfer": "presentation",
+  "draw_flat_offset": "presentation",
+  "draw_register_rows": "presentation",
+  "draw_sheet_alternatives": "presentation",
+  "drawing": "presentation",
+  "drawing_standard": "presentation",
+  "fillet_scope_analysis.measure_clamped_gtw": "external",
+  "fillet_scope_analysis.measure_fillet_context": "external",
+  "fillet_scope_analysis.measure_fillet_share": "external",
+  "fillet_scope_analysis.sweep_clamped_gtw": "external",
+  "fillet_scope_analysis.sweep_fillet_share": "external",
+  "fuselage_splode": "presentation",
+  "joint_analysis.measure_corner_joint": "external",
+  "make_sheet_template": "presentation",
+  "mesh_stats": "external",
+  "oml_blank": "boundary",
+  "oml_export": "boundary",
+  "render_pages": "presentation",
+  "render_variant": "presentation",
+  "scan_octant_micro": "external",
+  "section_figure": "presentation",
+  "sheet_annotations": "presentation",
+  "sheet_table": "presentation",
+  "si": "boundary",
+  "stl_preview": "presentation",
+  "surface_distance": "external"
+ }
 }

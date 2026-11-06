@@ -39,7 +39,8 @@ EXTENT_TOL_M = 2.5e-4
 ANNULUS, BROKEN, UNREADABLE = 'annulus', 'broken', 'unreadable'
 
 
-def station_count(z_lo, z_hi, scan_m, min_stations=MIN_STATIONS, max_stations=MAX_STATIONS):
+def station_count(z_lo_m, z_hi_m, scan_m, min_stations=MIN_STATIONS,
+                  max_stations=MAX_STATIONS):
     """How many stations a span needs at `scan_m` spacing, clamped to the two limits.
 
     **`round`, not `int`** -- and that was already true before IP-FC-163 converted the module,
@@ -48,18 +49,18 @@ def station_count(z_lo, z_hi, scan_m, min_stations=MIN_STATIONS, max_stations=MA
     """
     if scan_m <= 0.0:
         raise ValueError('scan_m must be positive, got %r' % (scan_m,))
-    span = abs(float(z_hi) - float(z_lo))
-    return max(min_stations, min(max_stations, int(round(span / float(scan_m))) + 1))
+    span_m = abs(float(z_hi_m) - float(z_lo_m))
+    return max(min_stations, min(max_stations, int(round(span_m / float(scan_m))) + 1))
 
 
-def scan_grid(z_lo, z_hi, stations):
+def scan_grid(z_lo_m, z_hi_m, stations):
     """The station heights, ends included, as a list. One station is the low end alone."""
     if stations < 1:
         raise ValueError('stations must be at least 1, got %r' % (stations,))
     if stations == 1:
-        return [float(z_lo)]
-    step = (float(z_hi) - float(z_lo)) / float(stations - 1)
-    return [float(z_lo) + step * i for i in range(stations)]
+        return [float(z_lo_m)]
+    step_m = (float(z_hi_m) - float(z_lo_m)) / float(stations - 1)
+    return [float(z_lo_m) + step_m * i for i in range(stations)]
 
 
 def runs(states):
@@ -108,7 +109,7 @@ def edge_z(state_at, z_good, z_bad, tol_m=EXTENT_TOL_M):
 def extents(state_at, grid, states, tol_m=EXTENT_TOL_M):
     """Each run of broken stations with its two axial ends refined off the grid.
 
-    Each entry carries `z_lo`, `z_hi`, `extent_m`, the grid stations it was found between, and two
+    Each entry carries `z_lo_m`, `z_hi_m`, `extent_m`, the grid stations it was found between, and two
     honesty flags: `reaches_scan_end` when the break runs to the end of the scanned span, so the
     figure is a lower bound rather than the extent, and `unreadable_in_bracket` when a station
     inside a refinement could not be classified.
@@ -124,7 +125,7 @@ def extents(state_at, grid, states, tol_m=EXTENT_TOL_M):
             hi = grid[-1]
         else:
             hi, hi_unreadable = edge_z(state_at, grid[last + 1], grid[last], tol_m)
-        out.append({'z_lo': min(lo, hi), 'z_hi': max(lo, hi),
+        out.append({'z_lo_m': min(lo, hi), 'z_hi_m': max(lo, hi),
                     'extent_m': abs(hi - lo),
                     'broken_stations_z': [grid[first], grid[last]],
                     'broken_station_count': last - first + 1,

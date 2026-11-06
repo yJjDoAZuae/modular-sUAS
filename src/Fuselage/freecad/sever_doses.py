@@ -105,6 +105,7 @@ import FreeCAD as App                                                    # noqa:
 import check_cowl_interior as cci                                        # noqa: E402
 import cowl_interior as ci                                               # noqa: E402
 import cowl_tree                                                        # noqa: E402
+import si                                                                # noqa: E402
 from corner_common import is_entry_point                                 # noqa: E402
 from station_gaps import BUILDERS, PARAMS, notch_compound, with_u        # noqa: E402
 from wall_measure import fit_response as fr                              # noqa: E402
@@ -124,8 +125,9 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'sever
 
 #: The station OQ-DES-CW26's probe displaced. Carried to its full precision: forcing a four-decimal
 #: printing of a notch edge into a seed set manufactured a 0.0000459 mm pair and invalidated a run
-#: once already (`cowl_interior_surface.md` §6.1, sixth caution).
-HISTORIC_Z = -283.9951339
+#: once already (`cowl_interior_surface.md` §6.1, sixth caution). Converted from -283.9951339 mm
+#: by IP-FC-163; it is the same station, to the last digit.
+HISTORIC_Z_M = -0.2839951339
 
 #: Spans the reported bracket -- benign at 0.01, severed at 0.03 -- with the ends that are recorded
 #: as caught, so a run reproduces both the silent and the loud case if either is reachable.
@@ -240,15 +242,18 @@ def break_extent(wall, detail, tol_m=EXTENT_TOL_M):
 
 #: The station OQ-DES-CW26 measured the broken ring at, 66 mm from the row it displaced. Read
 #: here as well as scanned, so a result can be set against the 0.355705 mm on record directly.
-BREAK_Z = -217.7261
+#: Was -217.7261 mm.
+BREAK_Z_M = -0.2177261
 
-#: What the healthy wall reads at `BREAK_Z`, reproduced to six decimals across five fresh builds
-#: and two independently fitted station sets, and 0.546559 mm on IP-FC-144's own set.
-HEALTHY_MM = 0.546556
+#: What the healthy wall reads at `BREAK_Z_M`, reproduced to six decimals across five fresh builds
+#: and two independently fitted station sets, and 0.546559 mm on IP-FC-144's own set. Was
+#: 0.546556 mm -- the figure is unchanged and only its unit is stated differently.
+HEALTHY_M = 5.46556e-4
 
 #: What the silent failure read there: not a thickness at all, but the gap between the two broken
-#: ends, which `wall_thickness` cannot distinguish from a thickness (section 7.1).
-SILENT_MM = 0.355705
+#: ends, which `wall_thickness` cannot distinguish from a thickness (section 7.1). Was
+#: 0.355705 mm.
+SILENT_M = 3.55705e-4
 
 
 def target_station(kept, z_lo, z_hi, notch_edges, want=None, tol=1.0e-6):
@@ -357,7 +362,7 @@ def _save_wall(wall, out_dir, kind, u, delta):
     return path
 
 
-def thickness_at(wall, z, t):
+def thickness_at(wall, z_m, t_m):
     """The incumbent measure's reading at one station, as a dict, or `None` where it refuses.
 
     **Read because the figure on record is this measure's output, not because it is trusted.**
@@ -369,7 +374,7 @@ def thickness_at(wall, z, t):
     rather than replaced by it, since the two say different things.
     """
     try:
-        got = cci.wall_thickness(wall, z, t, ci.WALL_TOL_M)
+        got = cci.wall_thickness(wall, z_m, t_m, ci.WALL_TOL_M)
     except Exception as exc:                                      # noqa: BLE001
         return {'error': '%s: %s' % (type(exc).__name__, str(exc)[:160])}
     if got is None:
@@ -389,8 +394,8 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
     # station the run does not displace is the kind of figure that gets quoted. The station is
     # chosen per dose, from that dose's own station set, and printed in the table below.
     print('  the station displaced is chosen per dose: an interior notch edge, never a patch end')
-    print('  (OQ-DES-CW26 produced its failure at z = %.7f, which the station floor now drops)'
-          % HISTORIC_Z)
+    print('  (OQ-DES-CW26 produced its failure at z = %.7f mm, which the station floor now '
+          'drops)' % si.mm(HISTORIC_Z_M))
     print('')
     if floor_mm is not None:
         print('  station floor overridden to %.3f mm -- the unfiltered union, '
@@ -398,8 +403,9 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
     if want_z is not None:
         print('  displacing z = %.7f exactly; an absent station is an error, not a substitution'
               % want_z)
-    print('  incumbent reading taken at z = %.4f, where the healthy wall reads %.6f mm and the '
-          'silent failure read %.6f' % (BREAK_Z, HEALTHY_MM, SILENT_MM))
+    print('  incumbent reading taken at z = %.4f mm, where the healthy wall reads %.6f mm and '
+          'the silent failure read %.6f mm'
+          % (si.mm(BREAK_Z_M), si.mm(HEALTHY_M), si.mm(SILENT_M)))
     print('')
     print('   delta   outcome        solids  slip       residue   annulus  broken  at break  s')
     print('   ' + '-' * 86)
@@ -417,7 +423,11 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             doc.recompute()
             body_node, tools, mirrors, cell_cut = cowl_tree.pieces(doc)
             params = doc.getObject('Params')
-            t = float(params.get('cowl_n_perimeters')) * float(params.get('extrusion_width'))
+            # **The two cells are a Spreadsheet's, so their product is millimeters, and
+            # every `cowl_interior` call below takes meters** (IP-FC-163). This is the same
+            # crossing `wall_vanish` and `tau_study` were getting wrong.
+            t_m = si.m(float(params.get('cowl_n_perimeters'))
+                       * float(params.get('extrusion_width')))
             overhang = float(params.get('overhang_angle_from_bed'))
             # The planes the nudge has to respect, read off the cell itself rather than assumed
             # from the mirror chain -- the same source `cavity` uses.
@@ -431,14 +441,18 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             p_lo, p_hi = ci._patches(z_lo, z_hi, body_features)[0]
             union = sorted(set(ci._seed(p_lo, p_hi, True, True))
                            | {e for e in notch_edges if p_lo < e < p_hi})
-            floor = ci.station_floor(t) if floor_mm is None else float(floor_mm)
-            kept = ci._thin_stations(union, floor)
+            # `station_floor` is SI; the override arrives already converted from `--floor-mm`.
+            floor_m = ci.station_floor(t_m) if floor_mm is None else si.m(float(floor_mm))
+            kept = ci._thin_stations(union, floor_m)
             target, is_edge = target_station(kept, p_lo, p_hi, notch_edges, want=want_z)
-            rec.update(target_z=target, target_is_notch_edge=is_edge,
-                       floor_mm=floor, seeded_stations=len(union),
+            rec.update(target_z_mm=si.mm(target), target_is_notch_edge=is_edge,
+                       floor_mm=si.mm(floor_m), seeded_stations=len(union),
                        kept_stations=len(kept))
+            # `station_floor_m`, because the seam is SI: `cowl_interior._probe_floor` hands it a
+            # meter default and uses whatever comes back (IP-FC-163).
             probe = wm_probe.Probe(contour=probe_for(delta, target, normals),
-                                   station_floor_mm=floor_mm)
+                                   station_floor_m=(None if floor_mm is None
+                                                    else si.m(float(floor_mm))))
             # `notches` is read for its vertices by `feature_stations`, so it must be one shape.
             # Handing over the list `pieces()` returns raises `'list' object has no attribute
             # 'Vertexes'` -- after the tree has already been built, so the cost is paid first.
@@ -449,7 +463,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # the next one perturbed.
             with wm_probe.installed(ci, probe=probe):
                 wall = ci.shell_solid(cell_cut.Shape, body_node.Shape, notch_compound(tools),
-                                      t, overhang, mirrors, report=report)
+                                      t_m, overhang, mirrors, report=report)
             w_lo, w_hi = ci.z_extent(wall)
             s_lo, s_hi = w_lo + ci.END_INSET_M, w_hi - ci.END_INSET_M
             cont, broken, unread, worst, detail = ring_states(wall, s_lo, s_hi)
@@ -460,7 +474,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                        worst_station=worst, stations=detail,
                        scan_mm=si.mm(SCAN_M), scan_stations=len(detail),
                        scan_z=[s_lo, s_hi],
-                       incumbent_at_break=thickness_at(wall, BREAK_Z, t),
+                       incumbent_at_break=thickness_at(wall, BREAK_Z_M, t_m),
                        moved_row=_moved(probe))
             flag = ''
             if delta == 0.0:
@@ -474,7 +488,8 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                 rec['break_extent'] = extents
                 for span in extents:
                     print('          break over %.3f mm, z %.4f to %.4f, up to %s arc(s)%s'
-                          % (si.mm(span['extent_m']), si.mm(span['z_lo']), si.mm(span['z_hi']),
+                          % (si.mm(span['extent_m']), si.mm(span['z_lo_m']),
+                             si.mm(span['z_hi_m']),
                              span['max_faces'],
                              ' (reaches the scan end)' if span['reaches_scan_end'] else ''))
                 rec['shape_path'] = _save_wall(wall, out_dir, kind, u, delta)
@@ -536,7 +551,8 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # top-level `target_z` holding the historical constant reads as though the run had
             # displaced it. At `U` = 3.0 it displaced z = -165.0433 while this said -283.9951339.
             fh.write(json.dumps({'kind': kind, 'u': float(u),
-                                 'historic_z': HISTORIC_Z, 'scan_mm': si.mm(SCAN_M),
+                                 'historic_z_mm': si.mm(HISTORIC_Z_M),
+                                 'scan_mm': si.mm(SCAN_M),
                                  'doses': records}, indent=1, sort_keys=True, default=float))
 
     print('')

@@ -72,6 +72,7 @@ import Part                                                        # noqa: E402
 import check_cowl_interior as cci                                  # noqa: E402
 import cowl_interior as ci                                         # noqa: E402
 import cowl_tree                                                   # noqa: E402
+import si                                                          # noqa: E402
 import soak_cowl_shell as soak                                     # noqa: E402
 from corner_common import is_entry_point                           # noqa: E402
 
@@ -85,15 +86,15 @@ BUILDERS = soak.BUILDERS
 BASE_PARAMS = soak.BASE_PARAMS
 with_u = soak.with_u
 
-#: Circumferential spacing the wall is measured at, in mm. Fixed as a spacing and not as a sample
+#: Circumferential spacing the wall is measured at. Fixed as a spacing and not as a sample
 #: count: a cowl's perimeter scales with `U` while its wall does not, and a fixed count is what made
 #: this subsystem's first corpus figures wrong by a factor of six
-#: (cowl_interior_surface.md section 6.6).
-SPACING = 0.125
+#: (cowl_interior_surface.md section 6.6). Was 0.125 mm before IP-FC-163.
+SPACING_M = 1.25e-4
 
 #: The criterion values to try, coarsest first so the baseline is reproduced before anything is
-#: tightened. The first should be `cowl_interior.TAU_M` itself.
-DEFAULT_TAUS = (0.05, 0.02, 0.01)
+#: tightened. The first is `cowl_interior.TAU_M` itself. Converted from (0.05, 0.02, 0.01) mm.
+DEFAULT_TAUS_M = (5.0e-5, 2.0e-5, 1.0e-5)
 
 
 def _opt(name, default=None):
@@ -119,35 +120,43 @@ def build_cell(kind, u):
     return doc, tip
 
 
-def wall_at_tau(shell, tau):
-    """`shell_solid` on the same cell inputs at one `tau`. Returns a row, never raises.
+def wall_at_tau(shell, tau_m):
+    """`shell_solid` on the same cell inputs at one `tau_m`. Returns a row, never raises.
 
     An `Unconverged` is a result here, not an error: outcome 2 in this module's docstring. It is
     recorded with the message, because the message carries the worst gap pass 2 reached and how
     many intervals it still wanted.
+
+    **`shell.Inset` is the sheet's millimeters and `shell_solid` takes meters, which is the
+    crossing this function was getting wrong** (IP-FC-163). `Inset` is a `Spreadsheet`-fed
+    property, so it evaluates in millimeters by FreeCAD's own convention; `cowl_interior` has
+    stored SI since IP-FC-162. Handing the raw property over made every wall in this study a
+    thousand times thicker than the cell it was cut from -- the same defect `sever_doses` shipped,
+    and the reason that one was found by measuring rather than by reading.
     """
     notches = Part.makeCompound([n.Shape for n in shell.Notches])
     mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in shell.Mirrors]
     report = {}
     started = time.time()
-    row = {'tau': float(tau), 'converged': False, 'error': None, 'elapsed_s': None,
-           'rows': None, 'predicted': None, 'solids': None, 'volume': None}
+    row = {'tau_m': float(tau_m), 'converged': False, 'error': None, 'elapsed_s': None,
+           'rows': None, 'predicted_m': None, 'solids': None, 'volume_m3': None}
+    t_m = si.m(float(shell.Inset))
     try:
-        solid = ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, shell.Inset,
-                               shell.Overhang, mirrors, tau=float(tau), report=report)
+        solid = ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t_m,
+                               shell.Overhang, mirrors, tau=float(tau_m), report=report)
     except ci.Unconverged as exc:
         row['elapsed_s'] = time.time() - started
         row['error'] = str(exc)
         row['rows'] = report.get('stations')
-        row['predicted'] = report.get('worst_wall')
+        row['predicted_m'] = report.get('worst_wall')
         return row, None
     row.update(converged=True, elapsed_s=time.time() - started,
-               rows=report.get('stations'), predicted=report.get('worst_wall'),
-               solids=len(solid.Solids), volume=solid.Volume)
+               rows=report.get('stations'), predicted_m=report.get('worst_wall'),
+               solids=len(solid.Solids), volume_m3=si.volume_m3(solid))
     return row, solid
 
 
-def measure(solid, t, spacing=SPACING, stations=cci.STATIONS):
+def measure(solid, t_m, spacing_m=SPACING_M, stations=cci.STATIONS):
     """The finished wall's worst thinness, on a grid placed the way the acceptance gate places its.
 
     **`ci.z_extent` on the finished wall, not `Shape.BoundBox`.** `z_extent` finds the real axial
@@ -162,53 +171,63 @@ def measure(solid, t, spacing=SPACING, stations=cci.STATIONS):
     the body's -- small, but unmeasured. A figure from here is comparable across `TAU`, which is
     what this study needs; comparing one against a gate figure needs that difference measured first.
     """
-    lo, hi = ci.z_extent(solid)
-    lo, hi = lo + 1.0, hi - 1.0
-    zs = [lo + (hi - lo) * i / float(stations - 1) for i in range(stations)]
-    rows = locate.profile(solid, zs, measure=candidates.corner_excluded_min, nominal=t,
-                          App=App, spacing=spacing)
+    # **`ci.z_extent` returns meters, so the inset is `STATION_INSET_M` and not `1.0`.** Adding a
+    # bare 1.0 to a meter extent inset the grid by a whole meter, which on a 0.3 m part put every
+    # station outside the solid -- the identical defect `sever_doses` shipped (IP-FC-163).
+    lo_m, hi_m = ci.z_extent(solid)
+    lo_m, hi_m = lo_m + cci.STATION_INSET_M, hi_m - cci.STATION_INSET_M
+    zs_m = [lo_m + (hi_m - lo_m) * i / float(stations - 1) for i in range(stations)]
+    rows = locate.profile(solid, zs_m, measure=candidates.corner_excluded_min, nominal_m=t_m,
+                          App=App, spacing_m=spacing_m)
     worst = locate.worst(rows)
-    readable = [r for r in rows if r['worst_thin'] is not None]
+    readable = [r for r in rows if r['worst_thin_m'] is not None]
     return {
-        'stations': len(zs),
+        'stations': len(zs_m),
         'stations_measured': len(readable),
-        'worst_thin': worst['worst_thin'] if worst else None,
-        'worst_z': worst['z'] if worst else None,
-        'worst_angle_deg': worst['angle_deg'] if worst else None,
-        'over_tolerance': sum(1 for r in readable if r['worst_thin'] > ci.WALL_TOL_M),
+        'worst_thin_m': worst['worst_thin_m'] if worst else None,
+        'worst_z_m': worst['z_m'] if worst else None,
+        'worst_angle_rad': worst['angle_rad'] if worst else None,
+        'over_tolerance': sum(1 for r in readable if r['worst_thin_m'] > ci.WALL_TOL_M),
         'states': locate.states(rows),
-        'gate_spacing_mm': density.gate_spacing(
-            density.section_perimeter(solid, zs[len(zs) // 2], App=App) or 0.0)[0],
+        'gate_spacing_m': density.gate_spacing(
+            density.section_perimeter(solid, zs_m[len(zs_m) // 2], App=App) or 0.0)[0],
     }
 
 
-def study(kind, u, taus=DEFAULT_TAUS, spacing=SPACING, out=None):
-    """Build `kind` at `u` once, then re-cut and measure the wall at each `tau`."""
+def study(kind, u, taus_m=DEFAULT_TAUS_M, spacing_m=SPACING_M, out=None):
+    """Build `kind` at `u` once, then re-cut and measure the wall at each `tau_m`.
+
+    Millimeters only in the printing; see `wall_at_tau` on the sheet crossing.
+    """
     out = out if out is not None else sys.stdout
     doc, shell = build_cell(kind, u)
-    t = float(shell.Inset)
-    out.write('tau_study %s U=%s, wall t = %.4f mm, WALL_TOL = %.3f, module TAU = %.3f\n'
-              % (kind, u, t, ci.WALL_TOL_M, ci.TAU_M))
+    t_m = si.m(float(shell.Inset))
+    out.write('tau_study %s U=%s, wall t = %.4f mm, WALL_TOL = %.3f mm, module TAU = %.3f mm\n'
+              % (kind, u, si.mm(t_m), si.mm(ci.WALL_TOL_M), si.mm(ci.TAU_M)))
     out.flush()
     rows = []
-    for tau in taus:
-        row, solid = wall_at_tau(shell, tau)
+    for tau_m in taus_m:
+        row, solid = wall_at_tau(shell, tau_m)
         if solid is not None:
-            row['measured'] = measure(solid, t, spacing)
+            row['measured'] = measure(solid, t_m, spacing_m)
         else:
             row['measured'] = None
         rows.append(row)
         m = row['measured']
         if row['converged']:
-            out.write('  TAU %.4f  converged  rows %3s  predicted %8.5f  real %8.5f  '
-                      'over_tol %2d of %2d  %5.0f s\n'
-                      % (tau, row['rows'], row['predicted'] or float('nan'),
-                         m['worst_thin'] if m['worst_thin'] is not None else float('nan'),
+            out.write('  TAU %.4f mm  converged  rows %3s  predicted %8.5f mm  '
+                      'real %8.5f mm  over_tol %2d of %2d  %5.0f s\n'
+                      % (si.mm(tau_m), row['rows'],
+                         si.mm(row['predicted_m']) if row['predicted_m'] else float('nan'),
+                         si.mm(m['worst_thin_m']) if m['worst_thin_m'] is not None
+                         else float('nan'),
                          m['over_tolerance'], m['stations_measured'], row['elapsed_s']))
         else:
-            out.write('  TAU %.4f  UNCONVERGED  rows %3s  predicted %8.5f  %5.0f s\n    %s\n'
-                      % (tau, row['rows'], row['predicted'] or float('nan'), row['elapsed_s'],
-                         row['error'][:160]))
+            out.write('  TAU %.4f mm  UNCONVERGED  rows %3s  predicted %8.5f mm  %5.0f s\n'
+                      '    %s\n'
+                      % (si.mm(tau_m), row['rows'],
+                         si.mm(row['predicted_m']) if row['predicted_m'] else float('nan'),
+                         row['elapsed_s'], row['error'][:160]))
         out.flush()
     App.closeDocument(doc.Name)
     return rows
@@ -217,8 +236,11 @@ def study(kind, u, taus=DEFAULT_TAUS, spacing=SPACING, out=None):
 def main():
     kind = _opt('kind', 'nose_cowl_shell')
     u = float(_opt('u', '4.0'))
-    taus = tuple(float(v) for v in _opt('taus', ','.join(str(x) for x in DEFAULT_TAUS)).split(','))
-    rows = study(kind, u, taus, float(_opt('spacing', SPACING)))
+    # **The flags name their unit**, which `--taus` and `--spacing` did not (IP-FC-163).
+    taus_m = tuple(si.m(float(v)) for v in
+                   _opt('taus-mm',
+                        ','.join(str(si.mm(x)) for x in DEFAULT_TAUS_M)).split(','))
+    rows = study(kind, u, taus_m, si.m(float(_opt('spacing-mm', str(si.mm(SPACING_M))))))
     print('TAU_STUDY ' + json.dumps({'kind': kind, 'u': u, 'rows': rows}, default=str))
     sys.stdout.flush()
     return 0

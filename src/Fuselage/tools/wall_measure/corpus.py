@@ -19,6 +19,7 @@ import json
 import os
 import re
 
+from . import kern
 from .sections import closed_wires
 
 #: Where the soak leaves its artifacts, relative to this file.
@@ -43,8 +44,11 @@ _SCREEN_NAME = re.compile(
 #: The acceptance check's own station count, so a measurement here samples where the gate does.
 STATIONS = 12
 
-#: How far in from each end the station grid starts, matching `check_cowl_interior`.
-END_INSET = 1.0
+#: How far in from each end the station grid starts, matching `check_cowl_interior`. 1.0e-3 m is
+#: the 1.0 mm this was before IP-FC-163. **Not `cowl_interior.END_INSET_M`**, which is 1.0e-6 m
+#: and answers a different question -- that one keeps a section clear of a face, this one keeps a
+#: station clear of the part's end.
+END_INSET_M = 1.0e-3
 
 
 class WallRecord(object):
@@ -223,8 +227,8 @@ def load(Part, record_or_path):
     return shape
 
 
-def station_grid(shape, stations=STATIONS, inset=END_INSET):
-    """`stations` evenly spaced `z` values across `shape`, inset `inset` from each end.
+def station_grid(shape, stations=STATIONS, inset_m=END_INSET_M):
+    """`stations` evenly spaced `z_m` values across `shape`, inset `inset_m` from each end.
 
     **This is NOT the acceptance check's own grid, and an earlier version of this docstring claimed
     it was.** `check_cowl_interior.main` and `soak_cowl_shell` both take `ci.z_extent(body)` -- the
@@ -243,12 +247,12 @@ def station_grid(shape, stations=STATIONS, inset=END_INSET):
     IP-WTM-18, so a wall built by a later soak *can* be measured on the gate's own grid --
     `gate_station_grid` reads them. The 2026-10-06 corpus predates that and has none.
     """
-    bb = shape.BoundBox
-    lo, hi = bb.ZMin + inset, bb.ZMax - inset
+    lo_box_m, hi_box_m = kern.z_extent_m(shape)
+    lo, hi = lo_box_m + inset_m, hi_box_m - inset_m
     return [lo + (hi - lo) * i / float(stations - 1) for i in range(stations)]
 
 
-def sectioning_extent(shape, App=None, tol=1.0e-3, probes=9):
+def sectioning_extent(shape, App=None, tol_m=1.0e-6, probes=9):
     """Where a shape **really** starts and ends in `z`, found by sectioning rather than from its box.
 
     **A bounding box on these solids is an outer bound and nothing more**, which is the whole reason
@@ -259,14 +263,17 @@ def sectioning_extent(shape, App=None, tol=1.0e-3, probes=9):
     FreeCAD and this package does not.
 
     Probes a handful of interior fractions of the box for one that sections, then bisects outward to
-    each real end within `tol`. Returns `(lo, hi)`, or `None` when no probe finds material -- which
-    is a finding about the shape rather than something to guess around.
-    """
-    bb = shape.BoundBox
-    lo_box, hi_box = bb.ZMin, bb.ZMax
+    each real end within `tol_m`. Returns `(lo_m, hi_m)`, or `None` when no probe finds material --
+    which is a finding about the shape rather than something to guess around.
 
-    def sections(z):
-        return bool(closed_wires(shape, z, App=App))
+    **`tol_m` scaled with the unit** (IP-FC-163): 1.0e-6 m is the 1.0e-3 mm it was, so the
+    bisection still stops at the same physical precision rather than a thousand times finer.
+    """
+    lo_box, hi_box = kern.z_extent_m(shape)
+
+    def sections(z_m):
+        # SI through to `closed_wires`, which owns the one conversion.
+        return bool(closed_wires(shape, z_m, App=App))
 
     inside = None
     for i in range(1, probes + 1):
@@ -281,7 +288,7 @@ def sectioning_extent(shape, App=None, tol=1.0e-3, probes=9):
         near, far = inside, outward          # near sections, far does not (or is the box end)
         if sections(far):
             return far
-        while abs(far - near) > tol:
+        while abs(far - near) > tol_m:
             mid = 0.5 * (near + far)
             if sections(mid):
                 near = mid
@@ -292,8 +299,8 @@ def sectioning_extent(shape, App=None, tol=1.0e-3, probes=9):
     return edge(lo_box), edge(hi_box)
 
 
-def measurable_station_grid(shape, stations=STATIONS, inset=END_INSET, App=None):
-    """`stations` evenly spaced `z` across the shape's **real** extent, inset from each real end.
+def measurable_station_grid(shape, stations=STATIONS, inset_m=END_INSET_M, App=None):
+    """`stations` evenly spaced `z_m` across the shape's **real** extent, inset from each real end.
 
     The grid `station_grid` should have used all along. On a `nose_cowl_shell` wall the bounding box
     overstates the part, so `station_grid` places its end stations where there is no wall and loses
@@ -302,10 +309,10 @@ def measurable_station_grid(shape, stations=STATIONS, inset=END_INSET, App=None)
     """
     extent = sectioning_extent(shape, App=App)
     if extent is None:
-        return station_grid(shape, stations, inset)
-    lo, hi = extent[0] + inset, extent[1] - inset
+        return station_grid(shape, stations, inset_m)
+    lo, hi = extent[0] + inset_m, extent[1] - inset_m
     if hi <= lo:
-        return station_grid(shape, stations, inset)
+        return station_grid(shape, stations, inset_m)
     return [lo + (hi - lo) * i / float(stations - 1) for i in range(stations)]
 
 
@@ -323,10 +330,12 @@ def gate_station_grid(record, stations=STATIONS):
     lo, hi = recorded.get('station_z_lo'), recorded.get('station_z_hi')
     if lo is None or hi is None:
         return None
-    lo, hi = float(lo), float(hi)
+    # The soak's record is a JSON artifact already on disk, so its keys stay millimeters and
+    # ingest converts -- the same boundary `station_sets` draws around the same kind of file.
+    lo, hi = kern.m(float(lo)), kern.m(float(hi))
     return [lo + (hi - lo) * i / float(stations - 1) for i in range(stations)]
 
 
-def interior_station(shape, index=3, stations=STATIONS, inset=END_INSET):
-    """One station well inside the part, for a single-station measurement."""
-    return station_grid(shape, stations, inset)[index]
+def interior_station(shape, index=3, stations=STATIONS, inset_m=END_INSET_M):
+    """One station well inside the part, for a single-station measurement. In meters."""
+    return station_grid(shape, stations, inset_m)[index]

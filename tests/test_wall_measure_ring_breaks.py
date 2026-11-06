@@ -37,18 +37,18 @@ def broken_between(z_start, z_end, unreadable=()):
     return state_at
 
 
-def scan(state_at, z_lo, z_hi, scan_m, tol=None):
+def scan(state_at, z_lo, z_hi, scan_m, tol_m=None):
     """The grid, its states and the extents, the way a real run would compute them.
 
-    `tol` is forwarded when given, so a test can price a refinement at the precision its own
+    `tol_m` is forwarded when given, so a test can price a refinement at the precision its own
     synthetic grid warrants rather than at the production constant's.
     """
     n = rb.station_count(z_lo, z_hi, scan_m)
     grid = rb.scan_grid(z_lo, z_hi, n)
     states = [state_at(z) for z in grid]
-    if tol is None:
+    if tol_m is None:
         return grid, states, rb.extents(state_at, grid, states)
-    return grid, states, rb.extents(state_at, grid, states, tol_m=tol)
+    return grid, states, rb.extents(state_at, grid, states, tol_m=tol_m)
 
 
 class TestTheSamplingIsASpacing:
@@ -117,8 +117,8 @@ class TestMeasuringTheExtent:
         _grid, _states, found = scan(state_at, -300.0, -1.0, 2.0)
         assert len(found) == 1
         assert found[0]['extent_m'] == pytest.approx(7.0, abs=2 * rb.EXTENT_TOL_M)
-        assert found[0]['z_lo'] == pytest.approx(-120.0, abs=rb.EXTENT_TOL_M)
-        assert found[0]['z_hi'] == pytest.approx(-113.0, abs=rb.EXTENT_TOL_M)
+        assert found[0]['z_lo_m'] == pytest.approx(-120.0, abs=rb.EXTENT_TOL_M)
+        assert found[0]['z_hi_m'] == pytest.approx(-113.0, abs=rb.EXTENT_TOL_M)
         assert found[0]['reaches_scan_end'] is False
 
     def test_the_grid_alone_would_have_overstated_it(self):
@@ -179,8 +179,8 @@ class TestMeasuringTheExtent:
         """`edge_z` returns the broken side, so the extent is a span the break does cover."""
         state_at = broken_between(-120.0, -113.0)
         _grid, _states, found = scan(state_at, -300.0, -1.0, 2.0)
-        assert state_at(found[0]['z_lo']) == rb.BROKEN
-        assert state_at(found[0]['z_hi']) == rb.BROKEN
+        assert state_at(found[0]['z_lo_m']) == rb.BROKEN
+        assert state_at(found[0]['z_hi_m']) == rb.BROKEN
 
     def test_a_healthy_wall_measures_no_extent(self):
         _grid, _states, found = scan(lambda z: rb.ANNULUS, -300.0, -1.0, 2.0)
@@ -201,7 +201,7 @@ class TestMeasuringTheExtent:
         def counted(z):
             calls.append(z)
             return inner(z)
-        grid, states, _found = scan(counted, -300.0, -1.0, 2.0, tol=0.25)
+        grid, states, _found = scan(counted, -300.0, -1.0, 2.0, tol_m=0.25)
         refinement = len(calls) - len(grid)
         assert refinement <= 24, refinement
         assert len(states) == 151

@@ -40,24 +40,36 @@ from wall_measure import truth                                           # noqa:
 from conftest import requires_freecad                                    # noqa: E402
 
 #: The bore radius of every fixture here: `R_OUTER` less the nominal wall.
-R_BORE = truth.R_OUTER - truth.WALL
+R_BORE = truth.R_OUTER_M - truth.WALL_M
 
-#: A reading is checked against closed form to a hundredth of `WALL_TOL`, which is the bisection
-#: tolerance `DEPTH_TOL_MM` the measure itself stops at. Tighter would be asserting on noise.
-TOL = 2.0 * nd.DEPTH_TOL_MM
+#: A reading is checked against closed form to a hundredth of `WALL_TOL_M`, which is the
+#: bisection tolerance `DEPTH_TOL_M` the measure itself stops at. Tighter would be asserting on
+#: noise.
+TOL = 2.0 * nd.DEPTH_TOL_M
+
+#: The published figures in this file are millimeters; `MM` converts each at its assertion so a
+#: literal still matches the measurement it was taken from (IP-FC-163).
+MM = 1.0e-3
 
 
 # ----------------------------------------------------------------- arithmetic, no vendor
 
 
-def _row(in_plane, normal, declined=None, z=-15.0, i=0, bounded=True, aligned=True,
+def _row(in_plane_mm, normal_mm, declined=None, z_mm=-15.0, i=0, bounded=True, aligned=True,
          plane_angle_deg=2.0, consistent=True, cos_residual_mm=0.0002):
-    return {'z': z, 'i': i, 'in_plane_mm': in_plane, 'thickness_mm': normal,
-            'bounded': bounded if normal is not None else None, 'declined': declined,
-            'faces': 1, 'normal_residual_mm': 1e-6, 'offsets_used': 8,
-            'aligned': aligned, 'plane_angle_deg': plane_angle_deg,
-            'consistent': consistent, 'cos_residual_mm': cos_residual_mm,
-            'x': 1.0, 'y': 2.0}
+    """One `station_normals` row. **Arguments in millimeters, row in SI** (IP-FC-163): the
+    figures these cases are written from are the published ones, and the angle goes in as degrees
+    for the same reason and comes out as radians, which is what the row carries."""
+    return {'z_m': MM * z_mm, 'i': i, 'in_plane_m': MM * in_plane_mm,
+            'thickness_m': None if normal_mm is None else MM * normal_mm,
+            'bounded': bounded if normal_mm is not None else None, 'declined': declined,
+            'faces': 1, 'normal_residual_m': MM * 1e-6, 'offsets_used': 8,
+            'aligned': aligned,
+            'plane_angle_rad': (None if plane_angle_deg is None
+                                else math.radians(plane_angle_deg)),
+            'consistent': consistent,
+            'cos_residual_m': None if cos_residual_mm is None else MM * cos_residual_mm,
+            'x_m': MM * 1.0, 'y_m': MM * 2.0}
 
 
 class TestCosConsistency:
@@ -69,33 +81,37 @@ class TestCosConsistency:
     them at all**: 3.1–30.7° on the fitted surface against 33.2–50.8° on cheeks, a 2.5° gap."""
 
     def test_the_identity_holds_for_an_inclined_wall(self):
-        got = nd.cos_consistency(0.58845, 0.54487, 22.07)
-        assert got == pytest.approx(-0.0005, abs=1e-4)
+        # **The angle goes in as radians now** -- 22.07 degrees passed as a bare number is
+        # 1264 degrees, whose cosine is nothing like the slab's (IP-FC-163).
+        got = nd.cos_consistency(MM * 0.58845, MM * 0.54487, math.radians(22.07))
+        assert got == pytest.approx(MM * -0.0005, abs=MM * 1e-4)
 
     def test_a_cheek_reading_fails_it_by_two_orders_of_magnitude(self):
-        got = nd.cos_consistency(0.56880, 1.05200, 33.19)
-        assert got == pytest.approx(0.688, abs=1e-3)
+        got = nd.cos_consistency(MM * 0.56880, MM * 1.05200, math.radians(33.19))
+        assert got == pytest.approx(MM * 0.688, abs=MM * 1e-3)
 
     def test_a_zero_angle_is_the_degenerate_but_valid_case(self):
         """Perpendicular to the layer plane: the two measures must agree exactly."""
-        assert nd.cos_consistency(0.6, 0.6, 0.0) == pytest.approx(0.0)
+        assert nd.cos_consistency(MM * 0.6, MM * 0.6, 0.0) == pytest.approx(0.0)
 
     def test_an_orthogonal_normal_has_no_consistent_reading(self):
-        """`cos 90` is zero, so the identity has no finite value — the honest answer is `inf`, not a
-        division that raises or a number that looks like a measurement."""
-        assert nd.cos_consistency(0.6, 0.6, 90.0) == float('inf')
-        assert nd.cos_consistency(0.6, 0.6, 120.0) == float('inf')
+        """`cos(pi/2)` is zero, so the identity has no finite value -- the honest answer is `inf`,
+        not a division that raises or a number that looks like a measurement."""
+        assert nd.cos_consistency(MM * 0.6, MM * 0.6,
+                                  math.pi / 2.0) == float('inf')
+        assert nd.cos_consistency(MM * 0.6, MM * 0.6,
+                                  math.radians(120.0)) == float('inf')
 
     def test_a_nan_angle_is_inf_not_nan(self):
-        """`angle_deg` returns `nan` for a degenerate vector; that must become a definite
+        """`angle_between_rad` returns `nan` for a degenerate vector; that must become a definite
         inconsistency rather than a `nan` that compares false against every threshold and so would
         silently pass an `abs(residual) <= tol` test."""
-        assert nd.cos_consistency(0.6, 0.6, float('nan')) == float('inf')
+        assert nd.cos_consistency(MM * 0.6, MM * 0.6, float('nan')) == float('inf')
 
     def test_a_missing_input_is_none(self):
-        assert nd.cos_consistency(None, 0.6, 2.0) is None
-        assert nd.cos_consistency(0.6, None, 2.0) is None
-        assert nd.cos_consistency(0.6, 0.6, None) is None
+        assert nd.cos_consistency(None, MM * 0.6, math.radians(2.0)) is None
+        assert nd.cos_consistency(MM * 0.6, None, math.radians(2.0)) is None
+        assert nd.cos_consistency(MM * 0.6, MM * 0.6, None) is None
 
 
 class TestNearestFoot:
@@ -143,18 +159,19 @@ class TestNearestFoot:
 class TestAngleDeg:
 
     def test_parallel_and_perpendicular(self):
-        assert nd.angle_deg((1, 0, 0), (2, 0, 0)) == pytest.approx(0.0)
-        assert nd.angle_deg((1, 0, 0), (0, 1, 0)) == pytest.approx(90.0)
-        assert nd.angle_deg((1, 0, 0), (-1, 0, 0)) == pytest.approx(180.0)
+        # Radians, which is the standard's angle unit (IP-FC-163).
+        assert nd.angle_between_rad((1, 0, 0), (2, 0, 0)) == pytest.approx(0.0)
+        assert nd.angle_between_rad((1, 0, 0), (0, 1, 0)) == pytest.approx(math.pi / 2.0)
+        assert nd.angle_between_rad((1, 0, 0), (-1, 0, 0)) == pytest.approx(math.pi)
 
     def test_a_degenerate_vector_gives_nan_not_an_exception(self):
-        assert math.isnan(nd.angle_deg((0, 0, 0), (1, 0, 0)))
+        assert math.isnan(nd.angle_between_rad((0, 0, 0), (1, 0, 0)))
 
     def test_it_is_numerically_safe_at_the_ends_of_the_range(self):
         """`arccos` of a dot product that floating point pushed past 1 would raise or return nan;
         the clip is what stops a parallel pair reporting `nan` degrees."""
         v = (1.0, 0.0, 0.0)
-        assert nd.angle_deg(v, v) == pytest.approx(0.0)
+        assert nd.angle_between_rad(v, v) == pytest.approx(0.0)
 
 
 class TestExoneration:
@@ -163,20 +180,20 @@ class TestExoneration:
         """**The claim section 6.8.2.1 asks for.** The in-plane figure fails the gate's own
         threshold and the normal figure does not, which is what "the in-plane reading was a
         direction artifact" means in numbers."""
-        got = nd.exoneration([_row(0.5667, 0.6012)], nominal=0.6, tol=0.01)
+        got = nd.exoneration([_row(0.5667, 0.6012)], nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert len(got['exonerated']) == 1
         assert got['confirmed'] == []
 
     def test_both_readings_thin_is_confirmed_not_exonerated(self):
         """The opposite result and just as important: the material really is absent, and no
         exclusion or change of direction rescues it."""
-        got = nd.exoneration([_row(0.5667, 0.5701)], nominal=0.6, tol=0.01)
+        got = nd.exoneration([_row(0.5667, 0.5701)], nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert got['exonerated'] == []
         assert len(got['confirmed']) == 1
 
     def test_a_sample_the_plane_already_passes_is_neither(self):
         """Only samples the incumbent fails are at issue; a passing one has nothing to explain."""
-        got = nd.exoneration([_row(0.5995, 0.6001)], nominal=0.6, tol=0.01)
+        got = nd.exoneration([_row(0.5995, 0.6001)], nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert got['exonerated'] == [] and got['confirmed'] == []
         assert got['read'] == 1
 
@@ -184,7 +201,7 @@ class TestExoneration:
         """A probe still inside the solid at the limit has a lower bound, not a measurement, and
         counting it would exonerate a wall on the strength of a ray that ran along it."""
         rows = [_row(0.5667, 3.0, declined='unbounded', bounded=False)]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert got['read'] == 0
         assert got['exonerated'] == [] and got['confirmed'] == []
         assert got['declined'] == {'unbounded': 1}
@@ -192,15 +209,15 @@ class TestExoneration:
     def test_declined_samples_are_counted_by_reason(self):
         rows = [_row(0.56, None, declined='on_crease'), _row(0.57, None, declined='on_crease'),
                 _row(0.58, None, declined='no_normal'), _row(0.59, 0.61)]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert got['declined'] == {'on_crease': 2, 'no_normal': 1}
         assert got['read'] == 1
 
     def test_the_worst_of_each_column_is_reported(self):
         rows = [_row(0.52, 0.61), _row(0.58, 0.59)]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
-        assert got['worst_in_plane_mm'] == pytest.approx(0.52)
-        assert got['worst_normal_mm'] == pytest.approx(0.59)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
+        assert got['worst_in_plane_m'] == pytest.approx(MM * 0.52)
+        assert got['worst_normal_m'] == pytest.approx(MM * 0.59)
 
 
 class TestObliqueSamples:
@@ -215,7 +232,7 @@ class TestObliqueSamples:
     def test_an_oblique_sample_is_not_counted_as_exonerating(self):
         rows = [_row(0.5688, 1.0520, consistent=False, cos_residual_mm=0.688,
                      plane_angle_deg=33.19, declined='inconsistent')]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert got['exonerated'] == []
         assert got['confirmed'] == []
         assert len(got['oblique']) == 1
@@ -227,15 +244,15 @@ class TestObliqueSamples:
         rows = [_row(0.5688, 1.0520, consistent=False, cos_residual_mm=0.688,
                      plane_angle_deg=33.19, declined='inconsistent'),
                 _row(0.5900, 0.5950)]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
-        assert got['worst_normal_mm'] == pytest.approx(0.5950)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
+        assert got['worst_normal_m'] == pytest.approx(MM * 0.5950)
 
     def test_a_sample_measured_without_a_plane_direction_stays_comparable(self):
         """`aligned` is `None` when no in-plane direction was supplied -- the direct
         `normal_thickness` call the closed-form tests make -- and that must not be read as
         oblique."""
         rows = [_row(0.5667, 0.6012, consistent=None, cos_residual_mm=None, plane_angle_deg=None)]
-        got = nd.exoneration(rows, nominal=0.6, tol=0.01)
+        got = nd.exoneration(rows, nominal_m=MM * 0.6, tol_m=MM * 0.01)
         assert len(got['exonerated']) == 1
         assert got['oblique'] == []
 
@@ -245,7 +262,7 @@ class TestObliqueSamples:
         exoneration."""
         rows = [_row(0.5688, 1.0520, consistent=False, cos_residual_mm=0.688,
                      plane_angle_deg=33.19, declined='inconsistent')]
-        got = nd.normal_verdict([{'z': -15.0, 'rows': rows, 'loops': 2}], nominal=0.6)
+        got = nd.normal_verdict([{'z_m': -15.0, 'rows': rows, 'loops': 2}], nominal_m=MM * 0.6)
         assert got['established'] is False
         assert got['n_oblique'] == 1
         assert any('bounded normal reading' in r for r in got['vacuous_because'])
@@ -253,7 +270,7 @@ class TestObliqueSamples:
     def test_the_angle_is_in_the_table(self):
         rows = [_row(0.5688, 1.0520, consistent=False, cos_residual_mm=0.688,
                      plane_angle_deg=33.19, declined='inconsistent')]
-        text = nd.normal_table([{'z': -15.0, 'rows': rows}], nominal=0.6)
+        text = nd.normal_table([{'z_m': -15.0, 'rows': rows}], nominal_m=MM * 0.6)
         assert '33.19' in text and 'inconsistent' in text
 
 
@@ -265,12 +282,12 @@ class TestTheSurfaceCensus:
     i.e. across a slot mouth."""
 
     def _station(self, surfaces, thin, rows=()):
-        return {'z': -15.0, 'rows': list(rows), 'loops': 2, 'thin_in_plane': thin,
+        return {'z_m': -15.0, 'rows': list(rows), 'loops': 2, 'thin_in_plane': thin,
                 'thin_surfaces': dict(surfaces)}
 
     def test_a_census_with_nothing_on_the_fitted_surface_settles_it(self):
         station = self._station({'Part::GeomPlane': 12}, 12)
-        got = nd.normal_verdict([station], nominal=0.6)
+        got = nd.normal_verdict([station], nominal_m=MM * 0.6)
         assert got['thin_on_fitted'] == 0
         assert got['census_settles'] is True
         assert got['established'] is True, got['vacuous_because']
@@ -279,14 +296,14 @@ class TestTheSurfaceCensus:
         """One reading on the real inner boundary and the question is open again, whatever the cut
         faces do -- that sample is a wall thickness and it is under tolerance."""
         station = self._station({'Part::GeomPlane': 11, nd.FITTED_SURFACE: 1}, 12)
-        got = nd.normal_verdict([station], nominal=0.6)
+        got = nd.normal_verdict([station], nominal_m=MM * 0.6)
         assert got['thin_on_fitted'] == 1
         assert got['census_settles'] is False
         assert got['established'] is False
 
     def test_an_absent_census_cannot_settle_anything(self):
         """`census=False`, or a station with no thin samples to classify: silence, not a pass."""
-        got = nd.normal_verdict([self._station({}, 12)], nominal=0.6)
+        got = nd.normal_verdict([self._station({}, 12)], nominal_m=MM * 0.6)
         assert got['census_settles'] is False
         assert got['established'] is False
 
@@ -297,21 +314,21 @@ class TestTheSurfaceCensus:
         fitted surface. It happened not to change the real tail's answer, because four placed samples
         blocked it anyway, but the guard was unsound."""
         station = self._station({'Part::GeomPlane': 352, 'off_surface': 20}, 372)
-        got = nd.normal_verdict([station], nominal=0.6)
+        got = nd.normal_verdict([station], nominal_m=MM * 0.6)
         assert got['thin_unplaced'] == 20
         assert got['census_settles'] is False
         assert got['established'] is False
 
     def test_an_ambiguous_crease_sample_blocks_it_too(self):
         station = self._station({'Part::GeomPlane': 371, 'on_crease': 1}, 372)
-        assert nd.normal_verdict([station], nominal=0.6)['census_settles'] is False
+        assert nd.normal_verdict([station], nominal_m=MM * 0.6)['census_settles'] is False
 
     def test_a_loosely_placed_fitted_sample_blocks_it(self):
         """A sample that needed 1e-4 mm of slack to land on the fitted surface is still a reading on
         the fitted surface, and matching the class name exactly would have missed it."""
         station = self._station({'Part::GeomPlane': 11,
                                  nd.FITTED_SURFACE + ' (loose)': 1}, 12)
-        got = nd.normal_verdict([station], nominal=0.6)
+        got = nd.normal_verdict([station], nominal_m=MM * 0.6)
         assert got['thin_on_fitted'] == 0, 'the strict count stays strict'
         assert got['thin_on_fitted_any'] == 1
         assert got['census_settles'] is False
@@ -319,14 +336,14 @@ class TestTheSurfaceCensus:
     def test_the_census_sums_over_stations(self):
         stations = [self._station({'Part::GeomPlane': 3}, 3),
                     self._station({'Part::GeomPlane': 4, 'on_crease': 2}, 6)]
-        got = nd.normal_verdict(stations, nominal=0.6)
+        got = nd.normal_verdict(stations, nominal_m=MM * 0.6)
         assert got['thin_surfaces'] == {'Part::GeomPlane': 7, 'on_crease': 2}
         assert got['thin_total'] == 9
 
     def test_a_normal_reading_still_establishes_it_without_a_census(self):
         """The two routes are independent: a bounded aligned reading is enough on its own."""
-        got = nd.normal_verdict([{'z': -15.0, 'rows': [_row(0.5667, 0.6012)], 'loops': 2}],
-                                nominal=0.6)
+        got = nd.normal_verdict([{'z_m': -15.0, 'rows': [_row(0.5667, 0.6012)], 'loops': 2}],
+                                nominal_m=MM * 0.6)
         assert got['established'] is True
         assert got['census_settles'] is False
 
@@ -339,7 +356,7 @@ class TestTheSelectorMeasurement:
     worst and had to be selected by face class instead."""
 
     def _station(self, thin, ranks, z=-15.0):
-        return {'z': z, 'thin_in_plane': thin, 'fitted_ranks': list(ranks), 'rows': []}
+        return {'z_m': z, 'thin_in_plane': thin, 'fitted_ranks': list(ranks), 'rows': []}
 
     def test_ranks_come_out_of_the_census_in_severity_order(self):
         per_sample = ['Part::GeomPlane', nd.FITTED_SURFACE, 'Part::GeomPlane', nd.FITTED_SURFACE]
@@ -386,7 +403,7 @@ class TestTheSelectorMeasurement:
     def test_a_station_that_ran_no_census_is_not_read_as_having_none(self):
         """`fitted_ranks` is `None` when nobody looked and `[]` when the census found none. Treating
         the first as the second would report a clean ranking from a run that did not rank anything."""
-        got = nd.selector_verdict([{'z': -15.0, 'thin_in_plane': 40, 'fitted_ranks': None}])
+        got = nd.selector_verdict([{'z_m': -15.0, 'thin_in_plane': 40, 'fitted_ranks': None}])
         assert got['stations'] == 0
         assert got['established'] is False
         assert any('no station reported a rank census' in r for r in got['vacuous_because'])
@@ -406,10 +423,10 @@ class TestTheSelectorMeasurement:
 class TestTheVacuityGuard:
 
     def _stations(self, rows):
-        return [{'z': -15.0, 'rows': rows, 'loops': 2, 'declined': None}]
+        return [{'z_m': -15.0, 'rows': rows, 'loops': 2, 'declined': None}]
 
     def test_a_real_result_is_established(self):
-        got = nd.normal_verdict(self._stations([_row(0.5667, 0.6012)]), nominal=0.6)
+        got = nd.normal_verdict(self._stations([_row(0.5667, 0.6012)]), nominal_m=MM * 0.6)
         assert got['established'] is True
         assert got['vacuous_because'] == []
         assert got['n_exonerated'] == 1
@@ -418,7 +435,7 @@ class TestTheVacuityGuard:
         """**Section 6.1's first caution, and the eighth time this subsystem has needed it.** A
         wall with no thin sample cannot test an explanation of thinness; a verdict that reported
         success here would be reporting a pass from having measured nothing."""
-        got = nd.normal_verdict(self._stations([_row(0.5995, 0.6001)]), nominal=0.6)
+        got = nd.normal_verdict(self._stations([_row(0.5995, 0.6001)]), nominal_m=MM * 0.6)
         assert got['established'] is False
         assert any('nothing to explain' in r for r in got['vacuous_because'])
 
@@ -426,20 +443,20 @@ class TestTheVacuityGuard:
         """If every thin sample is on a crease, the measure has not shown material is present — it
         has shown it cannot see. Those are different answers and must not share a verdict."""
         rows = [_row(0.56, None, declined='on_crease'), _row(0.57, None, declined='on_crease')]
-        got = nd.normal_verdict(self._stations(rows), nominal=0.6)
+        got = nd.normal_verdict(self._stations(rows), nominal_m=MM * 0.6)
         assert got['established'] is False
         assert any('bounded normal reading' in r for r in got['vacuous_because'])
         assert got['thin_in_plane'] == 2
         assert got['census_settles'] is False
 
     def test_an_empty_scan_is_vacuous(self):
-        got = nd.normal_verdict([], nominal=0.6)
+        got = nd.normal_verdict([], nominal_m=MM * 0.6)
         assert got['established'] is False
         assert any('no sample was measured' in r for r in got['vacuous_because'])
 
     def test_the_table_renders_a_read_row_and_a_declined_one(self):
         rows = [_row(0.5667, 0.6012), _row(0.57, None, declined='on_crease')]
-        text = nd.normal_table(self._stations(rows), nominal=0.6)
+        text = nd.normal_table(self._stations(rows), nominal_m=MM * 0.6)
         assert 'on_crease' in text and 'read' in text
         assert '+0.03450' in text or '+0.0345' in text
 
@@ -462,7 +479,7 @@ def ribbed(fc, Part, App):
     return truth.ribbed_tube(Part, App)
 
 
-def _bore_point(radius, angle=0.0, z=truth.HEIGHT / 2.0):
+def _bore_point(radius, angle=0.0, z=truth.HEIGHT_M / 2.0):
     return (radius * math.cos(angle), radius * math.sin(angle), z)
 
 
@@ -473,49 +490,49 @@ class TestAgainstClosedForm:
         """The simplest case, and the one that would expose a sign error, an off-by-one in the
         bisection bracket, or a normal taken on the wrong surface."""
         point = _bore_point(R_BORE)
-        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL)
+        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['declined'] is None, got
         assert got['bounded'] is True
-        assert got['thickness_mm'] == pytest.approx(truth.WALL, abs=TOL)
+        assert got['thickness_m'] == pytest.approx(truth.WALL_M, abs=TOL)
 
     def test_it_agrees_with_the_fixtures_own_truth_function(self, uniform, App, Part):
         """Not just the constant: the same number `true_thickness_at` reports, at several places."""
         for angle in (0.0, 1.0, 2.5, -2.0):
             point = _bore_point(R_BORE, angle)
             expect = uniform.true_thickness_at(*point)
-            got = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL)
-            assert got['thickness_mm'] == pytest.approx(expect, abs=TOL), (angle, got)
+            got = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M)
+            assert got['thickness_m'] == pytest.approx(expect, abs=TOL), (angle, got)
 
     def test_a_patch_in_the_outer_surface_shortens_the_reading(self, patched, App, Part):
         """The probe starts on the bore, which the patch does not touch, so this tests that the ray
         stops where the **far** surface moved rather than where the near one is."""
         feature = patched.features[0]
-        point = _bore_point(R_BORE, 0.0, feature['z_mid'])
-        got = nd.normal_thickness(patched.shape, point, App, Part, nominal=truth.WALL)
+        point = _bore_point(R_BORE, 0.0, feature['z_mid_m'])
+        got = nd.normal_thickness(patched.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['declined'] is None, got
-        assert got['thickness_mm'] == pytest.approx(feature['thickness'], abs=TOL)
-        assert got['thickness_mm'] == pytest.approx(
+        assert got['thickness_m'] == pytest.approx(feature['thickness_m'], abs=TOL)
+        assert got['thickness_m'] == pytest.approx(
             patched.true_thickness_at(*point), abs=TOL)
 
     def test_away_from_the_patch_the_same_tube_reads_nominal(self, patched, App, Part):
         """The converse of the row above: a measure that read 0.45 everywhere would pass that test
         and be useless."""
-        point = _bore_point(R_BORE, math.pi, patched.features[0]['z_mid'])
-        got = nd.normal_thickness(patched.shape, point, App, Part, nominal=truth.WALL)
-        assert got['thickness_mm'] == pytest.approx(truth.WALL, abs=TOL)
+        point = _bore_point(R_BORE, math.pi, patched.features[0]['z_mid_m'])
+        got = nd.normal_thickness(patched.shape, point, App, Part, nominal_m=truth.WALL_M)
+        assert got['thickness_m'] == pytest.approx(truth.WALL_M, abs=TOL)
 
     def test_a_rib_on_the_inner_surface_lengthens_the_reading(self, ribbed, App, Part):
         """Here the probe starts on the **rib's** own surface, 0.4 mm proud of the bore, so the
         reading has to be 1.0 mm. A measure that always started from the nominal bore radius would
         report 0.6 and look right on the other two fixtures."""
         feature = ribbed.features[0]
-        radius = R_BORE + feature['delta']          # delta is negative: the bore moves inward
-        point = _bore_point(radius, 0.0, feature['z_mid'])
-        got = nd.normal_thickness(ribbed.shape, point, App, Part, nominal=truth.WALL)
+        radius = R_BORE + feature['delta_m']          # delta is negative: the bore moves inward
+        point = _bore_point(radius, 0.0, feature['z_mid_m'])
+        got = nd.normal_thickness(ribbed.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['declined'] is None, got
-        assert got['thickness_mm'] == pytest.approx(
+        assert got['thickness_m'] == pytest.approx(
             ribbed.true_thickness_at(*point), abs=TOL), got
-        assert got['thickness_mm'] > truth.WALL
+        assert got['thickness_m'] > truth.WALL_M
 
     def test_the_ray_is_reported_as_exiting_through_the_far_surface(self, uniform, App, Part):
         """**What the ray leaves through decides what the depth is a thickness *of*.** On a plain
@@ -527,19 +544,19 @@ class TestAgainstClosedForm:
         = 1e-4 mm of the boundary, a hundred times further out than `ON_FACE_TOL`.
         """
         point = _bore_point(R_BORE)
-        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL)
+        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['exit_surface'] not in (None, 'off_surface'), got
         assert got['exit_faces'] == 1
         # The outer surface of every fixture here is a cylinder, and the exit lands on it.
-        assert got['exit_point'][0] == pytest.approx(truth.R_OUTER, abs=10.0 * TOL)
+        assert got['exit_point_m'][0] == pytest.approx(truth.R_OUTER_M, abs=10.0 * TOL)
 
     def test_the_reading_is_insensitive_to_the_bisection_limit(self, uniform, App, Part):
         """A limit that happened to sit near the answer would make the figure an artifact of the
         search rather than of the wall."""
         point = _bore_point(R_BORE)
-        a = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL, limit=1.5)
-        b = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL, limit=6.0)
-        assert a['thickness_mm'] == pytest.approx(b['thickness_mm'], abs=TOL)
+        a = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M, limit_m=1.5)
+        b = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M, limit_m=6.0)
+        assert a['thickness_m'] == pytest.approx(b['thickness_m'], abs=TOL)
 
 
 @requires_freecad
@@ -550,28 +567,28 @@ class TestWhenItDeclines:
         bore cylinder and the end annulus, so it has two normals and two defensible readings. The
         measure must name that rather than pick one, because the real samples at issue on a
         `tail_shell` are exactly the ones on a crease."""
-        point = _bore_point(R_BORE, 0.0, truth.HEIGHT)
-        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL)
+        point = _bore_point(R_BORE, 0.0, truth.HEIGHT_M)
+        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['declined'] == 'on_crease'
         assert got['faces'] >= 2
-        assert got['thickness_mm'] is None
+        assert got['thickness_m'] is None
 
     def test_a_point_off_the_surface_is_declined_not_measured(self, uniform, App, Part):
         """A probe in the middle of the wall is inside the solid, and measuring a wall outward from
         an interior point would return a number with no meaning."""
-        point = _bore_point(R_BORE + 0.3)
-        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal=truth.WALL)
+        point = _bore_point(R_BORE + MM * 0.3)
+        got = nd.normal_thickness(uniform.shape, point, App, Part, nominal_m=truth.WALL_M)
         assert got['declined'] in ('off_surface', 'not_entered'), got
-        assert got['thickness_mm'] is None
+        assert got['thickness_m'] is None
 
     def test_a_ray_along_the_wall_is_reported_as_unbounded(self, uniform, App, Part):
         """`exit_depth` is asked directly here, along the axis from a bore point: the solid runs
         10 mm that way and the limit is 3, so the honest answer is a lower bound."""
-        point = _bore_point(R_BORE, 0.0, 2.0)
-        depth, bounded = nd.exit_depth(uniform.shape, point, (0.0, 0.0, 1.0), App,
-                                       limit=3.0, step=nd.ENTRY_STEP_MM)
+        point = _bore_point(R_BORE, 0.0, MM * 2.0)
+        depth_m, bounded = nd.exit_depth(uniform.shape, point, (0.0, 0.0, 1.0), App,
+                                         limit_m=MM * 3.0, step_m=nd.ENTRY_STEP_M)
         assert bounded is False
-        assert depth == pytest.approx(3.0)
+        assert depth_m == pytest.approx(MM * 3.0)
 
 
 @requires_freecad
@@ -593,7 +610,7 @@ class TestEntryDirection:
     def test_a_point_inside_the_material_is_refused_rather_than_oriented(self, uniform, App, Part):
         """Material lies both ways from an interior point, so neither direction is "into the wall"
         and a reading from there would be meaningless."""
-        point = _bore_point(R_BORE + 0.3)
+        point = _bore_point(R_BORE + MM * 0.3)
         out, step = nd.entry_direction(uniform.shape, point, (1.0, 0.0, 0.0), App)
         assert out is None and step is None
 
@@ -609,11 +626,11 @@ class TestStationScan:
         """End to end on a wall that is exactly nominal: nothing is thin, so nothing is measured and
         the verdict says it established nothing. This is the shape of the seventh false CLEAN this
         subsystem produced, asserted here so this measure cannot repeat it."""
-        station = nd.station_normals(uniform.shape, truth.HEIGHT / 2.0, truth.WALL, App, Part,
+        station = nd.station_normals(uniform.shape, truth.HEIGHT_M / 2.0, truth.WALL_M, App, Part,
                                      n_points=360)
         assert station['thin_in_plane'] == 0
         assert station['rows'] == []
-        verdict = nd.normal_verdict([station], nominal=truth.WALL)
+        verdict = nd.normal_verdict([station], nominal_m=truth.WALL_M)
         assert verdict['established'] is False
 
     def test_discretization_sag_is_not_mistaken_for_a_thin_wall(self, uniform, App, Part):
@@ -626,24 +643,24 @@ class TestStationScan:
         section 6.8.3, in the construction rather than here.
         """
         from wall_measure import candidates, sections
-        outer, inner = sections.station_loops(uniform.shape, truth.HEIGHT / 2.0, 360, App=App)
+        outer, inner = sections.station_loops(uniform.shape, truth.HEIGHT_M / 2.0, 360, App=App)
         _pts, dists = candidates.nearest_point_min(outer, inner)
-        assert float(dists.min()) < truth.WALL, 'the sag should make every reading short'
-        assert float(dists.min()) > truth.WALL - nd.WALL_TOL, 'but only by sub-micron amounts'
-        assert nd.thin_samples(outer, inner, truth.WALL) == []
+        assert float(dists.min()) < truth.WALL_M, 'the sag should make every reading short'
+        assert float(dists.min()) > truth.WALL_M - nd.WALL_TOL_M, 'but only by sub-micron amounts'
+        assert nd.thin_samples(outer, inner, truth.WALL_M) == []
         # And the margin is what does it: ask for "anything under nominal" and they all come back.
-        assert len(nd.thin_samples(outer, inner, truth.WALL, margin=0.0)) == 360
+        assert len(nd.thin_samples(outer, inner, truth.WALL_M, margin_m=0.0)) == 360
 
     def test_a_patched_tube_yields_thin_samples_that_the_normal_confirms(self, patched, App, Part):
         """And the converse, on a wall with a real 0.15 mm thin patch: the in-plane measure finds it,
         the normal measure agrees it is genuinely thin, and the verdict is `confirmed` rather than
         `exonerated` — which is the right answer here, because the patch is real missing material."""
         feature = patched.features[0]
-        station = nd.station_normals(patched.shape, feature['z_mid'], truth.WALL, App, Part,
+        station = nd.station_normals(patched.shape, feature['z_mid_m'], truth.WALL_M, App, Part,
                                      n_points=720, worst=4)
         assert station['thin_in_plane'] > 0
-        verdict = nd.normal_verdict([station], nominal=truth.WALL)
+        verdict = nd.normal_verdict([station], nominal_m=truth.WALL_M)
         assert verdict['established'] is True
         assert verdict['n_confirmed'] > 0
         assert verdict['n_exonerated'] == 0
-        assert verdict['worst_normal_mm'] == pytest.approx(feature['thickness'], abs=0.01)
+        assert verdict['worst_normal_m'] == pytest.approx(feature['thickness_m'], abs=MM * 0.01)

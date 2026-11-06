@@ -465,7 +465,7 @@ class TestScreenVerdict:
     def test_a_kernel_disagreement_is_a_finding_because_the_scan_is_a_proxy(self):
         records = [_record('base'), _record('x', faces=2500)]
         scans = [self._scan('tail_shell_U0.5_base',
-                            disagree=[{'z': -1.0, 'scan': 'severed', 'kernel_annulus': True}])]
+                            disagree=[{'z_m': -1.0, 'scan': 'severed', 'kernel_annulus': True}])]
         assert inputs.screen_verdict(records, scans)['clean'] is False
 
     def test_a_build_failure_is_recorded_and_is_not_itself_unclean(self):

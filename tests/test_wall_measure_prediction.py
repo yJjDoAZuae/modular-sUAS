@@ -26,6 +26,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from wall_measure import prediction                                         # noqa: E402
 
+#: The published figures in this file are quoted in millimeters, as every document that cites
+#: them does, and `prediction` stores meters since IP-FC-163. Converting at the assertion keeps
+#: both readable: the literal still matches the log line and the design document, and the unit it
+#: is compared in is named.
+MM = 1.0e-3
+
 #: Two builds, one that passed round 0 outright and one that needed two insertion rounds. Written to
 #: the real log's own format, including the indentation and the surrounding noise a `freecadcmd` run
 #: leaves, so a change to `note()`'s wording fails these tests rather than silently returning zero
@@ -80,11 +86,15 @@ def write_sweep(tmp_path, rows, name='sweep.jsonl'):
     return str(p)
 
 
-def sweep_row(kind, u, repeat=0, real=0.2, other=0.3, coverage=12, stations=12):
+def sweep_row(kind, u, repeat=0, real_mm=0.2, other_mm=0.3, coverage=12, stations=12):
+    """One line of a `sweep.write_jsonl` file. **Millimeters, and the key keeps its file
+    spelling** -- the format is frozen (see `sweep.JSONL_LENGTH_KEYS`), and `read_sweep` is the
+    side that converts. A fixture written in meters under the SI key would be read straight
+    through unconverted, which is the one way this boundary could be got wrong silently."""
     return {'kind': kind, 'u': u, 'repeat': repeat,
             'label': '%s_U%s_r%d' % (kind, u, repeat),
             'stations': stations,
-            'worst_thin': {M: real, OTHER: other},
+            'worst_thin': {M: real_mm, OTHER: other_mm},
             'stations_measured': {M: coverage, OTHER: coverage}}
 
 
@@ -104,14 +114,14 @@ class TestParseBuildLog:
 
     def test_the_predicted_thinness_is_the_cavity_closed_figure(self, tmp_path):
         a, b = prediction.parse_build_log(write(tmp_path, SYNTHETIC_LOG))
-        assert a.predicted == pytest.approx(0.0019)
-        assert b.predicted == pytest.approx(0.0484)
+        assert a.predicted_m == pytest.approx(MM * 0.0019)
+        assert b.predicted_m == pytest.approx(MM * 0.0484)
 
     def test_pass_1_worst_is_the_largest_over_the_patches(self, tmp_path):
         """Pass 1 prints one figure per patch; the build's own worst is the maximum of them."""
         a, b = prediction.parse_build_log(write(tmp_path, SYNTHETIC_LOG))
-        assert a.pass1_worst == pytest.approx(0.0064)
-        assert b.pass1_worst == pytest.approx(0.0301)
+        assert a.pass1_worst_m == pytest.approx(MM * 0.0064)
+        assert b.pass1_worst_m == pytest.approx(MM * 0.0301)
 
     def test_scan_points_sum_over_patches(self, tmp_path):
         """What makes the prediction a near-complete scan rather than a sample."""
@@ -121,28 +131,28 @@ class TestParseBuildLog:
 
     def test_rounds_and_their_gaps_are_recorded_in_order(self, tmp_path):
         a, b = prediction.parse_build_log(write(tmp_path, SYNTHETIC_LOG))
-        assert a.rounds == 0 and a.round_gaps == []
+        assert a.rounds == 0 and a.round_gaps_m == []
         assert b.rounds == 2
-        assert b.round_gaps == [pytest.approx(0.0601), pytest.approx(0.0576)]
+        assert b.round_gaps_m == [pytest.approx(MM * 0.0601), pytest.approx(MM * 0.0576)]
 
     def test_pass_1_and_pass_2_figures_are_not_confused(self, tmp_path):
         """Both lines print a number after the words 'worst wall'. They are different quantities:
         pass 1 is the smooth surface against the true erosion, pass 2 the finished, rib-cut wall."""
         _a, b = prediction.parse_build_log(write(tmp_path, SYNTHETIC_LOG))
-        assert b.pass1_worst != b.predicted
+        assert b.pass1_worst_m != b.predicted_m
 
     def test_a_build_that_never_closed_is_not_converged(self, tmp_path):
         builds = prediction.parse_build_log(write(tmp_path, UNCONVERGED_LOG))
         assert len(builds) == 1
         assert builds[0].converged is False
-        assert builds[0].predicted is None
+        assert builds[0].predicted_m is None
         assert builds[0].rounds == 1
 
     def test_lines_before_the_first_header_are_ignored(self, tmp_path):
         """A log starts with the driver's own banner, not a build."""
         text = 'driver starting, 28 builds queued\ncavity closed: worst finished wall error 9 mm\n'
-        assert prediction.parse_build_log(write(tmp_path, text + SYNTHETIC_LOG))[0].predicted == \
-            pytest.approx(0.0019)
+        assert prediction.parse_build_log(write(tmp_path, text + SYNTHETIC_LOG))[0].predicted_m == \
+            pytest.approx(MM * 0.0019)
 
 
 # ---------------------------------------------------------------------------------- the pairing
@@ -153,12 +163,12 @@ class TestPair:
     def test_a_build_is_paired_to_its_own_sweep_row(self, tmp_path):
         rows = prediction.pair(
             M, log=write(tmp_path, SYNTHETIC_LOG),
-            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real=0.1514),
-                                              sweep_row('nose_cowl_shell', 0.5, real=0.0010)]))
+            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real_mm=0.1514),
+                                              sweep_row('nose_cowl_shell', 0.5, real_mm=0.0010)]))
         by = dict((r['label'], r) for r in rows)
-        assert by['tail_shell_U3.0_r0']['predicted'] == pytest.approx(0.0484)
-        assert by['tail_shell_U3.0_r0']['real'] == pytest.approx(0.1514)
-        assert by['nose_cowl_shell_U0.5_r0']['predicted'] == pytest.approx(0.0019)
+        assert by['tail_shell_U3.0_r0']['predicted_m'] == pytest.approx(MM * 0.0484)
+        assert by['tail_shell_U3.0_r0']['real_m'] == pytest.approx(MM * 0.1514)
+        assert by['nose_cowl_shell_U0.5_r0']['predicted_m'] == pytest.approx(MM * 0.0019)
 
     def test_the_shortfall_is_clamped_at_zero_not_signed(self, tmp_path):
         """The two sides are maxima over different grids, and the sweep's is a lower bound. A real
@@ -166,9 +176,9 @@ class TestPair:
         this pairing refuses to report it as a negative gap."""
         rows = prediction.pair(
             M, log=write(tmp_path, SYNTHETIC_LOG),
-            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real=0.0001)]))
-        assert rows[0]['real'] == pytest.approx(0.0001)
-        assert rows[0]['shortfall'] == 0.0
+            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real_mm=0.0001)]))
+        assert rows[0]['real_m'] == pytest.approx(MM * 0.0001)
+        assert rows[0]['shortfall_m'] == 0.0
 
     def test_an_incomplete_wall_is_excluded_by_default(self, tmp_path):
         """IP-WTM-19: an unmeasured station is not a passing one."""
@@ -208,20 +218,20 @@ class TestVerdict:
         tighter criterion on pass 2's own quantity can certify the part."""
         v = prediction.verdict(
             M, log=write(tmp_path, SYNTHETIC_LOG),
-            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real=0.2136),
-                                              sweep_row('nose_cowl_shell', 0.5, real=0.0010)]))
+            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real_mm=0.2136),
+                                              sweep_row('nose_cowl_shell', 0.5, real_mm=0.0010)]))
         assert v['builds_paired'] == 2
         assert v['predictions_within_tau'] is True
-        assert v['max_predicted'] == pytest.approx(0.0484)
+        assert v['max_predicted_m'] == pytest.approx(MM * 0.0484)
         assert v['builds_real_worse_than_tau'] == 1
         assert v['worst_label'] == 'tail_shell_U3.0_r0'
-        assert v['worst_shortfall'] == pytest.approx(0.2136 - 0.0484)
+        assert v['worst_shortfall_m'] == pytest.approx(MM * (0.2136 - 0.0484))
 
     def test_it_counts_builds_meeting_the_acceptance_tolerance(self, tmp_path):
         v = prediction.verdict(
             M, log=write(tmp_path, SYNTHETIC_LOG),
-            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real=0.2136),
-                                              sweep_row('nose_cowl_shell', 0.5, real=0.0010)]))
+            sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 3.0, real_mm=0.2136),
+                                              sweep_row('nose_cowl_shell', 0.5, real_mm=0.0010)]))
         assert v['builds_real_worse_than_tolerance'] == 1
         assert v['builds_meeting_tolerance'] == 1
 
@@ -230,16 +240,16 @@ class TestVerdict:
         v = prediction.verdict(M, log=write(tmp_path, SYNTHETIC_LOG),
                                sweep_path=write_sweep(tmp_path, [sweep_row('tail_shell', 9.0)]))
         assert v['builds_paired'] == 0
-        assert v['worst_shortfall'] is None
-        assert v['max_predicted'] is None
+        assert v['worst_shortfall_m'] is None
+        assert v['max_predicted_m'] is None
         assert v['builds_meeting_tolerance'] == 0
 
     def test_tau_is_pass_2s_criterion_and_wall_tol_is_five_times_tighter(self):
         """Carried in this module so a reader need not go and find them; asserted so a change to
         either in `cowl_interior` fails here instead of silently rescoring the verdict."""
-        assert prediction.TAU == 0.05
-        assert prediction.WALL_TOL == 0.01
-        assert prediction.TAU == pytest.approx(5 * prediction.WALL_TOL)
+        assert prediction.TAU_M == 5.0e-5
+        assert prediction.WALL_TOL_M == 1.0e-5
+        assert prediction.TAU_M == pytest.approx(5 * prediction.WALL_TOL_M)
 
 
 # ------------------------------------------------------------- this project's own 28 builds
@@ -263,9 +273,9 @@ class TestTheRealSoakLog:
         """What makes the comparison below an inequality rather than a correlation: pass 2's
         guarantee held on all 28, so the prediction side is not in doubt."""
         builds = prediction.parse_build_log()
-        worst = max(b.predicted for b in builds)
-        assert worst <= prediction.TAU
-        assert worst == pytest.approx(0.0484, abs=1e-4)
+        worst = max(b.predicted_m for b in builds)
+        assert worst <= prediction.TAU_M
+        assert worst == pytest.approx(MM * 0.0484, abs=MM * 1e-4)
 
     def test_pass_2s_scan_is_dense_enough_to_call_near_complete(self):
         """The one-sided inequality rests on this: pass 2 scans tens to hundreds of points per
@@ -302,8 +312,8 @@ class TestTheCorpusAnswer:
             assert v['predictions_within_tau'] is True, name
             assert v['builds_real_worse_than_tau'] == 0, name
         selected = prediction.verdict(M)
-        assert selected['worst_shortfall'] <= prediction.WALL_TOL
-        assert selected['mean_shortfall'] < 0.2 * prediction.WALL_TOL
+        assert selected['worst_shortfall_m'] <= prediction.WALL_TOL_M
+        assert selected['mean_shortfall_m'] < 0.2 * prediction.WALL_TOL_M
 
     def test_the_incumbent_measures_a_corner_not_the_wall_on_every_nose_build(self):
         """The converse of the test above, and the evidence for scoping it. C0's nose readings sit
@@ -311,9 +321,9 @@ class TestTheCorpusAnswer:
         reading that does not move with the part is not reading the part."""
         nose = [r for r in prediction.pair(OTHER) if r['kind'] == 'nose_cowl_shell']
         assert len(nose) >= 6
-        thin = [r['real'] for r in nose]
+        thin = [r['real_m'] for r in nose]
         assert max(thin) / min(thin) < 1.5, nose
-        assert min(thin) > 2.0 * prediction.WALL_TOL, nose
+        assert min(thin) > 2.0 * prediction.WALL_TOL_M, nose
 
     def test_the_tail_fails_the_tolerance_at_every_u_and_the_nose_only_at_u4(self):
         """**Supersedes `test_no_fully_measured_wall_meets_the_acceptance_tolerance`, which
@@ -326,8 +336,8 @@ class TestTheCorpusAnswer:
         tail = [r for r in rows if r['kind'] == 'tail_shell']
         nose = [r for r in rows if r['kind'] == 'nose_cowl_shell']
         assert len(tail) >= 6 and len(nose) >= 6
-        assert all(r['real'] > prediction.WALL_TOL for r in tail), tail
-        over = [r['u'] for r in nose if r['real'] > prediction.WALL_TOL]
+        assert all(r['real_m'] > prediction.WALL_TOL_M for r in tail), tail
+        over = [r['u'] for r in nose if r['real_m'] > prediction.WALL_TOL_M]
         assert over == [4.0], nose
 
     def test_the_tail_thinning_does_not_grow_with_u(self):
@@ -340,10 +350,11 @@ class TestTheCorpusAnswer:
         kinds passed only while the nose's own readings were being lost to the bounding-box grid;
         the nose does have a trend, and the test below is where that lives."""
         rows = [r for r in prediction.pair(M) if r['kind'] == 'tail_shell']
-        thin = [r['real'] for r in rows]
+        thin = [r['real_m'] for r in rows]
+        # A ratio, so unit-invariant; the bound beside it is a length and scaled with it.
         assert max(thin) / min(thin) < 5.0, rows
-        assert max(thin) < 0.06, rows
-        assert max(rows, key=lambda r: r['real'])['u'] < 4.0, 'worst is not the largest wall'
+        assert max(thin) < MM * 0.06, rows
+        assert max(rows, key=lambda r: r['real_m'])['u'] < 4.0, 'worst is not the largest wall'
 
     def test_the_nose_thinning_does_grow_with_u_and_the_tail_does_not(self):
         """**A finding, not a guard, and it was invisible until the station grid was fixed.** The
@@ -355,10 +366,10 @@ class TestTheCorpusAnswer:
         rows = prediction.pair(M)
         nose = sorted((r for r in rows if r['kind'] == 'nose_cowl_shell'), key=lambda r: r['u'])
         tail = sorted((r for r in rows if r['kind'] == 'tail_shell'), key=lambda r: r['u'])
-        thin = [r['real'] for r in nose]
+        thin = [r['real_m'] for r in nose]
         assert thin == sorted(thin), 'the nose is no longer monotonic in U: %s' % nose
         assert thin[-1] / thin[0] > 8.0, nose
-        tail_thin = [r['real'] for r in tail]
+        tail_thin = [r['real_m'] for r in tail]
         assert tail_thin != sorted(tail_thin), 'the tail is now monotonic in U: %s' % tail
         assert tail_thin[0] > 8.0 * thin[0], 'the tail no longer dwarfs the nose at U = 0.5'
 
@@ -374,8 +385,8 @@ class TestTheCorpusAnswer:
         different point set. Fixed; asserted here against the recorded corpus as well as against the
         measure itself in `test_wall_measure_sweep.py`."""
         rows = prediction.read_sweep()
-        bad = [(k, r['worst_thin'][OTHER], r['worst_thin'][M]) for k, r in rows.items()
-               if r['worst_thin'][M] > r['worst_thin'][OTHER] + 1e-12]
+        bad = [(k, r['worst_thin_m'][OTHER], r['worst_thin_m'][M]) for k, r in rows.items()
+               if r['worst_thin_m'][M] > r['worst_thin_m'][OTHER] + 1e-15]
         assert not bad, bad
 
     def test_the_corner_exclusion_matters_on_the_nose_and_not_on_the_tail(self):
@@ -388,20 +399,20 @@ class TestTheCorpusAnswer:
         rows = prediction.read_sweep()
 
         def gaps(kind):
-            return [r['worst_thin'][OTHER] - r['worst_thin'][M]
+            return [r['worst_thin_m'][OTHER] - r['worst_thin_m'][M]
                     for k, r in rows.items() if k[0] == kind]
 
         nose, tail = gaps('nose_cowl_shell'), gaps('tail_shell')
         assert nose and tail
-        assert min(nose) > 0.01, nose
-        assert min(tail) < 0.005, tail
+        assert min(nose) > MM * 0.01, nose
+        assert min(tail) < MM * 0.005, tail
         assert max(nose) > max(tail), (max(nose), max(tail))
 
     def test_the_hard_cases_are_the_ones_pass_2_worked_hardest_on(self):
         """Pass 2's round count is a signal that gates nothing, and it survives the correction: the
         build that needed 5 of its 6 allowed rounds is still the one with the largest shortfall."""
         rows = prediction.pair(M)
-        worst = max(rows, key=lambda r: r['shortfall'])
+        worst = max(rows, key=lambda r: r['shortfall_m'])
         assert worst['rounds'] >= 1
         assert max(r['rounds'] for r in rows if r['u'] >= 3.0) == 5
 

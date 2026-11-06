@@ -35,7 +35,7 @@ FLOOR = 0.6
 
 
 def _patch(index=0, union_mm=BASE_TIGHT, kept_mm=1.9983671, under=7, union=32, kept=27):
-    return {'patch': index, 'z_lo': -300.0 + index, 'z_hi': -100.0 + index,
+    return {'patch': index, 'z_lo_m': -300.0 + index, 'z_hi_m': -100.0 + index,
             'seed': union - 4, 'notch_edges': 4, 'union': union, 'kept': kept,
             'tightest_union_mm': union_mm, 'under_floor': under,
             'tightest_kept_mm': kept_mm}
@@ -45,7 +45,7 @@ def _record(kind='tail_shell', u=3.0, case=None, floor=FLOOR, t=0.6,
             patches=None, moves=None):
     return {'kind': kind, 'u': u, 'case': case, 'moves': moves,
             't_mm': t, 'station_floor_mm': floor,
-            'z_lo': -300.0, 'z_hi': -8.0,
+            'z_lo_m': -300.0, 'z_hi_m': -8.0,
             'notch_edges': [-283.9951339, -60.0], 'body_creases': [-150.0],
             'patches': [_patch()] if patches is None else patches}
 

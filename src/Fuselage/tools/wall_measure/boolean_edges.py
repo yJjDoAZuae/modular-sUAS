@@ -62,26 +62,45 @@ and `App` arrive as arguments, the way `locate` and `corpus` already take them.
 """
 import numpy as np
 
-#: The kernel's own coincidence tolerance (`Precision::Confusion`), in mm. A point genuinely on a
-#: surface reads below this; anything above it the kernel considers a real separation.
-KERNEL_TOL = 1.0e-7
+from . import kern
 
-#: `cowl_interior.RIB_CUT_FUZZ`, in mm: what the fuzzy rib cut is explicitly allowed to move.
-#: Restated rather than imported because this module must stay free of the vendor-side module.
-FUZZ_TOL = 1.0e-5
+#: The kernel's own coincidence tolerance (`Precision::Confusion`), **expressed in meters**. A
+#: point genuinely on a surface reads below this; anything above it the kernel considers a real
+#: separation. 1.0e-10 m is OpenCASCADE's 1.0e-7 mm; the value belongs to the kernel, the unit
+#: belongs to this project (IP-FC-163), and `kern.mm` puts it back whenever it is handed to a
+#: kernel call.
+KERNEL_TOL_M = 1.0e-10
 
-#: `cowl_interior.WALL_TOL`, in mm: the scale at which a deviation stops being bookkeeping and
-#: starts being a wall that is the wrong thickness.
-WALL_TOL = 0.01
+#: `si.RIB_CUT_FUZZ_MM`: what the fuzzy rib cut is explicitly allowed to move. Restated rather
+#: than imported because this module must stay free of the vendor-side module. 1.0e-8 m is the
+#: 1.0e-5 mm `si.py` holds.
+FUZZ_TOL_M = 1.0e-8
 
-#: Arc length, in mm, between samples along an edge. `cowl_interior.CHECK_ARC`'s value, for the
-#: same reason: a third of the wall, so a chord's sag is well inside the quantity being measured.
-SAMPLE_ARC = 0.20
+#: `cowl_interior.WALL_TOL_M`: the scale at which a deviation stops being bookkeeping and starts
+#: being a wall that is the wrong thickness.
+WALL_TOL_M = 1.0e-5
+
+#: Arc length between samples along an edge. `cowl_interior.CHECK_ARC_M`'s value, for the same
+#: reason: a third of the wall, so a chord's sag is well inside the quantity being measured.
+SAMPLE_ARC_M = 2.0e-4
+
+#: **A quantum for a surface PARAMETER, and it deliberately did not move with the conversion**
+#: (IP-FC-163). Knots, multiplicities and weights are parameter-space and dimensionless quantities,
+#: not lengths, so quantizing or comparing them against a length tolerance is a category error that
+#: happened to be harmless while the two shared a numeric value. Scaling this with the coordinates
+#: would have made the knot comparison a thousand times finer and could have split a
+#: `mirror_families` group that previously hashed together -- a behavior change in a verdict, from
+#: a conversion that should not have touched it. It is 1.0e-7, which is the figure the knot
+#: comparison has always used.
+PARAM_QUANTUM = 1.0e-7
+
+#: Below this an edge is zero-length: a pole of the parameterization. Was 1.0e-6 mm.
+LENGTH_TOL_M = 1.0e-9
 
 #: How far outside a face's bounding box a point's **in-plane projection** may sit and still be
-#: considered a candidate for lying on that face, in mm. Two orders above `FUZZ_TOL` so the filter
+#: considered a candidate for lying on that face. Two orders above `FUZZ_TOL_M` so the filter
 #: never rejects a face the fuzzy cut legitimately snapped a point to, and an order below
-#: `WALL_TOL` so it cannot admit a face a wall-sized distance away in plane.
+#: `WALL_TOL_M` so it cannot admit a face a wall-sized distance away in plane. Was 1.0e-3 mm.
 #:
 #: **It pads the projection, not the point, and the distinction is the whole filter.** A planar
 #: face's bounding box is flat -- zero thickness along its own normal -- so padding the raw point
@@ -90,7 +109,7 @@ SAMPLE_ARC = 0.20
 #: 0.25 mm off a face read `inf` (no candidate) instead of 0.25 mm. Projecting first asks the
 #: right question -- is the point *over* the face -- and leaves the distance being measured
 #: unfiltered.
-BOX_PAD = 1.0e-3
+BOX_PAD_M = 1.0e-6
 
 #: Face classifications `classify_face` returns.
 #:
@@ -124,36 +143,43 @@ def plane_set(shape):
 
     **Only the tool is read this way.** The smooth operand's boundary is a deliberate mix, and
     `smooth_reference` measures it with the kernel instead; see `closure_faces`.
+
+    Origins and boxes come back in meters; the normals are unit vectors and carry no unit. The
+    boxes are ordered `(x_lo, y_lo, z_lo, x_hi, y_hi, z_hi)`, which is `plane_deviations`' own
+    layout and not `kern.bbox_m`'s.
     """
-    faces, origins, normals, boxes = [], [], [], []
+    faces, origins_m, normals, boxes_m = [], [], [], []
     for index, face in enumerate(shape.Faces):
         surf = face.Surface
         if type(surf).__name__ != 'Plane':
             raise ValueError('face %d is a %s, not a Plane; `plane_deviations` is only exact '
                              'for a polyhedron' % (index, type(surf).__name__))
         pos, axis = surf.Position, surf.Axis
-        bb = face.BoundBox
+        box_m = kern.bbox_m(face)
         faces.append(face)
-        origins.append((pos.x, pos.y, pos.z))
+        origins_m.append(kern.point_m(pos))
+        # **The axis is NOT converted.** `Plane.Axis` is a unit normal, so it is dimensionless and
+        # the same numbers in either unit; multiplying it by 1e-3 would have made every dot
+        # product below a thousand times too small (IP-FC-163).
         normals.append((axis.x, axis.y, axis.z))
-        boxes.append((bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax))
+        boxes_m.append((box_m[0], box_m[2], box_m[4], box_m[1], box_m[3], box_m[5]))
     if not faces:
         raise ValueError('the shape has no planar faces')
-    return (faces, np.asarray(origins, dtype=float), np.asarray(normals, dtype=float),
-            np.asarray(boxes, dtype=float))
+    return (faces, np.asarray(origins_m, dtype=float), np.asarray(normals, dtype=float),
+            np.asarray(boxes_m, dtype=float))
 
 
 #: The largest intermediate `plane_deviations` will allocate, in array elements. Matches
 #: `candidates.MAX_BLOCK`: the same arithmetic there, unbounded, once asked for 37 TB.
 MAX_BLOCK = 25000000
 
-#: Chord tolerance, in mm, for the tessellation `interior_probes` takes its probe points from.
-#: Only has to be fine enough that a facet centroid is near the face; `interior_probes` snaps it
-#: on exactly afterwards, so this trades facet count against nothing else.
-PROBE_DEFLECTION = 0.01
+#: Chord tolerance for the tessellation `interior_probes` takes its probe points from. Only has
+#: to be fine enough that a facet centroid is near the face; `interior_probes` snaps it on exactly
+#: afterwards, so this trades facet count against nothing else. Was 0.01 mm.
+PROBE_DEFLECTION_M = 1.0e-5
 
 
-def interior_probes(face, count=4, deflection=PROBE_DEFLECTION, Part=None):
+def interior_probes(face, count=4, deflection_m=PROBE_DEFLECTION_M, Part=None):
     """Points strictly inside `face` and exactly on it, from its own tessellation's largest facets.
 
     **Vertices are not probe points, and using them is what broke the first version of this
@@ -177,23 +203,31 @@ def interior_probes(face, count=4, deflection=PROBE_DEFLECTION, Part=None):
     moved to the nearest point *on the face* with the kernel, which is exact and stays inside the
     trim; without it the unsnapped centroids come back, which is only useful for testing the facet
     arithmetic itself.
+
+    The points come back in meters; `tessellate` is a kernel call and takes its deflection in
+    millimeters (IP-FC-163).
     """
-    verts, facets = face.tessellate(float(deflection))
+    verts, facets = face.tessellate(kern.mm(float(deflection_m)))
     ranked = []
     for tri in facets:
         if len(tri) != 3:
             continue
         a, b, c = (verts[i] for i in tri)
-        area = 0.5 * float(b.sub(a).cross(c.sub(a)).Length)
-        mid = ((a.x + b.x + c.x) / 3.0, (a.y + b.y + c.y) / 3.0, (a.z + b.z + c.z) / 3.0)
-        ranked.append((area, mid))
+        # A kernel cross product's `Length` is mm2, so two factors convert it. Only the ordering
+        # uses it, which a positive scale cannot change -- but an area named in the wrong unit is
+        # how the next reader gets it wrong.
+        area_m2 = (0.5 * float(b.sub(a).cross(c.sub(a)).Length)
+                   * kern.M_PER_MM * kern.M_PER_MM)
+        mid_m = (kern.m((a.x + b.x + c.x) / 3.0), kern.m((a.y + b.y + c.y) / 3.0),
+                 kern.m((a.z + b.z + c.z) / 3.0))
+        ranked.append((area_m2, mid_m))
     ranked.sort(key=lambda row: -row[0])
-    picked = [mid for _area, mid in ranked[:int(count)]]
+    picked = [mid_m for _area_m2, mid_m in ranked[:int(count)]]
     return [_snap_to(Part, face, p) for p in picked] if Part is not None else picked
 
 
-def _snap_to(Part, face, point, strict=False):
-    """`point` moved to the nearest point on `face`, by the kernel.
+def _snap_to(Part, face, point_m, strict=False):
+    """`point_m` moved to the nearest point on `face`, by the kernel. SI in, SI out.
 
     **The two callers want opposite things on a refusal, and conflating them was a bug a test
     caught.** `interior_probes` wants the point kept: an empty probe list classifies its face
@@ -206,20 +240,26 @@ def _snap_to(Part, face, point, strict=False):
     So `strict` returns `None` instead of falling back, and `face_normal` passes it.
     """
     try:
-        pairs = Part.Vertex(float(point[0]), float(point[1]), float(point[2])).distToShape(face)[1]
-        on_face = pairs[0][1]
-        return (float(on_face.x), float(on_face.y), float(on_face.z))
+        vertex = Part.Vertex(kern.mm(float(point_m[0])), kern.mm(float(point_m[1])),
+                             kern.mm(float(point_m[2])))
+        pairs = vertex.distToShape(face)[1]
+        return kern.point_m(pairs[0][1])
     except Exception:                                               # noqa: BLE001 kernel refusal
-        return None if strict else point
+        return None if strict else point_m
 
 
-def plane_deviations(points, origins, normals, boxes, pad=BOX_PAD, max_block=MAX_BLOCK):
+def plane_deviations(points_m, origins_m, normals, boxes_m, pad_m=BOX_PAD_M,
+                     max_block=MAX_BLOCK):
     """Per point, the distance to the nearest candidate face's plane, and which face that was.
 
+    SI throughout: meters in from `plane_set` and `interior_probes`, meters out. The normals are
+    unit vectors and carry no unit, which is what keeps the dot product in the same unit as the
+    points (IP-FC-163).
+
     A face is a candidate for a point when the point's **projection onto that face's plane** is
-    inside the face's bounding box grown by `pad` -- the point is over the face. See `BOX_PAD` on
-    why the projection and not the point, and the module note on why a box stands in for the trim
-    here and why the result has to be checked against the kernel.
+    inside the face's bounding box grown by `pad_m` -- the point is over the face. See `BOX_PAD_M`
+    on why the projection and not the point, and the module note on why a box stands in for the
+    trim here and why the result has to be checked against the kernel.
 
     Returns `(distance, index)`, both length-`len(points)`. A point with no candidate face gets
     `inf` and `-1`.
@@ -230,20 +270,20 @@ def plane_deviations(points, origins, normals, boxes, pad=BOX_PAD, max_block=MAX
     hundreds of megabytes. `candidates._segment_distances` was already caught by the same
     arithmetic -- it asked for 37 TB -- and `MAX_BLOCK` is the same bound restated here.
     """
-    pts = np.asarray(points, dtype=float).reshape(-1, 3)
-    n_faces = max(len(origins), 1)
+    pts = np.asarray(points_m, dtype=float).reshape(-1, 3)
+    n_faces = max(len(origins_m), 1)
     rows = max(int(max_block // (3 * n_faces)), 1)
     if len(pts) > rows:
         best = np.empty(len(pts), dtype=float)
         index = np.empty(len(pts), dtype=int)
         for start in range(0, len(pts), rows):
             stop = min(start + rows, len(pts))
-            b, i = plane_deviations(pts[start:stop], origins, normals, boxes, pad=pad,
+            b, i = plane_deviations(pts[start:stop], origins_m, normals, boxes_m, pad_m=pad_m,
                                     max_block=max_block)
             best[start:stop], index[start:stop] = b, i
         return best, index
     # (n_points, n_faces): signed distance along each plane's normal, then its magnitude.
-    delta = pts[:, None, :] - origins[None, :, :]
+    delta = pts[:, None, :] - origins_m[None, :, :]
     signed = np.einsum('pfk,fk->pf', delta, normals)
     dist = np.abs(signed)
     # Drop each point onto each plane before the box test, so the box only ever constrains the
@@ -251,8 +291,8 @@ def plane_deviations(points, origins, normals, boxes, pad=BOX_PAD, max_block=MAX
     projected = pts[:, None, :] - signed[:, :, None] * normals[None, :, :]
     inside = np.ones(dist.shape, dtype=bool)
     for k in range(3):
-        inside &= (projected[:, :, k] >= boxes[None, :, k] - pad)
-        inside &= (projected[:, :, k] <= boxes[None, :, 3 + k] + pad)
+        inside &= (projected[:, :, k] >= boxes_m[None, :, k] - pad_m)
+        inside &= (projected[:, :, k] <= boxes_m[None, :, 3 + k] + pad_m)
     masked = np.where(inside, dist, np.inf)
     index = np.argmin(masked, axis=1)
     best = masked[np.arange(len(pts)), index]
@@ -288,17 +328,21 @@ def fitted_faces(Part, smooth):
     return Part.makeCompound(faces)
 
 
-def surface_deviations(Part, points, shape):
-    """Per point, the kernel distance to `shape`.
+def surface_deviations(Part, points_m, shape):
+    """Per point, the kernel distance to `shape`, in meters.
 
     `shape` is `fitted_faces(Part, smooth)` for the conformance question, or
     `closure_faces(Part, smooth)` for the classification one; see `fitted_faces` for why no
     reconstruction of the surface is an acceptable substitute for either.
+
+    Points in meters, vertex built in millimeters, distance converted back on the way out
+    (IP-FC-163).
     """
-    out = np.empty(len(points), dtype=float)
-    for i, p in enumerate(points):
-        vertex = Part.Vertex(float(p[0]), float(p[1]), float(p[2]))
-        out[i] = float(vertex.distToShape(shape)[0])
+    out = np.empty(len(points_m), dtype=float)
+    for i, p_m in enumerate(points_m):
+        vertex = Part.Vertex(kern.mm(float(p_m[0])), kern.mm(float(p_m[1])),
+                             kern.mm(float(p_m[2])))
+        out[i] = kern.m(float(vertex.distToShape(shape)[0]))
     return out
 
 
@@ -340,7 +384,8 @@ def smooth_reference(Part, smooth):
     return smooth_surface_of(smooth), fitted_faces(Part, smooth), closure_faces(Part, smooth)
 
 
-def classify_faces(Part, cut, smooth_reference_pair, tool_planes, tol=FUZZ_TOL, probes=4):
+def classify_faces(Part, cut, smooth_reference_pair, tool_planes, tol_m=FUZZ_TOL_M,
+                   probes=4):
     """Which operand each face of `cut` lies on, as a list of dicts, one per face.
 
     **Classified by measurement, not by surface type.** Asking whether a face is a B-spline or a
@@ -360,48 +405,49 @@ def classify_faces(Part, cut, smooth_reference_pair, tool_planes, tol=FUZZ_TOL, 
         pts = interior_probes(face, probes, Part=Part)
         if not pts:
             rows.append({'face': index, 'surface': type(face.Surface).__name__,
-                         'd_smooth_mm': float('nan'), 'd_tool_mm': float('nan'),
+                         'd_smooth_m': float('nan'), 'd_tool_m': float('nan'),
                          'on': ON_NEITHER, 'probes': 0})
             continue
-        d_tool, _which = plane_deviations(pts, t_origins, t_normals, t_boxes)
-        d_surface = surface_deviations(Part, pts, surface_faces)
-        d_lid = surface_deviations(Part, pts, closure)
-        near_surface = float(np.min(d_surface))
-        near_lid = float(np.min(d_lid))
-        near_tool = float(np.min(d_tool))
+        d_tool_m, _which = plane_deviations(pts, t_origins, t_normals, t_boxes)
+        d_surface_m = surface_deviations(Part, pts, surface_faces)
+        d_lid_m = surface_deviations(Part, pts, closure)
+        near_surface_m = float(np.min(d_surface_m))
+        near_lid_m = float(np.min(d_lid_m))
+        near_tool_m = float(np.min(d_tool_m))
         rows.append({'face': index,
                      'surface': type(face.Surface).__name__,
                      # The smooth operand's boundary is the fitted surface *or* a closing plane.
-                     'd_smooth_mm': min(near_surface, near_lid),
-                     'd_surface_mm': near_surface,
-                     'd_lid_mm': near_lid,
-                     'd_tool_mm': near_tool,
-                     'on': classify_face(near_surface, near_lid, near_tool, tol),
+                     'd_smooth_m': min(near_surface_m, near_lid_m),
+                     'd_surface_m': near_surface_m,
+                     'd_lid_m': near_lid_m,
+                     'd_tool_m': near_tool_m,
+                     'on': classify_face(near_surface_m, near_lid_m, near_tool_m, tol_m),
                      'probes': len(pts)})
     return rows
 
 
-def classify_face(d_surface, d_lid, d_tool, tol=FUZZ_TOL):
+def classify_face(d_surface_m, d_lid_m, d_tool_m, tol_m=FUZZ_TOL_M):
     """Which boundary a face at these three distances lies on.
 
     Three separate things, not two: see the `ON_SURFACE` block above for why a lid cannot be
     folded into the fitted surface, and what folding them measured instead.
     """
-    hits = [name for name, d in ((ON_SURFACE, d_surface), (ON_LID, d_lid), (ON_TOOL, d_tool))
-            if d <= tol]
+    hits = [name for name, d_m in ((ON_SURFACE, d_surface_m), (ON_LID, d_lid_m),
+                                   (ON_TOOL, d_tool_m))
+            if d_m <= tol_m]
     if len(hits) > 1:
         return ON_AMBIGUOUS
     return hits[0] if hits else ON_NEITHER
 
 
-def classify(d_smooth, d_tool, tol=FUZZ_TOL):
+def classify(d_smooth_m, d_tool_m, tol_m=FUZZ_TOL_M):
     """Which of the two surfaces a rib-edge sample at these distances lies on.
 
-    `d_smooth` here is the distance to the **fitted surface**, not to the smooth operand's whole
+    `d_smooth_m` here is the distance to the **fitted surface**, not to the smooth operand's whole
     boundary: a rib edge is the intersection of that surface with a tool face, so those are the
     two things a sample on it has to satisfy, and `ON_BOTH` is the answer a conformant one gives.
     """
-    s, t = d_smooth <= tol, d_tool <= tol
+    s, t = d_smooth_m <= tol_m, d_tool_m <= tol_m
     if s and t:
         return ON_BOTH
     if s:
@@ -411,19 +457,28 @@ def classify(d_smooth, d_tool, tol=FUZZ_TOL):
     return ON_NEITHER
 
 
-def _edge_key(edge, quantum=KERNEL_TOL):
+def _edge_key(edge, quantum_m=KERNEL_TOL_M):
     """A key two faces sharing an edge agree on. Endpoints sorted, so orientation does not matter.
 
     Two faces of one solid share the *same* underlying edge, so their coordinates are identical
     rather than merely close, and any quantum separates distinct edges. Keyed geometrically rather
     than through `ancestorsOfType` because that is a search over every face per edge, and a tail
     cavity has thousands of each.
+
+    **The coordinates are converted before they are quantized**, so the integers are the same ones
+    this produced before IP-FC-163: a meter coordinate over a meter quantum is the same ratio a
+    millimeter coordinate over a millimeter quantum was. Quantizing the raw kernel value against
+    the SI quantum would have multiplied every key by a thousand -- harmless on its own, since the
+    key is only ever compared with itself, and not harmless if `quantum_m` is ever passed from a
+    caller that means meters.
     """
     def q(v):
-        return (int(round(v.x / quantum)), int(round(v.y / quantum)), int(round(v.z / quantum)))
+        x_m, y_m, z_m = kern.point_m(v)
+        return (int(round(x_m / quantum_m)), int(round(y_m / quantum_m)),
+                int(round(z_m / quantum_m)))
     ends = tuple(sorted(q(v.Point) for v in edge.Vertexes))
     mid = edge.valueAt(0.5 * (edge.FirstParameter + edge.LastParameter))
-    return (ends, q(mid), int(round(edge.Length / quantum)))
+    return (ends, q(mid), int(round(kern.length_m(edge) / quantum_m)))
 
 
 def face_adjacency(cut, face_rows):
@@ -469,8 +524,8 @@ def rib_edges(cut, face_rows, groups=None):
         if ON_SURFACE in classes and ON_TOOL in classes:
             out.append({'edge': slot['edge'], 'faces': list(slot['faces']),
                         'classes': sorted(c for c in classes if c),
-                        'length_mm': float(slot['edge'].Length)})
-    out.sort(key=lambda row: -row['length_mm'])
+                        'length_m': kern.length_m(slot['edge'])})
+    out.sort(key=lambda row: -row['length_m'])
     return out
 
 
@@ -491,7 +546,7 @@ def edge_kinds(cut, face_rows, groups=None):
     return tally
 
 
-def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc=SAMPLE_ARC,
+def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc_m=SAMPLE_ARC_M,
                      max_points=200000):
     """Sample every rib edge by arc length and measure each sample against both references.
 
@@ -504,26 +559,32 @@ def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc=SAMPLE_ARC,
     number of edges dropped on the `max_points` budget, so a partial answer is never mistaken for
     a complete one. Edges are taken longest-first (`rib_edges` sorts them), so a truncated run
     drops the shortest rather than whatever came last.
+
+    **The sample count is `round`, not `int`** (IP-FC-163). Both operands are lengths, so the
+    ratio is unit-invariant -- but only once it is rounded: `int(length / arc)` has a boundary at
+    every integer and approaches it from one side, so an edge that is exactly `n` arcs long gives
+    `n` in millimeters and `n` minus an ulp in meters, dropping a sample. That is the `_steps`
+    defect, and `tools/unit_regime.py --counts` sweeps for it.
     """
-    _faces, origins, normals, boxes = tool_planes
+    _faces, origins_m, normals, boxes_m = tool_planes
     samples, budget, truncated = [], int(max_points), 0
     for ei, row in enumerate(edge_rows):
         edge = row['edge']
-        n = max(int(edge.Length / float(arc)) + 1, 2)
+        n = max(int(round(kern.length_m(edge) / float(arc_m))) + 1, 2)
         if n > budget:
             truncated += 1
             continue
         budget -= n
-        pts = [(p.x, p.y, p.z) for p in edge.discretize(Number=n)]
-        d_tool, which = plane_deviations(pts, origins, normals, boxes)
-        d_smooth = surface_deviations(Part, pts, smooth_faces)
-        for k, p in enumerate(pts):
+        pts_m = [kern.point_m(p) for p in edge.discretize(Number=n)]
+        d_tool_m, which = plane_deviations(pts_m, origins_m, normals, boxes_m)
+        d_smooth_m = surface_deviations(Part, pts_m, smooth_faces)
+        for k, p_m in enumerate(pts_m):
             samples.append({'edge': ei, 'faces': row['faces'], 'i': k,
-                            'x': p[0], 'y': p[1], 'z': p[2],
-                            'd_smooth_mm': float(d_smooth[k]),
-                            'd_tool_mm': float(d_tool[k]),
+                            'x_m': p_m[0], 'y_m': p_m[1], 'z_m': p_m[2],
+                            'd_smooth_m': float(d_smooth_m[k]),
+                            'd_tool_m': float(d_tool_m[k]),
                             'tool_face': int(which[k]),
-                            'on': classify(float(d_smooth[k]), float(d_tool[k]))})
+                            'on': classify(float(d_smooth_m[k]), float(d_tool_m[k]))})
     return samples, truncated
 
 
@@ -552,9 +613,9 @@ def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc=SAMPLE_ARC,
 #    agree to 1e-9 mm in position and still disagree visibly in slope.
 # ----------------------------------------------------------------------------------------------
 
-#: Step, in mm, for the parameter-free normal. Small enough that the chord error over it is a
-#: fraction of a degree on these radii, large enough that the snapped offsets are not dominated by
-#: the kernel's own 1e-7 mm resolution.
+#: Step for the parameter-free normal. Small enough that the chord error over it is a fraction of
+#: a degree on these radii, large enough that the snapped offsets are not dominated by the
+#: kernel's own 1e-7 mm resolution. Was 0.05 mm.
 #:
 #: **The resolution that buys is measured, not predicted.** `face_normal` returns the
 #: non-coplanarity of its snapped neighbors as a residual, and over 187 rib-edge samples on a
@@ -562,7 +623,7 @@ def edge_conformance(Part, edge_rows, tool_planes, smooth_faces, arc=SAMPLE_ARC,
 #: 1.9e-05 mm -- which over `h` = 0.05 mm is a **median 0.022 deg and a worst 0.088 deg**. So this
 #: resolves a normal difference of about a tenth of a degree and no better, which is ample for
 #: telling a refit from a trim and far too coarse to quote a crease angle to three decimals.
-NORMAL_STEP = 0.05
+NORMAL_STEP_M = 5.0e-5
 
 #: Directions offset before snapping, for `face_normal`. Six, because an offset along the local
 #: normal snaps straight back to the point it came from and carries no tangent information; with
@@ -587,7 +648,7 @@ def bspline_surfaces(shape):
     return out
 
 
-def surface_identity(a, b, atol=KERNEL_TOL):
+def surface_identity(a, b, atol_m=KERNEL_TOL_M, param_atol=PARAM_QUANTUM):
     """Do two B-spline surfaces have the same control net? The exact form of the question.
 
     **This is the test that settles whether a boundary-value error is even possible.** A boolean
@@ -597,36 +658,43 @@ def surface_identity(a, b, atol=KERNEL_TOL):
 
     Compared field by field rather than by a single verdict, so a near-match reports *which* part
     differs -- a changed knot vector and a nudged pole are different failures.
+
+    **Two tolerances, not one, and the conversion is what exposed that** (IP-FC-163). The poles are
+    positions and are compared in meters against `atol_m`; the knots and weights are parameter-space
+    and dimensionless and are compared against `param_atol`, which did not move. One tolerance
+    served both while they shared a numeric value, and scaling it would have made the knot
+    comparison a thousand times finer in a verdict that has nothing to do with length.
     """
     out = {'same_degrees': None, 'same_pole_counts': None, 'same_knots': None,
-           'same_weights': None, 'same_periodicity': None, 'worst_pole_mm': None,
+           'same_weights': None, 'same_periodicity': None, 'worst_pole_m': None,
            'identical': False, 'comparable': False}
     try:
         out['same_degrees'] = (a.UDegree, a.VDegree) == (b.UDegree, b.VDegree)
         out['same_pole_counts'] = (a.NbUPoles, a.NbVPoles) == (b.NbUPoles, b.NbVPoles)
         out['same_periodicity'] = (bool(a.isUPeriodic()), bool(a.isVPeriodic())) == \
                                   (bool(b.isUPeriodic()), bool(b.isVPeriodic()))
-        out['same_knots'] = (_close(a.getUKnots(), b.getUKnots(), atol)
-                             and _close(a.getVKnots(), b.getVKnots(), atol)
+        out['same_knots'] = (_close(a.getUKnots(), b.getUKnots(), param_atol)
+                             and _close(a.getVKnots(), b.getVKnots(), param_atol)
                              and list(a.getUMultiplicities()) == list(b.getUMultiplicities())
                              and list(a.getVMultiplicities()) == list(b.getVMultiplicities()))
         out['comparable'] = True
         if not out['same_pole_counts']:
             return out
-        pa = _pole_array(a)
-        pb = _pole_array(b)
-        out['worst_pole_mm'] = float(np.max(np.linalg.norm(pa - pb, axis=-1)))
-        out['same_weights'] = _close(np.ravel(_weight_array(a)), np.ravel(_weight_array(b)), atol)
+        pa_m = _pole_array(a)
+        pb_m = _pole_array(b)
+        out['worst_pole_m'] = float(np.max(np.linalg.norm(pa_m - pb_m, axis=-1)))
+        out['same_weights'] = _close(np.ravel(_weight_array(a)), np.ravel(_weight_array(b)),
+                                     param_atol)
         out['identical'] = bool(out['same_degrees'] and out['same_pole_counts']
                                 and out['same_knots'] and out['same_weights']
                                 and out['same_periodicity']
-                                and out['worst_pole_mm'] <= atol)
+                                and out['worst_pole_m'] <= atol_m)
     except Exception:                                               # noqa: BLE001 kernel/API
         pass
     return out
 
 
-def congruent_identity(a, b, atol=KERNEL_TOL):
+def congruent_identity(a, b, atol_m=KERNEL_TOL_M, param_atol=PARAM_QUANTUM):
     """Are two B-spline surfaces the same surface **up to a rigid motion**? For the mirror steps.
 
     `surface_identity` compares poles where they stand, which is the right question for a boolean
@@ -649,31 +717,33 @@ def congruent_identity(a, b, atol=KERNEL_TOL):
     reparameterization rather than a rigid motion, and accepting it would hide the kind of change
     this exists to find.
 
-    Returns the same shape of dict as `surface_identity` with `worst_step_mm` in place of
-    `worst_pole_mm`, so one formatter prints either.
+    Returns the same shape of dict as `surface_identity` with `worst_step_m` in place of
+    `worst_pole_m`, so one formatter prints either. `param_atol` is the dimensionless knot and
+    weight tolerance; see `surface_identity` on why it is separate from `atol_m`.
     """
     out = {'same_degrees': None, 'same_pole_counts': None, 'same_knots': None,
-           'same_weights': None, 'same_periodicity': None, 'worst_step_mm': None,
+           'same_weights': None, 'same_periodicity': None, 'worst_step_m': None,
            'identical': False, 'comparable': False}
     try:
         out['same_degrees'] = (a.UDegree, a.VDegree) == (b.UDegree, b.VDegree)
         out['same_pole_counts'] = (a.NbUPoles, a.NbVPoles) == (b.NbUPoles, b.NbVPoles)
         out['same_periodicity'] = (bool(a.isUPeriodic()), bool(a.isVPeriodic())) == \
                                   (bool(b.isUPeriodic()), bool(b.isVPeriodic()))
-        out['same_knots'] = (_close(a.getUKnots(), b.getUKnots(), atol)
-                             and _close(a.getVKnots(), b.getVKnots(), atol)
+        out['same_knots'] = (_close(a.getUKnots(), b.getUKnots(), param_atol)
+                             and _close(a.getVKnots(), b.getVKnots(), param_atol)
                              and list(a.getUMultiplicities()) == list(b.getUMultiplicities())
                              and list(a.getVMultiplicities()) == list(b.getVMultiplicities()))
         out['comparable'] = True
         if not out['same_pole_counts']:
             return out
-        out['worst_step_mm'] = _worst_step_difference(_pole_array(a), _pole_array(b))
-        out['same_weights'] = _close(np.ravel(_weight_array(a)), np.ravel(_weight_array(b)), atol)
+        out['worst_step_m'] = _worst_step_difference(_pole_array(a), _pole_array(b))
+        out['same_weights'] = _close(np.ravel(_weight_array(a)), np.ravel(_weight_array(b)),
+                                     param_atol)
         out['identical'] = bool(out['same_degrees'] and out['same_pole_counts']
                                 and out['same_knots'] and out['same_weights']
                                 and out['same_periodicity']
-                                and out['worst_step_mm'] is not None
-                                and out['worst_step_mm'] <= atol)
+                                and out['worst_step_m'] is not None
+                                and out['worst_step_m'] <= atol_m)
     except Exception:                                               # noqa: BLE001 kernel/API
         pass
     return out
@@ -736,7 +806,7 @@ def loose_faces(shape):
         return None, None
 
 
-def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
+def anomalous_edges(shape, quantum_m=KERNEL_TOL_M, length_tol_m=LENGTH_TOL_M, Part=None):
     """Every edge group of `shape` not shared by exactly two faces, each one classified.
 
     **On a closed solid every edge has exactly two faces, so a group that does not is one of four
@@ -782,7 +852,7 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
     for index, face in enumerate(shape.Faces):
         for edge in face.Edges:
             try:
-                key = _edge_key(edge, quantum)
+                key = _edge_key(edge, quantum_m)
             except Exception:                                       # noqa: BLE001 kernel/API
                 # **Reported, not skipped.** `_edge_key` reads the edge's length and midpoint, so
                 # an edge the kernel will not describe cannot be grouped -- and dropping it here
@@ -793,7 +863,7 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
             slot = groups.setdefault(key, {'edge': edge, 'faces': {}})
             slot['faces'][index] = slot['faces'].get(index, 0) + 1
     out = [{'kind': EDGE_UNREADABLE, 'faces': [i], 'occurrences': 1,
-            'length_mm': float('nan'), 'closed': False,
+            'length_m': float('nan'), 'closed': False,
             'surfaces': sorted({type(shape.Faces[i].Surface).__name__}),
             'periodic': _is_periodic(shape.Faces[i].Surface),
             'kernel_faces': None, 'key': None}
@@ -804,25 +874,27 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
             continue
         edge = slot['edge']
         try:
-            length = float(edge.Length)
-            verts = [v.Point for v in edge.Vertexes]
-            if len(verts) < 2:
+            length_m = kern.length_m(edge)
+            verts_m = [kern.point_m(v.Point) for v in edge.Vertexes]
+            if len(verts_m) < 2:
                 closed = True
             else:
-                a, b = verts[0], verts[-1]
+                a_m, b_m = verts_m[0], verts_m[-1]
                 # Read by attribute, not by index. A vendor vector happens to support `v[0]`, and
-                # relying on that is what made this branch raise and then mis-label the edge.
-                closed = bool(abs(a.x - b.x) <= length_tol and abs(a.y - b.y) <= length_tol
-                              and abs(a.z - b.z) <= length_tol)
+                # relying on that is what made this branch raise and then mis-label the edge;
+                # `kern.point_m` now does the reading and the conversion in one place.
+                closed = bool(abs(a_m[0] - b_m[0]) <= length_tol_m
+                              and abs(a_m[1] - b_m[1]) <= length_tol_m
+                              and abs(a_m[2] - b_m[2]) <= length_tol_m)
             readable = True
         except Exception:                                           # noqa: BLE001 kernel/API
-            length, closed, readable = float('nan'), False, False
+            length_m, closed, readable = float('nan'), False, False
         occurrences = sum(faces.values())
         surfaces = sorted({type(shape.Faces[i].Surface).__name__ for i in faces})
         periodic = any(_is_periodic(shape.Faces[i].Surface) for i in faces)
         if not readable:
             kind = EDGE_UNREADABLE
-        elif length <= length_tol:
+        elif length_m <= length_tol_m:
             kind = EDGE_DEGENERATE
         elif len(faces) >= 3:
             kind = EDGE_NONMANIFOLD
@@ -839,14 +911,14 @@ def anomalous_edges(shape, quantum=KERNEL_TOL, length_tol=1.0e-6, Part=None):
             # The authority says this edge is shared normally, so the anomaly is the keying's.
             kind = EDGE_KEYED_APART
         out.append({'kind': kind, 'faces': sorted(faces), 'occurrences': occurrences,
-                    'length_mm': length, 'closed': closed, 'surfaces': surfaces,
+                    'length_m': length_m, 'closed': closed, 'surfaces': surfaces,
                     'periodic': periodic, 'kernel_faces': kernel_faces, 'key': key})
     order = {EDGE_FREE: 0, EDGE_NONMANIFOLD: 1, EDGE_UNREADABLE: 2, EDGE_KEYED_APART: 3,
              EDGE_SEAM: 4, EDGE_DEGENERATE: 5}
-    # `-length_mm` would put a NaN anywhere, so the kind alone orders the unreadable ones.
+    # `-length_m` would put a NaN anywhere, so the kind alone orders the unreadable ones.
     return sorted(out, key=lambda r: (order.get(r['kind'], 9),
-                                      0.0 if r['length_mm'] != r['length_mm']
-                                      else -r['length_mm']))
+                                      0.0 if r['length_m'] != r['length_m']
+                                      else -r['length_m']))
 
 
 def _is_periodic(surface):
@@ -876,13 +948,14 @@ def edge_anomaly_verdict(rows):
 
 def table_anomalous(rows, limit=12):
     """`anomalous_edges` as text, worst kind first."""
-    head = '%-14s %10s %7s %8s %-22s %8s %s' % ('kind', 'length mm', 'faces', 'times', 'surfaces',
-                                                'periodic', 'kernel faces')
+    head = '%-14s %10s %7s %8s %-22s %8s %s' % ('kind', 'length/mm', 'faces', 'times',
+                                                'surfaces', 'periodic', 'kernel faces')
     out = [head, '-' * len(head)]
     for r in rows[:limit]:
         out.append('%-14s %10s %7d %8d %-22s %8s %s'
                    % (r['kind'],
-                      '?' if r['length_mm'] != r['length_mm'] else '%.5f' % r['length_mm'],
+                      '?' if r['length_m'] != r['length_m']
+                      else '%.5f' % kern.mm(r['length_m']),
                       len(r['faces']), r['occurrences'],
                       ','.join(s[:20] for s in r['surfaces']), 'yes' if r['periodic'] else 'no',
                       'not asked' if r.get('kernel_faces') is None else r['kernel_faces']))
@@ -891,9 +964,17 @@ def table_anomalous(rows, limit=12):
     return '\n'.join(out)
 
 
-def parameterization_key(surface, quantum=KERNEL_TOL):
+def parameterization_key(surface, quantum=PARAM_QUANTUM):
     """Everything about a B-spline surface except where its poles are: degrees, pole counts, knots,
-    multiplicities and periodicity, quantized so two copies of one fit hash together."""
+    multiplicities and periodicity, quantized so two copies of one fit hash together.
+
+    **The quantum is `PARAM_QUANTUM` and not a length** (IP-FC-163). Nothing here is a position:
+    a knot is a parameter value, and a multiplicity and a degree are counts. This took
+    `KERNEL_TOL` before the conversion, which was the same number by coincidence -- and had the
+    conversion carried it along, every knot would have been quantized a thousand times more
+    finely, which could split a `mirror_families` group that previously hashed together and so
+    change a verdict that has nothing to do with length.
+    """
     def q(values):
         return tuple(int(round(float(v) / quantum)) for v in values)
     return (surface.UDegree, surface.VDegree, surface.NbUPoles, surface.NbVPoles,
@@ -902,7 +983,7 @@ def parameterization_key(surface, quantum=KERNEL_TOL):
             bool(surface.isUPeriodic()), bool(surface.isVPeriodic()))
 
 
-def mirror_families(shape, atol=KERNEL_TOL):
+def mirror_families(shape, atol_m=KERNEL_TOL_M, param_atol=PARAM_QUANTUM):
     """Group a finished wall's B-spline surfaces by parameterization, and test each group for
     congruence. **The build-free half of the after-`cavity` question.**
 
@@ -921,9 +1002,13 @@ def mirror_families(shape, atol=KERNEL_TOL):
     `congruent_identity` on the poles, which never looks at the key.
 
     Returns one row a group: `size`, how many members are *exactly* equal to the representative,
-    the worst congruence mismatch in millimeters, and the pole counts. The `exact` count is what
-    says the test is not vacuous -- a group where every member is pole-identical has not been
-    mirrored at all, and congruence there is trivially true.
+    the worst congruence mismatch in meters, and the pole counts. The `exact` count is what says
+    the test is not vacuous -- a group where every member is pole-identical has not been mirrored
+    at all, and congruence there is trivially true.
+
+    **The grouping quantum is the parameter one, not `atol_m`.** This used to pass its own position
+    tolerance into `parameterization_key`, which was the same number before IP-FC-163 and is not
+    now; see that function on why a knot must not be quantized against a length.
     """
     rows = {}
     for index, face in enumerate(shape.Faces):
@@ -931,26 +1016,26 @@ def mirror_families(shape, atol=KERNEL_TOL):
         if type(surf).__name__ != 'BSplineSurface':
             continue
         try:
-            key = parameterization_key(surf, atol)
+            key = parameterization_key(surf, param_atol)
         except Exception:                                           # noqa: BLE001 kernel/API
             continue
         rows.setdefault(key, []).append((index, surf))
     out = []
     for key, members in rows.items():
         _i0, first = members[0]
-        worst, exact, comparable = 0.0, 0, True
+        worst_m, exact, comparable = 0.0, 0, True
         for _i, surf in members[1:]:
-            verdict = congruent_identity(first, surf, atol)
-            if not verdict['comparable'] or verdict['worst_step_mm'] is None:
+            verdict = congruent_identity(first, surf, atol_m, param_atol)
+            if not verdict['comparable'] or verdict['worst_step_m'] is None:
                 comparable = False
                 continue
-            worst = max(worst, verdict['worst_step_mm'])
+            worst_m = max(worst_m, verdict['worst_step_m'])
             if _same_surface(first, surf):
                 exact += 1
         out.append({'poles': (key[2], key[3]), 'degrees': (key[0], key[1]),
                     'size': len(members), 'exact': exact + 1, 'mirrored': len(members) - exact - 1,
-                    'worst_step_mm': worst, 'comparable': comparable,
-                    'congruent': bool(comparable and worst <= atol),
+                    'worst_step_m': worst_m, 'comparable': comparable,
+                    'congruent': bool(comparable and worst_m <= atol_m),
                     'faces': [i for i, _s in members]})
     return sorted(out, key=lambda r: (-r['size'], r['poles']))
 
@@ -967,7 +1052,7 @@ def mirror_verdict(rows):
     return {'groups': len(rows), 'surfaces': sum(r['size'] for r in rows),
             'groups_with_a_mirrored_copy': len(tested),
             'mirrored_copies': sum(r['mirrored'] for r in tested),
-            'worst_step_mm': (max(r['worst_step_mm'] for r in tested) if tested else None),
+            'worst_step_m': (max(r['worst_step_m'] for r in tested) if tested else None),
             'failed': [r for r in rows if not r['congruent']],
             'vacuous': not tested,
             'clean': bool(tested and all(r['congruent'] for r in rows))}
@@ -976,13 +1061,14 @@ def mirror_verdict(rows):
 def table_mirror(rows):
     """`mirror_families` as text, one line a parameterization group."""
     head = '%6s %10s %6s %6s %9s %14s' % ('faces', 'poles', 'exact', 'mirror', 'degrees',
-                                          'worst step mm')
+                                          'worst step/mm')
     out = [head, '-' * len(head)]
     for r in rows:
         out.append('%6d %10s %6d %6d %9s %14s%s'
                    % (r['size'], '%dx%d' % r['poles'], r['exact'], r['mirrored'],
                       '%dx%d' % r['degrees'],
-                      'n/a' if r['worst_step_mm'] is None else '%.3e' % r['worst_step_mm'],
+                      'n/a' if r['worst_step_m'] is None
+                      else '%.3e' % kern.mm(r['worst_step_m']),
                       '' if r['congruent'] else '   <-- NOT CONGRUENT'))
     return '\n'.join(out)
 
@@ -1017,7 +1103,9 @@ def _close(a, b, atol):
 
 
 def _pole_array(surface):
-    return np.array([[(p.x, p.y, p.z) for p in row] for row in surface.getPoles()], dtype=float)
+    """A B-spline's control net as an `(nu, nv, 3)` array **in meters**."""
+    return np.array([[(p.x, p.y, p.z) for p in row] for row in surface.getPoles()],
+                    dtype=float) * kern.M_PER_MM
 
 
 def _weight_array(surface):
@@ -1027,8 +1115,8 @@ def _weight_array(surface):
         return np.ones((surface.NbUPoles, surface.NbVPoles), dtype=float)
 
 
-def face_normal(Part, face, point, h=NORMAL_STEP, directions=NORMAL_DIRECTIONS):
-    """The unit normal of `face` at `point`, without ever asking for a surface parameter.
+def face_normal(Part, face, point_m, h_m=NORMAL_STEP_M, directions=NORMAL_DIRECTIONS):
+    """The unit normal of `face` at `point_m`, without ever asking for a surface parameter.
 
     **Parameter-free on purpose.** `Surface.parameter` and `projectPoint` have both been measured
     wrong by 2.411 mm on this very surface (`fitted_faces`), and a normal taken at a wrong
@@ -1036,36 +1124,40 @@ def face_normal(Part, face, point, h=NORMAL_STEP, directions=NORMAL_DIRECTIONS):
     `directions`, snaps every offset back onto the face with `distToShape`, and takes the normal of
     the plane those on-face neighbors span -- the smallest singular vector of their offsets.
 
-    Returns `(normal, residual, used)`: the unit normal, the singular value it came from (how far
-    the neighbors are from coplanar, in mm -- large means the step is too big for the local
-    curvature), and how many offsets survived. `(None, nan, n)` when fewer than three survive,
-    which happens at a point pinched between trim boundaries.
+    Returns `(normal, residual_m, used)`: the unit normal, which is dimensionless; the singular
+    value it came from, in meters (how far the neighbors are from coplanar -- large means the step
+    is too big for the local curvature); and how many offsets survived. `(None, nan, n)` when
+    fewer than three survive, which happens at a point pinched between trim boundaries.
     """
-    p = np.asarray(point, dtype=float)
-    offsets = []
+    p_m = np.asarray(point_m, dtype=float)
+    offsets_m = []
     for d in directions:
-        moved = p + h * np.asarray(d, dtype=float)
-        back = _snap_to(Part, face, moved, strict=True)
-        if back is None:                                   # not on the face; see `_snap_to`
+        moved_m = p_m + h_m * np.asarray(d, dtype=float)
+        back_m = _snap_to(Part, face, moved_m, strict=True)
+        if back_m is None:                                 # not on the face; see `_snap_to`
             continue
-        delta = np.asarray(back, dtype=float) - p
+        delta_m = np.asarray(back_m, dtype=float) - p_m
         # An offset along the local normal snaps straight back; one that barely moved carries no
-        # tangent information and would only add noise to the fit.
-        if np.linalg.norm(delta) > 0.1 * h:
-            offsets.append(delta)
-    if len(offsets) < 3:
-        return None, float('nan'), len(offsets)
-    matrix = np.asarray(offsets, dtype=float)
+        # tangent information and would only add noise to the fit. A tenth of the step, so the
+        # test is a ratio and the conversion could not move it.
+        if np.linalg.norm(delta_m) > 0.1 * h_m:
+            offsets_m.append(delta_m)
+    if len(offsets_m) < 3:
+        return None, float('nan'), len(offsets_m)
+    matrix = np.asarray(offsets_m, dtype=float)
     _u, singular, vt = np.linalg.svd(matrix - matrix.mean(axis=0), full_matrices=True)
     normal = vt[-1]
     norm = np.linalg.norm(normal)
     if norm == 0.0:
-        return None, float('nan'), len(offsets)
-    return normal / norm, float(singular[-1]), len(offsets)
+        return None, float('nan'), len(offsets_m)
+    return normal / norm, float(singular[-1]), len(offsets_m)
 
 
-def angle_between(a, b):
-    """The unsigned angle in degrees between two directions, folded into [0, 90].
+def angle_between_rad(a, b):
+    """The unsigned angle in **radians** between two directions, folded into [0, pi/2].
+
+    Radians because the standard's angle unit is radians (IP-FC-163). It was `angle_between`
+    returning degrees; the two callers that print an angle convert at their display boundary.
 
     **Folded because a normal's sign is a convention, not a measurement.** Two faces of the same
     surface can be oriented oppositely and are still the same surface, so 180 deg apart has to
@@ -1080,11 +1172,11 @@ def angle_between(a, b):
     if na == 0.0 or nb == 0.0:
         return float('nan')
     cos = float(np.clip(abs(np.dot(a, b) / (na * nb)), 0.0, 1.0))
-    return float(np.degrees(np.arccos(cos)))
+    return float(np.arccos(cos))
 
 
 def patch_deviation(Part, cut, fitted, rib_edge_shapes, probes=400,
-                    deflection=PROBE_DEFLECTION, h=NORMAL_STEP, normal_limit=150):
+                    deflection_m=PROBE_DEFLECTION_M, h_m=NORMAL_STEP_M, normal_limit=150):
     """Sample the cut cavity's fitted-surface faces inside, and compare to the pre-cut face.
 
     Per probe: the distance to `fitted` (the pre-cut B-spline face compound), the angle between the
@@ -1104,21 +1196,21 @@ def patch_deviation(Part, cut, fitted, rib_edge_shapes, probes=400,
     """
     rows = []
     for index, face in _surface_faces(Part, cut, fitted):
-        pts = interior_probes(face, probes, deflection=deflection, Part=Part)
-        if not pts:
+        pts_m = interior_probes(face, probes, deflection_m=deflection_m, Part=Part)
+        if not pts_m:
             continue
-        d_surface = surface_deviations(Part, pts, fitted)
-        for k, p in enumerate(pts):
-            row = {'face': index, 'i': k, 'x': p[0], 'y': p[1], 'z': p[2],
-                   'd_fitted_mm': float(d_surface[k]),
-                   'edge_mm': _nearest_edge_distance(Part, p, rib_edge_shapes),
-                   'normal_deg': float('nan'), 'normal_residual_mm': float('nan'),
+        d_surface_m = surface_deviations(Part, pts_m, fitted)
+        for k, p_m in enumerate(pts_m):
+            row = {'face': index, 'i': k, 'x_m': p_m[0], 'y_m': p_m[1], 'z_m': p_m[2],
+                   'd_fitted_m': float(d_surface_m[k]),
+                   'edge_m': _nearest_edge_distance(Part, p_m, rib_edge_shapes),
+                   'normal_rad': float('nan'), 'normal_residual_m': float('nan'),
                    'offsets_used': 0}
             if k < int(normal_limit):
-                n_cut, res, used = face_normal(Part, face, p, h=h)
-                n_pre, _r2, _u2 = face_normal(Part, fitted, p, h=h)
-                row['normal_deg'] = angle_between(n_cut, n_pre)
-                row['normal_residual_mm'] = res
+                n_cut, res_m, used = face_normal(Part, face, p_m, h_m=h_m)
+                n_pre, _r2, _u2 = face_normal(Part, fitted, p_m, h_m=h_m)
+                row['normal_rad'] = angle_between_rad(n_cut, n_pre)
+                row['normal_residual_m'] = res_m
                 row['offsets_used'] = used
             rows.append(row)
     return rows
@@ -1135,29 +1227,30 @@ def _surface_faces(Part, cut, fitted):
     for index, face in enumerate(cut.Faces):
         if type(face.Surface).__name__ != 'BSplineSurface':
             continue
-        pts = interior_probes(face, 3, Part=Part)
-        if not pts:
+        pts_m = interior_probes(face, 3, Part=Part)
+        if not pts_m:
             continue
-        if float(np.min(surface_deviations(Part, pts, fitted))) <= FUZZ_TOL:
+        if float(np.min(surface_deviations(Part, pts_m, fitted))) <= FUZZ_TOL_M:
             out.append((index, face))
     return out
 
 
-def _nearest_edge_distance(Part, point, edge_shapes):
-    """How far `point` is from the nearest rib edge, in mm. `inf` when there are none."""
+def _nearest_edge_distance(Part, point_m, edge_shapes):
+    """How far `point_m` is from the nearest rib edge, in meters. `inf` when there are none."""
     if not edge_shapes:
         return float('inf')
-    vertex = Part.Vertex(float(point[0]), float(point[1]), float(point[2]))
-    best = float('inf')
+    vertex = Part.Vertex(kern.mm(float(point_m[0])), kern.mm(float(point_m[1])),
+                         kern.mm(float(point_m[2])))
+    best_m = float('inf')
     for shape in edge_shapes:
         try:
-            best = min(best, float(vertex.distToShape(shape)[0]))
+            best_m = min(best_m, kern.m(float(vertex.distToShape(shape)[0])))
         except Exception:                                           # noqa: BLE001 kernel refusal
             continue
-    return best
+    return best_m
 
 
-def crease_angles(Part, samples, cut, fitted, tool_planes, h=NORMAL_STEP, worst=200):
+def crease_angles(Part, samples, cut, fitted, tool_planes, h_m=NORMAL_STEP_M, worst=200):
     """At each rib-edge sample, the angle between the fitted surface and the tool's cutting plane.
 
     **This is a design quantity, not a conformance one, and it is the degeneracy that matters.**
@@ -1170,22 +1263,28 @@ def crease_angles(Part, samples, cut, fitted, tool_planes, h=NORMAL_STEP, worst=
     on the cut face the same point sits on a trim boundary, where `face_normal` has fewer than
     three usable offsets and declines.
     """
-    _faces, origins, normals, _boxes = tool_planes
-    ranked = sorted(samples, key=lambda s: -max(s['d_smooth_mm'], s['d_tool_mm']))[:int(worst)]
+    _faces, _origins_m, normals, _boxes_m = tool_planes
+    ranked = sorted(samples, key=lambda s: -max(s['d_smooth_m'], s['d_tool_m']))[:int(worst)]
     rows = []
     for s in ranked:
-        point = (s['x'], s['y'], s['z'])
-        n_surface, residual, used = face_normal(Part, fitted, point, h=h)
+        point_m = (s['x_m'], s['y_m'], s['z_m'])
+        n_surface, residual_m, used = face_normal(Part, fitted, point_m, h_m=h_m)
         face_index = s.get('tool_face', -1)
         n_tool = normals[face_index] if 0 <= face_index < len(normals) else None
-        rows.append({'edge': s['edge'], 'i': s['i'], 'z': s['z'],
-                     'crease_deg': angle_between(n_surface, n_tool),
-                     'normal_residual_mm': residual, 'offsets_used': used,
+        rows.append({'edge': s['edge'], 'i': s['i'], 'z_m': s['z_m'],
+                     'crease_rad': angle_between_rad(n_surface, n_tool),
+                     'normal_residual_m': residual_m, 'offsets_used': used,
                      'tool_face': face_index})
     return rows
 
 
-def summarize_patch(rows, kernel_tol=KERNEL_TOL, fuzz_tol=FUZZ_TOL, bands=(0.1, 0.5, 2.0)):
+#: Distance-to-the-nearest-rib-edge bands `summarize_patch` tabulates by. Converted from
+#: (0.1, 0.5, 2.0) mm by IP-FC-163; the same three bands.
+PATCH_BANDS_M = (1.0e-4, 5.0e-4, 2.0e-3)
+
+
+def summarize_patch(rows, kernel_tol_m=KERNEL_TOL_M, fuzz_tol_m=FUZZ_TOL_M,
+                    bands_m=PATCH_BANDS_M):
     """`patch_deviation`'s verdict, including the deviation banded by distance to a rib edge.
 
     The banding is what answers the question. If the boolean imposes something at a patch edge
@@ -1194,36 +1293,36 @@ def summarize_patch(rows, kernel_tol=KERNEL_TOL, fuzz_tol=FUZZ_TOL, bands=(0.1, 
     """
     if not rows:
         return {'probes': 0}
-    d = np.array([r['d_fitted_mm'] for r in rows], dtype=float)
-    e = np.array([r['edge_mm'] for r in rows], dtype=float)
-    ang = np.array([r['normal_deg'] for r in rows], dtype=float)
+    d_m = np.array([r['d_fitted_m'] for r in rows], dtype=float)
+    e_m = np.array([r['edge_m'] for r in rows], dtype=float)
+    ang = np.array([r['normal_rad'] for r in rows], dtype=float)
     finite_ang = ang[np.isfinite(ang)]
-    order = int(np.argmax(d))
+    order = int(np.argmax(d_m))
     out = {
         'probes': len(rows),
         'faces': len({r['face'] for r in rows}),
-        'worst_mm': float(np.max(d)),
-        'mean_mm': float(np.mean(d)),
+        'worst_m': float(np.max(d_m)),
+        'mean_m': float(np.mean(d_m)),
         'worst_at': rows[order],
-        'within_kernel': int(np.count_nonzero(d <= kernel_tol)),
-        'within_fuzz': int(np.count_nonzero(d <= fuzz_tol)),
-        'over_fuzz': int(np.count_nonzero(d > fuzz_tol)),
-        'worst_normal_deg': float(np.max(finite_ang)) if len(finite_ang) else float('nan'),
-        'mean_normal_deg': float(np.mean(finite_ang)) if len(finite_ang) else float('nan'),
+        'within_kernel': int(np.count_nonzero(d_m <= kernel_tol_m)),
+        'within_fuzz': int(np.count_nonzero(d_m <= fuzz_tol_m)),
+        'over_fuzz': int(np.count_nonzero(d_m > fuzz_tol_m)),
+        'worst_normal_rad': float(np.max(finite_ang)) if len(finite_ang) else float('nan'),
+        'mean_normal_rad': float(np.mean(finite_ang)) if len(finite_ang) else float('nan'),
         'normals_measured': int(len(finite_ang)),
         'bands': [],
     }
-    edges = [0.0] + list(bands) + [float('inf')]
-    for lo, hi in zip(edges[:-1], edges[1:]):
-        pick = (e >= lo) & (e < hi)
+    edges_m = [0.0] + list(bands_m) + [float('inf')]
+    for lo_m, hi_m in zip(edges_m[:-1], edges_m[1:]):
+        pick = (e_m >= lo_m) & (e_m < hi_m)
         if not np.any(pick):
             continue
         band_ang = ang[pick]
         band_ang = band_ang[np.isfinite(band_ang)]
         out['bands'].append({
-            'lo_mm': lo, 'hi_mm': hi, 'probes': int(np.count_nonzero(pick)),
-            'worst_mm': float(np.max(d[pick])), 'mean_mm': float(np.mean(d[pick])),
-            'worst_normal_deg': float(np.max(band_ang)) if len(band_ang) else float('nan'),
+            'lo_m': lo_m, 'hi_m': hi_m, 'probes': int(np.count_nonzero(pick)),
+            'worst_m': float(np.max(d_m[pick])), 'mean_m': float(np.mean(d_m[pick])),
+            'worst_normal_rad': float(np.max(band_ang)) if len(band_ang) else float('nan'),
         })
     return out
 
@@ -1239,17 +1338,18 @@ def table_patch(summary, identity=None, creases=None):
                          % (row['face'], 'IDENTICAL' if row['identical'] else 'DIFFERS',
                             row['same_degrees'], row['same_pole_counts'], row['same_knots'],
                             row['same_weights'], row['same_periodicity'],
-                            'n/a' if row['worst_pole_mm'] is None
-                            else '%.3e mm' % row['worst_pole_mm']))
+                            'n/a' if row['worst_pole_m'] is None
+                            else '%.3e mm' % kern.mm(row['worst_pole_m'])))
     if summary.get('probes'):
         lines.append('patch interior: %d probe(s) on %d fitted face(s)'
                      % (summary['probes'], summary['faces']))
         lines.append('  worst position deviation from the pre-cut face  %12.3e mm'
-                     % summary['worst_mm'])
+                     % kern.mm(summary['worst_m']))
         lines.append('  worst normal angle between the two surfaces     %12.4f deg'
-                     % summary['worst_normal_deg'])
+                     % np.degrees(summary['worst_normal_rad']))
         lines.append('  mean normal angle (%d measured)                 %12.4f deg'
-                     % (summary['normals_measured'], summary['mean_normal_deg']))
+                     % (summary['normals_measured'],
+                        np.degrees(summary['mean_normal_rad'])))
         lines.append('  at kernel tolerance %d, within fuzz %d, over fuzz %d, of %d'
                      % (summary['within_kernel'], summary['within_fuzz'],
                         summary['over_fuzz'], summary['probes']))
@@ -1257,58 +1357,61 @@ def table_patch(summary, identity=None, creases=None):
         lines.append('    %-18s %7s %12s %12s %12s' % ('band', 'probes', 'worst mm',
                                                        'mean mm', 'worst deg'))
         for b in summary['bands']:
-            label = '%.2f .. %s mm' % (b['lo_mm'],
-                                       'inf' if b['hi_mm'] == float('inf') else '%.2f' % b['hi_mm'])
+            label = '%.2f .. %s mm' % (
+                kern.mm(b['lo_m']),
+                'inf' if b['hi_m'] == float('inf') else '%.2f' % kern.mm(b['hi_m']))
             lines.append('    %-18s %7d %12.3e %12.3e %12.4f'
-                         % (label, b['probes'], b['worst_mm'], b['mean_mm'],
-                            b['worst_normal_deg']))
+                         % (label, b['probes'], kern.mm(b['worst_m']), kern.mm(b['mean_m']),
+                            np.degrees(b['worst_normal_rad'])))
     if creases:
-        angles = np.array([r['crease_deg'] for r in creases], dtype=float)
-        angles = angles[np.isfinite(angles)]
-        if len(angles):
+        angles_rad = np.array([r['crease_rad'] for r in creases], dtype=float)
+        angles_rad = angles_rad[np.isfinite(angles_rad)]
+        if len(angles_rad):
             lines.append('crease angle, fitted surface against the tool plane, over %d rib-edge '
-                         'sample(s):' % len(angles))
+                         'sample(s):' % len(angles_rad))
             lines.append('  min %.3f deg, median %.3f deg, max %.3f deg  (0 would be a tangency)'
-                         % (float(np.min(angles)), float(np.median(angles)),
-                            float(np.max(angles))))
+                         % (float(np.degrees(np.min(angles_rad))),
+                            float(np.degrees(np.median(angles_rad))),
+                            float(np.degrees(np.max(angles_rad)))))
     return '\n'.join(lines) + '\n' if lines else 'nothing measured\n'
 
 
-def summarize(samples, kernel_tol=KERNEL_TOL, fuzz_tol=FUZZ_TOL, wall_tol=WALL_TOL):
+def summarize(samples, kernel_tol_m=KERNEL_TOL_M, fuzz_tol_m=FUZZ_TOL_M,
+              wall_tol_m=WALL_TOL_M):
     """The banded verdict over a set of samples.
 
     The bands are the three scales a deviation can be at, and they mean different things: under
-    `kernel_tol` the point is on the surface as far as the kernel is concerned; between that and
-    `fuzz_tol` it moved by no more than the fuzzy cut was licensed to move it; above `fuzz_tol`
-    nothing in the construction accounts for it; above `wall_tol` it is a wall of the wrong
+    `kernel_tol_m` the point is on the surface as far as the kernel is concerned; between that and
+    `fuzz_tol_m` it moved by no more than the fuzzy cut was licensed to move it; above `fuzz_tol_m`
+    nothing in the construction accounts for it; above `wall_tol_m` it is a wall of the wrong
     thickness, not a bookkeeping difference.
     """
     if not samples:
         return {'samples': 0}
-    ds = np.array([s['d_smooth_mm'] for s in samples], dtype=float)
-    dt = np.array([s['d_tool_mm'] for s in samples], dtype=float)
-    worst = np.maximum(ds, dt)
-    order = int(np.argmax(worst))
+    ds_m = np.array([s['d_smooth_m'] for s in samples], dtype=float)
+    dt_m = np.array([s['d_tool_m'] for s in samples], dtype=float)
+    worst_m = np.maximum(ds_m, dt_m)
+    order = int(np.argmax(worst_m))
     # **An `inf` is a finding, not a number to average.** `plane_deviations` returns it for a
     # point whose projection falls over no tool face at all, which on a rib edge should never
     # happen -- the edge is on a tool face by definition. Counted separately, and kept out of the
     # means, so one of them cannot turn the whole summary into `inf` and hide the rest.
-    no_tool = int(np.count_nonzero(~np.isfinite(dt)))
-    finite_t = dt[np.isfinite(dt)]
+    no_tool = int(np.count_nonzero(~np.isfinite(dt_m)))
+    finite_t_m = dt_m[np.isfinite(dt_m)]
     return {
         'samples': len(samples),
         'edges': len({s['edge'] for s in samples}),
-        'worst_smooth_mm': float(np.max(ds)),
-        'worst_tool_mm': float(np.max(finite_t)) if len(finite_t) else float('nan'),
-        'worst_either_mm': float(worst[order]),
+        'worst_smooth_m': float(np.max(ds_m)),
+        'worst_tool_m': float(np.max(finite_t_m)) if len(finite_t_m) else float('nan'),
+        'worst_either_m': float(worst_m[order]),
         'worst_sample': samples[order],
         'no_tool_candidate': no_tool,
-        'mean_smooth_mm': float(np.mean(ds)),
-        'mean_tool_mm': float(np.mean(finite_t)) if len(finite_t) else float('nan'),
-        'within_kernel': int(np.count_nonzero(worst <= kernel_tol)),
-        'within_fuzz': int(np.count_nonzero(worst <= fuzz_tol)),
-        'over_fuzz': int(np.count_nonzero(worst > fuzz_tol)),
-        'over_wall_tol': int(np.count_nonzero(worst > wall_tol)),
+        'mean_smooth_m': float(np.mean(ds_m)),
+        'mean_tool_m': float(np.mean(finite_t_m)) if len(finite_t_m) else float('nan'),
+        'within_kernel': int(np.count_nonzero(worst_m <= kernel_tol_m)),
+        'within_fuzz': int(np.count_nonzero(worst_m <= fuzz_tol_m)),
+        'over_fuzz': int(np.count_nonzero(worst_m > fuzz_tol_m)),
+        'over_wall_tol': int(np.count_nonzero(worst_m > wall_tol_m)),
         'on': _tally(samples),
     }
 
@@ -1339,17 +1442,17 @@ def agrees_with_kernel(Part, App, samples, smooth, tool, worst=12):
     fitted = fitted_faces(Part, smooth)
     smooth_boundary = Part.makeCompound(smooth.Faces)
     tool_boundary = Part.makeCompound(tool.Faces)
-    ranked = sorted(samples, key=lambda s: -max(s['d_smooth_mm'], s['d_tool_mm']))[:worst]
+    ranked = sorted(samples, key=lambda s: -max(s['d_smooth_m'], s['d_tool_m']))[:worst]
     rows = []
     for s in ranked:
-        v = Part.Vertex(App.Vector(s['x'], s['y'], s['z']))
+        v = Part.Vertex(kern.vec_mm(App, s['x_m'], s['y_m'], s['z_m']))
         rows.append({
-            'edge': s['edge'], 'i': s['i'], 'z': s['z'],
-            'cheap_smooth_mm': s['d_smooth_mm'],
-            'cheap_tool_mm': s['d_tool_mm'],
-            'kernel_smooth_mm': float(v.distToShape(fitted)[0]),
-            'kernel_boundary_mm': float(v.distToShape(smooth_boundary)[0]),
-            'kernel_tool_mm': float(v.distToShape(tool_boundary)[0]),
+            'edge': s['edge'], 'i': s['i'], 'z_m': s['z_m'],
+            'cheap_smooth_m': s['d_smooth_m'],
+            'cheap_tool_m': s['d_tool_m'],
+            'kernel_smooth_m': kern.m(float(v.distToShape(fitted)[0])),
+            'kernel_boundary_m': kern.m(float(v.distToShape(smooth_boundary)[0])),
+            'kernel_tool_m': kern.m(float(v.distToShape(tool_boundary)[0])),
         })
     return rows
 
@@ -1380,9 +1483,8 @@ def _same_surface(a, b):
     try:
         if (a.NbUPoles, a.NbVPoles) != (b.NbUPoles, b.NbVPoles):
             return False
-        pa = np.array([[(p.x, p.y, p.z) for p in row] for row in a.getPoles()], dtype=float)
-        pb = np.array([[(p.x, p.y, p.z) for p in row] for row in b.getPoles()], dtype=float)
-        return bool(np.allclose(pa, pb, atol=KERNEL_TOL, rtol=0.0))
+        pa_m, pb_m = _pole_array(a), _pole_array(b)
+        return bool(np.allclose(pa_m, pb_m, atol=KERNEL_TOL_M, rtol=0.0))
     except Exception:                                               # noqa: BLE001 kernel/API
         return False
 
@@ -1393,34 +1495,36 @@ def table(summary, agreement=None):
         return 'no rib edge samples\n'
     lines = ['%d samples on %d rib edge(s)' % (summary['samples'], summary['edges']),
              '  worst distance to the fitted interior surface  %12.3e mm'
-             % summary['worst_smooth_mm'],
+             % kern.mm(summary['worst_smooth_m']),
              '  worst distance to a dilated tool face plane    %12.3e mm'
-             % summary['worst_tool_mm'],
+             % kern.mm(summary['worst_tool_m']),
              '  worst of the two, per sample                   %12.3e mm'
-             % summary['worst_either_mm'],
-             '  at kernel tolerance (%.0e)   %d of %d'
-             % (KERNEL_TOL, summary['within_kernel'], summary['samples']),
-             '  within the cut fuzz  (%.0e)   %d of %d'
-             % (FUZZ_TOL, summary['within_fuzz'], summary['samples']),
+             % kern.mm(summary['worst_either_m']),
+             '  at kernel tolerance (%.0e mm)   %d of %d'
+             % (kern.mm(KERNEL_TOL_M), summary['within_kernel'], summary['samples']),
+             '  within the cut fuzz  (%.0e mm)   %d of %d'
+             % (kern.mm(FUZZ_TOL_M), summary['within_fuzz'], summary['samples']),
              '  over the cut fuzz                %d of %d'
              % (summary['over_fuzz'], summary['samples']),
              '  over WALL_TOL (%.3f mm)         %d of %d'
-             % (WALL_TOL, summary['over_wall_tol'], summary['samples']),
+             % (kern.mm(WALL_TOL_M), summary['over_wall_tol'], summary['samples']),
              '  over no tool face at all         %d of %d'
              % (summary.get('no_tool_candidate', 0), summary['samples']),
              '  classification: %s' % summary['on']]
     w = summary['worst_sample']
-    lines.append('  worst at edge %d point %d, (%.4f, %.4f, %.4f)'
-                 % (w['edge'], w['i'], w['x'], w['y'], w['z']))
+    lines.append('  worst at edge %d point %d, (%.4f, %.4f, %.4f) mm'
+                 % (w['edge'], w['i'], kern.mm(w['x_m']), kern.mm(w['y_m']),
+                    kern.mm(w['z_m'])))
     if agreement:
-        lines.append('  cheap measure against the kernel, worst %d samples:' % len(agreement))
+        lines.append('  cheap measure against the kernel, worst %d samples, mm:' % len(agreement))
         lines.append('    %-9s %11s %11s %11s %11s %11s'
                      % ('z', 'cheap surf', 'kern surf', 'kern bndry', 'cheap tool', 'kern tool'))
         for r in agreement:
             lines.append('    %-9.3f %11.3e %11.3e %11.3e %11.3e %11.3e'
-                         % (r['z'], r['cheap_smooth_mm'], r['kernel_smooth_mm'],
-                            r.get('kernel_boundary_mm', float('nan')),
-                            r['cheap_tool_mm'], r['kernel_tool_mm']))
+                         % (kern.mm(r['z_m']), kern.mm(r['cheap_smooth_m']),
+                            kern.mm(r['kernel_smooth_m']),
+                            kern.mm(r.get('kernel_boundary_m', float('nan'))),
+                            kern.mm(r['cheap_tool_m']), kern.mm(r['kernel_tool_m'])))
     return '\n'.join(lines) + '\n'
 
 
@@ -1438,7 +1542,8 @@ def table(summary, agreement=None):
 ISOMETRY_STAGES = ('mirror_across_cell',)
 
 
-def stage_identity(stages, atol=KERNEL_TOL, isometries=ISOMETRY_STAGES):
+def stage_identity(stages, atol_m=KERNEL_TOL_M, isometries=ISOMETRY_STAGES,
+                   param_atol=PARAM_QUANTUM):
     """IP-WTM-38: does the fitted interior surface survive each boolean *after* `cavity`?
 
     `stages` is the list `cowl_interior.shell_solid` fills when given one: `(name, shape)` a step,
@@ -1465,7 +1570,7 @@ def stage_identity(stages, atol=KERNEL_TOL, isometries=ISOMETRY_STAGES):
     * `keys_before`, `keys_after` -- how many distinct parameterizations each side carried.
     * `matched` -- keys present on both sides.
     * `lost` -- keys present before and gone after: a refit, or a surface the step removed.
-    * `worst_mm` -- over matched keys, the largest discrepancy the applied test found.
+    * `worst_m` -- over matched keys, the largest discrepancy the applied test found, in meters.
     * `test` -- `'identity'` (poles where they stand) or `'congruence'` (internal step lengths).
     * `identical` -- every matched key passed the applied test, and nothing was lost.
     * `vacuous` -- the earlier stage carried no B-spline surface at all, so nothing was tested.
@@ -1483,28 +1588,29 @@ def stage_identity(stages, atol=KERNEL_TOL, isometries=ISOMETRY_STAGES):
         for store, shape in ((before, shape_a), (after, shape_b)):
             for _index, surf in bspline_surfaces(shape):
                 try:
-                    store.setdefault(parameterization_key(surf, atol), surf)
+                    # The parameter quantum, not `atol_m`: see `parameterization_key`.
+                    store.setdefault(parameterization_key(surf, param_atol), surf)
                 except Exception:                                   # noqa: BLE001 kernel/API
                     continue
         matched = sorted(set(before) & set(after), key=repr)
         lost = sorted(set(before) - set(after), key=repr)
         rigid = name_b in isometries
-        worst, all_same = None, True
+        worst_m, all_same = None, True
         for key in matched:
             if rigid:
-                ident = congruent_identity(before[key], after[key], atol)
-                found = ident['worst_step_mm']
+                ident = congruent_identity(before[key], after[key], atol_m, param_atol)
+                found_m = ident['worst_step_m']
             else:
-                ident = surface_identity(before[key], after[key], atol)
-                found = ident['worst_pole_mm']
-            if found is not None:
-                worst = found if worst is None else max(worst, found)
+                ident = surface_identity(before[key], after[key], atol_m, param_atol)
+                found_m = ident['worst_pole_m']
+            if found_m is not None:
+                worst_m = found_m if worst_m is None else max(worst_m, found_m)
             all_same = all_same and bool(ident['identical'])
         rows.append({
             'from_stage': name_a, 'to_stage': name_b,
             'keys_before': len(before), 'keys_after': len(after),
             'matched': len(matched), 'lost': len(lost),
-            'worst_mm': worst, 'test': 'congruence' if rigid else 'identity',
+            'worst_m': worst_m, 'test': 'congruence' if rigid else 'identity',
             'identical': bool(all_same and not lost and matched),
             'vacuous': not before,
         })
@@ -1521,13 +1627,13 @@ def stage_verdict(rows):
     """
     tested = [r for r in rows if not r['vacuous']]
     bad = [r for r in rows if not r['vacuous'] and not r['identical']]
-    worst = max((r['worst_mm'] for r in rows if r['worst_mm'] is not None), default=None)
+    worst_m = max((r['worst_m'] for r in rows if r['worst_m'] is not None), default=None)
     return {
         'transitions': len(rows),
         'tested': len(tested),
         'refitting': bad,
         'lost_total': sum(r['lost'] for r in rows),
-        'worst_pole_mm': worst,
+        'worst_pole_m': worst_m,
         'vacuous': not tested,
         'clean': bool(tested and not bad),
     }
@@ -1537,13 +1643,13 @@ def table_stages(rows):
     """`stage_identity` as text, one line a transition."""
     v = stage_verdict(rows)
     head = '%-22s %-22s %7s %7s %7s %6s %11s %12s %s' % (
-        'from', 'to', 'before', 'after', 'matched', 'lost', 'test', 'worst', 'verdict')
+        'from', 'to', 'before', 'after', 'matched', 'lost', 'test', 'worst/mm', 'verdict')
     out = [head, '-' * len(head)]
     for r in rows:
         out.append('%-22s %-22s %7d %7d %7d %6d %11s %12s %s'
                    % (r['from_stage'], r['to_stage'], r['keys_before'], r['keys_after'],
                       r['matched'], r['lost'], r['test'],
-                      '-' if r['worst_mm'] is None else '%.3e' % r['worst_mm'],
+                      '-' if r['worst_m'] is None else '%.3e' % kern.mm(r['worst_m']),
                       'NOTHING TESTED' if r['vacuous'] else
                       ('passes' if r['identical'] else 'REFIT OR LOST')))
     out.append('-' * len(head))
@@ -1553,7 +1659,8 @@ def table_stages(rows):
         out.append('CLEAN: the fitted surface survives all %d tested transition(s) pole for '
                    'pole, worst displacement %s mm'
                    % (v['tested'],
-                      '-' if v['worst_pole_mm'] is None else '%.3e' % v['worst_pole_mm']))
+                      '-' if v['worst_pole_m'] is None
+                      else '%.3e' % kern.mm(v['worst_pole_m'])))
     else:
         out.append('%d of %d tested transition(s) refit or lost the surface: %s'
                    % (len(v['refitting']), v['tested'],

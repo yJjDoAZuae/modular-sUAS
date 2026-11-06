@@ -30,7 +30,14 @@ requires_corpus = pytest.mark.skipif(
     reason='no saved soak walls; the authoritative convergence gate needs one')
 
 #: The acceptance target a pass/fail candidate is asked about: nominal minus the tolerance.
-TARGET = truth.WALL - 0.01
+#: SI since IP-FC-163 -- `truth.WALL_M` is 6.0e-4 m and the tolerance is 1.0e-5 m. Subtracting a
+#: bare 0.01 from it gave a **negative** target, which `makeOffset2D` then applied as a dilation:
+#: the erosion test reported a 36 mm2 ribbon growing to 609 mm2 and called the wall compliant.
+TARGET_M = truth.WALL_M - 1.0e-5
+
+#: Where these fixtures are sectioned: a twentieth of the way up a `truth.HEIGHT_M` tube, which
+#: is the 1.0 mm this was. At `z` = 1.0 the plane is fifty tube-lengths past the end.
+STATION_M = 1.0e-3
 
 
 def _measures():
@@ -157,31 +164,31 @@ class TestTheErosionGuardOnItsOwnTerms:
             'thin_patch_tube': truth.thin_patch_tube(Part, App),
         }
 
-    def _loops(self, t, z, App, n=720):
-        return sections.station_loops(t.shape, z, n, App=App)[:2]
+    def _loops(self, t, z_m, App, n=720):
+        return sections.station_loops(t.shape, z_m, n, App=App)[:2]
 
     def test_a_compliant_wall_survives_the_erosion(self, kit, App):
-        """0.6 mm of wall against a 0.59 mm target: it must survive."""
+        """6.0e-4 m of wall against a 5.9e-4 m target: it must survive."""
         Part, _App, fx = kit
-        outer, inner = self._loops(fx['uniform_tube'], 1.0, App)
-        ok, detail = candidates.survives_erosion(Part, App, outer, inner, TARGET)
+        outer, inner = self._loops(fx['uniform_tube'], STATION_M, App)
+        ok, detail = candidates.survives_erosion(Part, App, outer, inner, TARGET_M)
         assert ok, detail
 
     def test_a_thin_patch_does_not_survive(self, kit, App):
-        """The converse, and the whole point: 0.45 mm in the patch against a 0.59 mm target."""
+        """The converse, and the whole point: 4.5e-4 m in the patch against a 5.9e-4 m target."""
         Part, _App, fx = kit
         t = fx['thin_patch_tube']
-        outer, inner = self._loops(t, t.features[0]['z_mid'], App)
-        ok, detail = candidates.survives_erosion(Part, App, outer, inner, TARGET)
+        outer, inner = self._loops(t, t.features[0]['z_mid_m'], App)
+        ok, detail = candidates.survives_erosion(Part, App, outer, inner, TARGET_M)
         assert not ok, detail
 
     def test_the_target_is_what_decides_it(self, kit, App):
         """Not merely sensitive to the shape: the same section must flip with the target, or the
         guard is reporting something other than the thickness it was asked about."""
         Part, _App, fx = kit
-        outer, inner = self._loops(fx['uniform_tube'], 1.0, App)
-        assert candidates.survives_erosion(Part, App, outer, inner, 0.40)[0] is True
-        assert candidates.survives_erosion(Part, App, outer, inner, 0.80)[0] is False
+        outer, inner = self._loops(fx['uniform_tube'], STATION_M, App)
+        assert candidates.survives_erosion(Part, App, outer, inner, 4.0e-4)[0] is True
+        assert candidates.survives_erosion(Part, App, outer, inner, 8.0e-4)[0] is False
 
     def test_the_polygon_reopens_the_route_the_bspline_closed(self, kit, App, capsys):
         """**IP-FC-151 closed this route at over six minutes for one call on an exact B-spline
@@ -196,9 +203,9 @@ class TestTheErosionGuardOnItsOwnTerms:
         """
         import time
         Part, _App, fx = kit
-        outer, inner = self._loops(fx['uniform_tube'], 1.0, App)
+        outer, inner = self._loops(fx['uniform_tube'], STATION_M, App)
         started = time.time()
-        ok, _detail = candidates.survives_erosion(Part, App, outer, inner, TARGET)
+        ok, _detail = candidates.survives_erosion(Part, App, outer, inner, TARGET_M)
         took = time.time() - started
         with capsys.disabled():
             print('\n    erosion guard: %.1f s a station at 720 samples a loop '
@@ -214,9 +221,9 @@ class TestTheErosionGuardOnItsOwnTerms:
         the guard does not fit G5, and whether a coarser polygon does is untested."""
         import time
         Part, _App, fx = kit
-        outer, inner = self._loops(fx['uniform_tube'], 1.0, App)
+        outer, inner = self._loops(fx['uniform_tube'], STATION_M, App)
         started = time.time()
-        candidates.survives_erosion(Part, App, outer, inner, TARGET)
+        candidates.survives_erosion(Part, App, outer, inner, TARGET_M)
         per_station = time.time() - started
         assert per_station * 12.0 > gates.COST_LIMIT_S, (
             'the guard now fits G5 at this density (%.1f s for 12 stations); if this fails, the '

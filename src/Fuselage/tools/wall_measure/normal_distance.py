@@ -50,39 +50,48 @@ that guesses at a junction would be answering the question it was built to settl
 
 Nothing here imports a vendor module at module scope: `Part` and `App` arrive as arguments, the rule
 the rest of this package holds to and that `tests/test_wall_measure_sweep.py` enforces by AST.
+
+**SI throughout** (IP-FC-163). Points arrive in meters from `sections`, every depth and tolerance
+here is a length in meters, and the three kernel calls this measure makes -- `Part.Vertex`,
+`Shape.isInside` and `distToShape` -- convert at the call through `kern`. The angle this module
+reports is in radians, which is the standard's angle unit; `normal_table` is where it becomes
+degrees. The millimeter figures quoted in the notes below are measurements as they were published.
 """
 import math
 
 import numpy as np
 
-from . import boolean_edges, candidates, sections
+from . import boolean_edges, candidates, kern, sections
 
-#: How far along the candidate normal the first containment probe is taken, in mm. Small against
-#: `WALL_TOL` = 0.01 and against the 0.6 mm wall -- 1/600 of it -- so a wall has to be
+#: How far along the candidate normal the first containment probe is taken. Small against
+#: `WALL_TOL_M` = 1e-5 m and against the 6e-4 m wall -- 1/600 of it -- so a wall has to be
 #: pathologically thin before the entry probe overshoots it. A ladder of smaller steps is tried
 #: before a sample is declined as `not_entered`, so this is a starting point rather than a floor.
-ENTRY_STEP_MM = 1.0e-3
+#: Was 1.0e-3 mm.
+ENTRY_STEP_M = 1.0e-6
 
-#: Successively smaller entry probes, for a wall thinner than `ENTRY_STEP_MM`.
-ENTRY_LADDER = (1.0e-3, 1.0e-4, 1.0e-5)
+#: Successively smaller entry probes, for a wall thinner than `ENTRY_STEP_M`.
+ENTRY_LADDER_M = (1.0e-6, 1.0e-7, 1.0e-8)
 
-#: Bisection stops when the bracket is narrower than this, in mm. A hundredth of `WALL_TOL`, so the
-#: reading is two orders finer than the tolerance it is compared against.
-DEPTH_TOL_MM = 1.0e-4
+#: Bisection stops when the bracket is narrower than this. A hundredth of `WALL_TOL_M`, so the
+#: reading is two orders finer than the tolerance it is compared against. Was 1.0e-4 mm.
+DEPTH_TOL_M = 1.0e-7
 
 #: How far the probe may travel before the reading is called `unbounded`, as a multiple of nominal.
-#: A ray that has gone five wall thicknesses is not measuring a wall.
+#: A ray that has gone five wall thicknesses is not measuring a wall. A ratio, so it is
+#: unit-invariant and the conversion did not touch it.
 LIMIT_FACTOR = 5.0
 
 #: `Shape.isInside`'s own tolerance. Tight: a point this far outside counts as inside, so a loose
 #: value would report material where there is none, which is the error direction that matters here.
-INSIDE_TOL = 1.0e-7
+#: 1.0e-10 m is the 1.0e-7 mm it was, and `kern.mm` puts it back at the kernel call.
+INSIDE_TOL_M = 1.0e-10
 
-#: How close a face must come to a point to be said to contain it, in mm. `distToShape` on a
-#: trimmed B-spline face does not return an exact zero.
-ON_FACE_TOL = 1.0e-6
+#: How close a face must come to a point to be said to contain it. `distToShape` on a trimmed
+#: B-spline face does not return an exact zero. Was 1.0e-6 mm.
+ON_FACE_TOL_M = 1.0e-9
 
-#: Second-chance tolerance for a point no face claims at `ON_FACE_TOL`, in mm.
+#: Second-chance tolerance for a point no face claims at `ON_FACE_TOL_M`. Was 1.0e-4 mm.
 #:
 #: **Required, and the reason is a bias that ran the worst possible way.** `distToShape` to a planar
 #: face returns an exact distance; to a trimmed B-spline it is an iterative solve that stops at its
@@ -100,11 +109,11 @@ ON_FACE_TOL = 1.0e-6
 #: declined, which would lose placements that are currently unambiguous. Strict first, loose only
 #: where strict finds nothing, and a loosely placed sample is named `(loose)` so the two are never
 #: indistinguishable -- keeping them apart is what exposed this in the first place.
-FALLBACK_TOL = 1.0e-4
+FALLBACK_TOL_M = 1.0e-7
 
-#: Beyond this angle, in degrees, between the inner surface's own normal and the in-plane shortest
-#: path, the two are not measuring the same wall and the normal reading must not be read as the
-#: in-plane one's correction.
+#: Beyond this angle between the inner surface's own normal and the in-plane shortest path, the two
+#: are not measuring the same wall and the normal reading must not be read as the in-plane one's
+#: correction. Radians, which is the standard's angle unit; it is the 30 degrees it always was.
 #:
 #: **This is the quantity section 6.8.2.1 is actually asking about, and the first real run showed
 #: why it has to be measured rather than assumed.** On a `nose_cowl_shell` at `U` = 1 the thin
@@ -123,11 +132,11 @@ FALLBACK_TOL = 1.0e-4
 #: does not separate the two populations.** Measured on a real `tail_shell`, samples on the fitted
 #: interior surface run 3.1 to 30.7 degrees and samples on slot cheeks run 33.2 to 50.8 -- adjacent
 #: ranges with a 2.5 degree gap, so any cutoff in between is arbitrary and this one was discarding
-#: genuine readings at 30.1 to 30.8 degrees. `CONSISTENCY_TOL` is the test that replaced it.
-ALIGN_DEG = 30.0
+#: genuine readings at 30.1 to 30.8 degrees. `CONSISTENCY_TOL_M` is the test that replaced it.
+ALIGN_RAD = math.radians(30.0)
 
-#: How far `normal / cos(theta)` may fall from the in-plane reading before the two are not measuring
-#: the same wall, in mm.
+#: How far `normal / cos(theta)` may fall from the in-plane reading before the two are not
+#: measuring the same wall.
 #:
 #: **This is a measurable relationship rather than a chosen threshold, which is why it replaced the
 #: angle.** A plane cutting a slab inclined at theta sees a width of `thickness / cos theta`, so on
@@ -138,13 +147,13 @@ ALIGN_DEG = 30.0
 #:     on the fitted interior surface   residual 0.00023 .. 0.00200 mm
 #:     on rib-slot cheeks               residual 0.688   .. 0.737   mm
 #:
-#: `WALL_TOL` as the tolerance sits 5x above the worst real residual and 69x below the best cheek
-#: one, so the gap is wide enough that the exact value does not matter -- which is the property an
-#: arbitrary cutoff lacked.
-CONSISTENCY_TOL = 0.01
+#: `WALL_TOL_M` as the tolerance sits 5x above the worst real residual and 69x below the best
+#: cheek one, so the gap is wide enough that the exact value does not matter -- which is the
+#: property an arbitrary cutoff lacked. Was 0.01 mm.
+CONSISTENCY_TOL_M = 1.0e-5
 
 #: The acceptance tolerance, as the rest of this package spells it. A sample counts as thin when it
-#: is under `nominal - WALL_TOL`, which is the gate's own failure threshold.
+#: is under `nominal_m - WALL_TOL_M`, which is the gate's own failure threshold.
 #:
 #: **Not "under nominal", and the difference is not pedantic -- it was measured here.** Selecting
 #: every sample under nominal picked **all 360** inner samples of a `uniform_tube` whose wall is
@@ -153,7 +162,11 @@ CONSISTENCY_TOL = 0.01
 #: is the same bias section 6.8.3 measures on `CHECK_ARC`, where a coarse exterior polyline makes
 #: every distance to it short -- here it would have filled this measure's sample set with
 #: sub-micron noise and buried the twelve samples that actually fail.
-WALL_TOL = 0.01
+WALL_TOL_M = 1.0e-5
+
+#: The cowl's own nominal wall, `cowl_n_perimeters` * `extrusion_width` = 1 * 0.6 mm. Carried so
+#: the callers that used to pass a bare `0.6` have a named default to take.
+NOMINAL_M = 6.0e-4
 
 
 #: The fitted interior surface's own surface type. `_fit` produces a B-spline, so a sample on one of
@@ -185,8 +198,8 @@ def surface_type(face):
         return UNKNOWN_SURFACE
 
 
-def faces_at(solid, point, tol=ON_FACE_TOL, Part=None):
-    """Every face of `solid` containing `point`, as `(index, face)`. Pruned by bounding box first.
+def faces_at(solid, point_m, tol_m=ON_FACE_TOL_M, Part=None):
+    """Every face of `solid` containing `point_m`, as `(index, face)`. Pruned by box first.
 
     **More than one is a finding, not a tie to break.** Two faces containing a point means the point
     is on the edge where they meet -- a crease -- and a crease has no single normal. Returning the
@@ -196,34 +209,37 @@ def faces_at(solid, point, tol=ON_FACE_TOL, Part=None):
     and a `distToShape` against each is the whole cost of this measure, while a point is inside the
     box of only a handful.
     """
-    p = np.asarray(point, dtype=float)
-    vertex = Part.Vertex(float(p[0]), float(p[1]), float(p[2]))
+    p_m = np.asarray(point_m, dtype=float)
+    vertex = Part.Vertex(kern.mm(float(p_m[0])), kern.mm(float(p_m[1])), kern.mm(float(p_m[2])))
     out = []
     for i, face in enumerate(solid.Faces):
         # Plain arithmetic on the box's six floats rather than `BoundBox.isInside` plus a
         # point-distance call: it needs no vendor method beyond the attributes, and the margin has
-        # to be applied anyway because a point *on* a face is on its box's boundary.
-        box = face.BoundBox
-        if not (box.XMin - tol <= p[0] <= box.XMax + tol
-                and box.YMin - tol <= p[1] <= box.YMax + tol
-                and box.ZMin - tol <= p[2] <= box.ZMax + tol):
+        # to be applied anyway because a point *on* a face is on its box's boundary. `kern.bbox_m`
+        # does the reading and the conversion in one place (IP-FC-163).
+        x_lo, x_hi, y_lo, y_hi, z_lo, z_hi = kern.bbox_m(face)
+        if not (x_lo - tol_m <= p_m[0] <= x_hi + tol_m
+                and y_lo - tol_m <= p_m[1] <= y_hi + tol_m
+                and z_lo - tol_m <= p_m[2] <= z_hi + tol_m):
             continue
-        if float(vertex.distToShape(face)[0]) <= tol:
+        if kern.m(float(vertex.distToShape(face)[0])) <= tol_m:
             out.append((i, face))
     return out
 
 
-def _inside(solid, point, App, tol=INSIDE_TOL):
-    return bool(solid.isInside(App.Vector(float(point[0]), float(point[1]), float(point[2])),
-                               tol, True))
+def _inside(solid, point_m, App, tol_m=INSIDE_TOL_M):
+    """Is `point_m` inside the solid? The one kernel containment call, and its one conversion."""
+    return bool(solid.isInside(kern.vec_mm(App, float(point_m[0]), float(point_m[1]),
+                                           float(point_m[2])),
+                               kern.mm(tol_m), True))
 
 
-def entry_direction(solid, point, normal, App, ladder=ENTRY_LADDER, tol=INSIDE_TOL):
+def entry_direction(solid, point_m, normal, App, ladder_m=ENTRY_LADDER_M, tol_m=INSIDE_TOL_M):
     """`normal` turned to point into the material, with the step that proved it, or `(None, None)`.
 
     `face_normal`'s sign is arbitrary -- it comes from a singular vector -- so which way is into the
     wall has to be established rather than assumed. Tries both signs at each step of the ladder and
-    takes the first that lands inside. Returns `(oriented_normal, step)`.
+    takes the first that lands inside. Returns `(oriented_normal, step_m)`.
 
     **Both signs inside is not possible for a point on the boundary of a solid and is treated as a
     failure**, because it means the probe is not on the boundary at all: a point in the interior has
@@ -234,91 +250,95 @@ def entry_direction(solid, point, normal, App, ladder=ENTRY_LADDER, tol=INSIDE_T
     if not np.isfinite(norm) or norm == 0.0:
         return None, None
     n = n / norm
-    p = np.asarray(point, dtype=float)
-    for step in ladder:
-        plus = _inside(solid, p + step * n, App, tol)
-        minus = _inside(solid, p - step * n, App, tol)
+    p_m = np.asarray(point_m, dtype=float)
+    for step_m in ladder_m:
+        plus = _inside(solid, p_m + step_m * n, App, tol_m)
+        minus = _inside(solid, p_m - step_m * n, App, tol_m)
         if plus and minus:
             return None, None
         if plus:
-            return n, step
+            return n, step_m
         if minus:
-            return -n, step
+            return -n, step_m
     return None, None
 
 
-def exit_depth(solid, point, direction, App, limit, step, tol=DEPTH_TOL_MM,
-               inside_tol=INSIDE_TOL):
-    """How far along `direction` the solid extends from `point`, by bisection on `isInside`.
+def exit_depth(solid, point_m, direction, App, limit_m, step_m, tol_m=DEPTH_TOL_M,
+               inside_tol_m=INSIDE_TOL_M):
+    """How far along `direction` the solid extends from `point_m`, by bisection on `isInside`.
 
-    Returns `(depth, bounded)`. `bounded` is `False` when the probe is still inside at `limit`, in
-    which case `depth` is `limit` and is a **lower bound rather than a thickness** -- the caller must
-    not report it as one.
+    Returns `(depth_m, bounded)`. `bounded` is `False` when the probe is still inside at `limit_m`,
+    in which case `depth_m` is `limit_m` and is a **lower bound rather than a thickness** -- the
+    caller must not report it as one.
 
-    Assumes `point + step*direction` is inside, which `entry_direction` has established.
+    Assumes `point_m + step_m*direction` is inside, which `entry_direction` has established.
+    `direction` is a unit vector and carries no unit, so the depth comes out in the points' own
+    unit (IP-FC-163) -- and `tol_m` had to move with it, or the bisection would have run a
+    thousand times further than it needs to.
     """
-    p = np.asarray(point, dtype=float)
+    p_m = np.asarray(point_m, dtype=float)
     n = np.asarray(direction, dtype=float)
-    if _inside(solid, p + limit * n, App, inside_tol):
-        return float(limit), False
-    lo, hi = float(step), float(limit)
-    while hi - lo > tol:
-        mid = 0.5 * (lo + hi)
-        if _inside(solid, p + mid * n, App, inside_tol):
-            lo = mid
+    if _inside(solid, p_m + limit_m * n, App, inside_tol_m):
+        return float(limit_m), False
+    lo_m, hi_m = float(step_m), float(limit_m)
+    while hi_m - lo_m > tol_m:
+        mid_m = 0.5 * (lo_m + hi_m)
+        if _inside(solid, p_m + mid_m * n, App, inside_tol_m):
+            lo_m = mid_m
         else:
-            hi = mid
-    return 0.5 * (lo + hi), True
+            hi_m = mid_m
+    return 0.5 * (lo_m + hi_m), True
 
 
-def cos_consistency(in_plane_mm, thickness_mm, angle_deg_value):
-    """`normal / cos(theta) - in_plane`, the residual of the inclined-slab identity, in mm.
+def cos_consistency(in_plane_m, thickness_m, angle_rad_value):
+    """`normal / cos(theta) - in_plane`, the residual of the inclined-slab identity, in meters.
 
     `None` when any input is missing; `inf` when `cos(theta)` is zero or negative, which is a normal
     orthogonal to or facing away from the in-plane path and so has no consistent reading at all.
     """
-    if in_plane_mm is None or thickness_mm is None or angle_deg_value is None:
+    if in_plane_m is None or thickness_m is None or angle_rad_value is None:
         return None
-    if not np.isfinite(angle_deg_value):
+    if not np.isfinite(angle_rad_value):
         return float('inf')
-    cos = math.cos(math.radians(float(angle_deg_value)))
+    cos = math.cos(float(angle_rad_value))
     # **`<= 0` is not the right guard and does not fire**: `cos(radians(90.0))` is 6.12e-17, not
     # zero, so a perfectly orthogonal normal would divide by it and return 9.8e15 -- a number, not
     # an `inf`, and one that happens to be classified correctly while telling the reader nothing.
-    # Below this the identity is numerically meaningless rather than merely large.
+    # Below this the identity is numerically meaningless rather than merely large. A cosine, so
+    # dimensionless, and the one threshold in this module the conversion did not move.
     if cos <= 1.0e-12:
         return float('inf')
-    return float(thickness_mm) / cos - float(in_plane_mm)
+    return float(thickness_m) / cos - float(in_plane_m)
 
 
-def normal_thickness(solid, point, App, Part, nominal=0.6, limit=None, h=None,
-                     depth_tol=DEPTH_TOL_MM, on_face_tol=ON_FACE_TOL, plane_dir=None,
-                     align_deg=ALIGN_DEG, fallback_tol=FALLBACK_TOL,
-                     in_plane_mm=None, consistency_tol=CONSISTENCY_TOL):
-    """The wall depth at `point`, measured along the inner surface's own outward normal.
+def normal_thickness(solid, point_m, App, Part, nominal_m=NOMINAL_M, limit_m=None, h_m=None,
+                     depth_tol_m=DEPTH_TOL_M, on_face_tol_m=ON_FACE_TOL_M, plane_dir=None,
+                     align_rad=ALIGN_RAD, fallback_tol_m=FALLBACK_TOL_M,
+                     in_plane_m=None, consistency_tol_m=CONSISTENCY_TOL_M):
+    """The wall depth at `point_m`, measured along the inner surface's own outward normal.
 
     Returns a dict always, never `None`: `declined` names why there is no reading, because a sample
     this measure cannot read is the thing worth knowing at a junction and dropping it silently would
     bias the answer toward whichever samples happen to be easy.
 
-    Keys: `thickness_mm`, `bounded`, `declined`, `faces`, `normal`, `normal_residual_mm`,
-    `offsets_used`, `entry_step_mm`.
+    Keys: `thickness_m`, `bounded`, `declined`, `faces`, `normal`, `normal_residual_m`,
+    `offsets_used`, `entry_step_m`.
     """
-    limit = float(nominal * LIMIT_FACTOR) if limit is None else float(limit)
-    row = {'x': float(point[0]), 'y': float(point[1]), 'z': float(point[2]),
-           'thickness_mm': None, 'bounded': None, 'declined': None, 'faces': 0,
-           'normal': None, 'normal_residual_mm': None, 'offsets_used': None,
-           'entry_step_mm': None, 'plane_angle_deg': None, 'aligned': None,
-           'surface': None, 'exit_surface': None, 'exit_point': None, 'exit_faces': None,
-           'placed_loose': False, 'cos_residual_mm': None, 'consistent': None}
-    found = faces_at(solid, point, on_face_tol, Part=Part)
-    # **The same fallback the census needs, for the same reason** -- see `FALLBACK_TOL`. Without it
-    # this function declines exactly the B-spline samples it most needs to read: the first targeted
-    # run on a `tail_shell` measured 4 samples where 24 were on the fitted surface, the other 20
-    # having been turned away as `off_surface` by a tolerance a planar face meets and a trimmed
-    # B-spline does not.
-    if not found and fallback_tol:
-        found = faces_at(solid, point, float(fallback_tol), Part=Part)
+    limit_m = float(nominal_m * LIMIT_FACTOR) if limit_m is None else float(limit_m)
+    row = {'x_m': float(point_m[0]), 'y_m': float(point_m[1]), 'z_m': float(point_m[2]),
+           'thickness_m': None, 'bounded': None, 'declined': None, 'faces': 0,
+           'normal': None, 'normal_residual_m': None, 'offsets_used': None,
+           'entry_step_m': None, 'plane_angle_rad': None, 'aligned': None,
+           'surface': None, 'exit_surface': None, 'exit_point_m': None, 'exit_faces': None,
+           'placed_loose': False, 'cos_residual_m': None, 'consistent': None}
+    found = faces_at(solid, point_m, on_face_tol_m, Part=Part)
+    # **The same fallback the census needs, for the same reason** -- see `FALLBACK_TOL_M`. Without
+    # it this function declines exactly the B-spline samples it most needs to read: the first
+    # targeted run on a `tail_shell` measured 4 samples where 24 were on the fitted surface, the
+    # other 20 having been turned away as `off_surface` by a tolerance a planar face meets and a
+    # trimmed B-spline does not.
+    if not found and fallback_tol_m:
+        found = faces_at(solid, point_m, float(fallback_tol_m), Part=Part)
         row['placed_loose'] = bool(found)
     row['faces'] = len(found)
     if not found:
@@ -331,28 +351,28 @@ def normal_thickness(solid, point, App, Part, nominal=0.6, limit=None, h=None,
         return row
     _index, face = found[0]
     row['surface'] = surface_type(face)
-    kwargs = {} if h is None else {'h': h}
-    normal, residual, used = boolean_edges.face_normal(Part, face, point, **kwargs)
-    row.update(normal_residual_mm=float(residual), offsets_used=int(used))
+    kwargs = {} if h_m is None else {'h_m': h_m}
+    normal, residual_m, used = boolean_edges.face_normal(Part, face, point_m, **kwargs)
+    row.update(normal_residual_m=float(residual_m), offsets_used=int(used))
     if normal is None:
         row['declined'] = 'no_normal'
         return row
-    oriented, step = entry_direction(solid, point, normal, App)
+    oriented, step_m = entry_direction(solid, point_m, normal, App)
     if oriented is None:
         row['declined'] = 'not_entered'
         return row
     row['normal'] = [float(v) for v in oriented]
-    row['entry_step_mm'] = float(step)
+    row['entry_step_m'] = float(step_m)
     if plane_dir is not None:
         # **The angle between the two measurements' directions, recorded before either is
-        # believed.** See `ALIGN_DEG`: a normal orthogonal to the in-plane path means the sample is
+        # believed.** See `ALIGN_RAD`: a normal orthogonal to the in-plane path means the sample is
         # on a face whose normal runs *along* the wall -- a rib-slot cheek -- and the depth found
         # that way is the material across the slot, not the wall.
-        theta = angle_deg(oriented, plane_dir)
-        row['plane_angle_deg'] = theta
-        row['aligned'] = bool(np.isfinite(theta) and theta <= float(align_deg))
-    depth, bounded = exit_depth(solid, point, oriented, App, limit, step, depth_tol)
-    row.update(thickness_mm=float(depth), bounded=bool(bounded))
+        theta_rad = angle_between_rad(oriented, plane_dir)
+        row['plane_angle_rad'] = theta_rad
+        row['aligned'] = bool(np.isfinite(theta_rad) and theta_rad <= float(align_rad))
+    depth_m, bounded = exit_depth(solid, point_m, oriented, App, limit_m, step_m, depth_tol_m)
+    row.update(thickness_m=float(depth_m), bounded=bool(bounded))
     if bounded:
         # **What the ray leaves through, which decides what the depth is a thickness *of*.** A
         # normal reading shorter than the in-plane minimum is not a contradiction: the in-plane
@@ -362,27 +382,28 @@ def normal_thickness(solid, point, App, Part, nominal=0.6, limit=None, h=None,
         # between the interior surface and that slot, which is a different quantity the construction
         # also intends to be `t` (it dilates each notch by `t` for exactly that) but which is not
         # what `WALL_TOL` gates.
-        exit_point = np.asarray(point, dtype=float) + float(depth) * np.asarray(oriented,
-                                                                               dtype=float)
+        exit_point_m = (np.asarray(point_m, dtype=float)
+                        + float(depth_m) * np.asarray(oriented, dtype=float))
         # **The exit's tolerance is the bisection's, not the entry's**, and getting that wrong made
         # all four readings on a real tail report `off_surface`. The entry point comes off a section
-        # wire and lies on its face to kernel tolerance, so 1e-6 mm is right for it; the exit point
-        # is wherever bisection stopped, which is within `depth_tol` = 1e-4 mm of the boundary and
-        # therefore up to a hundred times further out than that. Classifying it at the entry's
-        # tolerance asks whether a point known to be 1e-4 from the surface is within 1e-6 of it.
-        exit_tol = max(float(on_face_tol), 2.0 * float(depth_tol))
-        at_exit = faces_at(solid, exit_point, exit_tol, Part=Part)
-        row['exit_point'] = [float(v) for v in exit_point]
+        # wire and lies on its face to kernel tolerance, so `ON_FACE_TOL_M` is right for it; the
+        # exit point is wherever bisection stopped, which is within `depth_tol_m` of the boundary
+        # and therefore up to a hundred times further out than that. Classifying it at the entry's
+        # tolerance asks whether a point known to be `depth_tol_m` from the surface is within
+        # `ON_FACE_TOL_M` of it. Both scaled together by IP-FC-163, so the ratio is unchanged.
+        exit_tol_m = max(float(on_face_tol_m), 2.0 * float(depth_tol_m))
+        at_exit = faces_at(solid, exit_point_m, exit_tol_m, Part=Part)
+        row['exit_point_m'] = [float(v) for v in exit_point_m]
         row['exit_faces'] = len(at_exit)
         row['exit_surface'] = (surface_type(at_exit[0][1]) if len(at_exit) == 1
                                else ('on_crease' if at_exit else 'off_surface'))
-    # **The inclined-slab identity, which is the discriminator.** See `CONSISTENCY_TOL`: the angle
-    # alone does not separate a reading on the fitted surface from one on a slot cheek, but whether
-    # `normal / cos(theta)` reproduces the in-plane figure does, by two orders of magnitude.
-    residual = cos_consistency(in_plane_mm, row['thickness_mm'], row['plane_angle_deg'])
-    row['cos_residual_mm'] = residual
-    if residual is not None:
-        row['consistent'] = bool(abs(residual) <= float(consistency_tol))
+    # **The inclined-slab identity, which is the discriminator.** See `CONSISTENCY_TOL_M`: the
+    # angle alone does not separate a reading on the fitted surface from one on a slot cheek, but
+    # whether `normal / cos(theta)` reproduces the in-plane figure does, by two orders of magnitude.
+    residual_m = cos_consistency(in_plane_m, row['thickness_m'], row['plane_angle_rad'])
+    row['cos_residual_m'] = residual_m
+    if residual_m is not None:
+        row['consistent'] = bool(abs(residual_m) <= float(consistency_tol_m))
     if not bounded:
         row['declined'] = 'unbounded'
     elif row['consistent'] is False:
@@ -390,8 +411,8 @@ def normal_thickness(solid, point, App, Part, nominal=0.6, limit=None, h=None,
     return row
 
 
-def nearest_foot(point, poly, segment):
-    """Where on `poly`'s `segment`-th edge the perpendicular from `point` lands, in 2-D.
+def nearest_foot(point_m, poly, segment):
+    """Where on `poly`'s `segment`-th edge the perpendicular from `point_m` lands, in 2-D.
 
     `candidates._segment_nearest` returns the distance and *which* segment was nearest; this is the
     foot itself, which is what gives the in-plane shortest path a **direction**. Kept here rather
@@ -403,22 +424,26 @@ def nearest_foot(point, poly, segment):
     p0, p1 = a[j], a[(j + 1) % a.shape[0]]
     ab = p1 - p0
     denom = float(ab @ ab)
-    t = 0.0 if denom == 0.0 else float(np.clip((np.asarray(point[:2], dtype=float) - p0) @ ab
+    t = 0.0 if denom == 0.0 else float(np.clip((np.asarray(point_m[:2], dtype=float) - p0) @ ab
                                                / denom, 0.0, 1.0))
     return p0 + t * ab
 
 
-def angle_deg(a, b):
-    """The unsigned angle between two vectors, in degrees, or `nan` if either is degenerate."""
+def angle_between_rad(a, b):
+    """The unsigned angle between two vectors, in **radians**, or `nan` if either is degenerate.
+
+    Radians because the standard's angle unit is radians (IP-FC-163). `normal_table` is the one
+    place this becomes degrees, which is where a reader wants it.
+    """
     u, v = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     nu, nv = float(np.linalg.norm(u)), float(np.linalg.norm(v))
     if not (np.isfinite(nu) and np.isfinite(nv)) or nu == 0.0 or nv == 0.0:
         return float('nan')
-    return float(np.degrees(np.arccos(np.clip(float(u @ v) / (nu * nv), -1.0, 1.0))))
+    return float(np.arccos(np.clip(float(u @ v) / (nu * nv), -1.0, 1.0)))
 
 
-def thin_samples(outer, inner, nominal, measure=None, margin=WALL_TOL):
-    """The inner samples an in-plane measure reads under `nominal - margin`, worst first.
+def thin_samples(outer, inner, nominal_m, measure=None, margin_m=WALL_TOL_M):
+    """The inner samples an in-plane measure reads under `nominal_m - margin_m`, worst first.
 
     `measure` defaults to `candidates.nearest_point_min`'s own per-sample distances, which is the
     **incumbent** gate's reading -- the one whose figure section 6.8.2.1 calls 63 % junction
@@ -432,28 +457,28 @@ def thin_samples(outer, inner, nominal, measure=None, margin=WALL_TOL):
     # the wall. The distances are identical -- that function's own docstring records it is the same
     # arithmetic as `_segment_distances` with an `argmin` alongside the `min`, and a test holds the
     # two together so they cannot drift.
-    dists, which = candidates._segment_nearest(inner, outer)          # noqa: SLF001 - same package
-    order = np.argsort(dists)
+    dists_m, which = candidates._segment_nearest(inner, outer)        # noqa: SLF001 - same package
+    order = np.argsort(dists_m)
     out = []
     for k in order:
-        if float(dists[k]) >= nominal - margin:
+        if float(dists_m[k]) >= nominal_m - margin_m:
             break
         # **The sample's own three coordinates, not a rebuilt point.** `station_loops` returns
         # `(n, 3)` arrays, so the `z` here is the one the kernel put on the section rather than the
         # station it was asked for. The two differ by the slicer's own tolerance, and a probe placed
         # at the requested `z` can miss the face by that much -- which `faces_at` would report as
         # `off_surface`.
-        point = tuple(float(v) for v in inner[k][:3])
-        foot = nearest_foot(point, outer, which[k])
+        point_m = tuple(float(v) for v in inner[k][:3])
+        foot_m = nearest_foot(point_m, outer, which[k])
         # In-plane by construction: the section is a `z` plane, so the shortest path has no `z`.
-        step = np.array([foot[0] - point[0], foot[1] - point[1], 0.0], dtype=float)
-        out.append({'i': int(k), 'in_plane_mm': float(dists[k]), 'point': point,
-                    'outer_point': (float(foot[0]), float(foot[1]), point[2]),
-                    'plane_dir': [float(v) for v in step]})
+        step_m = np.array([foot_m[0] - point_m[0], foot_m[1] - point_m[1], 0.0], dtype=float)
+        out.append({'i': int(k), 'in_plane_m': float(dists_m[k]), 'point_m': point_m,
+                    'outer_point_m': (float(foot_m[0]), float(foot_m[1]), point_m[2]),
+                    'plane_dir': [float(v) for v in step_m]})
     return out
 
 
-def thin_by_surface(shape, thin, Part, tol=ON_FACE_TOL, fallback_tol=FALLBACK_TOL):
+def thin_by_surface(shape, thin, Part, tol_m=ON_FACE_TOL_M, fallback_tol_m=FALLBACK_TOL_M):
     """Which face class each thin sample sits on, counted. **No normals, no bisection, so cheap.**
 
     This is the half of the question that can be asked of *every* thin sample rather than the worst
@@ -466,7 +491,7 @@ def thin_by_surface(shape, thin, Part, tol=ON_FACE_TOL, fallback_tol=FALLBACK_TO
     """
     counts, per_sample = {}, []
     for s in thin:
-        found = faces_at(shape, s['point'], tol, Part=Part)
+        found = faces_at(shape, s['point_m'], tol_m, Part=Part)
         # **An `off_surface` is retried at a looser tolerance before it is counted as one, because
         # it would otherwise be an undercount of the class that matters.** A sample the census
         # cannot place is a sample excluded from the "is it on the fitted interior surface?"
@@ -476,8 +501,8 @@ def thin_by_surface(shape, thin, Part, tol=ON_FACE_TOL, fallback_tol=FALLBACK_TO
         # than silently folded in: a sample that needs 1e-4 mm of slack to land on a face is placed
         # less certainly than one that lands at 1e-6, and the two should not be indistinguishable.
         loose = False
-        if not found and fallback_tol:
-            found = faces_at(shape, s['point'], float(fallback_tol), Part=Part)
+        if not found and fallback_tol_m:
+            found = faces_at(shape, s['point_m'], float(fallback_tol_m), Part=Part)
             loose = bool(found)
         if not found:
             kind = 'off_surface'
@@ -504,8 +529,8 @@ def surface_ranks(per_sample, kind=FITTED_SURFACE):
     `per_sample` is `thin_by_surface`'s second return, which is in the same worst-first order
     `thin_samples` produced.
 
-    **Matched by prefix, so a `(loose)` placement counts.** A sample that needed `FALLBACK_TOL` of
-    slack to land on the fitted surface is still a reading on the fitted surface, and on the three
+    **Matched by prefix, so a `(loose)` placement counts.** A sample that needed `FALLBACK_TOL_M`
+    of slack to land on the fitted surface is still a reading on the fitted surface, and on the three
     walls measured every unplaced sample turned out to be one of those -- so exact matching would
     drop the majority of the class on two of them.
     """
@@ -533,7 +558,7 @@ def selector_verdict(stations, kind=FITTED_SURFACE):
         if ranks:
             with_kind += 1
             deepest = max(deepest, max(ranks))
-        rows.append({'z': station.get('z'), 'thin': thin, 'ranks': list(ranks),
+        rows.append({'z_m': station.get('z_m'), 'thin': thin, 'ranks': list(ranks),
                      'fraction': (max(ranks) + 1) / float(thin) if (ranks and thin) else None})
     reasons = []
     if not rows:
@@ -548,20 +573,21 @@ def selector_verdict(stations, kind=FITTED_SURFACE):
 
 def rank_table(verdict):
     """`selector_verdict` as text: what `N` each station would have needed."""
-    head = '%12s %8s %8s %10s  %s' % ('z', 'thin', 'on kind', 'needs N', 'ranks (0-based)')
+    head = '%12s %8s %8s %10s  %s' % ('z/mm', 'thin', 'on kind', 'needs N',
+                                      'ranks (0-based)')
     out = [head, '-' * len(head)]
     for r in verdict['rows']:
         ranks = r['ranks']
         out.append('%12.4f %8d %8d %10s  %s'
-                   % (r['z'], r['thin'], len(ranks),
+                   % (kern.mm(r['z_m']), r['thin'], len(ranks),
                       '-' if not ranks else str(max(ranks) + 1),
                       '-' if not ranks else ', '.join(str(v) for v in ranks[:12])))
     return '\n'.join(out)
 
 
-def station_normals(shape, z, nominal, App, Part, n_points=None, spacing=None, worst=12,
-                    margin=WALL_TOL, limit=None, h=None, census=True, only_surface=None,
-                    fallback_tol=None):
+def station_normals(shape, z_m, nominal_m, App, Part, n_points=None, spacing_m=None, worst=12,
+                    margin_m=WALL_TOL_M, limit_m=None, h_m=None, census=True, only_surface=None,
+                    fallback_tol_m=None):
     """At one station: the in-plane thin samples, each re-measured along its own normal in 3-D.
 
     `worst` caps how many samples are re-measured, because each costs a `distToShape` per candidate
@@ -572,24 +598,27 @@ def station_normals(shape, z, nominal, App, Part, n_points=None, spacing=None, w
     # `locate.state_profile` does the same conversion for the same reason: the part scales with `U`
     # and the 0.6 mm wall does not, so a fixed count is a different circumferential resolution at
     # every size. The one extra slice `section_perimeter` costs is paid once a station.
-    if spacing is not None:
+    if spacing_m is not None:
         from . import density
-        wires = sections.closed_wires(shape, z, App=App)
+        wires = sections.closed_wires(shape, z_m, App=App)
         if len(wires) < 2:
-            return {'z': float(z), 'rows': [], 'loops': len(wires), 'declined': 'no_annulus',
-                    'thin_in_plane': 0}
-        perimeter = max(float(w.Length) for w in wires)
-        loops = sections.loops_from_wires(wires, density.counts_for_spacing(perimeter, spacing))
+            return {'z_m': float(z_m), 'rows': [], 'loops': len(wires),
+                    'declined': 'no_annulus', 'thin_in_plane': 0}
+        # `kern.length_m`, not `float(w.Length)`: the wire's attribute is millimeters and the
+        # spacing is meters, which is the crossing `sever_doses` got wrong (IP-FC-163).
+        perimeter_m = max(kern.length_m(w) for w in wires)
+        loops = sections.loops_from_wires(
+            wires, density.counts_for_spacing(perimeter_m, spacing_m))
     elif n_points is not None:
-        loops = sections.station_loops(shape, z, n_points, App=App)
+        loops = sections.station_loops(shape, z_m, n_points, App=App)
     else:
-        loops = sections.station_loops(shape, z, App=App)
+        loops = sections.station_loops(shape, z_m, App=App)
     if len(loops) < 2:
-        return {'z': float(z), 'rows': [], 'loops': len(loops), 'declined': 'no_annulus',
+        return {'z_m': float(z_m), 'rows': [], 'loops': len(loops), 'declined': 'no_annulus',
                 'thin_in_plane': 0}
     outer, inner = loops[0], loops[1]
-    thin = thin_samples(outer, inner, nominal, margin=margin)
-    counts, per_sample = (thin_by_surface(shape, thin, Part, fallback_tol=fallback_tol)
+    thin = thin_samples(outer, inner, nominal_m, margin_m=margin_m)
+    counts, per_sample = (thin_by_surface(shape, thin, Part, fallback_tol_m=fallback_tol_m)
                           if (census and thin) else ({}, []))
 
     # **`only_surface` exists because the worst-N and the question are not the same set.** On a
@@ -604,12 +633,12 @@ def station_normals(shape, z, nominal, App, Part, n_points=None, spacing=None, w
         chosen = [(k, s) for k, s in chosen if str(per_sample[k]).startswith(only_surface)]
     rows = []
     for _k, s in chosen[:int(worst)]:
-        row = normal_thickness(shape, s['point'], App, Part, nominal=nominal, limit=limit, h=h,
-                               plane_dir=s['plane_dir'], fallback_tol=fallback_tol,
-                               in_plane_mm=s['in_plane_mm'])
-        row.update(in_plane_mm=s['in_plane_mm'], i=s['i'], outer_point=s['outer_point'])
+        row = normal_thickness(shape, s['point_m'], App, Part, nominal_m=nominal_m,
+                               limit_m=limit_m, h_m=h_m, plane_dir=s['plane_dir'],
+                               fallback_tol_m=fallback_tol_m, in_plane_m=s['in_plane_m'])
+        row.update(in_plane_m=s['in_plane_m'], i=s['i'], outer_point_m=s['outer_point_m'])
         rows.append(row)
-    return {'z': float(z), 'rows': rows, 'loops': len(loops), 'declined': None,
+    return {'z_m': float(z_m), 'rows': rows, 'loops': len(loops), 'declined': None,
             'thin_in_plane': len(thin), 'samples': len(inner), 'thin_surfaces': counts,
             'only_surface': only_surface,
             # The severity ranks of the samples that are actually wall thicknesses -- see
@@ -619,32 +648,32 @@ def station_normals(shape, z, nominal, App, Part, n_points=None, spacing=None, w
                 [] if (census and thin) else None)}
 
 
-def exoneration(rows, nominal, tol=0.01):
+def exoneration(rows, nominal_m, tol_m=WALL_TOL_M):
     """How the 3-D normal reading compares with the in-plane one, sample by sample.
 
-    `exonerated` means the in-plane figure is under `nominal - tol` -- a real failure by the gate's
-    own threshold -- while the normal reading is at or above `nominal - tol`. That is the only
+    `exonerated` means the in-plane figure is under `nominal_m - tol_m` -- a real failure by the
+    gate's own threshold -- while the normal reading is at or above it. That is the only
     combination that says the in-plane reading was a direction artifact rather than missing
     material, and it is the claim section 6.8.2.1 asks for.
 
     `confirmed` is the opposite and equally important: both readings thin, so the material really is
     absent and no exclusion rescues it.
     """
-    floor = float(nominal) - float(tol)
+    floor_m = float(nominal_m) - float(tol_m)
     # **Only a sample where both instruments are reading one wall can correct the other.**
     # `consistent` is `False` where `normal / cos(theta)` fails to reproduce the in-plane figure,
     # which means the two are measuring different walls: such a sample's depth is a real distance
     # through material and not a correction to the in-plane reading, so it is reported apart rather
     # than counted either way. `None` is a sample measured without an in-plane figure to compare
     # against -- the direct `normal_thickness` call a test makes -- and is treated as comparable.
-    read = [r for r in rows if r.get('thickness_mm') is not None and r.get('bounded')]
+    read = [r for r in rows if r.get('thickness_m') is not None and r.get('bounded')]
     aligned = [r for r in read if r.get('consistent') is not False]
     oblique = [r for r in read if r.get('consistent') is False]
     exonerated, confirmed = [], []
     for r in aligned:
-        if float(r['in_plane_mm']) >= floor:
+        if float(r['in_plane_m']) >= floor_m:
             continue
-        (exonerated if float(r['thickness_mm']) >= floor else confirmed).append(r)
+        (exonerated if float(r['thickness_m']) >= floor_m else confirmed).append(r)
     declined = {}
     for r in rows:
         why = r.get('declined')
@@ -652,11 +681,11 @@ def exoneration(rows, nominal, tol=0.01):
             declined[why] = declined.get(why, 0) + 1
     return {'read': len(read), 'aligned': len(aligned), 'oblique': oblique,
             'exonerated': exonerated, 'confirmed': confirmed, 'declined': declined,
-            'worst_in_plane_mm': min((float(r['in_plane_mm']) for r in rows), default=None),
-            'worst_normal_mm': min((float(r['thickness_mm']) for r in aligned), default=None)}
+            'worst_in_plane_m': min((float(r['in_plane_m']) for r in rows), default=None),
+            'worst_normal_m': min((float(r['thickness_m']) for r in aligned), default=None)}
 
 
-def normal_verdict(stations, nominal, tol=0.01):
+def normal_verdict(stations, nominal_m, tol_m=WALL_TOL_M):
     """The whole scan's answer, with the guard that stops it reporting a pass from nothing.
 
     `clean` here does **not** mean the wall is good -- it means *this measurement established
@@ -667,8 +696,9 @@ def normal_verdict(stations, nominal, tol=0.01):
     silence, not exoneration).
     """
     rows = [r for s in stations for r in s.get('rows', [])]
-    agg = exoneration(rows, nominal, tol)
-    thin_in_plane = sum(1 for r in rows if float(r.get('in_plane_mm', nominal)) < nominal - tol)
+    agg = exoneration(rows, nominal_m, tol_m)
+    thin_in_plane = sum(1 for r in rows
+                        if float(r.get('in_plane_m', nominal_m)) < nominal_m - tol_m)
     # **The census over every thin sample, not only the re-measured ones.** `station_normals` caps
     # how many samples get a normal; the surface class is cheap enough to ask of all of them, and on
     # a real wall it is this column that answers the question.
@@ -713,28 +743,34 @@ def normal_verdict(stations, nominal, tol=0.01):
             'read': agg['read'], 'aligned': agg['aligned'], 'n_oblique': len(agg['oblique']),
             'n_exonerated': len(agg['exonerated']),
             'n_confirmed': len(agg['confirmed']), 'declined': agg['declined'],
-            'worst_in_plane_mm': agg['worst_in_plane_mm'],
-            'worst_normal_mm': agg['worst_normal_mm'],
+            'worst_in_plane_m': agg['worst_in_plane_m'],
+            'worst_normal_m': agg['worst_normal_m'],
             'vacuous_because': reasons, 'established': not reasons}
 
 
-def normal_table(stations, nominal):
-    """One row a re-measured sample: what the plane said, what the normal says, or why not."""
-    head = '%10s %6s %10s %10s %9s %7s %10s %-26s %s' % (
-        'z', 'i', 'in-plane', 'normal 3-D', 'delta', 'n vs u', 'cos resid', 'exits through', 'note')
+def normal_table(stations, nominal_m):
+    """One row a re-measured sample: what the plane said, what the normal says, or why not.
+
+    **The display boundary**: millimeters and degrees, each named in its heading. The rows are
+    meters and radians.
+    """
+    head = '%10s %6s %11s %13s %10s %8s %11s %-26s %s' % (
+        'z/mm', 'i', 'in-plane/mm', 'normal 3-D/mm', 'delta/mm', 'n^u/deg', 'cos res/mm',
+        'exits through', 'note')
     out = [head, '-' * len(head)]
     for s in stations:
         for r in s.get('rows', []):
-            normal = r.get('thickness_mm')
-            delta = None if normal is None else float(normal) - float(r['in_plane_mm'])
-            theta = r.get('plane_angle_deg')
-            resid = r.get('cos_residual_mm')
-            out.append('%10.4f %6d %10.5f %10s %9s %7s %10s %-26s %s'
-                       % (r['z'], r.get('i', -1), r['in_plane_mm'],
-                          'n/a' if normal is None else '%.5f' % normal,
-                          'n/a' if delta is None else '%+.5f' % delta,
-                          'n/a' if theta is None else '%6.2f' % theta,
-                          'n/a' if resid is None else '%+.5f' % resid,
+            normal_m = r.get('thickness_m')
+            delta_m = (None if normal_m is None
+                       else float(normal_m) - float(r['in_plane_m']))
+            theta_rad = r.get('plane_angle_rad')
+            resid_m = r.get('cos_residual_m')
+            out.append('%10.4f %6d %11.5f %13s %10s %8s %11s %-26s %s'
+                       % (kern.mm(r['z_m']), r.get('i', -1), kern.mm(r['in_plane_m']),
+                          'n/a' if normal_m is None else '%.5f' % kern.mm(normal_m),
+                          'n/a' if delta_m is None else '%+.5f' % kern.mm(delta_m),
+                          'n/a' if theta_rad is None else '%6.2f' % np.degrees(theta_rad),
+                          'n/a' if resid_m is None else '%+.5f' % kern.mm(resid_m),
                           r.get('exit_surface') or 'n/a',
                           r.get('declined') or 'read'))
     return '\n'.join(out)

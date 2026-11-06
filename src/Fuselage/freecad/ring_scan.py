@@ -121,23 +121,36 @@ import Part                                                        # noqa: E402
 
 from corner_common import is_entry_point                           # noqa: E402
 
+import si                                                          # noqa: E402
+
 from wall_measure import corpus, locate                            # noqa: E402
 
-#: Axial spacing, in mm, between scanned stations. **A spacing, not a count**, for the reason in
+#: Axial spacing between scanned stations. **A spacing, not a count**, for the reason in
 #: `locate.dense_grid`: the part's length scales with `U` and a defect's extent does not.
 #:
-#: 1.0 mm is twenty-five times finer than the acceptance grid's own ~25 mm on a tail, which is the
-#: gap OQ-DES-CW26's evidence is bounded by. It is not chosen against a known defect width, because
-#: the reproduced break's extent in `z` was never measured -- so this bounds how short a break could
-#: still hide rather than guaranteeing none does.
-AXIAL_MM = 1.0
+#: 1.0e-3 m is twenty-five times finer than the acceptance grid's own ~25 mm on a tail, which is
+#: the gap OQ-DES-CW26's evidence is bounded by. It is not chosen against a known defect width,
+#: because the reproduced break's extent in `z` was never measured -- so this bounds how short a
+#: break could still hide rather than guaranteeing none does. Was 1.0 mm before IP-FC-163 and is
+#: the same spacing.
+AXIAL_M = 1.0e-3
 
-#: Circumferential spacing, in mm, each station discretizes its loops at. `locate.TARGET_SPACING`'s
-#: value: a third of the wall, so a chord's sag is well inside the quantity being classified.
-AROUND_MM = 0.2
+#: Circumferential spacing each station discretizes its loops at. `locate.TARGET_SPACING_M`'s
+#: value: a third of the wall, so a chord's sag is well inside the quantity being classified. Was
+#: 0.2 mm.
+AROUND_M = 2.0e-4
 
 #: Scanned first, because it is the configuration OQ-DES-CW26's break was reproduced on.
 PRIORITY = ('tail_shell_U3.0', 'tail_shell_U4.0', 'tail_shell_U1.5')
+
+#: **The JSON this script writes stays in millimeters, deliberately** (IP-FC-163). A corpus scan is
+#: hours a run and the records under `out/ring_scan/` are the whole of OQ-DES-CW26's evidence that
+#: no unperturbed wall severs its ring; a format whose numbers silently changed meaning would make
+#: every one of those records disagree with the document quoting it, and re-earning them costs the
+#: hours again. The keys already name the unit (`axial_mm`, `around_mm`), the station lists are
+#: millimeters beside them, and `locate.scan_verdict` is the other side of the conversion. Nothing
+#: inside this module stores a millimeter: the constants are SI, the measuring is SI, and `si.mm`
+#: appears only where a figure is written or printed.
 
 
 def _opt(name, default=None):
@@ -178,16 +191,16 @@ def summarize(where, out=None):
             walls.append(wall)
     out.write(locate.scan_table(walls) + '\n')
     verdict = locate.scan_verdict(walls)
-    for label, z in verdict['severed']:
-        out.write('  SEVERED  %-26s z %.4f\n' % (label, z))
-    for label, z in verdict['real_gaps']:
-        out.write('  GAP      %-26s z %.4f\n' % (label, z))
+    for label, z_m in verdict['severed_m']:
+        out.write('  SEVERED  %-26s z %.4f mm\n' % (label, si.mm(z_m)))
+    for label, z_m in verdict['real_gaps_m']:
+        out.write('  GAP      %-26s z %.4f mm\n' % (label, si.mm(z_m)))
     for label, d in verdict['kernel_disagreements']:
         out.write('  DISAGREE %-26s %s\n' % (label, d))
     out.write('VERDICT: %s -- %d station(s) across %d wall(s), %d severed, %d confirmed gap(s), '
               '%d slice artifact(s)\n'
               % ('CLEAN' if verdict['clean'] else 'FINDINGS', verdict['stations'],
-                 verdict['walls'], len(verdict['severed']), len(verdict['real_gaps']),
+                 verdict['walls'], len(verdict['severed_m']), len(verdict['real_gaps_m']),
                  verdict['artifacts']))
     out.write('RING_SCAN_SUMMARY ' + json.dumps(verdict, default=str) + '\n')
     out.flush()
@@ -203,8 +216,8 @@ def ordered(records, only=None):
                                           r.label))
 
 
-def scan_wall(wall, axial=AXIAL_MM, around=AROUND_MM, out=None, label=''):
-    """One wall, densely in `z`.
+def scan_wall(wall, axial_m=AXIAL_M, around_m=AROUND_M, out=None, label=''):
+    """One wall, densely in `z`. SI in, SI in the rows, millimeters only where it prints.
 
     Returns `(rows, severed, no_wall, meta)` -- every station's classification, the two kinds of
     station that are not a healthy annulus, and what the run cost. `meta` carries the real extent,
@@ -212,13 +225,17 @@ def scan_wall(wall, axial=AXIAL_MM, around=AROUND_MM, out=None, label=''):
     schedule the rest of the corpus and it is not recoverable from the rows.
     """
     out = out if out is not None else sys.stdout
-    extent = corpus.sectioning_extent(wall, App=App)
-    # `extent` is handed on rather than let `dense_grid` find it again: the bisection behind it is
-    # about forty sections on a wall whose box spans 400 mm, and this function already paid for it.
-    zs = locate.dense_grid(wall, inset=1.0, App=App, spacing_mm=axial, extent=extent)
-    out.write('  %-26s real z %s, %d station(s) at %.2f mm\n'
-              % (label, '%.3f..%.3f' % extent if extent else 'UNKNOWN (box fallback)',
-                 len(zs), axial))
+    extent_m = corpus.sectioning_extent(wall, App=App)
+    # `extent_m` is handed on rather than let `dense_grid` find it again: the bisection behind it
+    # is about forty sections on a wall whose box spans 400 mm, and this function already paid for
+    # it.
+    zs_m = locate.dense_grid(wall, inset_m=locate.DENSE_INSET_M, App=App, spacing_m=axial_m,
+                             extent_m=extent_m)
+    out.write('  %-26s real z %s mm, %d station(s) at %.2f mm\n'
+              % (label,
+                 ('%.3f..%.3f' % (si.mm(extent_m[0]), si.mm(extent_m[1])) if extent_m
+                  else 'UNKNOWN (box fallback)'),
+                 len(zs_m), si.mm(axial_m)))
     out.flush()
     at = time.time()
     seen = {'n': 0}
@@ -226,21 +243,23 @@ def scan_wall(wall, axial=AXIAL_MM, around=AROUND_MM, out=None, label=''):
     def tick(row):
         seen['n'] += 1
         if seen['n'] % 50 == 0:
-            out.write('      %d of %d, %.0f s\n' % (seen['n'], len(zs), time.time() - at))
+            out.write('      %d of %d, %.0f s\n' % (seen['n'], len(zs_m), time.time() - at))
             out.flush()
 
-    rows = locate.state_profile(wall, zs, App=App, spacing=around, on_station=tick)
+    rows = locate.state_profile(wall, zs_m, App=App, spacing_m=around_m, on_station=tick)
     elapsed = time.time() - at
     bad = locate.severed(rows)
     no_wall = [r for r in rows if r['state'] == locate.NO_WALL]
-    meta = {'extent': list(extent) if extent else None, 'faces': len(wall.Faces),
-            'seconds': elapsed, 'seconds_per_station': elapsed / len(zs) if zs else None}
+    # `extent_mm`, because `meta` is written into the millimeter record; see the note on `PRIORITY`.
+    meta = {'extent_mm': [si.mm(v) for v in extent_m] if extent_m else None,
+            'faces': len(wall.Faces), 'seconds': elapsed,
+            'seconds_per_station': elapsed / len(zs_m) if zs_m else None}
     out.write('      %s  %d station(s), %d severed, %d no_wall  [%.0f s, %.1f s/station]\n'
               % (label, len(rows), len(bad), len(no_wall), elapsed,
                  meta['seconds_per_station'] or 0.0))
     for r in (bad + no_wall)[:10]:
-        out.write('        z %10.4f  %-16s loops %d  area_ratio %s  samples %d\n'
-                  % (r['z'], r['state'], r['loops'],
+        out.write('        z %10.4f mm  %-16s loops %d  area_ratio %s  samples %d\n'
+                  % (si.mm(r['z_m']), r['state'], r['loops'],
                      'n/a' if r['area_ratio'] is None else '%.4f' % r['area_ratio'],
                      r['samples']))
     out.flush()
@@ -255,20 +274,22 @@ def confirm(wall, rows, out=None):
     produced a false positive before (`locate.N_POINTS`).
     """
     out = out if out is not None else sys.stdout
-    suspect = [r['z'] for r in rows if r['state'] != locate.ANNULUS]
-    if not suspect:
+    suspect_m = [r['z_m'] for r in rows if r['state'] != locate.ANNULUS]
+    if not suspect_m:
         return []
-    out.write('    kernel confirmation on %d suspect station(s)\n' % len(suspect))
+    out.write('    kernel confirmation on %d suspect station(s)\n' % len(suspect_m))
     # `agrees_with_kernel` returns only the stations where the two disagree, as
-    # `(z, scan_state, kernel_says_annulus)`. An empty list is full agreement.
-    disagree = locate.agrees_with_kernel(wall, suspect[:40], Part, App, spacing=AROUND_MM)
+    # `(z_m, scan_state, kernel_says_annulus)`. An empty list is full agreement.
+    disagree = locate.agrees_with_kernel(wall, suspect_m[:40], Part, App, spacing_m=AROUND_M)
     if not disagree:
-        out.write('      kernel agrees with the scan at all %d\n' % min(len(suspect), 40))
-    for z, state, kernel_annulus in disagree:
-        out.write('      z %10.4f  scan says %-16s kernel says %s  DISAGREE\n'
-                  % (z, state, 'annulus' if kernel_annulus else 'not an annulus'))
+        out.write('      kernel agrees with the scan at all %d\n' % min(len(suspect_m), 40))
+    for z_m, state, kernel_annulus in disagree:
+        out.write('      z %10.4f mm  scan says %-16s kernel says %s  DISAGREE\n'
+                  % (si.mm(z_m), state, 'annulus' if kernel_annulus else 'not an annulus'))
     out.flush()
-    return [{'z': z, 'scan': state, 'kernel_annulus': bool(k)} for z, state, k in disagree]
+    # Written into the millimeter record, so converted here.
+    return [{'z_mm': si.mm(z_m), 'scan': state, 'kernel_annulus': bool(k)}
+            for z_m, state, k in disagree]
 
 
 def confirm_no_wall(wall, rows, out=None):
@@ -290,21 +311,21 @@ def confirm_no_wall(wall, rows, out=None):
     in principle also strike a neighbor, a deterministic one cannot.
     """
     out = out if out is not None else sys.stdout
-    gaps = [r['z'] for r in rows if r['state'] == locate.NO_WALL]
+    gaps_m = [r['z_m'] for r in rows if r['state'] == locate.NO_WALL]
     verdicts = []
-    for z in gaps:
-        near = locate.nearby_states(wall, z, App=App, spacing=AROUND_MM)
+    for z_m in gaps_m:
+        near = locate.nearby_states(wall, z_m, App=App, spacing_m=AROUND_M)
         artifact = locate.is_slice_artifact(near)
-        out.write('    no_wall at z %.4f: %s\n'
-                  % (z, 'SLICE ARTIFACT, the wall returns nearby' if artifact
+        out.write('    no_wall at z %.4f mm: %s\n'
+                  % (si.mm(z_m), 'SLICE ARTIFACT, the wall returns nearby' if artifact
                      else 'REAL GAP, absent either side too'))
         for r in near:
-            out.write('        z %10.4f  %-16s loops %d  samples %d\n'
-                      % (r['z'], r['state'], r['loops'], r['samples']))
+            out.write('        z %10.4f mm  %-16s loops %d  samples %d\n'
+                      % (si.mm(r['z_m']), r['state'], r['loops'], r['samples']))
         out.flush()
-        verdicts.append({'z': z, 'slice_artifact': bool(artifact),
-                         'nearby': [{'z': r['z'], 'state': r['state'], 'loops': r['loops']}
-                                    for r in near]})
+        verdicts.append({'z_mm': si.mm(z_m), 'slice_artifact': bool(artifact),
+                         'nearby': [{'z_mm': si.mm(r['z_m']), 'state': r['state'],
+                                     'loops': r['loops']} for r in near]})
     return verdicts
 
 
@@ -334,8 +355,11 @@ def walls_of(family):
 
 
 def main():
-    axial = float(_opt('axial', AXIAL_MM))
-    around = float(_opt('around', AROUND_MM))
+    # **The flags name their unit**, which `--axial` and `--around` did not: a bare length on a
+    # command line is the same unnamed-unit defect the standard forbids in an identifier
+    # (IP-FC-163). The record they end up in is millimeters too, so the flag and the file agree.
+    axial_m = si.m(float(_opt('axial-mm', si.mm(AXIAL_M))))
+    around_m = si.m(float(_opt('around-mm', si.mm(AROUND_M))))
     only = _opt('only')
     out_json = _opt('json')
     family = _opt('family', 'soak')
@@ -343,34 +367,37 @@ def main():
         return summarize(_opt('summarize'))
     records = ordered(walls_of(family), only)
     print('ring_scan: %s family, %d wall(s), %.2f mm axially, %.2f mm circumferentially'
-          % (family, len(records), axial, around), flush=True)
+          % (family, len(records), si.mm(axial_m), si.mm(around_m)), flush=True)
     results = []
     started = time.time()
     for rec in records:
         wall = corpus.load(Part, rec)
-        rows, bad, no_wall, meta = scan_wall(wall, axial, around, label=rec.label)
+        rows, bad, no_wall, meta = scan_wall(wall, axial_m, around_m, label=rec.label)
         agree = confirm(wall, rows) if (bad or no_wall) else []
         gaps = confirm_no_wall(wall, rows) if no_wall else []
-        real_gaps = [g['z'] for g in gaps if not g['slice_artifact']]
+        real_gaps_mm = [g['z_mm'] for g in gaps if not g['slice_artifact']]
+        # Every station position written here is millimeters: see the note on `PRIORITY`.
         results.append({'label': rec.label, 'stations': len(rows),
-                        'severed': [r['z'] for r in bad],
-                        'no_wall': [r['z'] for r in no_wall],
-                        'no_wall_verdicts': gaps, 'real_gaps': real_gaps,
+                        'severed': [si.mm(r['z_m']) for r in bad],
+                        'no_wall': [si.mm(r['z_m']) for r in no_wall],
+                        'no_wall_verdicts': gaps, 'real_gaps': real_gaps_mm,
                         'states': locate.states(rows), 'kernel_disagreements': agree,
-                        'axial_mm': axial, 'around_mm': around, 'meta': meta})
+                        'axial_mm': si.mm(axial_m), 'around_mm': si.mm(around_m),
+                        'meta': meta})
         # **Written after every wall, not at the end.** `freecadcmd` exits 0 on an uncaught
         # exception, so the artifact is the only honest record of how far a run got; a scan of the
         # whole corpus is hours, and losing the finished walls to the eleventh one's crash would
         # mean paying for them again.
         if out_json:
-            _write_json(out_json, {'axial_mm': axial, 'around_mm': around, 'walls': results})
+            _write_json(out_json, {'axial_mm': si.mm(axial_m), 'around_mm': si.mm(around_m),
+                                   'walls': results})
     total = sum(r['stations'] for r in results)
     # **Severed and a real gap are findings; a slice artifact is not.** Counting an artifact here
     # would report the plane the scan happened to choose as a defect in the part.
     flagged = [r for r in results if r['severed'] or r['real_gaps']]
     print('scanned %d station(s) across %d wall(s) in %.0f s; %d wall(s) with a severed ring or a '
           'confirmed gap' % (total, len(results), time.time() - started, len(flagged)), flush=True)
-    print('RING_SCAN ' + json.dumps({'axial_mm': axial, 'around_mm': around,
+    print('RING_SCAN ' + json.dumps({'axial_mm': si.mm(axial_m), 'around_mm': si.mm(around_m),
                                      'walls': results}, default=str))
     sys.stdout.flush()
     return 0

@@ -53,13 +53,15 @@ import FreeCAD as App                                                    # noqa:
 import Part                                                              # noqa: E402,F401
 
 import cowl_interior as ci                                               # noqa: E402
+import si                                                                # noqa: E402
 from corner_common import is_entry_point                                 # noqa: E402
 from wall_measure import fit_response as fr                              # noqa: E402
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'fit_amplification')
 
-#: The section the synthetic rows carry, in mm: a tail-sized rounded rectangle.
-HALF_X, HALF_Y, CORNER = 60.0, 40.0, 8.0
+#: The section the synthetic rows carry: a tail-sized rounded rectangle. Converted from
+#: 60.0 / 40.0 / 8.0 mm by IP-FC-163; the same section.
+HALF_X_M, HALF_Y_M, CORNER_M = 0.060, 0.040, 0.008
 
 #: Points per row. `cowl_interior`'s own fit resolution is this order, and the response is measured
 #: at matched surface parameters rather than at row points, so it is not a sampling knob.
@@ -69,13 +71,21 @@ N_FIT = 96
 #: replaces. 1.0 is the uniform mesh -- the control.
 TIGHTNESS = (1.0, 1.0e-1, 1.0e-2, 1.0e-3, 1.0e-4)
 
-#: The nudge, in mm. Small enough to stay in the regime OQ-DES-CW26 measured its gain in.
-DELTA = 0.001
+#: The nudge. Small enough to stay in the regime OQ-DES-CW26 measured its gain in. Was 0.001 mm.
+DELTA_M = 1.0e-6
 
 #: The cowl wall at the parameter sheet's current values, `cowl_n_perimeters * extrusion_width`.
-#: `cavity` is handed this as `t` and derives its station floor from it, so the floor this script
-#: reports is the floor a real build at these values gets.
-WALL_MM = 0.6
+#: `cavity` is handed this as `t_m` and derives its station floor from it, so the floor this
+#: script reports is the floor a real build at these values gets. Was 0.6 mm.
+WALL_M = 6.0e-4
+
+#: The axial span the synthetic stack covers. Was -300.0 .. 0.0 mm, a tail's own length.
+Z_LO_M, Z_HI_M = -0.300, 0.0
+
+#: How much the synthetic section shrinks per meter of `z`, so the stack is not a prism. This is a
+#: **reciprocal length**, so converting the lengths it multiplies meant scaling it the other way:
+#: 0.0005 per mm is 0.5 per m (IP-FC-163).
+TAPER_PER_M = 0.5
 
 
 def _opt(name, default=None):
@@ -85,63 +95,70 @@ def _opt(name, default=None):
     return default
 
 
-#: Near-duplicate station pairs this subsystem is recorded as actually containing, in mm. The
-#: first is the pair IP-FC-144 exists to remove and reaches a real build because `MIN_INTERVAL` is
-#: enforced against subdivision and not against the seed-set union; the second is the artifact an
-#: earlier harness manufactured by unioning a four-decimal printing of a real notch edge into the
-#: seed set; the third is the real neighbor gap at the perturbed row once nothing is forced.
-REAL_PAIRS = ((0.0009433, 'the pair IP-FC-144 removes'),
-              (0.0000338812, "an earlier harness's forced pair"),
-              (0.4310898, 'the real notch-edge neighbor gap'))
+#: Near-duplicate station pairs this subsystem is recorded as actually containing. The first is
+#: the pair IP-FC-144 exists to remove and reaches a real build because `MIN_INTERVAL` is enforced
+#: against subdivision and not against the seed-set union; the second is the artifact an earlier
+#: harness manufactured by unioning a four-decimal printing of a real notch edge into the seed
+#: set; the third is the real neighbor gap at the perturbed row once nothing is forced. Converted
+#: from 0.0009433 / 0.0000338812 / 0.4310898 mm; the same three gaps.
+REAL_PAIRS_M = ((9.433e-7, 'the pair IP-FC-144 removes'),
+                (3.38812e-8, "an earlier harness's forced pair"),
+                (4.310898e-4, 'the real notch-edge neighbor gap'))
 
 
-def mesh(knots, i_row, tightness, z_lo, z_hi, at=None):
-    """Station heights: uniform, with one interval squeezed by `tightness`.
+def mesh(knots, i_row, tightness, z_lo_m, z_hi_m, at=None):
+    """Station heights in meters: uniform, with one interval squeezed by `tightness`.
 
     `at` is which interval to squeeze, defaulting to the one immediately after `i_row`. Being able
     to put the crowding somewhere else is the whole converse: if crowding anywhere amplified, the
     finding would be about the mesh, and if only crowding *beside the nudged row* amplifies, it is
     about the pair and the nudge together.
+
+    `tightness` is a fraction of the interval it replaces, so it carries no unit.
     """
-    span = z_hi - z_lo
-    zs = [z_lo + span * i / float(knots - 1) for i in range(knots)]
+    span_m = z_hi_m - z_lo_m
+    zs_m = [z_lo_m + span_m * i / float(knots - 1) for i in range(knots)]
     if tightness < 1.0:
         k = i_row if at is None else at
-        zs[k + 1] = zs[k] + tightness * (zs[k + 1] - zs[k])
-    return sorted(zs)
+        zs_m[k + 1] = zs_m[k] + tightness * (zs_m[k + 1] - zs_m[k])
+    return sorted(zs_m)
 
 
-def _gain(zs, i_row, offset):
-    """The measured gain of the real fit at `offset` knots along, and its prediction."""
-    rows = fr.rounded_rows(zs, N_FIT, HALF_X, HALF_Y, CORNER, taper=0.0005)
-    target = fr._at([z for z, _p in rows], i_row, offset)
-    return fr.response(ci._fit, rows, i_row, DELTA, [target])[0]
+def _gain(zs_m, i_row, offset):
+    """The measured gain of the real fit at `offset` knots along, and its prediction.
+
+    `gain` is a ratio of two displacements, so it is dimensionless and is the one figure here the
+    conversion could not move -- which is what makes it comparable with OQ-DES-CW26's own 0.408.
+    """
+    rows = fr.rounded_rows(zs_m, N_FIT, HALF_X_M, HALF_Y_M, CORNER_M, taper=TAPER_PER_M)
+    target_m = fr._at([z_m for z_m, _p in rows], i_row, offset)
+    return fr.response(ci._fit, rows, i_row, DELTA_M, [target_m])[0]
 
 
 def run(knots, offset, out_dir):
     started = time.time()
     i_row = int(knots // 2)
-    z_lo, z_hi = -300.0, 0.0
+    z_lo_m, z_hi_m = Z_LO_M, Z_HI_M
     print('')
     print('The fit alone: how far a %.4f mm one-row nudge travels, %s knots along.'
-          % (DELTA, offset))
+          % (si.mm(DELTA_M), offset))
     print('  rows %d, nudged row %d, section %.0f x %.0f mm, corner r = %.0f mm'
-          % (knots, i_row, 2 * HALF_X, 2 * HALF_Y, CORNER))
+          % (knots, i_row, si.mm(2 * HALF_X_M), si.mm(2 * HALF_Y_M), si.mm(CORNER_M)))
     print('')
-    print('  pair gap, mm   measured gain   predicted gain      ratio')
+    print('  pair gap/mm    measured gain   predicted gain      ratio')
     print('  ' + '-' * 60)
 
     records = []
     for tightness in TIGHTNESS:
-        zs = mesh(knots, i_row, tightness, z_lo, z_hi)
-        gap = zs[i_row + 1] - zs[i_row]
-        got = _gain(zs, i_row, offset)
+        zs_m = mesh(knots, i_row, tightness, z_lo_m, z_hi_m)
+        gap_m = zs_m[i_row + 1] - zs_m[i_row]
+        got = _gain(zs_m, i_row, offset)
         ratio = (got['gain'] / got['predicted_gain']
                  if got['predicted_gain'] else float('nan'))
         print('  %12.6g   %13.6e   %13.6e   %8.3f'
-              % (gap, got['gain'], got['predicted_gain'], ratio))
-        records.append(dict(got, tightness=tightness, pair_gap_mm=gap, arm='tightness',
-                            knots=knots, offset=offset, i_row=i_row))
+              % (si.mm(gap_m), got['gain'], got['predicted_gain'], ratio))
+        records.append(dict(got, tightness=tightness, pair_gap_mm=si.mm(gap_m),
+                            arm='tightness', knots=knots, offset=offset, i_row=i_row))
 
     print('')
     base = records[0]['gain']
@@ -157,8 +174,8 @@ def run(knots, offset, out_dir):
     print('    pair beside interval   measured gain    against uniform')
     tight = 1.0e-4
     for at in (0, 3, i_row - 1, i_row, i_row + 1, i_row + 4, knots - 2):
-        zs = mesh(knots, i_row, tight, z_lo, z_hi, at=at)
-        got = _gain(zs, i_row, offset)
+        zs_m = mesh(knots, i_row, tight, z_lo_m, z_hi_m, at=at)
+        got = _gain(zs_m, i_row, offset)
         flag = '   <- beside the nudge' if at in (i_row - 1, i_row) else ''
         print('    %18d   %13.6e   %12.1fx%s'
               % (at, got['gain'], got['gain'] / base if base else float('nan'), flag))
@@ -168,37 +185,42 @@ def run(knots, offset, out_dir):
     # What the pairs this subsystem really contains would do, at the same offset.
     print('')
     print('  The near-duplicate pairs actually on record:')
-    print('    pair gap, mm    measured gain   what it is')
-    span_interval = (z_hi - z_lo) / float(knots - 1)
-    for gap, what in REAL_PAIRS:
-        zs = mesh(knots, i_row, gap / span_interval, z_lo, z_hi)
-        got = _gain(zs, i_row, offset)
-        print('    %12.7f   %13.6e   %s' % (gap, got['gain'], what))
-        records.append(dict(got, pair_gap_mm=gap, arm='real', what=what,
+    print('    pair gap/mm     measured gain   what it is')
+    # A ratio of two lengths, so the tightness each pair implies is unit-invariant.
+    span_interval_m = (z_hi_m - z_lo_m) / float(knots - 1)
+    for gap_m, what in REAL_PAIRS_M:
+        zs_m = mesh(knots, i_row, gap_m / span_interval_m, z_lo_m, z_hi_m)
+        got = _gain(zs_m, i_row, offset)
+        print('    %12.7f   %13.6e   %s' % (si.mm(gap_m), got['gain'], what))
+        records.append(dict(got, pair_gap_mm=si.mm(gap_m), arm='real', what=what,
                             knots=knots, offset=offset, i_row=i_row))
 
     # The bound. IP-FC-144 put a floor under the station gap, and since the gain goes as
     # 1 / gap, a floor on the gap is a ceiling on the gain. This is the number that says whether
     # the condition behind the 0.408 reading is still reachable.
-    floor = ci.station_floor(WALL_MM)
-    zs = mesh(knots, i_row, floor / span_interval, z_lo, z_hi)
-    got = _gain(zs, i_row, offset)
+    floor_m = ci.station_floor(WALL_M)
+    zs_m = mesh(knots, i_row, floor_m / span_interval_m, z_lo_m, z_hi_m)
+    got = _gain(zs_m, i_row, offset)
     print('')
-    print('  The bound IP-FC-144 puts on this, at t = %.3f mm:' % WALL_MM)
-    print('    station_floor(t)          %.4f mm' % floor)
-    print('    gain at the floor         %13.6e mm per mm' % got['gain'])
+    print('  The bound IP-FC-144 puts on this, at t = %.3f mm:' % si.mm(WALL_M))
+    print('    station_floor(t)          %.4f mm' % si.mm(floor_m))
+    # The gain is dimensionless -- a displacement over a displacement -- so "per mm" would be
+    # wrong in either unit, and 0.408 is directly comparable without converting anything.
+    print('    gain at the floor         %13.6e (dimensionless)' % got['gain'])
     print('    against the 0.408 on record     %.1fx smaller'
           % (0.408 / got['gain'] if got['gain'] else float('nan')))
-    records.append(dict(got, pair_gap_mm=floor, arm='floor', what='station_floor(t)',
+    records.append(dict(got, pair_gap_mm=si.mm(floor_m), arm='floor',
+                        what='station_floor(t)',
                         knots=knots, offset=offset, i_row=i_row))
 
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
     stem = os.path.join(out_dir, 'fit_amplification')
     with io.open(stem + '.json', 'w', encoding='utf-8') as fh:
-        fh.write(json.dumps({'delta_mm': DELTA, 'records': records,
-                             'section': {'half_x': HALF_X, 'half_y': HALF_Y,
-                                         'corner': CORNER, 'n_fit': N_FIT}},
+        fh.write(json.dumps({'delta_mm': si.mm(DELTA_M), 'records': records,
+                             'section_mm': {'half_x': si.mm(HALF_X_M),
+                                            'half_y': si.mm(HALF_Y_M),
+                                            'corner': si.mm(CORNER_M), 'n_fit': N_FIT}},
                             indent=1, sort_keys=True, default=float))
     print('')
     print('  wrote %s.json in %.1f s' % (stem, time.time() - started))

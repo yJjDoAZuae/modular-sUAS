@@ -46,8 +46,8 @@ from wall_measure import candidates, sections
 #: Stations the wall is measured at.
 STATIONS = 12
 
-#: Circumferential spacing, in millimeters, each section is sampled at when the wall is measured
-#: across it. **A spacing, not a count, and that is the whole of the change.**
+#: Circumferential spacing each section is sampled at when the wall is measured across it.
+#: **A spacing, not a count, and that is the whole of the change.**
 #:
 #: This was `AROUND` = 240 inner samples with the outer loop at `8 * AROUND`, fixed counts at every
 #: `U`. A cowl's perimeter grows roughly linearly with `U` while its wall stays an absolute
@@ -71,7 +71,7 @@ WALL_ARC_M = 1.25e-4                         # 0.125 mm
 #: Floor and ceiling on the derived sample count. The floor keeps a short section a polygon; the
 #: ceiling is a **memory and time guard, not a design value** -- no swept configuration reaches it,
 #: since `U` = 4's 2 088 mm section needs 16 707. If one ever did, the spacing it actually achieved
-#: would be coarser than `WALL_ARC` and `wall_samples` is where to look.
+#: would be coarser than `WALL_ARC_M` and `wall_samples` is where to look.
 WALL_MIN = 480
 WALL_MAX = 60000
 
@@ -306,27 +306,27 @@ def _station_distances(wall, z_m, arc_m=WALL_ARC_M):
             # figure and a corpus figure are not confounded by their sampling.
             n = wall_samples(max(si.length_m(loops[0]), si.length_m(loops[1])), arc_m)
             n_per_loop = n
-            # **The one millimeter crossing left in this file, and it is named rather than
-            # hidden.** `wall_measure` is not converted yet (IP-FC-163): it is an 8 000-line
-            # pure-numpy measurement subsystem under `tools/`, outside the port this item
-            # inventoried, with its own published corpus and pre-committed gate figures in
-            # millimeters. Its functions are unit-homogeneous -- points in, distances out -- so
-            # feeding them the kernel's own millimeters and converting what comes back is
-            # exactly correct arithmetic, and the conversion happens here, once, where a reader
-            # can see it. It is a crossing into un-converted library code, not a boundary:
-            # nothing about `wall_measure` makes millimeters right for it.
-            outer_pts_mm = sections._points_of(loops[0], n)
-            inner_pts_mm = sections._points_of(loops[1], n)
-            outer = ci._Polyline([(si.m(p[0]), si.m(p[1])) for p in outer_pts_mm])
+            # **There is no millimeter crossing here any more, and that is what IP-FC-163
+            # delivered.** Until 2026-11-03 these four lines were the one named crossing left in
+            # this file: `wall_measure` stored millimeters, so the points came back in the
+            # kernel's unit and every value crossing back had to be converted at this site. The
+            # package is SI now -- `sections._points_of` converts once, on the assembled array,
+            # which is the only place the package builds a point array -- so the arrays arrive in
+            # meters, `_Polyline` and `corner_excluded_min` both take and return meters, and
+            # nothing on this path converts anything. The conversion that remains is `si.mm(z_m)`
+            # at the `slice` call above, which is a kernel call and is where a conversion belongs.
+            outer_pts_m = sections._points_of(loops[0], n)
+            inner_pts_m = sections._points_of(loops[1], n)
+            outer = ci._Polyline([(p[0], p[1]) for p in outer_pts_m])
             # `distances` in one call, not `distance` per point: it chunks the
             # (points x segments) matrix itself, and at these counts a call a point is thousands
             # of numpy round trips for the same arithmetic.
-            inner_xy_m = [(si.m(p[0]), si.m(p[1])) for p in inner_pts_mm]
+            inner_xy_m = [(p[0], p[1]) for p in inner_pts_m]
             d.extend(outer.distances(inner_xy_m).tolist())
             # The selected measure, on the identical point set -- see `station_measures` on why
             # the two are computed from one section and what identity that preserves.
-            _kept, thick_mm = candidates.corner_excluded_min(outer_pts_mm, inner_pts_mm)
-            selected.extend(si.m(float(v)) for v in thick_mm if v == v)
+            _kept, thick_m = candidates.corner_excluded_min(outer_pts_m, inner_pts_m)
+            selected.extend(float(v) for v in thick_m if v == v)
         else:
             # A piece whose section is a single loop is a strip: its own width is the wall.
             # `2 * area / perimeter` is that width for a long thin region, exact in the limit

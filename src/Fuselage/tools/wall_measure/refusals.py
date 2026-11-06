@@ -115,12 +115,17 @@ def shape_of(exc):
 
 
 def station_of(exc):
-    """The station a refusal's worst reading was at, or `None` when it is not about one."""
-    z = getattr(exc, 'z', None)
-    return None if z is None else float(z)
+    """The station a refusal's worst reading was at, in meters, or `None`.
+
+    `Unconverged.z` is set by `cowl_interior`, which stores SI, so this is already meters and
+    nothing converts (IP-FC-163). The attribute keeps its own short name because it belongs to
+    the port's exception class, not to this module.
+    """
+    z_m = getattr(exc, 'z', None)
+    return None if z_m is None else float(z_m)
 
 
-def artifact_name(kind, u, z=None, delta=None, tag=None, ext=EXT):
+def artifact_name(kind, u, z_m=None, delta_m=None, tag=None, ext=EXT):
     """The file name for one refusal's shape.
 
     Every part is optional except the kind and `u`, and an absent part is left out rather than
@@ -128,25 +133,27 @@ def artifact_name(kind, u, z=None, delta=None, tag=None, ext=EXT):
     called None rather than as a refusal that had no station. `u` is `%g`, so `U3` and not
     `U3.0`, matching every other artifact this package writes.
 
-    `z` is carried at four decimals, which is what the round note and the `Unconverged` message
-    print, so a file can be matched to the line in the log that produced it by eye.
+    **The station and the dose go into the name in millimeters**, at four decimals, which is what
+    the round note and the `Unconverged` message print -- so a file can still be matched to the
+    line in the log that produced it by eye. A file name is a display boundary, and `_mm` in the
+    two tokens says which unit it is (IP-FC-163).
     """
     parts = ['%s_U%g' % (_safe(kind), u)]
-    if delta is not None:
-        parts.append('_d%g' % delta)
-    if z is not None:
-        parts.append('_z%.4f' % z)
+    if delta_m is not None:
+        parts.append('_d%gmm' % units.m_to_mm(delta_m))
+    if z_m is not None:
+        parts.append('_z%.4fmm' % units.m_to_mm(z_m))
     if tag is not None:
         parts.append('_%s' % _safe(tag))
     return ''.join(parts) + '.' + _safe(ext)
 
 
-def save(exc, out_dir, kind, u, export, delta=None, tag=None, dirname=DIRNAME):
+def save(exc, out_dir, kind, u, export, delta_m=None, tag=None, dirname=DIRNAME):
     """Write the shape `exc` carries. Returns `None` when it carries none, else a record.
 
-    The record is `path`, `z`, `bytes` where the written file could be measured, and `error` when
-    the export itself failed -- a string, never a raised exception, because this runs inside the
-    caller's `except` block.
+    The record is `path`, `z_m`, `bytes` where the written file could be measured, and `error`
+    when the export itself failed -- a string, never a raised exception, because this runs inside
+    the caller's `except` block.
 
     `export` is called as `export(shape, path)`. Anything it raises is caught and recorded: a
     28 MB write to a network path is a real thing to fail, and a refusal that also cannot be
@@ -155,10 +162,10 @@ def save(exc, out_dir, kind, u, export, delta=None, tag=None, dirname=DIRNAME):
     shape = shape_of(exc)
     if shape is None:
         return None
-    z = station_of(exc)
+    z_m = station_of(exc)
     folder = os.path.join(out_dir, _safe(dirname)) if dirname else out_dir
-    path = os.path.join(folder, artifact_name(kind, u, z=z, delta=delta, tag=tag))
-    rec = {'path': path, 'z': z}
+    path = os.path.join(folder, artifact_name(kind, u, z_m=z_m, delta_m=delta_m, tag=tag))
+    rec = {'path': path, 'z_m': z_m}
     try:
         if not os.path.isdir(folder):
             os.makedirs(folder)
