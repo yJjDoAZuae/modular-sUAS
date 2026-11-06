@@ -36,6 +36,7 @@ Usage, one `--pass` per argument (see `tau_study.py` for why)::
     freecadcmd rib_proximity.py --pass --kind=tail_shell --pass --u=0.5
 """
 import json
+import math
 import os
 import sys
 import time
@@ -49,8 +50,9 @@ import Part                                                        # noqa: E402
 
 import check_cowl_interior as cci                                  # noqa: E402
 import cowl_interior as ci                                         # noqa: E402
+import si                                                          # noqa: E402
 from corner_common import is_entry_point                           # noqa: E402
-from tau_study import SPACING, _opt, build_cell                    # noqa: E402
+from tau_study import SPACING_M, _opt, build_cell                  # noqa: E402
 
 from wall_measure import candidates, locate                        # noqa: E402
 
@@ -60,8 +62,11 @@ from wall_measure import candidates, locate                        # noqa: E402
 FAR_IN_T = 3.0
 
 
-def tool_rows(shell, t):
-    """Each buttress tool and its dilation, as `(name, kind, raw, dilated)`."""
+def tool_rows(shell, t_m):
+    """Each buttress tool and its dilation, as `(name, kind, raw, dilated)`.
+
+    `t_m` is meters, because `ci.dilated_notches` is SI (IP-FC-163).
+    """
     rows = []
     for obj in shell.Notches:
         name = obj.Name
@@ -70,51 +75,62 @@ def tool_rows(shell, t):
                 'top' if 'Top' in name else
                 'bottom' if 'Bot' in name else 'other')
         raw = obj.Shape
-        dilated = ci.dilated_notches(Part.makeCompound([raw]), t)
+        dilated = ci.dilated_notches(Part.makeCompound([raw]), t_m)
         rows.append((name, kind, raw,
                      dilated[0] if isinstance(dilated, (list, tuple)) else dilated))
     return rows
 
 
-def _distance(shape, point):
-    """In-plane-agnostic 3-D distance from a point to a shape, via the kernel."""
+def _distance_m(shape, point_m):
+    """3-D distance from a point to a shape, via the kernel, in meters.
+
+    SI in and SI out, with the vector built in the kernel's millimeters and the answer converted
+    back (IP-FC-163). Building the vertex from the raw meter coordinates would have probed a point
+    a thousand times nearer the axis than the thin spot.
+    """
     try:
-        return float(shape.distToShape(Part.Vertex(App.Vector(*point)))[0])
+        vertex = Part.Vertex(si.vec_m(point_m[0], point_m[1], point_m[2]))
+        return si.m(float(shape.distToShape(vertex)[0]))
     except Exception:                                              # noqa: BLE001 kernel refusal
         return float('nan')
 
 
-def probe(wall, tools, t, stations=cci.STATIONS, spacing=SPACING, out=None):
+def probe(wall, tools, t_m, stations=cci.STATIONS, spacing_m=SPACING_M, out=None):
     """Every station's thin spot, with its distance to each tool raw and dilated."""
     out = out if out is not None else sys.stdout
-    lo, hi = ci.z_extent(wall)
-    lo, hi = lo + 1.0, hi - 1.0
-    zs = [lo + (hi - lo) * i / float(stations - 1) for i in range(stations)]
+    # `ci.z_extent` is meters, so the inset is `STATION_INSET_M`: a bare 1.0 inset the grid by a
+    # whole meter and put every station off a 0.3 m part.
+    lo_m, hi_m = ci.z_extent(wall)
+    lo_m, hi_m = lo_m + cci.STATION_INSET_M, hi_m - cci.STATION_INSET_M
+    zs_m = [lo_m + (hi_m - lo_m) * i / float(stations - 1) for i in range(stations)]
     rows = []
-    for z in zs:
-        d = locate.station_detail(wall, z, measure=candidates.corner_excluded_min,
-                                  nominal=t, App=App, spacing=spacing)
-        if d['worst_thin'] is None:
-            out.write('  z %10.4f  %s\n' % (z, d['state']))
+    for z_m in zs_m:
+        d = locate.station_detail(wall, z_m, measure=candidates.corner_excluded_min,
+                                  nominal_m=t_m, App=App, spacing_m=spacing_m)
+        if d['worst_thin_m'] is None:
+            out.write('  z %10.4f mm  %s\n' % (si.mm(z_m), d['state']))
             out.flush()
             continue
-        pt = (d['x'], d['y'], z)
+        pt_m = (d['x_m'], d['y_m'], z_m)
         per_tool = []
         for name, kind, raw, dil in tools:
             per_tool.append({'tool': name, 'kind': kind,
-                             'raw_mm': _distance(raw, pt),
-                             'dilated_mm': _distance(dil, pt)})
-        nearest = min(per_tool, key=lambda r: r['raw_mm'])
-        nearest_dil = min(per_tool, key=lambda r: r['dilated_mm'])
-        row = {'z': z, 'thin': d['worst_thin'], 'angle_deg': d['angle_deg'],
-               'x': d['x'], 'y': d['y'], 'tools': per_tool,
+                             'raw_m': _distance_m(raw, pt_m),
+                             'dilated_m': _distance_m(dil, pt_m)})
+        nearest = min(per_tool, key=lambda r: r['raw_m'])
+        nearest_dil = min(per_tool, key=lambda r: r['dilated_m'])
+        row = {'z_m': z_m, 'thin_m': d['worst_thin_m'], 'angle_rad': d['angle_rad'],
+               'x_m': d['x_m'], 'y_m': d['y_m'], 'tools': per_tool,
                'nearest': nearest, 'nearest_dilated': nearest_dil,
-               'far_from_any_rib': nearest['raw_mm'] > FAR_IN_T * t}
+               # `FAR_IN_T` is a multiple of `t`, so the comparison is a ratio of two lengths and
+               # the conversion could not move it.
+               'far_from_any_rib': nearest['raw_m'] > FAR_IN_T * t_m}
         rows.append(row)
-        out.write('  z %10.4f  thin %8.5f  angle %7.2f   nearest raw %-12s %8.3f mm'
+        out.write('  z %10.4f mm  thin %8.5f mm  angle %7.2f deg   nearest raw %-12s %8.3f mm'
                   '   nearest dilated %-12s %8.3f mm%s\n'
-                  % (z, row['thin'], row['angle_deg'], nearest['tool'], nearest['raw_mm'],
-                     nearest_dil['tool'], nearest_dil['dilated_mm'],
+                  % (si.mm(z_m), si.mm(row['thin_m']), math.degrees(row['angle_rad']),
+                     nearest['tool'], si.mm(nearest['raw_m']),
+                     nearest_dil['tool'], si.mm(nearest_dil['dilated_m']),
                      '   FAR' if row['far_from_any_rib'] else ''))
         out.flush()
     return rows
@@ -137,16 +153,18 @@ def dilated_overlaps(tools, out=None):
                 common = a[3].common(b[3])
             except Exception:                                      # noqa: BLE001 kernel refusal
                 continue
-            vol = float(common.Volume) if common.Solids else 0.0
-            if vol <= 0.0:
+            vol_m3 = si.volume_m3(common) if common.Solids else 0.0
+            if vol_m3 <= 0.0:
                 continue
-            smaller = min(float(a[3].Volume), float(b[3].Volume))
+            smaller_m3 = min(si.volume_m3(a[3]), si.volume_m3(b[3]))
             found.append({'a': a[0], 'b': b[0], 'kinds': '%s/%s' % (a[1], b[1]),
-                          'common_mm3': vol,
-                          'fraction_of_smaller': vol / smaller if smaller else float('nan')})
+                          'common_m3': vol_m3,
+                          # A ratio of two volumes, so unit-invariant.
+                          'fraction_of_smaller': (vol_m3 / smaller_m3 if smaller_m3
+                                                  else float('nan'))})
     for r in sorted(found, key=lambda r: -r['fraction_of_smaller']):
         out.write('  %-12s %-12s %-12s common %12.4f mm3  %6.2f %% of the smaller\n'
-                  % (r['a'], r['b'], r['kinds'], r['common_mm3'],
+                  % (r['a'], r['b'], r['kinds'], r['common_m3'] * si.MM3_PER_M3,
                      100.0 * r['fraction_of_smaller']))
     if not found:
         out.write('  no two dilated envelopes intersect\n')
@@ -159,14 +177,15 @@ def main():
     u = float(_opt('u', '0.5'))
     started = time.time()
     doc, shell = build_cell(kind, u)
-    t = float(shell.Inset)
+    # The sheet's millimeters into an SI construction, named at the crossing (IP-FC-163).
+    t_m = si.m(float(shell.Inset))
     print('rib_proximity %s U=%s, t = %.4f mm, %d tools  [%.0f s to build]'
-          % (kind, u, t, len(shell.Notches), time.time() - started), flush=True)
-    tools = tool_rows(shell, t)
+          % (kind, u, si.mm(t_m), len(shell.Notches), time.time() - started), flush=True)
+    tools = tool_rows(shell, t_m)
     print('dilated envelopes that merge:', flush=True)
     overlaps = dilated_overlaps(tools)
-    print('thin spot proximity, %.3f mm spacing:' % SPACING, flush=True)
-    rows = probe(shell.Shape, tools, t)
+    print('thin spot proximity, %.3f mm spacing:' % si.mm(SPACING_M), flush=True)
+    rows = probe(shell.Shape, tools, t_m)
     far = [r for r in rows if r['far_from_any_rib']]
     print('stations whose thin spot is more than %.1f t from any rib: %d of %d'
           % (FAR_IN_T, len(far), len(rows)), flush=True)
@@ -175,7 +194,7 @@ def main():
         by_kind[r['nearest']['kind']] = by_kind.get(r['nearest']['kind'], 0) + 1
     print('nearest-rib kind at each thin spot: %s' % by_kind, flush=True)
     print('RIB_PROXIMITY ' + json.dumps(
-        {'kind': kind, 'u': u, 't': t, 'overlaps': overlaps, 'rows': rows}, default=str))
+        {'kind': kind, 'u': u, 't_m': t_m, 'overlaps': overlaps, 'rows': rows}, default=str))
     sys.stdout.flush()
     App.closeDocument(doc.Name)
     return 0

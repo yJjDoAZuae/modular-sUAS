@@ -1,8 +1,8 @@
 """IP-WTM-28: `TAU` and `WALL_TOL` are not two thresholds on one quantity.
 
 **What this answers, and why it had to be asked.** `cowl_interior.cavity`'s second pass converges
-until the finished wall is within `TAU` of nominal, and the acceptance gate then asks whether the
-wall is within `WALL_TOL`. Both are millimeters of wall error, so `TAU` = `WALL_TOL` reads like a
+until the finished wall is within `TAU_M` of nominal, and the acceptance gate then asks whether the
+wall is within `WALL_TOL_M`. Both are a wall error in meters, so `TAU_M` = `WALL_TOL_M` reads like a
 setting that makes the construction guarantee its own acceptance criterion
 (`cowl.md` OQ-DES-CW28, alternative 1).
 
@@ -39,6 +39,9 @@ samples whose nearest point on the exterior sits at a **crease** dropped, which 
 taken across a notch junction is separated from a thin wall::
 
     freecadcmd criterion_check.py --pass --only=tail_shell_U0.5 --pass --junctions
+
+**Figures are stored in meters and printed in millimeters** (IP-FC-163). `--nominal-mm` says its
+unit in its own name, which `--nominal` did not; the tables below say theirs in their headings.
 """
 import os
 import sys
@@ -53,6 +56,8 @@ import Part                                                        # noqa: E402
 
 from corner_common import is_entry_point                           # noqa: E402
 
+import si                                                          # noqa: E402
+
 from wall_measure import corpus, locate                            # noqa: E402
 
 
@@ -63,7 +68,7 @@ def _opt(name, default=None):
     return default
 
 
-def check_wall(wall, label='', nominal=0.6, out=None):
+def check_wall(wall, label='', nominal_m=locate.NOMINAL_M, out=None):
     """One saved wall at the gate's own twelve stations, both measures at both spacings.
 
     **The grid is `measurable_station_grid`, not `station_grid`.** A bounding box overstates these
@@ -79,14 +84,14 @@ def check_wall(wall, label='', nominal=0.6, out=None):
 
     def _tick(row):
         """One line a station, so a stall names the station that owns it rather than going dark."""
-        out.write('    %3d/%d  z %12.5f  %-8s  %5.0f s elapsed\n'
-                  % (len(seen) + 1, len(zs), row['z'], (row['state'] or '-')[:8],
+        out.write('    %3d/%d  z %12.5f mm  %-8s  %5.0f s elapsed\n'
+                  % (len(seen) + 1, len(zs), si.mm(row['z_m']), (row['state'] or '-')[:8],
                      time.time() - started))
         out.flush()
         seen.append(row)
 
     seen = []
-    rows = locate.criterion_split(wall, zs, nominal=nominal, App=App, on_station=_tick)
+    rows = locate.criterion_split(wall, zs, nominal_m=nominal_m, App=App, on_station=_tick)
     out.write('\n'.join('    ' + line
                         for line in locate.criterion_table(rows).splitlines()) + '\n')
 
@@ -94,24 +99,28 @@ def check_wall(wall, label='', nominal=0.6, out=None):
         vals = [r[key] for r in rows if r.get(key) is not None]
         return max(vals) if vals else None
 
-    pass2, inc, sel = _worst('thin_pass2'), _worst('thin_incumbent'), _worst('thin_selected')
+    pass2_m = _worst('thin_pass2_m')
+    inc_m = _worst('thin_incumbent_m')
+    sel_m = _worst('thin_selected_m')
     seconds = time.time() - started
-    if pass2 is not None and sel is not None:
-        ratio = (pass2 / sel) if sel > 0 else float('inf')
-        out.write('    pass 2 reads %.5f where the gate\'s selected measure reads %.5f '
-                  '(%.2fx); incumbent %.5f. %.1f s, %.1f s a station\n'
-                  % (pass2, sel, ratio, inc, seconds, seconds / max(1, len(zs))))
-    violations = [r['z'] for r in rows if r.get('subset_violated')]
+    if pass2_m is not None and sel_m is not None:
+        # A ratio of two readings, so it means the same thing in either unit.
+        ratio = (pass2_m / sel_m) if sel_m > 0 else float('inf')
+        out.write('    pass 2 reads %.5f mm where the gate\'s selected measure reads %.5f mm '
+                  '(%.2fx); incumbent %.5f mm. %.1f s, %.1f s a station\n'
+                  % (si.mm(pass2_m), si.mm(sel_m), ratio, si.mm(inc_m), seconds,
+                     seconds / max(1, len(zs))))
+    violations = [r['z_m'] for r in rows if r.get('subset_violated')]
     if violations:
         out.write('    SUBSET VIOLATED at %d station(s): the corner-excluded measure cannot '
                   'report more thinness than the incumbent\n' % len(violations))
     out.flush()
     return {'label': label, 'stations': len(zs), 'rows': rows, 'seconds': seconds,
-            'worst_pass2': pass2, 'worst_incumbent': inc, 'worst_selected': sel,
+            'worst_pass2_m': pass2_m, 'worst_incumbent_m': inc_m, 'worst_selected_m': sel_m,
             'subset_violations': len(violations)}
 
 
-def check_junctions(wall, label='', nominal=0.6, out=None):
+def check_junctions(wall, label='', nominal_m=locate.NOMINAL_M, out=None):
     """IP-WTM-45: how much of this wall's thinness is read at a crease of its own exterior.
 
     The saved wall's outer loop **is** the notched exterior, so this asks `cavity`'s question with
@@ -126,13 +135,13 @@ def check_junctions(wall, label='', nominal=0.6, out=None):
     seen = []
 
     def _tick(row):
-        out.write('    %3d/%d  z %12.5f  %-8s  creases %-4s dropped %-5s %5.0f s\n'
-                  % (len(seen) + 1, len(zs), row['z'], (row['state'] or '-')[:8],
+        out.write('    %3d/%d  z %12.5f mm  %-8s  creases %-4s dropped %-5s %5.0f s\n'
+                  % (len(seen) + 1, len(zs), si.mm(row['z_m']), (row['state'] or '-')[:8],
                      row['creases'], row['dropped'], time.time() - started))
         out.flush()
         seen.append(row)
 
-    rows = locate.junction_split(wall, zs, nominal=nominal, App=App, on_station=_tick)
+    rows = locate.junction_split(wall, zs, nominal_m=nominal_m, App=App, on_station=_tick)
     out.write('\n'.join('    ' + line
                         for line in locate.junction_table(rows).splitlines()) + '\n')
     out.flush()
@@ -141,7 +150,9 @@ def check_junctions(wall, label='', nominal=0.6, out=None):
 
 def main():
     only = _opt('only')
-    nominal = float(_opt('nominal', '0.6'))
+    # **The flag names its unit**, which `--nominal` did not: a bare length on a command line is
+    # the same unnamed-unit defect the standard forbids in an identifier (IP-FC-163).
+    nominal_m = si.m(float(_opt('nominal-mm', '0.6')))
     junctions = any(a == '--junctions' for a in sys.argv)
     records = [r for r in corpus.distinct() if not only or only in r.label]
     print('criterion_check: %d wall(s)' % len(records), flush=True)
@@ -149,15 +160,15 @@ def main():
     for rec in records:
         wall = corpus.load(Part, rec)
         if junctions:
-            check_junctions(wall, rec.label, nominal)
+            check_junctions(wall, rec.label, nominal_m)
             continue
-        walls.append(check_wall(wall, rec.label, nominal))
+        walls.append(check_wall(wall, rec.label, nominal_m))
     if junctions:
         return 0
     bad = [w for w in walls if w['subset_violations']]
-    ratios = [(w['label'], w['worst_pass2'] / w['worst_selected'])
+    ratios = [(w['label'], w['worst_pass2_m'] / w['worst_selected_m'])
               for w in walls
-              if w['worst_selected'] not in (None, 0.0) and w['worst_pass2'] is not None]
+              if w['worst_selected_m'] not in (None, 0.0) and w['worst_pass2_m'] is not None]
     if ratios:
         worst = max(ratios, key=lambda kv: kv[1])
         print('%d wall(s): pass 2 over the selected measure ranges %.2fx to %.2fx, worst on %s'

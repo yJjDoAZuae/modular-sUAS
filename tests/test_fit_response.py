@@ -287,7 +287,7 @@ def test_a_response_record_carries_the_prediction_beside_the_measurement():
     # is being compared against.
     rows = square_rows([0.0, 1.0, 2.0, 3.0])
     rec = fr.response(_LinearFit, rows, 1, 0.01, [1.5], n_v=16)[0]
-    assert set(rec) == {'z', 'row', 'u', 'moved_m', 'gain', 'predicted_gain'}
+    assert set(rec) == {'z_m', 'row', 'u', 'moved_m', 'gain', 'predicted_gain'}
 
 
 def test_the_axial_parameter_is_solved_from_the_surface_not_assumed():
@@ -493,31 +493,41 @@ def test_nothing_is_sub_floor_when_the_stations_are_well_spaced():
 
 # --- the synthetic stack ----------------------------------------------------------------------
 
+#: The synthetic section's own size, in meters: a tail-sized rounded rectangle, the same one
+#: `fit_amplification` builds. Converted from 60 / 40 / 8 mm by IP-FC-163.
+HALF_X_M, HALF_Y_M, CORNER_M = 0.060, 0.040, 0.008
+
+
 def test_the_synthetic_section_has_genuine_fixed_radius_corners():
-    rows = fr.rounded_rows([0.0, 1.0], n=720, half_x=60.0, half_y=40.0, radius=8.0)
+    rows = fr.rounded_rows([0.0, 1.0e-3], n=720, half_x_m=HALF_X_M, half_y_m=HALF_Y_M,
+                           radius_m=CORNER_M)
     pts = rows[0][1]
-    cx, cy = 60.0 - 8.0, 40.0 - 8.0
-    corner = [(x, y) for x, y in pts if x > cx and y > cy]
+    cx_m, cy_m = HALF_X_M - CORNER_M, HALF_Y_M - CORNER_M
+    corner = [(x_m, y_m) for x_m, y_m in pts if x_m > cx_m and y_m > cy_m]
     assert len(corner) > 10
-    for x, y in corner:
-        assert math.hypot(x - cx, y - cy) == pytest.approx(8.0, abs=1e-6)
+    for x_m, y_m in corner:
+        # 1e-9 m, not 1e-6: the tolerance scaled with the radius it bounds (IP-FC-163).
+        assert math.hypot(x_m - cx_m, y_m - cy_m) == pytest.approx(CORNER_M, abs=1e-9)
 
 
 def test_the_synthetic_section_has_flats_as_well_as_corners():
     # A section that was round everywhere would have no curvature discontinuity to exercise.
-    rows = fr.rounded_rows([0.0], n=720, half_x=60.0, half_y=40.0, radius=8.0)
-    xs = [x for x, y in rows[0][1] if abs(y) < 10.0]
-    assert max(xs) == pytest.approx(60.0, abs=1e-9)
+    rows = fr.rounded_rows([0.0], n=720, half_x_m=HALF_X_M, half_y_m=HALF_Y_M,
+                           radius_m=CORNER_M)
+    xs_m = [x_m for x_m, y_m in rows[0][1] if abs(y_m) < 0.010]
+    assert max(xs_m) == pytest.approx(HALF_X_M, abs=1e-12)
 
 
 def test_a_corner_radius_that_does_not_fit_is_refused():
     with pytest.raises(ValueError):
-        fr.rounded_rows([0.0], n=64, half_x=10.0, half_y=5.0, radius=6.0)
+        fr.rounded_rows([0.0], n=64, half_x_m=0.010, half_y_m=0.005, radius_m=0.006)
 
 
 def test_the_synthetic_stack_can_taper_so_it_is_not_a_prism():
-    rows = fr.rounded_rows([0.0, 10.0], n=64, half_x=60.0, half_y=40.0,
-                           radius=8.0, taper=0.01)
-    first = max(x for x, _y in rows[0][1])
-    last = max(x for x, _y in rows[1][1])
-    assert last < first
+    # `taper` is a fraction of the section per meter of `z`, so converting the lengths meant
+    # scaling it the other way: 0.01 per mm is 10.0 per m.
+    rows = fr.rounded_rows([0.0, 0.010], n=64, half_x_m=HALF_X_M, half_y_m=HALF_Y_M,
+                           radius_m=CORNER_M, taper=10.0)
+    first_m = max(x_m for x_m, _y_m in rows[0][1])
+    last_m = max(x_m for x_m, _y_m in rows[1][1])
+    assert last_m < first_m

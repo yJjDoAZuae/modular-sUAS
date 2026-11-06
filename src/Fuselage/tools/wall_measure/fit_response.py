@@ -10,7 +10,7 @@ over 7.5 intervals is a factor of 1.3e-4, which is three orders of magnitude und
 gain. `freecad_migration.md` IP-FC-146 records the discrepancy and says it is unexplained.
 
 **Why it can be settled cheaply.** `cowl_interior._fit` is an *interpolation*, and interpolation is
-a linear operator. So the surface's response to displacing one row by `delta` is exactly `delta`
+a linear operator. So the surface's response to displacing one row by `delta_m` is exactly it
 times a fixed shape -- the interpolating spline's cardinal function for that row -- and that shape
 can be computed in closed form and compared against the real kernel. Two consequences follow
 without any boolean, any rib cut, or any build:
@@ -69,10 +69,10 @@ def centroid(pts):
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-def nudge(pts, delta, center=None):
-    """`pts` displaced by `delta` mm along the outward direction from `center`.
+def nudge(pts, delta_m, center=None):
+    """`pts` displaced by `delta_m` meters along the outward direction from `center`.
 
-    The displacement is absolute, not fractional: `delta` = 0.01 moves every point 0.01 mm, which
+    The displacement is absolute, not fractional: `delta_m` = 1e-5 moves every point 1e-5 m, which
     is how OQ-DES-CW26's dose series is quoted and the only reading that makes it comparable with
     `WALL_TOL`. A point sitting exactly on the center has no outward direction and is left alone
     rather than being given an arbitrary one.
@@ -97,12 +97,12 @@ def nudge(pts, delta, center=None):
         if r <= 0.0:
             out.append((float(px), float(py)))
             continue
-        out.append((float(px) + delta * dx / r, float(py) + delta * dy / r))
+        out.append((float(px) + delta_m * dx / r, float(py) + delta_m * dy / r))
     return out
 
 
-def nudge_rows(rows, i_row, delta, center=None):
-    """`rows` with row `i_row` nudged by `delta`, every other row untouched.
+def nudge_rows(rows, i_row, delta_m, center=None):
+    """`rows` with row `i_row` nudged by `delta_m`, every other row untouched.
 
     Returns a new list; the input is not modified, because a probe that mutated the row stack it
     was handed would make the second case in a dose series depend on the first.
@@ -111,7 +111,7 @@ def nudge_rows(rows, i_row, delta, center=None):
         raise IndexError('row %d is outside a stack of %d' % (i_row, len(rows)))
     out = []
     for i, (z, pts) in enumerate(rows):
-        out.append((z, nudge(pts, delta, center) if i == i_row else list(pts)))
+        out.append((z, nudge(pts, delta_m, center) if i == i_row else list(pts)))
     return out
 
 
@@ -180,7 +180,7 @@ def cardinal(params, i_row, at):
     """The natural-cubic-spline cardinal function for knot `i_row`, evaluated at `at`.
 
     This is the analytic prediction for the fit's response, per mm of nudge. Interpolation is
-    linear, so a `delta` bump at one row produces `delta` times this shape and nothing else.
+    linear, so a `delta_m` bump at one row produces `delta_m` times this shape and nothing else.
 
     **The end condition is natural, and the kernel's may not be.** `Part.BSplineCurve.interpolate`
     does not document which end condition it applies, and the choice changes the response only
@@ -256,8 +256,8 @@ def _ring(surf, u, n_v):
     return np.array([[surf.value(u, v).x, surf.value(u, v).y] for v in vs], dtype=float)
 
 
-def response(fit, rows, i_row, delta, targets, n_v=N_CIRCUM):
-    """How far the fitted surface moves at each `z` in `targets`, for a `delta` nudge of `i_row`.
+def response(fit, rows, i_row, delta_m, targets_m, n_v=N_CIRCUM):
+    """How far the surface moves at each `z` in `targets_m`, for a `delta_m` nudge of `i_row`.
 
     `fit` is `cowl_interior._fit` in a real run and a stand-in in a test. It must return something
     with `.value(u, v)` giving a point with `.x`, `.y` and `.z`.
@@ -267,7 +267,7 @@ def response(fit, rows, i_row, delta, targets, n_v=N_CIRCUM):
 
     - `z`, and `row` -- the row index if the target *is* a row, else `None`
     - `moved_m` -- the largest distance the surface moved at that height
-    - `gain` -- `moved_m / delta`, which is **dimensionless and therefore the one figure here
+    - `gain` -- `moved_m / delta_m`, which is **dimensionless and therefore the one figure here
       that did not move when IP-FC-163 converted the module** -- still comparable with
       OQ-DES-CW26's 0.408
     - `predicted_gain` -- `cardinal` at the same place, the natural-spline expectation
@@ -277,66 +277,71 @@ def response(fit, rows, i_row, delta, targets, n_v=N_CIRCUM):
     nudge is purely radial, so both surfaces carry identical station heights and `u` means the same
     `z` on each.
     """
-    if delta == 0.0:
+    if delta_m == 0.0:
         raise ValueError('a zero nudge has no gain; the probe needs a displacement')
     base = fit(rows)
-    moved = fit(nudge_rows(rows, i_row, delta))
+    moved = fit(nudge_rows(rows, i_row, delta_m))
     params = uparams(rows)
     out = []
-    for z in targets:
-        u = _solve_u(base, z)
+    for z_m in targets_m:
+        u = _solve_u(base, z_m)
         ring_a = _ring(base, u, n_v)
         ring_b = _ring(moved, u, n_v)
         step = float(np.hypot(*(ring_b - ring_a).T).max())
         out.append({
-            'z': float(z),
-            'row': row_index(rows, z),
+            'z_m': float(z_m),
+            'row': row_index(rows, z_m),
             'u': float(u),
             'moved_m': step,
-            'gain': step / abs(delta),
+            'gain': step / abs(delta_m),
             'predicted_gain': abs(cardinal(params, i_row, u)),
         })
     return out
 
 
-def station_distance(rows, i_row, z):
-    """How many station intervals lie between row `i_row` and height `z`.
+def station_distance(rows, i_row, z_m):
+    """How many station intervals lie between row `i_row` and height `z_m`.
 
     OQ-DES-CW26 quotes its attenuation per *station*, so a response is only comparable with it
     alongside this count. Fractional between rows, and signed the way `rows` is ordered.
+
+    **The count itself is unit-invariant**: `u` is a ratio of two spans, so the conversion could
+    not move it (IP-FC-163).
     """
     params = uparams(rows)
-    zs = [float(rz) for rz, _pts in rows]
-    lo, hi = zs[0], zs[-1]
-    u = (float(z) - lo) / (hi - lo)
-    # Where `u` falls in the parameter list, counted in knots rather than in millimeters.
+    zs_m = [float(rz) for rz, _pts in rows]
+    lo_m, hi_m = zs_m[0], zs_m[-1]
+    u = (float(z_m) - lo_m) / (hi_m - lo_m)
+    # Where `u` falls in the parameter list, counted in knots rather than in meters.
     k = int(np.clip(np.searchsorted(params, u) - 1, 0, len(params) - 2))
     span = params[k + 1] - params[k]
     frac = 0.0 if span <= 0.0 else (u - params[k]) / span
     return (k + frac) - i_row
 
 
-def gaps(zs):
-    """Consecutive station gaps as `(gap, z_lower, z_upper)`, tightest first.
+def gaps(zs_m):
+    """Consecutive station gaps as `(gap_m, z_lower_m, z_upper_m)`, tightest first.
 
     The tightest gap is what `station_floor` is compared against and what §4.4's amplification is
     inversely proportional to, so it is the one statistic a station set is read for. Sorted
     rather than returned in axial order because the question asked of it is always "what is the
     worst", never "what is at this height".
     """
-    zs = [float(z) for z in zs]
-    if len(zs) < 2:
+    heights_m = [float(z_m) for z_m in zs_m]
+    if len(heights_m) < 2:
         return []
-    return sorted((zs[i + 1] - zs[i], zs[i], zs[i + 1]) for i in range(len(zs) - 1))
+    return sorted((heights_m[i + 1] - heights_m[i], heights_m[i], heights_m[i + 1])
+                  for i in range(len(heights_m) - 1))
 
 
-def sub_floor(zs, floor):
-    """The gaps in `zs` that fall under `floor`, tightest first.
+def sub_floor(zs_m, floor_m):
+    """The gaps in `zs_m` that fall under `floor_m`, tightest first.
 
     A count of these is how a station set is judged: `cavity`'s own filter drops a station for
-    each one, and §4.4's amplification needs at least one beside the row being displaced.
+    each one, and §4.4's amplification needs at least one beside the row being displaced. Both
+    sides are meters, so the comparison means what it did before IP-FC-163.
     """
-    return [row for row in gaps(zs) if row[0] < floor]
+    return [row for row in gaps(zs_m) if row[0] < floor_m]
 
 
 def mesh_bound(knots, offset, trials=4000, seed=20261025):
@@ -394,7 +399,7 @@ def _at(params, i_row, offset):
     return params[k] + frac * (params[k + 1] - params[k])
 
 
-def rounded_rows(zs, n, half_x, half_y, radius, taper=0.0):
+def rounded_rows(zs_m, n, half_x_m, half_y_m, radius_m, taper=0.0):
     """A synthetic row stack with real corners: a rounded rectangle per station.
 
     **Fixed-radius corners, not a smooth stand-in.** A cowl cross-section is a rounded rectangle,
@@ -407,35 +412,40 @@ def rounded_rows(zs, n, half_x, half_y, radius, taper=0.0):
     open arc, matching what `_fit` is given: the first and last point are distinct and the row does
     not wrap onto itself.
     """
-    if radius <= 0.0 or radius > min(half_x, half_y):
+    if radius_m <= 0.0 or radius_m > min(half_x_m, half_y_m):
         raise ValueError('a corner radius must be positive and fit inside the section')
     rows = []
-    z_lo = float(zs[0])
-    for z in zs:
-        scale = 1.0 - taper * (float(z) - z_lo)
-        hx, hy, r = half_x * scale, half_y * scale, radius * scale
+    z_lo_m = float(zs_m[0])
+    for z_m in zs_m:
+        # `taper` is a reciprocal length -- a fraction of the section per meter of `z` -- so a
+        # caller converting its own lengths must scale it by 1000 as well. Named in the docstring
+        # rather than suffixed, because `_per_m` on a knob nobody passes but the two synthetic
+        # harnesses would be noise at every call site (IP-FC-163).
+        scale = 1.0 - taper * (float(z_m) - z_lo_m)
+        hx_m, hy_m, r_m = half_x_m * scale, half_y_m * scale, radius_m * scale
         pts = []
         for i in range(n):
             # Walk the perimeter by angle and project onto the rounded rectangle, which keeps the
             # corner arcs at a genuine fixed radius instead of blending them away.
             a = math.pi * 2.0 * i / float(n)
             ca, sa = math.cos(a), math.sin(a)
-            # The corner centers sit at (+-(hx-r), +-(hy-r)); solve along the ray for the
-            # rounded-rectangle boundary by taking the nearer of the flats and the corner arc.
-            tx = (hx / abs(ca)) if abs(ca) > 1.0e-12 else float('inf')
-            ty = (hy / abs(sa)) if abs(sa) > 1.0e-12 else float('inf')
-            t = min(tx, ty)
-            px, py = t * ca, t * sa
-            cx = math.copysign(hx - r, px) if px else 0.0
-            cy = math.copysign(hy - r, py) if py else 0.0
-            if abs(px) > hx - r and abs(py) > hy - r:
+            # The corner centers sit at (+-(hx_m-r_m), +-(hy_m-r_m)); solve along the ray for
+            # the rounded-rectangle boundary by taking the nearer of the flats and the corner arc.
+            # Every length here is meters; `ca` and `sa` are direction cosines and carry no unit.
+            tx_m = (hx_m / abs(ca)) if abs(ca) > 1.0e-12 else float('inf')
+            ty_m = (hy_m / abs(sa)) if abs(sa) > 1.0e-12 else float('inf')
+            t_m = min(tx_m, ty_m)
+            px_m, py_m = t_m * ca, t_m * sa
+            cx_m = math.copysign(hx_m - r_m, px_m) if px_m else 0.0
+            cy_m = math.copysign(hy_m - r_m, py_m) if py_m else 0.0
+            if abs(px_m) > hx_m - r_m and abs(py_m) > hy_m - r_m:
                 # Inside a corner quadrant: re-solve the ray against that corner's circle.
                 fx, fy = ca, sa
-                b = 2.0 * (fx * -cx + fy * -cy)
-                c = cx * cx + cy * cy - r * r
-                disc = max(b * b - 4.0 * c, 0.0)
-                t = (-b + math.sqrt(disc)) / 2.0
-                px, py = t * ca, t * sa
-            pts.append((px, py))
-        rows.append((float(z), pts))
+                b_m = 2.0 * (fx * -cx_m + fy * -cy_m)
+                c_m2 = cx_m * cx_m + cy_m * cy_m - r_m * r_m
+                disc_m2 = max(b_m * b_m - 4.0 * c_m2, 0.0)
+                t_m = (-b_m + math.sqrt(disc_m2)) / 2.0
+                px_m, py_m = t_m * ca, t_m * sa
+            pts.append((px_m, py_m))
+        rows.append((float(z_m), pts))
     return rows

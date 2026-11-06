@@ -28,15 +28,17 @@ arrive as arguments, the same rule the rest of this package holds itself to, and
 import os
 import sys
 
-from . import corpus, prediction
+from . import corpus, kern, prediction
 
 #: The measures section 6.4 publishes, incumbent first so a reader sees the comparison in the
 #: direction the document makes it.
 INCUMBENT = 'C0_nearest_point_min'
 SELECTED = 'C4_corner_excluded_min'
 
-NOMINAL = 0.6
-WALL_TOL = prediction.WALL_TOL
+#: The cowl's own wall: `cowl_n_perimeters` * `extrusion_width` = 1 * 0.6 mm. SI since IP-FC-163,
+#: and the same wall it was.
+NOMINAL_M = 6.0e-4
+WALL_TOL_M = prediction.WALL_TOL_M
 
 
 def _rule(text):
@@ -44,7 +46,12 @@ def _rule(text):
 
 
 def prediction_report(log=None, sweep_path=None, out=None):
-    """Section 6.5's table and verdict, for both measures. Returns the text and prints it."""
+    """Section 6.5's table and verdict, for both measures. Returns the text and prints it.
+
+    **This is a display boundary**, so every figure is printed in millimeters and every column says
+    so -- which is what the published sections quote, and is the one place in this package where a
+    millimeter belongs outside a kernel call (IP-FC-163).
+    """
     out = out if out is not None else sys.stdout
     lines = [_rule('Pass 2 prediction against the real wall (section 6.5)'), '']
     builds = prediction.parse_build_log(log)
@@ -53,7 +60,8 @@ def prediction_report(log=None, sweep_path=None, out=None):
         lines.append('builds in the log           %d (%d converged, %d raised Unconverged)'
                      % (len(builds), len(closed), len(builds) - len(closed)))
         lines.append('worst pass 2 prediction     %.4f mm against TAU = %.3f mm'
-                     % (max(b.predicted for b in closed), prediction.TAU))
+                     % (kern.mm(max(b.predicted_m for b in closed)),
+                        kern.mm(prediction.TAU_M)))
         lines.append('')
     for name in (INCUMBENT, SELECTED):
         lines.append(prediction.table(name, log, sweep_path))
@@ -71,12 +79,13 @@ def prediction_report(log=None, sweep_path=None, out=None):
         lines.append('    real wall worse than WALL_TOL      %d of %d'
                      % (v['builds_real_worse_than_tolerance'], v['builds_paired']))
         lines.append('    meeting WALL_TOL = %.3f mm        %d'
-                     % (v['tolerance'], v['builds_meeting_tolerance']))
-        lines.append('    mean shortfall                     %.4f mm' % v['mean_shortfall'])
+                     % (kern.mm(v['tolerance_m']), v['builds_meeting_tolerance']))
+        lines.append('    mean shortfall                     %.4f mm'
+                     % kern.mm(v['mean_shortfall_m']))
         lines.append('    worst                              %s, predicted %.4f, real %.4f, '
                      'short by %.4f mm'
-                     % (v['worst_label'], v['worst_predicted'], v['worst_real'],
-                        v['worst_shortfall']))
+                     % (v['worst_label'], kern.mm(v['worst_predicted_m']),
+                        kern.mm(v['worst_real_m']), kern.mm(v['worst_shortfall_m'])))
         lines.append('')
     text = '\n'.join(lines)
     out.write(text + '\n')
@@ -84,7 +93,7 @@ def prediction_report(log=None, sweep_path=None, out=None):
 
 
 def sweep_report(Part, App, measures=None, records=None, out=None, write_to=None,
-                 nominal=NOMINAL, tolerance=WALL_TOL):
+                 nominal_m=NOMINAL_M, tolerance_m=WALL_TOL_M):
     """Section 6.4's corpus table: several measures over every saved wall, on identical sections.
 
     **Pairing the measures on the same sections is what makes the comparison valid.** The soak's own
@@ -112,19 +121,20 @@ def sweep_report(Part, App, measures=None, records=None, out=None, write_to=None
     def progress(r):
         out.write('  %-26s %s  cov %s  %4.0f s\n'
                   % (r['label'],
-                     '  '.join('%s %.4f' % (n.split('_')[0], r['worst_thin'][n]) for n in names),
+                     '  '.join('%s %.4f mm' % (n.split('_')[0], kern.mm(r['worst_thin_m'][n]))
+                               for n in names),
                      '/'.join(str(r['stations_measured'][n]) for n in names),
                      r['elapsed_s']))
         out.flush()
 
-    results = sweep.sweep(measures, Part, App, nominal, records=records, on_wall=progress)
+    results = sweep.sweep(measures, Part, App, nominal_m, records=records, on_wall=progress)
     if write_to:
         sweep.write_jsonl(results, write_to)
 
-    lines = ['', sweep.table(results, tolerance, names=names), '']
+    lines = ['', sweep.table(results, tolerance_m, names=names), '']
     for name in names:
-        v = sweep.verdict(results, tolerance, name)
-        lines.append('  %s at WALL_TOL = %.3f mm' % (name, tolerance))
+        v = sweep.verdict(results, tolerance_m, name)
+        lines.append('  %s at WALL_TOL = %.3f mm' % (name, kern.mm(tolerance_m)))
         lines.append('    walls measured at every station    %d of %d'
                      % (v['walls_with_full_coverage'], v['walls']))
         lines.append('    of those, meeting the tolerance    %d' % v['meets_tolerance'])
@@ -134,14 +144,15 @@ def sweep_report(Part, App, measures=None, records=None, out=None, write_to=None
                      % (v['fails_tolerance'], v['fails_coverage'], v['fails_total'], v['walls']))
         if v['worst_label']:
             lines.append('    worst                              %s at %.4f mm'
-                         % (v['worst_label'], v['worst_thin']))
+                         % (v['worst_label'], kern.mm(v['worst_thin_m'])))
         lines.append('')
-    dis = sweep.disagreements(results, names[0], names[-1], tolerance) if len(names) > 1 else []
+    dis = (sweep.disagreements(results, names[0], names[-1], tolerance_m)
+           if len(names) > 1 else [])
     lines.append('walls where the two measures disagree on the verdict: %d' % len(dis))
     for d in dis:
-        lines.append('  %-26s %s %.4f  %s %.4f  (coverage %d of %d)'
-                     % (d['label'], names[0], d[names[0]], names[-1], d[names[-1]],
-                        d['coverage'], d['stations']))
+        lines.append('  %-26s %s %.4f mm  %s %.4f mm  (coverage %d of %d)'
+                     % (d['label'], names[0], kern.mm(d[names[0]]),
+                        names[-1], kern.mm(d[names[-1]]), d['coverage'], d['stations']))
     if write_to:
         lines.append('written %s' % write_to)
     text = '\n'.join(lines)

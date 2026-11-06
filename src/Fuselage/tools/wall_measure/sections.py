@@ -22,12 +22,20 @@ Nothing here imports a vendor module: `shape` is whatever the caller has, a brid
 """
 import numpy as np
 
+from . import kern
+
 
 def _points_of(wire, n_points):
-    """One wire's discretized points as an `(n, 3)` float64 array, in one round trip.
+    """One wire's discretized points as an `(n, 3)` float64 array **in meters**, in one trip.
 
     The vendor's own `discretize` keyword is `Number`; it is passed positionally through the bridge
     because a bound vendor method takes its arguments the same way either side of the boundary.
+
+    **This is where the package's point arrays become SI** (IP-FC-163), and it is one line because
+    it is the only place they are built. Every loop, every measure in `candidates`, every thickness
+    and every minimum downstream is therefore in meters without converting anything itself -- which
+    is the whole reason to convert here rather than at the forty places that consume them. The
+    multiply is on the assembled array, so it costs one vectorized pass and not a Python loop.
     """
     pts = wire.discretize(Number=int(n_points))
     try:
@@ -35,22 +43,28 @@ def _points_of(wire, n_points):
     except AttributeError:
         # A real (non-proxy) list of vendors' vectors, when this runs under freecadcmd.
         table = [(p.x, p.y, p.z) for p in pts]
-    return np.asarray(table, dtype=np.float64)
+    return np.asarray(table, dtype=np.float64) * kern.M_PER_MM
 
 
-def closed_wires(shape, z, direction=(0.0, 0.0, 1.0), App=None):
-    """The closed section wires of `shape` at height `z`.
+def closed_wires(shape, z_m, direction=(0.0, 0.0, 1.0), App=None):
+    """The closed section wires of `shape` at height `z_m`.
 
     Open wires are dropped: a wall section is made of closed loops, and `Shape.slice` can return
     an open fragment at a tangency. `App` is needed only to build the direction vector; when the
     caller already holds a vector it may pass it as `direction`.
+
+    **This is the package's one kernel-section call, and therefore its one `z` conversion**
+    (IP-FC-163). Every grid in this package is SI; `Shape.slice` is millimeters. Keeping the
+    conversion here rather than at each of the dozen call sites is what makes it auditable --
+    and a caller that converts as well, or not at all, is the defect `sever_doses` shipped
+    when its meters met a millimeter scan.
     """
     if App is not None:
         direction = App.Vector(*direction)
-    return [w for w in shape.slice(direction, float(z)) if w.isClosed()]
+    return [w for w in shape.slice(direction, kern.mm(float(z_m))) if w.isClosed()]
 
 
-def station_loops(shape, z, n_points=720, direction=(0.0, 0.0, 1.0), App=None):
+def station_loops(shape, z_m, n_points=720, direction=(0.0, 0.0, 1.0), App=None):
     """Every closed loop of one section, as a list of `(n, 3)` arrays, ordered outer-first.
 
     **Ordered by enclosed area, not by perimeter length.** Length only tracks which loop is outer
@@ -60,7 +74,7 @@ def station_loops(shape, z, n_points=720, direction=(0.0, 0.0, 1.0), App=None):
     areas were not remotely close. Area answers "which region is bigger" directly, however
     convoluted either path is.
     """
-    return loops_from_wires(closed_wires(shape, z, direction, App), n_points)
+    return loops_from_wires(closed_wires(shape, z_m, direction, App), n_points)
 
 
 def loops_from_wires(wires, n_points=720):

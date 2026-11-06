@@ -43,24 +43,33 @@ class _SyntheticSource(object):
     def __call__(self, truth_obj, z, n):
         f = truth_obj.features[0] if truth_obj.features else None
         outer, inner = _synthetic_annulus(n, truth_obj.r_outer, truth_obj.nominal, z)
-        if f is not None and f['kind'] == 'thin' and f['z_lo'] <= z <= f['z_hi']:
+        if f is not None and f['kind'] == 'thin' and f['z_lo_m'] <= z <= f['z_hi_m']:
             ang = np.arctan2(outer[:, 1], outer[:, 0])
-            hit = np.abs(ang) <= f['half_angle']
+            hit = np.abs(ang) <= f['half_angle_rad']
             r = np.hypot(outer[:, 0], outer[:, 1])
-            r = np.where(hit, truth_obj.r_outer - f['depth'], r)
+            r = np.where(hit, truth_obj.r_outer - f['depth_m'], r)
             outer = np.column_stack((r * np.cos(ang), r * np.sin(ang), outer[:, 2]))
         return outer, inner
 
 
+#: The fixture scale these synthetic truths use: `truth`'s own, in meters (IP-FC-163). Named
+#: rather than repeated, because the stub measures below have to return readings on the same
+#: scale and a mismatch between the two would look like a gate failing.
+_R_OUTER_M = 0.010
+_WALL_M = 6.0e-4
+
+
 def _uniform_truth():
-    return truth.WallTruth(None, 'uniform_tube', 0.6, 10.0)
+    return truth.WallTruth(None, 'uniform_tube', _WALL_M, _R_OUTER_M)
 
 
-def _patch_truth(depth=0.15, arc=0.6):
-    f = {'kind': 'thin', 'thickness': 0.6 - depth, 'depth': depth,
-         'z_lo': 8.0, 'z_hi': 12.0, 'half_angle': arc / 20.0, 'arc': arc,
-         'angle': 0.0, 'z_mid': 10.0}
-    return truth.WallTruth(None, 'thin_patch_tube', 0.6, 10.0, [f])
+def _patch_truth(depth_m=1.5e-4, arc_m=6.0e-4):
+    # `half_angle_rad` is `arc_m / (2 * r_outer_m)`, which is a ratio of two lengths and so the
+    # same angle it was before IP-FC-163 -- `arc_m / 20.0` is that at `r_outer_m` = 0.010.
+    f = {'kind': 'thin', 'thickness_m': _WALL_M - depth_m, 'depth_m': depth_m,
+         'z_lo_m': 0.008, 'z_hi_m': 0.012, 'half_angle_rad': arc_m / (2.0 * _R_OUTER_M),
+         'arc_m': arc_m, 'angle_rad': 0.0, 'z_mid_m': 0.010}
+    return truth.WallTruth(None, 'thin_patch_tube', _WALL_M, _R_OUTER_M, [f])
 
 
 @pytest.fixture
@@ -75,7 +84,7 @@ class TestTheHarnessRejectsWhatItShould:
         fixtures, src = synthetic
 
         def always_nominal(outer, inner):
-            return inner, np.full(inner.shape[0], 0.6)
+            return inner, np.full(inner.shape[0], _WALL_M)
 
         res = gates.screen(always_nominal, fixtures, src)
         by = dict((r.gate, r) for r in res)
@@ -119,19 +128,28 @@ class TestTheHarnessRejectsWhatItShould:
         assert by['G3 accuracy'].value == pytest.approx(0.02, abs=2e-3)
 
     def test_a_drifting_measure_fails_convergence_even_with_small_steps(self, synthetic):
-        """G2's second condition. A measure moving 0.0009 mm per doubling forever has small steps
-        and has not converged, which is the incumbent's actual behavior."""
+        """G2's second condition. A measure whose steps never shrink has not converged however
+        small they are, which is the incumbent's actual behavior.
+
+        **The drift is `0.5 * CONVERGE_TOL_M` per call, not a literal.** It used to be 0.0009 mm
+        against a 0.001 mm threshold -- the same relationship, written as two numbers that
+        happened to sit either side of each other. Tying it to the threshold is what keeps the
+        case's point true: 'every step is under the threshold and it still fails' has to remain a
+        fact about the gate and not a coincidence of two constants, and after IP-FC-163 scaled
+        one of them it was neither (the drift was 900 times the limit).
+        """
         fixtures, src = synthetic
         state = {'n': 0}
+        step_m = 0.5 * gates.CONVERGE_TOL_M
 
         def drifting(outer, inner):
             state['n'] += 1
-            return inner, np.full(inner.shape[0], 0.6 - 0.0009 * state['n'])
+            return inner, np.full(inner.shape[0], _WALL_M - step_m * state['n'])
 
         by = dict((r.gate, r) for r in gates.screen(drifting, fixtures, src))
         assert not by['G2 convergence'].passed
         assert 'NOT contracting' in by['G2 convergence'].detail
-        assert by['G2 convergence'].value < gates.CONVERGE_TOL, (
+        assert by['G2 convergence'].value < gates.CONVERGE_TOL_M, (
             'the point of this case: every step is under the threshold and it still fails')
 
     def test_the_tie_break_is_cost_then_residual(self):
@@ -191,18 +209,21 @@ class TestTheBaselineIsTheRealIncumbent:
         """Checked against `cowl_interior._Polyline.distance`, which is what
         `check_cowl_interior.wall_thickness` actually calls."""
         t = real_fixtures['uniform_tube']
-        outer, inner = loops_at(t, 1.0, 360)
+        # 1.0e-3 m, not 1.0: the tube is 0.020 m tall, so `z` = 1.0 sections nothing.
+        outer, inner = loops_at(t, 1.0e-3, 360)
         _p, mine = candidates.nearest_point_min(outer, inner)
 
         line = ci._Polyline([(float(x), float(y)) for x, y in outer[:, :2]])
         theirs = np.array([line.distance(float(p[0]), float(p[1])) for p in inner[:40]])
-        assert np.allclose(mine[:40], theirs, atol=1e-9), (
+        # 1e-12, not 1e-9: both sides are meters now, and carrying the literal across would have
+        # made this a thousand times looser than the agreement it is checking (IP-FC-163).
+        assert np.allclose(mine[:40], theirs, atol=1e-12), (
             'max divergence %.3e' % float(np.max(np.abs(mine[:40] - theirs))))
 
     def test_it_agrees_on_the_ribbed_fixture_too(self, real_fixtures, loops_at, ci):
         """The shape with concave corners, where the two could most easily differ."""
         t = real_fixtures['ribbed_tube']
-        outer, inner = loops_at(t, t.features[0]['z_mid'], 360)
+        outer, inner = loops_at(t, t.features[0]['z_mid_m'], 360)
         _p, mine = candidates.nearest_point_min(outer, inner)
         line = ci._Polyline([(float(x), float(y)) for x, y in outer[:, :2]])
         theirs = np.array([line.distance(float(p[0]), float(p[1])) for p in inner[:60]])

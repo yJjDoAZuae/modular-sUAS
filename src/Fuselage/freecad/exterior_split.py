@@ -40,6 +40,10 @@ spacing** of the same build, which is the refined form of §6.7.1's diagonal hyp
 diagonals act on the wall through the fit's row placement rather than through the cut::
 
     freecadcmd exterior_split.py --pass --kind=tail_shell --pass --u=0.5 --pass --rows
+
+**Figures are stored in meters and printed in millimeters** (IP-FC-163). `--tau-mm` names its unit,
+which `--tau` did not, and the JSON record below carries `_m` keys so a line read back cannot be
+mistaken for the millimeter log beside it.
 """
 import json
 import os
@@ -57,6 +61,8 @@ import cowl_interior as ci                                         # noqa: E402
 import cowl_tree                                                   # noqa: E402
 import soak_cowl_shell as soak                                     # noqa: E402
 from corner_common import is_entry_point                           # noqa: E402
+
+import si                                                          # noqa: E402
 
 from wall_measure import corpus, locate                            # noqa: E402
 
@@ -89,25 +95,27 @@ def build_cell(kind, u):
     return doc, tip
 
 
-def measure(shell, tau=None, out=None):
+def measure(shell, tau_m=None, out=None):
     """One build: `shell_solid` with the split recorded, then the verdict.
 
-    `tau` defaults to the module constant, which is what production uses. A tighter `tau` is
-    interesting here for a different reason than in `tau_study`: it is the setting under which
-    pass 1 reaches 0.0073 mm, so the gap between the two exteriors should be at its most visible.
-    But it also raises `Unconverged` on a tail, and an exception means no record at all -- so the
-    default run is at the production value, where the build is known to finish.
+    `tau_m` defaults to `ci.TAU_M`, which is what production uses. A tighter one is interesting
+    here for a different reason than in `tau_study`: it is the setting under which pass 1 reaches
+    0.0073 mm, so the gap between the two exteriors should be at its most visible. But it also
+    raises `Unconverged` on a tail, and an exception means no record at all -- so the default run
+    is at the production value, where the build is known to finish.
     """
     out = out if out is not None else sys.stdout
     rows = []
     report = {}
     notches = Part.makeCompound([n.Shape for n in shell.Notches])
     mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in shell.Mirrors]
-    t = float(shell.Inset)
+    # `Inset` is a `Spreadsheet`-fed property, so it is the sheet's millimeters; `ci.shell_solid`
+    # is SI, which is the crossing (IP-FC-163).
+    t_m = si.m(float(shell.Inset))
     started = time.time()
     try:
-        ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t, shell.Overhang, mirrors,
-                       tau=float(tau) if tau is not None else ci.TAU_M, report=report,
+        ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t_m, shell.Overhang, mirrors,
+                       tau=float(tau_m) if tau_m is not None else ci.TAU_M, report=report,
                        exterior_split=rows)
         error = None
     except ci.Unconverged as exc:
@@ -115,18 +123,21 @@ def measure(shell, tau=None, out=None):
         # any insertion, so an `Unconverged` raised later does not invalidate the rows already
         # collected -- and on a tail at a tightened `tau` that is the only way to get them.
         error = str(exc)
-    out.write('wall t = %.4f mm, TAU = %.3f, WALL_TOL = %.3f, %d round-0 station(s), %.0f s\n'
-              % (t, float(tau) if tau is not None else ci.TAU_M, ci.WALL_TOL_M, len(rows),
-                 time.time() - started))
+    out.write('wall t = %.4f mm, TAU = %.3f mm, WALL_TOL = %.3f mm, %d round-0 station(s), '
+              '%.0f s\n'
+              % (si.mm(t_m),
+                 si.mm(float(tau_m) if tau_m is not None else ci.TAU_M),
+                 si.mm(ci.WALL_TOL_M), len(rows), time.time() - started))
     if error:
         out.write('  Unconverged (the round-0 record below still stands): %s\n' % error[:160])
     out.write('\n'.join('  ' + line for line in
-                        locate.exterior_table(rows, wall_tol=ci.WALL_TOL_M).splitlines()) + '\n')
+                        locate.exterior_table(rows,
+                                              wall_tol_m=ci.WALL_TOL_M).splitlines()) + '\n')
     out.flush()
-    return rows, locate.exterior_verdict(rows, wall_tol=ci.WALL_TOL_M), error
+    return rows, locate.exterior_verdict(rows, wall_tol_m=ci.WALL_TOL_M), error
 
 
-def measure_rows(shell, tau=None, out=None):
+def measure_rows(shell, tau_m=None, out=None):
     """IP-WTM-30: the finished wall's thin spots against the **fit row spacing** of its own build.
 
     `cavity`'s `station_positions` and the wall `shell_solid` returns come out of one call here, so
@@ -138,20 +149,23 @@ def measure_rows(shell, tau=None, out=None):
     report = {}
     notches = Part.makeCompound([n.Shape for n in shell.Notches])
     mirrors = [App.Vector(*[float(v) for v in text.split(',')]) for text in shell.Mirrors]
-    t = float(shell.Inset)
+    t_m = si.m(float(shell.Inset))
     started = time.time()
-    wall = ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t, shell.Overhang,
-                          mirrors, tau=float(tau) if tau is not None else ci.TAU_M, report=report)
-    row_zs = report.get('station_positions') or []
+    wall = ci.shell_solid(shell.Base.Shape, shell.Body.Shape, notches, t_m, shell.Overhang,
+                          mirrors, tau=float(tau_m) if tau_m is not None else ci.TAU_M,
+                          report=report)
+    # `station_positions` comes out of `cavity`, which is SI, so these are meters already.
+    row_zs_m = report.get('station_positions') or []
     out.write('built in %.0f s; %d fit row(s), wall %.3f mm3 in %d solid(s)\n'
-              % (time.time() - started, len(row_zs), wall.Volume, len(wall.Solids)))
-    if not row_zs:
+              % (time.time() - started, len(row_zs_m),
+                 si.volume_m3(wall) * si.MM3_PER_M3, len(wall.Solids)))
+    if not row_zs_m:
         out.write('  NO ROW POSITIONS in the report -- nothing to compare against\n')
         out.flush()
         return [], None
-    zs = corpus.measurable_station_grid(wall, App=App)
+    zs_m = corpus.measurable_station_grid(wall, App=App)
     out.flush()
-    rows = locate.row_spacing_split(wall, row_zs, zs, nominal=t, App=App)
+    rows = locate.row_spacing_split(wall, row_zs_m, zs_m, nominal_m=t_m, App=App)
     out.write('\n'.join('  ' + line
                         for line in locate.row_spacing_table(rows).splitlines()) + '\n')
     out.flush()
@@ -161,27 +175,30 @@ def measure_rows(shell, tau=None, out=None):
 def main():
     kind = _opt('kind', 'nose_cowl_shell')
     u = float(_opt('u', '1.0'))
-    tau = _opt('tau')
+    # **The flag names its unit.** A bare `--tau` on a command line is the same unnamed-unit
+    # defect the standard forbids in an identifier (IP-FC-163).
+    tau_text = _opt('tau-mm')
+    tau_m = None if tau_text is None else si.m(float(tau_text))
     if any(a == '--rows' for a in sys.argv):
         print('row_spacing %s U=%s' % (kind, u), flush=True)
         doc, shell = build_cell(kind, u)
-        rows, verdict = measure_rows(shell, tau)
+        rows, verdict = measure_rows(shell, tau_m)
         App.closeDocument(doc.Name)
         print('ROW_SPACING ' + json.dumps({'kind': kind, 'u': u, 'verdict': verdict,
                                            'rows': rows}, default=str), flush=True)
         return 0
     print('exterior_split %s U=%s' % (kind, u), flush=True)
     doc, shell = build_cell(kind, u)
-    rows, verdict, error = measure(shell, tau)
+    rows, verdict, error = measure(shell, tau_m)
     App.closeDocument(doc.Name)
     print('EXTERIOR_SPLIT ' + json.dumps({
-        'kind': kind, 'u': u, 'tau': tau, 'error': error,
+        'kind': kind, 'u': u, 'tau_m': tau_m, 'error': error,
         'stations': verdict['stations'], 'coincident': len(verdict['coincident']),
         'explained': len(verdict['explained']), 'unexplained': len(verdict['unexplained']),
-        'worst_notched': verdict['worst_notched'], 'worst_oml': verdict['worst_oml'],
-        'worst_unexplained_oml': verdict['worst_unexplained_oml'],
+        'worst_notched_m': verdict['worst_notched_m'], 'worst_oml_m': verdict['worst_oml_m'],
+        'worst_unexplained_oml_m': verdict['worst_unexplained_oml_m'],
         'vacuous': verdict['vacuous'], 'clean': verdict['clean'],
-        'rows': rows,
+        'rows_m': rows,
     }, default=str), flush=True)
     return 0
 

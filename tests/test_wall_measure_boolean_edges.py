@@ -17,6 +17,7 @@ See doc/design/cowl_interior_surface.md section 4.2 and
 doc/implementation/wall_thickness_measure.md.
 """
 import contextlib
+import math
 import os
 import sys
 import types
@@ -28,6 +29,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                                 'src', 'Fuselage', 'tools'))
 
 from wall_measure import boolean_edges as be                             # noqa: E402
+
+#: **The stubs in this file stand in for kernel objects, so they carry the kernel's millimeters**
+#: and every figure `boolean_edges` returns from them is meters (IP-FC-163). Expected values are
+#: written as `MM *` the figure they always were, which keeps each assertion readable against the
+#: stub that produced it and makes the conversion visible at every site.
+MM = 1.0e-3
 
 
 class Plane(object):
@@ -154,9 +161,12 @@ class TestPlaneSet:
         faces, origins, normals, boxes = be.plane_set(shape)
         assert len(faces) == 2
         assert origins.shape == (2, 3) and normals.shape == (2, 3) and boxes.shape == (2, 6)
-        assert origins[1].tolist() == [0.0, 0.0, 5.0]
+        # **The stub speaks the kernel's millimeters and `plane_set` returns meters**, so the
+        # origins and boxes convert and the normal does not: a `Plane.Axis` is a unit vector and
+        # carries no unit, which is the asymmetry this assertion now pins (IP-FC-163).
+        assert origins[1].tolist() == [0.0, 0.0, MM * 5.0]
         assert normals[0].tolist() == [0.0, 0.0, 1.0]
-        assert boxes[0].tolist() == [-1.0, -1.0, 0.0, 1.0, 1.0, 0.0]
+        assert boxes[0].tolist() == [MM * -1.0, MM * -1.0, 0.0, MM * 1.0, MM * 1.0, 0.0]
 
     def test_it_normalizes_nothing_it_was_not_given(self):
         """A `Part.Plane`'s `Axis` is already a unit vector; `plane_set` must not rescale it, or a
@@ -202,7 +212,7 @@ class TestInteriorProbes:
                     facets=[triangle((0, 0, 0), (3, 0, 0), (0, 3, 0))])
         pts = be.interior_probes(face)
         assert len(pts) == 1
-        assert pts[0] == pytest.approx((1.0, 1.0, 0.0))
+        assert pts[0] == pytest.approx((MM * 1.0, MM * 1.0, 0.0))
 
     def test_the_largest_facets_come_first(self):
         """**The reason, documented in the function:** a sliver facet along a trim curve has a
@@ -211,7 +221,7 @@ class TestInteriorProbes:
         sliver = triangle((0, 0, 0), (10, 0, 0), (10, 1.0e-6, 0))
         face = Face(Plane((0, 0, 0), (0, 0, 1)), (0, 0, 0), (10, 10, 0), facets=[sliver, big])
         pts = be.interior_probes(face, count=1)
-        assert pts[0] == pytest.approx((10.0 / 3.0, 10.0 / 3.0, 0.0))
+        assert pts[0] == pytest.approx((MM * 10.0 / 3.0, MM * 10.0 / 3.0, 0.0))
 
     def test_it_returns_at_most_the_count_asked_for(self):
         facets = [triangle((0, 0, 0), (k + 1, 0, 0), (0, k + 1, 0)) for k in range(10)]
@@ -231,7 +241,7 @@ class TestInteriorProbes:
         face = Face(Plane((0, 0, 0), (0, 0, 1)), (0, 0, 0), (3, 3, 0), facets=[zero, real])
         pts = be.interior_probes(face, count=2)
         assert len(pts) == 2
-        assert pts[0] == pytest.approx((1.0, 1.0, 0.0))
+        assert pts[0] == pytest.approx((MM * 1.0, MM * 1.0, 0.0))
 
 
 class TestProbeSnap:
@@ -246,21 +256,22 @@ class TestProbeSnap:
         the fitted B-spline. Against a 1e-5 mm tolerance that put zero of a nose cavity's 60 faces
         on the fitted surface, and showed the 45 real rib creases as `neither + tool`."""
         pts = be.interior_probes(self.face(), Part=fake_part(on_face=Vec(1.0, 1.0, 0.25)))
-        assert pts[0] == pytest.approx((1.0, 1.0, 0.25))
+        assert pts[0] == pytest.approx((MM * 1.0, MM * 1.0, MM * 0.25))
 
     def test_the_unsnapped_point_is_the_chord_centroid(self):
-        assert be.interior_probes(self.face())[0] == pytest.approx((1.0, 1.0, 0.0))
+        assert be.interior_probes(self.face())[0] == pytest.approx((MM * 1.0, MM * 1.0, 0.0))
 
     def test_a_kernel_refusal_leaves_the_point_where_it_was(self):
         """A face the kernel cannot measure against must not lose its probe entirely -- an empty
         probe list classifies the face `neither`, which is the one answer that means a defect."""
         pts = be.interior_probes(self.face(), Part=fake_part(raises=True))
-        assert pts[0] == pytest.approx((1.0, 1.0, 0.0))
+        assert pts[0] == pytest.approx((MM * 1.0, MM * 1.0, 0.0))
 
     def test_with_no_part_the_points_come_back_unsnapped_rather_than_raising(self):
         """`Part` defaults to `None` so the facet arithmetic stays testable without a kernel; the
         module must not import one, see `TestNoVendorImport`."""
-        assert be.interior_probes(self.face(), Part=None)[0] == pytest.approx((1.0, 1.0, 0.0))
+        assert be.interior_probes(self.face(),
+                                  Part=None)[0] == pytest.approx((MM * 1.0, MM * 1.0, 0.0))
 
 
 # ------------------------------------------------------------------- distance to a face plane
@@ -271,9 +282,17 @@ class TestPlaneDeviations:
     def setup_method(self):
         self.planes = be.plane_set(Shape([unit_square_at(0.0), unit_square_at(5.0)]))
 
-    def dev(self, points, **kw):
+    def dev(self, points_mm, **kw):
+        """`plane_deviations` on the stub faces, with the query points converted.
+
+        **The points are coordinates and `plane_set` has already converted the faces**, so they
+        go through `MM` here (IP-FC-163). Written in millimeters at the call sites because that is
+        what the stub geometry is written in, and a point and the face it is measured against have
+        to be in one unit or every distance is `inf`.
+        """
         _f, o, n, b = self.planes
-        return be.plane_deviations(points, o, n, b, **kw)
+        scaled = [(MM * x, MM * y, MM * z) for x, y, z in points_mm]
+        return be.plane_deviations(scaled, o, n, b, **kw)
 
     def test_a_point_on_a_face_reads_zero(self):
         d, i = self.dev([(0.0, 0.0, 0.0)])
@@ -282,7 +301,7 @@ class TestPlaneDeviations:
 
     def test_distance_is_the_perpendicular_one_and_exact(self):
         d, i = self.dev([(0.3, -0.4, 0.25)])
-        assert d[0] == pytest.approx(0.25, abs=1e-15)
+        assert d[0] == pytest.approx(MM * 0.25, abs=1e-18)
         assert i[0] == 0
 
     def test_it_picks_the_nearer_of_two_candidate_planes(self):
@@ -293,9 +312,9 @@ class TestPlaneDeviations:
             Face(Plane((0, 0, 5), (0, 0, 1)), (-1, -1, -1), (1, 1, 9)),
         ]))
         _f, o, n, b = tall
-        d, i = be.plane_deviations([(0.0, 0.0, 3.5)], o, n, b)
+        d, i = be.plane_deviations([(0.0, 0.0, MM * 3.5)], o, n, b)
         assert i[0] == 1
-        assert d[0] == pytest.approx(1.5)
+        assert d[0] == pytest.approx(MM * 1.5)
 
     def test_a_point_outside_every_padded_box_has_no_candidate(self):
         d, i = self.dev([(50.0, 50.0, 50.0)])
@@ -309,23 +328,25 @@ class TestPlaneDeviations:
         whose box has zero thickness, and must read 0.25 mm, not `inf`."""
         d, i = self.dev([(0.0, 0.0, 0.25)])
         assert i[0] == 0
-        assert d[0] == pytest.approx(0.25)
+        assert d[0] == pytest.approx(MM * 0.25)
 
     def test_the_off_plane_distance_is_never_filtered_however_large(self):
         """One face, so the nearest candidate cannot change with the offset."""
         _f, o, n, b = be.plane_set(Shape([unit_square_at(0.0)]))
-        for off in (1.0e-6, 1.0e-3, 0.25, 7.0, 1000.0):
-            d, i = be.plane_deviations([(0.0, 0.0, off)], o, n, b)
-            assert i[0] == 0, off
-            assert d[0] == pytest.approx(off), off
+        for off_mm in (1.0e-6, 1.0e-3, 0.25, 7.0, 1000.0):
+            d, i = be.plane_deviations([(0.0, 0.0, MM * off_mm)], o, n, b)
+            assert i[0] == 0, off_mm
+            assert d[0] == pytest.approx(MM * off_mm), off_mm
 
     def test_the_pad_is_what_decides_the_in_plane_box_test(self):
         """0.0004 mm beyond the face in x is a candidate at the default pad, not at a tighter
         one. In plane, unlike off plane, the box does constrain."""
         just_outside = [(1.0004, 0.0, 0.0)]
         d_default, i_default = self.dev(just_outside)
-        assert i_default[0] == 0 and d_default[0] == pytest.approx(0.0, abs=1e-12)
-        d_tight, i_tight = self.dev(just_outside, pad=1.0e-6)
+        assert i_default[0] == 0 and d_default[0] == pytest.approx(0.0, abs=1e-15)
+        # The tighter pad scaled with the default it is contrasted against: `BOX_PAD_M` is
+        # 1.0e-6 m, so the tight one is 1.0e-9 m (IP-FC-163).
+        d_tight, i_tight = self.dev(just_outside, pad_m=1.0e-9)
         assert i_tight[0] == -1 and not np.isfinite(d_tight[0])
 
     def test_the_box_filter_is_optimistic_just_outside_a_face(self):
@@ -334,13 +355,13 @@ class TestPlaneDeviations:
         `agrees_with_kernel` is what catches this; a test claiming otherwise would be false."""
         d, i = self.dev([(1.0005, 0.0, 0.0)])
         assert i[0] == 0
-        assert d[0] == pytest.approx(0.0, abs=1e-12)
+        assert d[0] == pytest.approx(0.0, abs=1e-15)
 
     def test_it_is_vectorized_over_points(self):
         pts = [(0, 0, 0.0), (0, 0, 0.001), (0, 0, 5.0), (40, 40, 40)]
         d, i = self.dev(pts)
         assert len(d) == 4 and len(i) == 4
-        assert d[1] == pytest.approx(0.001)
+        assert d[1] == pytest.approx(MM * 0.001)
         assert i[2] == 1
         assert i[3] == -1
 
@@ -351,6 +372,7 @@ class TestPlaneDeviations:
         the identical arithmetic asking for 37 TB. Chunking must not change a single answer."""
         _f, o, n, b = self.planes
         pts = [(0.3 * k, -0.2 * k, 0.01 * k) for k in range(37)]
+        pts = [(MM * x, MM * y, MM * z) for x, y, z in pts]
         ref_d, ref_i = be.plane_deviations(pts, o, n, b, max_block=be.MAX_BLOCK)
         for block in (6, 7, 12, 60, 300, 1000):
             d, i = be.plane_deviations(pts, o, n, b, max_block=block)
@@ -363,17 +385,17 @@ class TestPlaneDeviations:
         """`rows` is floored at 1, so an absurd budget degrades to one point at a time rather
         than dividing by zero or looping forever."""
         _f, o, n, b = self.planes
-        d, i = be.plane_deviations([(0, 0, 0.1), (0, 0, 5.1)], o, n, b, max_block=1)
+        d, i = be.plane_deviations([(0, 0, MM * 0.1), (0, 0, MM * 5.1)], o, n, b, max_block=1)
         assert i.tolist() == [0, 1]
-        assert d == pytest.approx([0.1, 0.1])
+        assert d == pytest.approx([MM * 0.1, MM * 0.1])
 
     def test_a_tilted_plane_is_measured_along_its_own_normal(self):
         """Not along z. A 45-degree plane through the origin puts (1, 0, 0) at 1/sqrt(2)."""
         tilted = be.plane_set(Shape([
             Face(Plane((0, 0, 0), (1.0, 0.0, 1.0)), (-2, -2, -2), (2, 2, 2))]))
         _f, o, n, b = tilted
-        d, _i = be.plane_deviations([(1.0, 0.0, 0.0)], o, n, b)
-        assert d[0] == pytest.approx(1.0 / np.sqrt(2.0))
+        d, _i = be.plane_deviations([(MM * 1.0, 0.0, 0.0)], o, n, b)
+        assert d[0] == pytest.approx(MM * 1.0 / np.sqrt(2.0))
 
 
 # ------------------------------------------------------------------------------ banding
@@ -404,8 +426,8 @@ class TestClassifyFace:
         assert be.classify_face(1.0, 1.0, 1.0) == be.ON_NEITHER
 
     def test_the_tolerance_is_a_parameter(self):
-        assert be.classify_face(1.0e-3, 1.0, 1.0, tol=1.0e-2) == be.ON_SURFACE
-        assert be.classify_face(1.0e-3, 1.0, 1.0, tol=1.0e-4) == be.ON_NEITHER
+        assert be.classify_face(1.0e-3, 1.0, 1.0, tol_m=1.0e-2) == be.ON_SURFACE
+        assert be.classify_face(1.0e-3, 1.0, 1.0, tol_m=1.0e-4) == be.ON_NEITHER
 
 
 class TestClassify:
@@ -421,13 +443,13 @@ class TestClassify:
         assert be.classify(1.0, 1.0) == be.ON_NEITHER
 
     def test_the_boundary_is_inclusive_at_the_tolerance(self):
-        tol = be.FUZZ_TOL
+        tol = be.FUZZ_TOL_M
         assert be.classify(tol, 10.0) == be.ON_SMOOTH
         assert be.classify(tol * 1.000001, 10.0) == be.ON_NEITHER
 
     def test_the_tolerance_is_a_parameter(self):
-        assert be.classify(1.0e-3, 10.0, tol=1.0e-2) == be.ON_SMOOTH
-        assert be.classify(1.0e-3, 10.0, tol=1.0e-4) == be.ON_NEITHER
+        assert be.classify(1.0e-3, 10.0, tol_m=1.0e-2) == be.ON_SMOOTH
+        assert be.classify(1.0e-3, 10.0, tol_m=1.0e-4) == be.ON_NEITHER
 
 
 # ----------------------------------------------------------------- adjacency and rib edges
@@ -506,7 +528,7 @@ class TestRibEdges:
     def test_the_fitted_surface_meeting_a_tool_face_is_a_rib_edge(self):
         out = self.pair(be.ON_SURFACE, be.ON_TOOL)
         assert len(out) == 1
-        assert out[0]['length_mm'] == pytest.approx(4.0)
+        assert out[0]['length_m'] == pytest.approx(MM * 4.0)
         assert out[0]['classes'] == [be.ON_SURFACE, be.ON_TOOL]
 
     def test_order_of_the_two_faces_does_not_matter(self):
@@ -543,7 +565,7 @@ class TestRibEdges:
         b = square_face(0.0, [short.reversed(), long_.reversed()])
         out = be.rib_edges(Shape([a, b]), [{'face': 0, 'on': be.ON_SURFACE},
                                            {'face': 1, 'on': be.ON_TOOL}])
-        assert [round(r['length_mm']) for r in out] == [7, 1]
+        assert [round(r['length_m'] / MM) for r in out] == [7, 1]
 
 
 class TestEdgeKinds:
@@ -587,7 +609,7 @@ class TestEdgeConformance:
         self.planes = be.plane_set(Shape([unit_square_at(0.0, half=9.0)]))
 
     def rows(self, *edges):
-        return [{'edge': e, 'faces': [0, 1], 'length_mm': e.Length} for e in edges]
+        return [{'edge': e, 'faces': [0, 1], 'length_m': e.Length} for e in edges]
 
     def part(self):
         """A `Part` whose every distance to the fitted faces reads 0.002 mm."""
@@ -596,38 +618,39 @@ class TestEdgeConformance:
     def test_sample_count_follows_arc_length_not_a_fixed_number(self):
         part = self.part()
         samples, truncated = be.edge_conformance(part, self.rows(Edge((0, 0, 0), (2, 0, 0))),
-                                                 self.planes, None, arc=0.2)
+                                                 self.planes, None, arc_m=MM * 0.2)
         assert truncated == 0
         assert len(samples) == 11                       # 2.0 mm / 0.2 mm + 1
         samples, _t = be.edge_conformance(part, self.rows(Edge((0, 0, 0), (4, 0, 0))),
-                                          self.planes, None, arc=0.2)
+                                          self.planes, None, arc_m=MM * 0.2)
         assert len(samples) == 21
 
     def test_both_distances_are_carried_per_sample(self):
         samples, _t = be.edge_conformance(self.part(),
                                           self.rows(Edge((0, 0, 0.5), (2, 0, 0.5))),
-                                          self.planes, None, arc=1.0)
-        assert all(s['d_smooth_mm'] == pytest.approx(0.002) for s in samples)
-        assert all(s['d_tool_mm'] == pytest.approx(0.5) for s in samples)
+                                          self.planes, None, arc_m=MM * 1.0)
+        assert all(s['d_smooth_m'] == pytest.approx(MM * 0.002) for s in samples)
+        assert all(s['d_tool_m'] == pytest.approx(MM * 0.5) for s in samples)
         assert all(s['on'] == be.ON_NEITHER for s in samples)
 
     def test_an_edge_over_the_point_budget_is_dropped_and_counted(self):
         samples, truncated = be.edge_conformance(self.part(),
                                                  self.rows(Edge((0, 0, 0), (9, 0, 0))),
-                                                 self.planes, None, arc=0.2, max_points=5)
+                                                 self.planes, None, arc_m=MM * 0.2,
+                                                 max_points=5)
         assert samples == [] and truncated == 1
 
     def test_a_short_edge_still_gets_two_samples(self):
         samples, _t = be.edge_conformance(self.part(),
                                           self.rows(Edge((0, 0, 0), (0.001, 0, 0))),
-                                          self.planes, None, arc=0.2)
+                                          self.planes, None, arc_m=MM * 0.2)
         assert len(samples) == 2
 
     def test_the_edge_index_is_the_position_in_the_row_list(self):
         samples, _t = be.edge_conformance(self.part(),
                                           self.rows(Edge((0, 0, 0), (1, 0, 0)),
                                                     Edge((0, 1, 0), (1, 1, 0))),
-                                          self.planes, None, arc=1.0)
+                                          self.planes, None, arc_m=1.0)
         assert sorted({s['edge'] for s in samples}) == [0, 1]
 
 
@@ -685,7 +708,7 @@ class TestSurfaceIdentity:
         out = be.surface_identity(BSplineSurface(net()), BSplineSurface(net()))
         assert out['comparable'] is True
         assert out['identical'] is True
-        assert out['worst_pole_mm'] == pytest.approx(0.0)
+        assert out['worst_pole_m'] == pytest.approx(0.0)
 
     def test_a_moved_pole_is_reported_with_its_magnitude(self):
         """**The signature of a `removeSplitter` refit**, which is the whole reason this test
@@ -693,7 +716,7 @@ class TestSurfaceIdentity:
         out = be.surface_identity(BSplineSurface(net()), BSplineSurface(net(dx=0.004)))
         assert out['identical'] is False
         assert out['same_pole_counts'] is True
-        assert out['worst_pole_mm'] == pytest.approx(0.004)
+        assert out['worst_pole_m'] == pytest.approx(MM * 0.004)
 
     def test_a_pole_moved_under_the_tolerance_is_still_identical(self):
         out = be.surface_identity(BSplineSurface(net()), BSplineSurface(net(dx=1.0e-9)))
@@ -721,7 +744,7 @@ class TestSurfaceIdentity:
         bigger = [[(0.0, 0.0, 0.0)] * 3] * 2
         out = be.surface_identity(BSplineSurface(net()), BSplineSurface(bigger))
         assert out['same_pole_counts'] is False
-        assert out['worst_pole_mm'] is None
+        assert out['worst_pole_m'] is None
         assert out['identical'] is False
 
     def test_a_non_rational_surface_is_treated_as_unit_weights(self):
@@ -799,7 +822,7 @@ class TestCongruentIdentity:
         b = BSplineSurface(mirrored(net()))
         out = be.congruent_identity(a, b)
         assert out['identical'] is True
-        assert out['worst_step_mm'] == pytest.approx(0.0, abs=1e-12)
+        assert out['worst_step_m'] == pytest.approx(0.0, abs=1e-12)
         assert be.surface_identity(a, b)['identical'] is False, \
             'pole equality must fail here, or the mirror moved nothing'
 
@@ -814,7 +837,7 @@ class TestCongruentIdentity:
         out = be.congruent_identity(BSplineSurface(net()), BSplineSurface(refitted(net())))
         assert out['identical'] is False
         assert out['comparable'] is True
-        assert out['worst_step_mm'] > 1.0e-6
+        assert out['worst_step_m'] > 1.0e-6
 
     def test_a_refit_of_a_mirrored_copy_is_still_caught(self):
         """The case that actually matters: a copy that is both mirrored and refitted, where pole
@@ -885,7 +908,7 @@ class TestMirrorFamilies:
         assert rows[0]['mirrored'] == 0 and rows[0]['exact'] == 3
         assert verdict['vacuous'] is True
         assert verdict['clean'] is False, 'nothing was tested, so nothing passed'
-        assert verdict['worst_step_mm'] is None
+        assert verdict['worst_step_m'] is None
 
     def test_a_shape_with_no_bspline_at_all_is_vacuous(self):
         rows = be.mirror_families(Shape([unit_square_at(0.0)]))
@@ -896,7 +919,7 @@ class TestMirrorFamilies:
         shape = Shape([self.face_of(net()), self.face_of(refitted(mirrored(net())))])
         text = be.table_mirror(be.mirror_families(shape))
         assert 'NOT CONGRUENT' in text
-        assert 'worst step mm' in text
+        assert 'worst step/mm' in text
 
     def test_the_parameterization_key_ignores_where_the_poles_are(self):
         a = BSplineSurface(net())
@@ -1060,7 +1083,7 @@ class TestAnomalousEdges:
         shape = Shape([self.faced([Unreadable((0, 0, 0), (1, 0, 0))])])
         rows = be.anomalous_edges(shape)
         assert [r['kind'] for r in rows] == [be.EDGE_UNREADABLE]
-        assert rows[0]['length_mm'] != rows[0]['length_mm'], 'NaN, not a number pretending to be'
+        assert rows[0]['length_m'] != rows[0]['length_m'], 'NaN, not a number pretending to be'
         assert be.edge_anomaly_verdict(rows)['clean'] is False
         assert '?' in be.table_anomalous(rows), 'the table must not print a NaN as a length'
 
@@ -1068,27 +1091,29 @@ class TestAnomalousEdges:
 class TestAngleBetween:
 
     def test_identical_directions_are_zero(self):
-        assert be.angle_between((0, 0, 1), (0, 0, 1)) == pytest.approx(0.0)
+        assert be.angle_between_rad((0, 0, 1), (0, 0, 1)) == pytest.approx(0.0)
 
     def test_opposite_directions_are_also_zero(self):
         """**Folded on purpose.** A normal's sign is an orientation convention, so two faces of
         one surface oriented oppositely must read as the same surface."""
-        assert be.angle_between((0, 0, 1), (0, 0, -1)) == pytest.approx(0.0)
+        assert be.angle_between_rad((0, 0, 1), (0, 0, -1)) == pytest.approx(0.0)
 
     def test_perpendicular_is_ninety(self):
-        assert be.angle_between((1, 0, 0), (0, 0, 1)) == pytest.approx(90.0)
+        # Radians, which is the standard's angle unit (IP-FC-163).
+        assert be.angle_between_rad((1, 0, 0), (0, 0, 1)) == pytest.approx(math.pi / 2.0)
 
     def test_a_known_oblique_angle(self):
-        assert be.angle_between((1, 0, 0), (1, 1, 0)) == pytest.approx(45.0)
-        assert be.angle_between((1, 0, 0), (-1, 1, 0)) == pytest.approx(45.0)
+        assert be.angle_between_rad((1, 0, 0), (1, 1, 0)) == pytest.approx(math.pi / 4.0)
+        assert math.degrees(be.angle_between_rad((1, 0, 0), (1, 1, 0))) == pytest.approx(45.0)
+        assert be.angle_between_rad((1, 0, 0), (-1, 1, 0)) == pytest.approx(math.pi / 4.0)
 
     def test_it_does_not_require_unit_vectors(self):
-        assert be.angle_between((0, 0, 7), (0, 3, 0)) == pytest.approx(90.0)
+        assert be.angle_between_rad((0, 0, 7), (0, 3, 0)) == pytest.approx(math.pi / 2.0)
 
     def test_a_missing_or_zero_direction_is_not_a_number(self):
-        assert np.isnan(be.angle_between(None, (0, 0, 1)))
-        assert np.isnan(be.angle_between((0, 0, 1), None))
-        assert np.isnan(be.angle_between((0, 0, 0), (0, 0, 1)))
+        assert np.isnan(be.angle_between_rad(None, (0, 0, 1)))
+        assert np.isnan(be.angle_between_rad((0, 0, 1), None))
+        assert np.isnan(be.angle_between_rad((0, 0, 0), (0, 0, 1)))
 
 
 class TestFaceNormal:
@@ -1110,7 +1135,7 @@ class TestFaceNormal:
     def test_a_plane_gives_its_own_normal(self):
         n, residual, used = be.face_normal(self.plane_part(), object(), (0.3, -0.7, 0.0))
         assert used >= 3
-        assert be.angle_between(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9)
+        assert be.angle_between_rad(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9)
         assert residual == pytest.approx(0.0, abs=1e-12)
 
     def test_the_normal_offset_is_discarded_rather_than_fitted(self):
@@ -1118,7 +1143,7 @@ class TestFaceNormal:
         carries no tangent information; keeping it would bias the plane fit."""
         n, _r, used = be.face_normal(self.plane_part(), object(), (0.0, 0.0, 0.0))
         assert used == 4, 'the two z offsets should have collapsed and been dropped'
-        assert be.angle_between(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9)
+        assert be.angle_between_rad(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9)
 
     def test_too_few_usable_offsets_declines_rather_than_guessing(self):
         """A point pinched between trim boundaries is where this happens, and a wrong normal there
@@ -1146,21 +1171,25 @@ class TestFaceNormal:
         assert n is None and used == 0
 
     def test_a_probe_still_survives_a_refusal_in_the_non_strict_caller(self):
-        """The other half of the same contract: `interior_probes` must keep its point."""
+        """The other half of the same contract: `interior_probes` must keep its point.
+
+        The point comes back in meters, because `interior_probes` converts the centroid it
+        computed from the facet whether or not the snap succeeded (IP-FC-163).
+        """
         face = Face(Plane((0, 0, 0), (0, 0, 1)), (0, 0, 0), (3, 3, 0),
                     facets=[triangle((0, 0, 0), (3, 0, 0), (0, 3, 0))])
         assert be.interior_probes(face, Part=fake_part(raises=True)) == [
-            pytest.approx((1.0, 1.0, 0.0))]
+            pytest.approx((MM * 1.0, MM * 1.0, 0.0))]
 
     def test_the_step_is_a_parameter(self):
         for h in (0.01, 0.05, 0.5):
-            n, _r, _u = be.face_normal(self.plane_part(), object(), (0.0, 0.0, 0.0), h=h)
-            assert be.angle_between(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9), h
+            n, _r, _u = be.face_normal(self.plane_part(), object(), (0.0, 0.0, 0.0), h_m=h)
+            assert be.angle_between_rad(n, (0, 0, 1)) == pytest.approx(0.0, abs=1e-9), h
 
 
 def probe_row(d, edge, deg=0.0, face=0, i=0):
-    return {'face': face, 'i': i, 'x': 0.0, 'y': 0.0, 'z': 0.0, 'd_fitted_mm': d,
-            'edge_mm': edge, 'normal_deg': deg, 'normal_residual_mm': 0.0, 'offsets_used': 6}
+    return {'face': face, 'i': i, 'x_m': 0.0, 'y_m': 0.0, 'z_m': 0.0, 'd_fitted_m': d,
+            'edge_m': edge, 'normal_rad': deg, 'normal_residual_m': 0.0, 'offsets_used': 6}
 
 
 class TestSummarizePatch:
@@ -1174,15 +1203,15 @@ class TestSummarizePatch:
         signature and every band reading alike is the refutation."""
         rows = [probe_row(1.0e-9, 0.05), probe_row(2.0e-9, 0.2),
                 probe_row(3.0e-9, 1.0), probe_row(9.0e-9, 50.0)]
-        s = be.summarize_patch(rows, bands=(0.1, 0.5, 2.0))
-        labels = [(b['lo_mm'], b['hi_mm'], b['probes']) for b in s['bands']]
+        s = be.summarize_patch(rows, bands_m=(0.1, 0.5, 2.0))
+        labels = [(b['lo_m'], b['hi_m'], b['probes']) for b in s['bands']]
         assert labels == [(0.0, 0.1, 1), (0.1, 0.5, 1), (0.5, 2.0, 1), (2.0, float('inf'), 1)]
-        assert s['bands'][-1]['worst_mm'] == pytest.approx(9.0e-9)
+        assert s['bands'][-1]['worst_m'] == pytest.approx(9.0e-9)
 
     def test_an_empty_band_is_omitted_rather_than_reported_as_zero(self):
-        s = be.summarize_patch([probe_row(1.0e-9, 50.0)], bands=(0.1, 0.5, 2.0))
+        s = be.summarize_patch([probe_row(1.0e-9, 50.0)], bands_m=(0.1, 0.5, 2.0))
         assert [b['probes'] for b in s['bands']] == [1]
-        assert s['bands'][0]['lo_mm'] == 2.0
+        assert s['bands'][0]['lo_m'] == 2.0
 
     def test_the_normal_angle_is_summarized_over_the_probes_that_have_one(self):
         """Only `normal_limit` probes carry a normal, so the rest are `nan` and must not drag the
@@ -1191,18 +1220,18 @@ class TestSummarizePatch:
                 probe_row(0.0, 1.0, deg=0.2)]
         s = be.summarize_patch(rows)
         assert s['normals_measured'] == 2
-        assert s['worst_normal_deg'] == pytest.approx(0.4)
-        assert s['mean_normal_deg'] == pytest.approx(0.3)
+        assert s['worst_normal_rad'] == pytest.approx(0.4)
+        assert s['mean_normal_rad'] == pytest.approx(0.3)
 
     def test_the_worst_probe_is_handed_back_so_it_can_be_looked_at(self):
         rows = [probe_row(1.0e-9, 1.0, face=2, i=3), probe_row(5.0e-4, 1.0, face=7, i=9)]
         s = be.summarize_patch(rows)
         assert s['worst_at']['face'] == 7 and s['worst_at']['i'] == 9
-        assert s['worst_mm'] == pytest.approx(5.0e-4)
+        assert s['worst_m'] == pytest.approx(5.0e-4)
 
     def test_the_bands_are_disjoint_and_cover_every_probe(self):
         rows = [probe_row(0.0, d) for d in (0.0, 0.09, 0.1, 0.49, 0.5, 1.9, 2.0, 1e9)]
-        s = be.summarize_patch(rows, bands=(0.1, 0.5, 2.0))
+        s = be.summarize_patch(rows, bands_m=(0.1, 0.5, 2.0))
         assert sum(b['probes'] for b in s['bands']) == len(rows)
 
 
@@ -1214,32 +1243,34 @@ class TestTablePatch:
     def test_the_identity_verdict_is_printed_per_face(self):
         identity = [{'face': 3, 'identical': True, 'same_degrees': True, 'same_pole_counts': True,
                      'same_knots': True, 'same_weights': True, 'same_periodicity': True,
-                     'worst_pole_mm': 0.0}]
+                     'worst_pole_m': 0.0}]
         text = be.table_patch({'probes': 0}, identity=identity)
         assert 'cut face 3' in text and 'IDENTICAL' in text
 
     def test_a_missing_pole_figure_prints_as_not_applicable(self):
         identity = [{'face': 0, 'identical': False, 'same_degrees': True,
                      'same_pole_counts': False, 'same_knots': True, 'same_weights': None,
-                     'same_periodicity': True, 'worst_pole_mm': None}]
+                     'same_periodicity': True, 'worst_pole_m': None}]
         text = be.table_patch({'probes': 0}, identity=identity)
         assert 'DIFFERS' in text and 'n/a' in text
 
     def test_the_bands_and_the_creases_are_printed(self):
         s = be.summarize_patch([probe_row(1.0e-9, 0.05, deg=0.1),
                                 probe_row(2.0e-9, 9.0, deg=0.2)])
-        creases = [{'edge': 0, 'i': 0, 'z': -1.0, 'crease_deg': 62.5,
-                    'normal_residual_mm': 0.0, 'offsets_used': 6},
-                   {'edge': 1, 'i': 0, 'z': -2.0, 'crease_deg': 88.0,
-                    'normal_residual_mm': 0.0, 'offsets_used': 6}]
+        creases = [{'edge': 0, 'i': 0, 'z_m': -1.0, 'crease_rad': math.radians(62.5),
+                    'normal_residual_m': 0.0, 'offsets_used': 6},
+                   {'edge': 1, 'i': 0, 'z_m': -2.0, 'crease_rad': math.radians(88.0),
+                    'normal_residual_m': 0.0, 'offsets_used': 6}]
         text = be.table_patch(s, creases=creases)
         assert 'distance to the nearest rib edge' in text
         assert 'crease angle' in text and 'tangency' in text
+        # The creases are radians in the record and degrees in the printed line, so the
+        # fixture's own figures are built with `math.radians` and read back as degrees.
         assert 'min 62.500 deg' in text and 'max 88.000 deg' in text
 
     def test_creases_that_are_all_unmeasurable_print_nothing_rather_than_nan(self):
-        creases = [{'edge': 0, 'i': 0, 'z': -1.0, 'crease_deg': float('nan'),
-                    'normal_residual_mm': float('nan'), 'offsets_used': 2}]
+        creases = [{'edge': 0, 'i': 0, 'z_m': -1.0, 'crease_rad': float('nan'),
+                    'normal_residual_m': float('nan'), 'offsets_used': 2}]
         text = be.table_patch(be.summarize_patch([probe_row(0.0, 1.0)]), creases=creases)
         assert 'crease angle' not in text
 
@@ -1248,8 +1279,8 @@ class TestTablePatch:
 
 
 def sample(ds, dt, edge=0, i=0, z=0.0):
-    return {'edge': edge, 'i': i, 'x': 0.0, 'y': 0.0, 'z': z,
-            'd_smooth_mm': ds, 'd_tool_mm': dt, 'tool_face': 0,
+    return {'edge': edge, 'i': i, 'x_m': 0.0, 'y_m': 0.0, 'z_m': z,
+            'd_smooth_m': ds, 'd_tool_m': dt, 'tool_face': 0,
             'on': be.classify(ds, dt)}
 
 
@@ -1260,10 +1291,14 @@ class TestSummarize:
 
     def test_the_three_bands_are_disjoint_and_nested_where_they_should_be(self):
         """`within_kernel` is a subset of `within_fuzz`, and `over_fuzz` is its complement."""
+        # **The band edges moved with the constants, so the four samples had to.** They sit at
+        # `KERNEL_TOL_M` = 1e-10, inside `FUZZ_TOL_M` = 1e-8, over the fuzz but under
+        # `WALL_TOL_M` = 1e-5, and over `WALL_TOL_M` -- the same four places they always
+        # occupied, a thousand times smaller (IP-FC-163).
         samples = [sample(0.0, 0.0),                        # at kernel tolerance
-                   sample(1.0e-6, 0.0),                     # inside the fuzz, over the kernel
-                   sample(1.0e-4, 0.0),                     # over the fuzz, under WALL_TOL
-                   sample(0.05, 0.0)]                       # over WALL_TOL
+                   sample(MM * 1.0e-6, 0.0),                # inside the fuzz, over the kernel
+                   sample(MM * 1.0e-4, 0.0),                # over the fuzz, under WALL_TOL
+                   sample(MM * 0.05, 0.0)]                  # over WALL_TOL
         s = be.summarize(samples)
         assert s['samples'] == 4
         assert s['within_kernel'] == 1
@@ -1277,16 +1312,16 @@ class TestSummarize:
         """A sample 0.01 mm off the tool and on the surface is as bad as one 0.01 mm off the
         surface and on the tool; taking the max per sample is what makes that true."""
         s = be.summarize([sample(0.009, 0.0), sample(0.0, 0.011)])
-        assert s['worst_smooth_mm'] == pytest.approx(0.009)
-        assert s['worst_tool_mm'] == pytest.approx(0.011)
-        assert s['worst_either_mm'] == pytest.approx(0.011)
+        assert s['worst_smooth_m'] == pytest.approx(0.009)
+        assert s['worst_tool_m'] == pytest.approx(0.011)
+        assert s['worst_either_m'] == pytest.approx(0.011)
 
     def test_the_worst_sample_is_handed_back_so_it_can_be_looked_at(self):
         s = be.summarize([sample(0.0, 0.0, edge=1, i=2, z=-7.5),
                           sample(0.02, 0.0, edge=3, i=4, z=-9.5)])
         assert s['worst_sample']['edge'] == 3
         assert s['worst_sample']['i'] == 4
-        assert s['worst_sample']['z'] == -9.5
+        assert s['worst_sample']['z_m'] == -9.5
 
     def test_it_counts_distinct_edges_not_samples(self):
         s = be.summarize([sample(0.0, 0.0, edge=5, i=0), sample(0.0, 0.0, edge=5, i=1),
@@ -1301,8 +1336,8 @@ class TestSummarize:
 
     def test_the_bands_are_parameters_so_a_caller_can_re_band_without_re_measuring(self):
         samples = [sample(1.0e-6, 0.0), sample(1.0e-4, 0.0)]
-        assert be.summarize(samples, fuzz_tol=1.0e-3)['over_fuzz'] == 0
-        assert be.summarize(samples, fuzz_tol=1.0e-7)['over_fuzz'] == 2
+        assert be.summarize(samples, fuzz_tol_m=1.0e-3)['over_fuzz'] == 0
+        assert be.summarize(samples, fuzz_tol_m=1.0e-7)['over_fuzz'] == 2
 
     def test_a_sample_over_no_tool_face_is_counted_not_averaged(self):
         """**The regression the first real run exposed.** One `inf` turned every aggregate in the
@@ -1311,15 +1346,15 @@ class TestSummarize:
         which is on a tool face by definition -- so it is counted and kept out of the means."""
         s = be.summarize([sample(0.0, float('inf')), sample(0.0, 0.004)])
         assert s['no_tool_candidate'] == 1
-        assert s['worst_tool_mm'] == pytest.approx(0.004)
-        assert s['mean_tool_mm'] == pytest.approx(0.004)
-        assert np.isinf(s['worst_either_mm'])
+        assert s['worst_tool_m'] == pytest.approx(0.004)
+        assert s['mean_tool_m'] == pytest.approx(0.004)
+        assert np.isinf(s['worst_either_m'])
         assert 'over no tool face' in be.table(s)
 
     def test_every_sample_over_no_tool_face_leaves_the_tool_figures_undefined(self):
         s = be.summarize([sample(0.0, float('inf'))])
         assert s['no_tool_candidate'] == 1
-        assert np.isnan(s['worst_tool_mm']) and np.isnan(s['mean_tool_mm'])
+        assert np.isnan(s['worst_tool_m']) and np.isnan(s['mean_tool_m'])
 
 
 # ------------------------------------------------------------------------------ the table
@@ -1341,9 +1376,9 @@ class TestTable:
 
     def test_the_kernel_cross_check_is_printed_when_given(self):
         s = be.summarize([sample(1.0e-3, 0.0)])
-        rows = [{'edge': 0, 'i': 0, 'z': -1.0, 'cheap_smooth_mm': 1.0e-3,
-                 'kernel_smooth_mm': 1.1e-3, 'kernel_boundary_mm': 1.0e-9,
-                 'cheap_tool_mm': 0.0, 'kernel_tool_mm': 2.0e-3}]
+        rows = [{'edge': 0, 'i': 0, 'z_m': -1.0, 'cheap_smooth_m': 1.0e-3,
+                 'kernel_smooth_m': 1.1e-3, 'kernel_boundary_m': 1.0e-9,
+                 'cheap_tool_m': 0.0, 'kernel_tool_m': 2.0e-3}]
         text = be.table(s, agreement=rows)
         assert 'against the kernel' in text
         assert 'kern tool' in text
@@ -1352,8 +1387,8 @@ class TestTable:
     def test_a_missing_boundary_column_prints_rather_than_raising(self):
         """The column was added after the first real run; a row from before it must still print."""
         s = be.summarize([sample(1.0e-3, 0.0)])
-        rows = [{'edge': 0, 'i': 0, 'z': -1.0, 'cheap_smooth_mm': 1.0e-3,
-                 'kernel_smooth_mm': 1.1e-3, 'cheap_tool_mm': 0.0, 'kernel_tool_mm': 2.0e-3}]
+        rows = [{'edge': 0, 'i': 0, 'z_m': -1.0, 'cheap_smooth_m': 1.0e-3,
+                 'kernel_smooth_m': 1.1e-3, 'cheap_tool_m': 0.0, 'kernel_tool_m': 2.0e-3}]
         assert 'nan' in be.table(s, agreement=rows)
 
 
@@ -1363,7 +1398,7 @@ class TestTable:
 class TestConstants:
 
     def test_the_bands_are_ordered_by_magnitude(self):
-        assert be.KERNEL_TOL < be.FUZZ_TOL < be.WALL_TOL
+        assert be.KERNEL_TOL_M < be.FUZZ_TOL_M < be.WALL_TOL_M
 
     def test_the_fuzz_band_matches_the_builders_own_rib_cut_fuzz(self):
         """Restated here rather than imported, so it is checked against the source of truth.
@@ -1385,17 +1420,17 @@ class TestConstants:
             stated_value = text.split(marker, 1)[1].split('\n', 1)[0].split('#')[0].strip()
             return float(stated_value.lstrip('(').split(',')[0])
 
-        # **This mirror now spans the unit boundary, and that is why the factor is
-        # explicit rather than folded into the figures.** `cowl_interior` is SI since
-        # IP-FC-160; `boolean_edges` is still millimeters, because this package may not import
-        # the conversion layer (OQ-ARCH-24). `si.RIB_CUT_FUZZ_MM` is a kernel argument and
-        # stays millimeters on both sides, so it needs no factor at all -- which is the
-        # distinction the two rows below would lose if the conversion were hidden.
-        mm_per_m = 1000.0
+        # **The mirror no longer spans a unit boundary, and the factors are gone with it.**
+        # `boolean_edges` stored millimeters until IP-FC-163, so two of these three rows needed
+        # a x1000 and the third did not -- which is exactly the asymmetry that makes a hidden
+        # conversion dangerous. Both sides are SI now, so each row is a plain equality, and
+        # `si.RIB_CUT_FUZZ_MM` is the one that moved: it is a kernel argument and stays
+        # millimeters where it is declared, so comparing it against `FUZZ_TOL_M` is the one
+        # conversion left here, and it is named.
         for module, name, here, factor in (
-                ('si', 'RIB_CUT_FUZZ_MM', be.FUZZ_TOL, 1.0),
-                ('cowl_interior', 'WALL_TOL_M', be.WALL_TOL, mm_per_m),
-                ('cowl_interior', 'CHECK_ARC_M', be.SAMPLE_ARC, mm_per_m)):
+                ('si', 'RIB_CUT_FUZZ_MM', be.FUZZ_TOL_M, MM),
+                ('cowl_interior', 'WALL_TOL_M', be.WALL_TOL_M, 1.0),
+                ('cowl_interior', 'CHECK_ARC_M', be.SAMPLE_ARC_M, 1.0)):
             value = stated(module, name) * factor
             assert value == pytest.approx(here), '%s.%s drifted: builder %s, here %s' % (
                 module, name, value, here)
@@ -1403,7 +1438,7 @@ class TestConstants:
     def test_the_box_pad_sits_between_the_fuzz_and_the_wall_tolerance(self):
         """Wide enough never to reject a face the fuzzy cut legitimately snapped a point to, and
         far enough below `WALL_TOL` that it cannot hide a deviation that matters."""
-        assert be.FUZZ_TOL < be.BOX_PAD < be.WALL_TOL
+        assert be.FUZZ_TOL_M < be.BOX_PAD_M < be.WALL_TOL_M
 
 
 # -------------------------------------------------------------------- no vendor import
@@ -1470,7 +1505,7 @@ class TestStageIdentity:
         assert len(rows) == 1
         assert rows[0]['matched'] == 1 and rows[0]['lost'] == 0
         assert rows[0]['identical'] is True
-        assert rows[0]['worst_mm'] == pytest.approx(0.0)
+        assert rows[0]['worst_m'] == pytest.approx(0.0)
         assert be.stage_verdict(rows)['clean'] is True
 
     def test_a_nudged_pole_is_reported_as_a_refit(self):
@@ -1480,7 +1515,7 @@ class TestStageIdentity:
         rows = be.stage_identity([('cavity', spline_shape(a)),
                                   ('notched_cut', spline_shape(b))])
         assert rows[0]['matched'] == 1 and rows[0]['identical'] is False
-        assert rows[0]['worst_mm'] == pytest.approx(0.004, abs=1e-9)
+        assert rows[0]['worst_m'] == pytest.approx(MM * 0.004, abs=1e-12)
         v = be.stage_verdict(rows)
         assert v['clean'] is False and len(v['refitting']) == 1
         assert 'REFIT OR LOST' in be.table_stages(rows)
@@ -1560,7 +1595,7 @@ class TestStageIdentity:
                                   ('mirror_across_cell', spline_shape(BSplineSurface(moved)))])
         assert rows[0]['test'] == 'congruence'
         assert rows[0]['identical'] is True, 'a rigid motion must pass the congruence test'
-        assert rows[0]['worst_mm'] == pytest.approx(0.0, abs=1e-9)
+        assert rows[0]['worst_m'] == pytest.approx(0.0, abs=1e-9)
         assert be.stage_verdict(rows)['clean'] is True
 
     def test_a_non_mirror_step_still_uses_pole_identity(self):
@@ -1571,7 +1606,7 @@ class TestStageIdentity:
                                   ('notched_cut', spline_shape(BSplineSurface(moved)))])
         assert rows[0]['test'] == 'identity'
         assert rows[0]['identical'] is False
-        assert rows[0]['worst_mm'] == pytest.approx(100.0)
+        assert rows[0]['worst_m'] == pytest.approx(MM * 100.0)
 
     def test_which_stages_count_as_rigid_is_a_named_constant(self):
         assert 'mirror_across_cell' in be.ISOMETRY_STAGES

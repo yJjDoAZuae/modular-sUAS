@@ -56,11 +56,11 @@ class TestTheProbeItself:
 
     def test_a_zero_floor_is_honored_and_not_treated_as_absent(self):
         """**The trap `0.0 or default` would set.** Zero is the whole point of the override."""
-        p = wm_probe.Probe(station_floor_mm=0.0)
+        p = wm_probe.Probe(station_floor_m=0.0)
         assert p.station_floor(0.6) == 0.0
 
     def test_the_floor_override_is_coerced_to_a_float(self):
-        p = wm_probe.Probe(station_floor_mm=0)
+        p = wm_probe.Probe(station_floor_m=0)
         assert isinstance(p.station_floor(0.6), float)
 
     def test_a_hook_that_changes_a_row_is_counted_and_its_station_recorded(self):
@@ -71,7 +71,7 @@ class TestTheProbeItself:
         assert p.contour(-1.0, pts) is pts            # declined
         out = p.contour(-5.0, pts)
         assert out == [(1.0, 0.0)]
-        assert p.calls == 1 and p.stations == [-5.0] and p.moved is True
+        assert p.calls == 1 and p.stations_m == [-5.0] and p.moved is True
 
     def test_a_hook_that_declines_every_row_is_not_counted_as_having_moved(self):
         """The `inputs.unmoved` discipline: a probe that fired on nothing must say so."""
@@ -85,7 +85,7 @@ class TestTheProbeItself:
         p = wm_probe.Probe(contour=lambda z, pts: list(pts) + [(9.0, 9.0)])
         p.contour(-5.0, [(0.0, 0.0)])
         p.contour(-5.0, [(0.0, 0.0)])
-        assert p.calls == 2 and p.stations == [-5.0, -5.0]
+        assert p.calls == 2 and p.stations_m == [-5.0, -5.0]
 
 
 class TestInstalling:
@@ -93,7 +93,7 @@ class TestInstalling:
     def test_the_seam_is_none_before_and_after(self):
         mod = FakeModule()
         assert read_seam(mod) is None
-        with wm_probe.installed(mod, station_floor_mm=0.0) as p:
+        with wm_probe.installed(mod, station_floor_m=0.0) as p:
             assert read_seam(mod) is p
         assert read_seam(mod) is None
 
@@ -101,7 +101,7 @@ class TestInstalling:
         """A dose that fails partway must not leave the next build perturbed."""
         mod = FakeModule()
         with pytest.raises(ValueError):
-            with wm_probe.installed(mod, station_floor_mm=0.0):
+            with wm_probe.installed(mod, station_floor_m=0.0):
                 assert read_seam(mod) is not None
                 raise ValueError('the build failed')
         assert read_seam(mod) is None
@@ -124,18 +124,18 @@ class TestInstalling:
     def test_nesting_is_refused_rather_than_stacked(self):
         """Two probes would mean one is silently ignored, which is the failure to design against."""
         mod = FakeModule()
-        with wm_probe.installed(mod, station_floor_mm=0.0) as outer:
+        with wm_probe.installed(mod, station_floor_m=0.0) as outer:
             with pytest.raises(wm_probe.ProbeInUse):
-                with wm_probe.installed(mod, station_floor_mm=0.1):
+                with wm_probe.installed(mod, station_floor_m=0.1):
                     pass
             assert read_seam(mod) is outer
         assert read_seam(mod) is None
 
     def test_a_refused_nesting_does_not_disturb_the_installed_probe(self):
         mod = FakeModule()
-        with wm_probe.installed(mod, station_floor_mm=0.0) as outer:
+        with wm_probe.installed(mod, station_floor_m=0.0) as outer:
             try:
-                with wm_probe.installed(mod, station_floor_mm=0.1):
+                with wm_probe.installed(mod, station_floor_m=0.1):
                     pass
             except wm_probe.ProbeInUse:
                 pass
@@ -145,7 +145,7 @@ class TestInstalling:
     def test_passing_a_probe_and_its_parts_is_an_error(self):
         mod = FakeModule()
         with pytest.raises(ValueError):
-            wm_probe.installed(mod, station_floor_mm=0.0, probe=wm_probe.Probe())
+            wm_probe.installed(mod, station_floor_m=0.0, probe=wm_probe.Probe())
 
     def test_active_reports_what_is_installed(self):
         mod = FakeModule()

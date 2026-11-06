@@ -20,7 +20,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 'src', 'Fuselage', 'tools'))
 
-from wall_measure import candidates, corpus, gates, sections                # noqa: E402
+from wall_measure import candidates, corpus, gates, kern, sections          # noqa: E402
 
 from conftest import requires_freecad                                       # noqa: E402
 
@@ -127,13 +127,16 @@ class TestLoadingAndStations:
         what the function actually promises: `STATIONS` stations, evenly spaced, inset from the
         wall's own ends. `gate_station_grid` is the one that reproduces the gate (IP-WTM-18)."""
         _rec, wall = real_wall
-        zs = corpus.station_grid(wall)
-        assert len(zs) == corpus.STATIONS
+        zs_m = corpus.station_grid(wall)
+        assert len(zs_m) == corpus.STATIONS
+        # **The box is read in the kernel's millimeters and the grid comes back in meters**, so
+        # the comparison converts (IP-FC-163). Asserting against `bb.ZMin` directly was the
+        # defect `kern` exists to prevent, and it is exactly the shape of the `sever_doses` bug.
         bb = wall.BoundBox
-        assert zs[0] == pytest.approx(bb.ZMin + corpus.END_INSET)
-        assert zs[-1] == pytest.approx(bb.ZMax - corpus.END_INSET)
-        gaps = np.diff(zs)
-        assert np.allclose(gaps, gaps[0])
+        assert zs_m[0] == pytest.approx(kern.m(bb.ZMin) + corpus.END_INSET_M)
+        assert zs_m[-1] == pytest.approx(kern.m(bb.ZMax) - corpus.END_INSET_M)
+        gaps_m = np.diff(zs_m)
+        assert np.allclose(gaps_m, gaps_m[0])
 
     def test_a_sectioning_extent_ignores_a_loose_bounding_box(self):
         """**The defect that lost the nose its stations.** A bounding box on these solids is an
@@ -152,10 +155,11 @@ class TestLoadingAndStations:
             def slice(self, _direction, z):
                 return [_ClosedWire()] if self.lo <= z <= self.hi else []
 
+        # The stub's `slice` takes the kernel's millimeters, as the real one does.
         shape = LooseBox(-200.0, -24.0)
-        lo, hi = corpus.sectioning_extent(shape, tol=1.0e-4)
-        assert lo == pytest.approx(-200.0, abs=1.0e-3)
-        assert hi == pytest.approx(-24.0, abs=1.0e-3)
+        lo_m, hi_m = corpus.sectioning_extent(shape, tol_m=1.0e-7)
+        assert lo_m == pytest.approx(-0.200, abs=1.0e-6)
+        assert hi_m == pytest.approx(-0.024, abs=1.0e-6)
 
     def test_a_station_grid_on_the_real_extent_stays_inside_the_material(self):
         class LooseBox(object):
@@ -165,11 +169,12 @@ class TestLoadingAndStations:
             def slice(self, _direction, z):
                 return [_ClosedWire()] if -200.0 <= z <= -24.0 else []
 
-        zs = corpus.measurable_station_grid(LooseBox())
-        assert len(zs) == corpus.STATIONS
-        assert all(-200.0 <= z <= -24.0 for z in zs), zs
-        assert zs[0] == pytest.approx(-199.0, abs=0.01)
-        assert zs[-1] == pytest.approx(-25.0, abs=0.01)
+        zs_m = corpus.measurable_station_grid(LooseBox())
+        assert len(zs_m) == corpus.STATIONS
+        assert all(-0.200 <= z_m <= -0.024 for z_m in zs_m), zs_m
+        # Inset by `END_INSET_M` = 1.0e-3 m from each real end, which is the 1 mm it always was.
+        assert zs_m[0] == pytest.approx(-0.199, abs=1.0e-5)
+        assert zs_m[-1] == pytest.approx(-0.025, abs=1.0e-5)
 
     def test_a_shape_that_sections_nowhere_reports_no_extent(self):
         """A finding about the shape, not something to guess around."""
@@ -197,13 +202,15 @@ class TestLoadingAndStations:
     def test_the_gate_grid_is_rebuilt_from_the_recorded_bounds(self):
         """What IP-WTM-18 added to `soak_cowl_shell`: the body-derived bounds the gate placed its
         own stations from, which is the one thing the saved wall cannot recover."""
+        # **The soak's record is a millimeter file format and `gate_station_grid` converts at
+        # ingest**, so the recorded bounds stay as the soak writes them and the grid is meters.
         rec = corpus.WallRecord('k', '1.0', 0, 'x.brep',
                                 recorded={'station_z_lo': -100.0, 'station_z_hi': -10.0})
-        zs = corpus.gate_station_grid(rec)
-        assert len(zs) == corpus.STATIONS
-        assert zs[0] == pytest.approx(-100.0) and zs[-1] == pytest.approx(-10.0)
-        gaps = np.diff(zs)
-        assert np.allclose(gaps, gaps[0])
+        zs_m = corpus.gate_station_grid(rec)
+        assert len(zs_m) == corpus.STATIONS
+        assert zs_m[0] == pytest.approx(-0.100) and zs_m[-1] == pytest.approx(-0.010)
+        gaps_m = np.diff(zs_m)
+        assert np.allclose(gaps_m, gaps_m[0])
 
     def test_a_real_section_has_two_closed_loops(self, real_wall, App):
         _rec, wall = real_wall
@@ -229,32 +236,38 @@ class TestTheIncumbentDoesNotConvergeOnARealSection:
         assert not r.passed, (
             'the incumbent converged on a real section: %s -- if this is now true, §6.1 and '
             'OQ-DES-CW27-adjacent reasoning need revisiting' % r.detail)
-        assert r.value > gates.CONVERGE_TOL
+        assert r.value > gates.CONVERGE_TOL_M
 
     def test_the_minimum_moves_by_more_than_the_tolerance_it_is_compared_against(self, real_wall,
                                                                                 App):
-        """The figure that matters: the instrument's own drift exceeds `WALL_TOL` = 0.01 mm, so it
-        cannot certify a 0.01 mm requirement whatever it reads."""
+        """The figure that matters: the instrument's own drift exceeds `WALL_TOL_M` = 1e-5 m, so
+        it cannot certify a 1e-5 m requirement whatever it reads."""
         _rec, wall = real_wall
-        z = corpus.interior_station(wall)
-        minima, _med = gates.refinement_sweep(
+        z_m = corpus.interior_station(wall)
+        minima_m, _med = gates.refinement_sweep(
             candidates.nearest_point_min,
-            lambda n: tuple(sections.station_loops(wall, z, n, App=App)[:2]))
-        spread = float(np.nanmax(minima) - np.nanmin(minima))
-        assert spread > 0.01, 'minimum spread only %.6f mm across the sweep' % spread
+            lambda n: tuple(sections.station_loops(wall, z_m, n, App=App)[:2]))
+        spread_m = float(np.nanmax(minima_m) - np.nanmin(minima_m))
+        # **The threshold is `WALL_TOL_M` itself, not a literal that used to equal it.** This read
+        # `spread > 0.01`, which was `WALL_TOL` in millimeters written out -- so after IP-FC-163
+        # it was a thousand times the drift being tested and the assertion asked for something
+        # physically absurd. Naming the constant is what stops that happening again.
+        assert spread_m > 1.0e-5, (
+            'minimum spread only %.6f mm across the sweep' % kern.mm(spread_m))
 
     def test_the_median_is_stable_across_the_same_sweep(self, real_wall, App):
         """The converse, and the lead for IP-WTM-11: it is the minimum that is unstable, not the
         wall. A measure whose median also wandered would mean the section extraction was at fault
         rather than the nearest-point minimum."""
         _rec, wall = real_wall
-        z = corpus.interior_station(wall)
-        _minima, medians = gates.refinement_sweep(
+        z_m = corpus.interior_station(wall)
+        _minima, medians_m = gates.refinement_sweep(
             candidates.nearest_point_min,
-            lambda n: tuple(sections.station_loops(wall, z, n, App=App)[:2]))
-        spread = float(np.nanmax(medians) - np.nanmin(medians))
-        assert spread < 0.001, 'median spread %.6f mm' % spread
-        assert float(np.nanmedian(medians)) == pytest.approx(0.6, abs=0.005)
+            lambda n: tuple(sections.station_loops(wall, z_m, n, App=App)[:2]))
+        spread_m = float(np.nanmax(medians_m) - np.nanmin(medians_m))
+        assert spread_m < 1.0e-6, 'median spread %.6f mm' % kern.mm(spread_m)
+        # The cowl's own wall, 6e-4 m, to within 5e-6 m: the same claim as 0.6 +- 0.005 mm.
+        assert float(np.nanmedian(medians_m)) == pytest.approx(6.0e-4, abs=5.0e-6)
 
     def test_the_sweep_is_cheap_enough_to_run_on_the_whole_corpus(self, real_wall, App):
         """Why IP-WTM-11 is affordable: the expensive part was the build, and it is already paid."""

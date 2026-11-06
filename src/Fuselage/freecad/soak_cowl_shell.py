@@ -136,13 +136,21 @@ def measure(kind, u):
     t1 = time.time()
     wall = tip.Shape
     body = tip.Body.Shape
-    t = tip.Inset
-    t_cut = float(doc.getObject('Params').get('buttress_cut_thickness'))
+    # **The sheet's millimeters into an SI construction, named at the crossing** (IP-FC-163).
+    # `Inset` and `buttress_cut_thickness` are `Spreadsheet`-fed, so they evaluate in millimeters
+    # by FreeCAD's own convention, while `cci.wall_thickness` and `cci.rib_gap` have taken meters
+    # since the port was converted.
+    t_m = si.m(float(tip.Inset))
+    t_cut_m = si.m(float(doc.getObject('Params').get('buttress_cut_thickness')))
 
-    lo, hi = cci.ci.z_extent(body)
-    lo, hi = lo + 1.0, hi - 1.0
+    # **`STATION_INSET_M`, not a bare `1.0`.** `ci.z_extent` returns meters, so adding 1.0 inset
+    # the grid by a whole meter -- which on a 0.3 m part collapses `hi - lo` to a negative span
+    # and puts every one of the twelve stations off the solid. This is the identical defect
+    # `sever_doses` shipped, in the driver that built the 28-wall corpus (IP-FC-163).
+    lo_m, hi_m = cci.ci.z_extent(body)
+    lo_m, hi_m = lo_m + cci.STATION_INSET_M, hi_m - cci.STATION_INSET_M
     stations = cci.STATIONS
-    worst_wall_error = 0.0
+    worst_wall_error_m = 0.0
     #: **Counted, not silently skipped.** `wall_thickness` returns `None` at a station with
     #: fewer than two loops -- no wall there at all -- and `check_cowl_interior.main` counts
     #: that as a failure (`bad += 1`). This soak's first draft did `continue` instead, which
@@ -150,7 +158,7 @@ def measure(kind, u):
     #: `worst_wall_error`, since only the stations that found wall material contribute to it.
     missing_stations = 0
     for i in range(stations):
-        z = lo + (hi - lo) * i / float(stations - 1)
+        z_m = lo_m + (hi_m - lo_m) * i / float(stations - 1)
         # `WALL_TOL`, not `TAU` -- the acceptance tolerance on the finished wall, not the fit's
         # convergence criterion (corrected 2026-10-05). **This does not change
         # `worst_wall_error`**, which is `max(0, t - lowv)` and so a pure one-sided deviation that
@@ -164,12 +172,12 @@ def measure(kind, u):
         # the same measurement. The 2026-10-06 corpus is the "before" set; at the mid station of its
         # saved `tail_shell` at `U` = 4 the reading moves from 0.4454 to 0.5675 mm. Do not difference
         # the two sets -- re-measure the saved walls instead, which needs no build.
-        got = cci.wall_thickness(wall, z, t, cci.ci.WALL_TOL_M)
+        got = cci.wall_thickness(wall, z_m, t_m, cci.ci.WALL_TOL_M)
         if got is None:
             missing_stations += 1
             continue
-        _n, _near, lowv, _med, _highv = got
-        worst_wall_error = max(worst_wall_error, max(0.0, t - lowv))
+        _n, _near, low_m, _med, _high = got
+        worst_wall_error_m = max(worst_wall_error_m, max(0.0, t_m - low_m))
 
     shapes = [n.Shape for n in tip.Notches]
     for text in tip.Mirrors:
@@ -177,14 +185,15 @@ def measure(kind, u):
         normal.normalize()
         shapes = shapes + [s.mirror(App.Vector(0, 0, 0), normal) for s in shapes]
     notches = Part.makeCompound(shapes)
-    worst_rib_error = 0.0
+    worst_rib_error_m = 0.0
     for i in range(3):
-        z = lo + (hi - lo) * (i + 1) / 4.0
-        pairs = cci.rib_gap(body, notches, z, t, t_cut)
+        z_m = lo_m + (hi_m - lo_m) * (i + 1) / 4.0
+        pairs = cci.rib_gap(body, notches, z_m, t_m, t_cut_m)
         if not pairs:
             continue
-        worst_rib_error = max(worst_rib_error,
-                              max(abs(gap - (width + 2.0 * t)) for width, gap in pairs))
+        worst_rib_error_m = max(worst_rib_error_m,
+                                max(abs(gap_m - (width_m + 2.0 * t_m))
+                                    for width_m, gap_m in pairs))
 
     # **A fixed deflection, not `converged_volume`'s adaptive search.** Measured on the nose
     # at U = 0.5, the cheapest case in this soak: the whole measure phase took 787 s, of
@@ -261,8 +270,14 @@ def measure(kind, u):
         'solids': len(wall.Solids),
         'stations': stations,
         'missing_stations': missing_stations,
-        'worst_wall_error': worst_wall_error,
-        'worst_rib_error': worst_rib_error,
+        # **The record stays a millimeter file format.** `soak_results.jsonl` holds the
+        # 2026-10-06 corpus's 28 rows, `corpus.recorded_results` reads them and
+        # `sweep`/`prediction` quote them in every published figure; a file whose numbers
+        # silently changed meaning would invalidate all of it. So the conversion happens here,
+        # once, and the keys that name a length say `_mm` where they can -- the two that cannot
+        # are read back through `corpus.gate_station_grid`, which converts (IP-FC-163).
+        'worst_wall_error': si.mm(worst_wall_error_m),
+        'worst_rib_error': si.mm(worst_rib_error_m),
         # **The station grid itself, because the saved wall cannot reproduce it (IP-WTM-18).**
         # Every station above is placed from `ci.z_extent(body)` -- the full cowl *solid* -- inset
         # 1 mm, and `check_cowl_interior.main`'s acceptance gate places its own the same way. The
@@ -274,8 +289,8 @@ def measure(kind, u):
         # the two grids are answers about different places and may not be differenced -- the whole
         # delta column of a first corpus sweep was withdrawn for exactly that. Recording the
         # bounds here is what lets a later sweep place the gate's own stations instead of its own.
-        'station_z_lo': lo,
-        'station_z_hi': hi,
+        'station_z_lo': si.mm(lo_m),
+        'station_z_hi': si.mm(hi_m),
         'partition_slip': tip.PartitionSlip,
         'wall_hash': wall_hash,
         'brep': brep_path,

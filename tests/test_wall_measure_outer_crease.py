@@ -20,6 +20,7 @@ subset of the incumbent. The real geometry answers the question.
 
 See doc/implementation/wall_thickness_measure.md.
 """
+import math
 import os
 import sys
 
@@ -77,9 +78,14 @@ class TestOuterCreases:
         so any threshold across a wide band gives the same answer. If that stops being true the
         separation this rests on has gone."""
         circle, sq = ring(20.0, 1000), square(20.0)
-        for angle in (10.0, 20.0, 30.0, 45.0, 60.0):
-            assert not candidates.outer_creases(circle, angle).any(), angle
-            assert int(candidates.outer_creases(sq, angle).sum()) == 4, angle
+        # **Radians, which is the standard's angle unit** (IP-FC-163). Passed in degrees these
+        # thresholds were all far above pi, so every turn read as smooth and the square reported
+        # no creases at all -- a test that would have gone on passing had it only checked the
+        # circle, which is why the square's count is asserted beside it.
+        for degrees in (10.0, 20.0, 30.0, 45.0, 60.0):
+            angle_rad = math.radians(degrees)
+            assert not candidates.outer_creases(circle, angle_rad).any(), degrees
+            assert int(candidates.outer_creases(sq, angle_rad).sum()) == 4, degrees
 
 
 class TestOuterCornerExcludedMin:
@@ -102,7 +108,7 @@ class TestOuterCornerExcludedMin:
         inward, not a corner pointing away."""
         outer, inner = vee(20.0, 1000, span_deg=2.0, depth=0.3), ring(19.4, 1000)
         _p0, d0 = candidates.nearest_point_min(outer, inner)
-        kept, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_mm=0.60)
+        kept, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_m=0.60)
         assert 0 < len(d1) < len(d0), 'it must drop some samples and keep some'
         assert float(np.min(d0)) == pytest.approx(0.312, abs=0.01)
         assert float(np.min(d1)) == pytest.approx(0.600, abs=0.01), (
@@ -117,7 +123,7 @@ class TestOuterCornerExcludedMin:
         outer, inner = vee(20.0, 1000, span_deg=8.0, depth=0.3), ring(19.4, 1000)
         assert not candidates.outer_creases(outer).any()
         _p0, d0 = candidates.nearest_point_min(outer, inner)
-        kept, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_mm=0.60)
+        kept, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_m=0.60)
         assert len(d1) == len(d0)
         assert float(np.min(d1)) == pytest.approx(float(np.min(d0)))
 
@@ -127,21 +133,21 @@ class TestOuterCornerExcludedMin:
         `corner_excluded_min` is held to, where a violation once revealed a real defect."""
         outer, inner = square(20.0), ring(19.4, 1000)
         _p0, d0 = candidates.nearest_point_min(outer, inner)
-        _p1, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_mm=1.0)
+        _p1, d1 = candidates.outer_corner_excluded_min(outer, inner, margin_m=1.0)
         assert float(np.min(d1)) >= float(np.min(d0)) - 1.0e-12
 
     def test_a_margin_that_covers_the_whole_exterior_reports_nothing(self):
         """Reporting nothing is the honest outcome when every sample is excluded, and the caller
         has to see it rather than receive a minimum over an empty set."""
         outer, inner = square(20.0), ring(19.4, 200)
-        kept, d = candidates.outer_corner_excluded_min(outer, inner, margin_mm=1.0e6)
+        kept, d = candidates.outer_corner_excluded_min(outer, inner, margin_m=1.0e6)
         assert len(kept) == 0 and len(d) == 0
 
     def test_the_dropped_samples_are_the_ones_near_the_crease_in_space(self):
         """Not merely *some* samples: the ones whose nearest exterior point is the crease. The
         notch sits at 40 degrees, so samples near there must go and samples on the far side stay."""
         outer, inner = vee(20.0, 1000, span_deg=2.0, depth=0.3, at_deg=40.0), ring(19.4, 1000)
-        kept, _d = candidates.outer_corner_excluded_min(outer, inner, margin_mm=0.60)
+        kept, _d = candidates.outer_corner_excluded_min(outer, inner, margin_m=0.60)
         ang = np.degrees(np.arctan2(kept[:, 1], kept[:, 0])) % 360.0
         assert np.min(np.abs(ang - 40.0)) > 0.5, 'a sample aimed at the notch survived'
         assert np.min(np.abs(ang - 220.0)) < 1.0, 'a sample on the far side was dropped'

@@ -56,6 +56,19 @@ can be built rather than biasing what is measured. What to do about it is `cowl.
 out are the sheet's own `(alias, text)` pairs, so the case arithmetic is testable without FreeCAD
 and without a build. The driver is `freecad/input_screen.py`; the scan that reads the walls back is
 `freecad/ring_scan.py --family=screen`.
+
+**This is the one module in the package that the SI conversion deliberately left in millimeters,
+and the reason is that it never holds a geometry figure** (IP-FC-163). Everything here is a *sheet
+cell*: a `Spreadsheet::Sheet` evaluates in millimeters, `cowl.PARAMS_TAIL` is millimeters for that
+reason and carries its own manifest exemption, and `bump` edits a cell's text in that cell's own
+units. Converting a delta here would have added 0.00003 to a cell meaning 0.03 mm -- a change of
+nothing, reported as a design excursion, in the one harness whose whole job is to say whether an
+excursion moved the wall. Every `Excursion` names its own unit in a field beside the value, which
+is the discipline the unit standard asks of a table whose rows carry different quantities, and the
+two fraction units are dimensionless anyway.
+
+The one real unit hazard here was `fingerprint`'s rounding, and it is now named rather than a bare
+`6`; see that function.
 """
 import json
 import os
@@ -88,6 +101,18 @@ _COEFFICIENT = re.compile(r'^=\s*(-?)unit_width\s*\*\s*(-?[0-9]*\.?[0-9]+(?:[eE]
 #: form's sake -- it is the control that says this harness builds what the soak built.
 BASELINE = 'base'
 
+#: Decimal places `fingerprint` quantizes a screen record's bounding box and raw volume to.
+#:
+#: **An absolute decimal count is not unit-invariant, which is why this is named and pinned to the
+#: record's unit** (IP-FC-163). `input_screen.py` writes `wall_bbox` and `volume_raw` straight off
+#: the kernel, so the record is a millimeter file format; six decimals is then a 1e-6 mm quantum,
+#: three orders inside `WALL_TOL_M` and well clear of the 0.2 mm change `fingerprint`'s own
+#: docstring records it must see. Had the record become meters while this stayed 6, the quantum
+#: would have become 1e-6 m -- 0.001 mm -- and the guard would have begun rounding away
+#: differences a tenth of the tolerance, silently weakening the one check that stops this screen
+#: reporting coverage it does not have.
+FINGERPRINT_DECIMALS = 6
+
 
 class Excursion(object):
     """One design input moved off the sheet's value, in that row's own units, with the reason.
@@ -96,6 +121,12 @@ class Excursion(object):
     carried into the record and the table because a screen whose case list has no stated reasoning
     cannot be argued with later -- the 2026-09-30 screen's magnitudes are the example, chosen at
     0.5 mm and later found to be larger than the 0.6 mm wall they were perturbing.
+
+    **`unit` is the row's own, and it is a field rather than a suffix for a reason.** A `delta` here
+    may be millimeters (a sheet cell's own unit) or a dimensionless fraction of `unit_width`, and
+    one name cannot say which; the unit standard's rule for a table whose rows carry different
+    quantities is exactly this -- put the unit at the use site. `__repr__` prints it, the record
+    carries it and `table` shows it, so no reader of a case ever sees a bare number.
 
     **`signs` exists for the row whose other direction is not a design.** `cowl_n_perimeters` is a
     count of extruded perimeters: 2 is a configuration and 0 is not a wall at all. A screen that
@@ -439,9 +470,13 @@ def find_pair(kind, u, name, excursions=None):
 def fingerprint(record):
     """A cheap identity for a built wall, or `None` when the record cannot support one.
 
-    Solids, faces, edges, the bounding box to 1e-6 mm, **and the raw `Shape.Volume`**. `None` when
-    `volume_raw` is absent, so that an old record is reported as uncomparable rather than compared
-    on the weaker four.
+    Solids, faces, edges, the bounding box to `FINGERPRINT_DECIMALS`, **and the raw
+    `Shape.Volume`**. `None` when `volume_raw` is absent, so that an old record is reported as
+    uncomparable rather than compared on the weaker four.
+
+    **The record is a millimeter file format and the quantum is tied to it**; see
+    `FINGERPRINT_DECIMALS` for why an absolute decimal count cannot be carried across a unit
+    change.
 
     **The first four alone were tried and are not enough -- measured, 2026-10-14.** The nose
     screen's first report named seven of fifteen cases `unmoved`, including `extrusion_width_lo`,
@@ -460,10 +495,12 @@ def fingerprint(record):
     """
     if record.get('volume_raw') is None:
         return None
-    bb = record.get('wall_bbox') or []
+    bb_mm = record.get('wall_bbox') or []
+    places = int(FINGERPRINT_DECIMALS)
     return (int(record.get('solids') or 0), int(record.get('faces') or 0),
-            int(record.get('edges') or 0), tuple(round(float(v), 6) for v in bb),
-            round(float(record['volume_raw']), 6))
+            int(record.get('edges') or 0),
+            tuple(round(float(v), places) for v in bb_mm),
+            round(float(record['volume_raw']), places))
 
 
 def uncomparable(records):

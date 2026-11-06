@@ -67,16 +67,19 @@ import Part                                                        # noqa: E402
 
 from corner_common import is_entry_point                           # noqa: E402
 
+import si                                                          # noqa: E402
+
 from wall_measure import corpus, normal_distance as nd             # noqa: E402
 
 #: The nominal wall: `cowl_n_perimeters` * `extrusion_width`. Absolute, so it is the same number at
-#: every `U` -- which is why a thinness figure is comparable across the corpus at all.
-NOMINAL = 0.6
+#: every `U` -- which is why a thinness figure is comparable across the corpus at all. Was 0.6 mm
+#: before IP-FC-163 and is the same wall.
+NOMINAL_M = 6.0e-4
 
-#: Circumferential spacing each station is discretized at, in mm. `WALL_ARC`'s value, the spacing
-#: IP-WTM-25 established a thickness measure needs: the gate's own 0.125 mm rather than the
-#: construction's 0.20 mm, because this is a measurement and not a convergence criterion.
-AROUND_MM = 0.125
+#: Circumferential spacing each station is discretized at. `WALL_ARC_M`'s value, the spacing
+#: IP-WTM-25 established a thickness measure needs: the gate's own 1.25e-4 m rather than the
+#: construction's 2.0e-4 m, because this is a measurement and not a convergence criterion.
+AROUND_M = 1.25e-4
 
 #: How many of a station's thin samples get the 3-D treatment, worst first. Each is about a second;
 #: the question is about the worst readings, and a station rarely has more than a dozen that fail.
@@ -116,39 +119,45 @@ def pick(label=None, kind=None, u=None, family='soak'):
                      % (kind, u, family, ', '.join(r.label for r in records)))
 
 
-#: Retry tolerance for a thin sample the census cannot place at `ON_FACE_TOL` = 1e-6 mm.
+#: Retry tolerance for a thin sample the census cannot place at `nd.ON_FACE_TOL_M` = 1e-9 m.
 #:
 #: **Not cosmetic: an unplaced sample is one never asked whether it is on the fitted interior
 #: surface**, and the first runs left 336 of 2 456 unplaced on a `tail_shell` at `U` = 1.0 and 86 of
 #: 251 on a `nose_cowl_shell` at `U` = 4.0 -- against fitted-surface counts of 1 682 and 8. At those
-#: proportions the census cannot be read until they are resolved. 1e-4 mm is the bisection's own
-#: tolerance and still four orders inside `WALL_TOL`; a sample placed only at this slack is reported
-#: as a separate `(loose)` class rather than folded in with the rest.
-FALLBACK_TOL = 1.0e-4
+#: proportions the census cannot be read until they are resolved. 1e-7 m is the bisection's own
+#: tolerance and still four orders inside `WALL_TOL_M`; a sample placed only at this slack is
+#: reported as a separate `(loose)` class rather than folded in with the rest. Was 1e-4 mm.
+FALLBACK_TOL_M = 1.0e-7
 
 
-def run(wall, zs, nominal=NOMINAL, around=AROUND_MM, worst=WORST, out=None, label='',
-        only_surface=None, fallback_tol=None):
-    """Scan the given stations and report. Returns `(stations, verdict)`."""
+def run(wall, zs_m, nominal_m=NOMINAL_M, around_m=AROUND_M, worst=WORST, out=None, label='',
+        only_surface=None, fallback_tol_m=None):
+    """Scan the given stations and report. Returns `(stations, verdict)`.
+
+    SI in and SI in the station records; millimeters only where this prints (IP-FC-163).
+    """
     out = out if out is not None else sys.stdout
-    out.write('%s: %d station(s), %.3f mm circumferentially, nominal %.3f, worst %d a station%s\n'
-              % (label, len(zs), around, nominal, worst,
+    out.write('%s: %d station(s), %.3f mm circumferentially, nominal %.3f mm, worst %d a '
+              'station%s\n'
+              % (label, len(zs_m), si.mm(around_m), si.mm(nominal_m), worst,
                  '' if only_surface is None else ', only samples on %s' % only_surface))
     out.flush()
     stations, started = [], time.time()
-    for z in zs:
+    for z_m in zs_m:
         at = time.time()
-        station = nd.station_normals(wall, z, nominal, App, Part, spacing=around, worst=worst,
-                                     only_surface=only_surface, fallback_tol=fallback_tol)
+        station = nd.station_normals(wall, z_m, nominal_m, App, Part, spacing_m=around_m,
+                                     worst=worst, only_surface=only_surface,
+                                     fallback_tol_m=fallback_tol_m)
         stations.append(station)
-        read = sum(1 for r in station['rows'] if r.get('thickness_mm') is not None)
-        out.write('  z %10.4f  %4d sample(s), %3d thin in-plane, %2d measured, %2d read  '
+        read = sum(1 for r in station['rows'] if r.get('thickness_m') is not None)
+        out.write('  z %10.4f mm  %4d sample(s), %3d thin in-plane, %2d measured, %2d read  '
                   '[%.0f s]\n'
-                  % (z, station.get('samples') or 0, station.get('thin_in_plane') or 0,
+                  % (si.mm(z_m), station.get('samples') or 0,
+                     station.get('thin_in_plane') or 0,
                      len(station['rows']), read, time.time() - at))
         out.flush()
     if worst:
-        out.write('\n' + nd.normal_table(stations, nominal) + '\n')
+        out.write('\n' + nd.normal_table(stations, nominal_m) + '\n')
     # **How deep in the in-plane ranking the readings that are wall thicknesses sit.** This is
     # OQ-DES-CW33 alternative 2's own prerequisite: that alternative re-measures the worst `N`
     # samples a station, so it stands or falls on whether in-plane severity ranks them near the top.
@@ -162,7 +171,7 @@ def run(wall, zs, nominal=NOMINAL, around=AROUND_MM, worst=WORST, out=None, labe
                  selector['deepest_rank'], selector['needed_n'], selector['thin_total']))
     for reason in selector['vacuous_because']:
         out.write('  VACUOUS    %s\n' % reason)
-    verdict = nd.normal_verdict(stations, nominal)
+    verdict = nd.normal_verdict(stations, nominal_m)
     # **The census first, because on a real wall it is what answers the question.** Which face class
     # a reading under tolerance was taken on decides whether it is a wall thickness at all.
     for kind, n in sorted(verdict['thin_surfaces'].items(), key=lambda kv: -kv[1]):
@@ -180,10 +189,10 @@ def run(wall, zs, nominal=NOMINAL, around=AROUND_MM, worst=WORST, out=None, labe
                  verdict['stations'], verdict['thin_total'], verdict['thin_on_fitted'],
                  verdict['samples'], verdict['read'], verdict['n_oblique'],
                  verdict['n_exonerated'], verdict['n_confirmed'],
-                 'n/a' if verdict['worst_in_plane_mm'] is None
-                 else '%.5f' % verdict['worst_in_plane_mm'],
-                 'n/a' if verdict['worst_normal_mm'] is None
-                 else '%.5f' % verdict['worst_normal_mm']))
+                 'n/a' if verdict['worst_in_plane_m'] is None
+                 else '%.5f mm' % si.mm(verdict['worst_in_plane_m']),
+                 'n/a' if verdict['worst_normal_m'] is None
+                 else '%.5f mm' % si.mm(verdict['worst_normal_m'])))
     out.write('  %.0f s in all\n' % (time.time() - started))
     out.flush()
     return stations, verdict
@@ -202,20 +211,25 @@ def main():
     # `--zs` names stations outright, for following up one the grid already found. Kept separate
     # from `--stations` because changing the count moves every station, so a station identified on a
     # 12-point grid cannot be revisited by asking for a different number of them.
-    if _opt('zs'):
-        zs = [float(v) for v in _opt('zs').split(',') if v]
+    # **Every length flag names its unit**, which `--zs`, `--nominal`, `--around` and
+    # `--fallback-tol` did not: a bare length on a command line is the same unnamed-unit defect the
+    # standard forbids in an identifier (IP-FC-163). A station named on the command line is one a
+    # printed table reported, so millimeters is the unit to accept, and it converts here.
+    if _opt('zs-mm'):
+        zs_m = [si.m(float(v)) for v in _opt('zs-mm').split(',') if v]
     else:
-        zs = corpus.measurable_station_grid(wall, int(_opt('stations', str(corpus.STATIONS))),
-                                            App=App)
+        zs_m = corpus.measurable_station_grid(wall, int(_opt('stations', str(corpus.STATIONS))),
+                                              App=App)
     # `--fitted` is the shorthand for the only face class whose readings are wall thicknesses.
     only = nd.FITTED_SURFACE if _opt('fitted') else _opt('only-surface')
-    stations, verdict = run(wall, zs, float(_opt('nominal', str(NOMINAL))),
-                            float(_opt('around', str(AROUND_MM))),
+    nominal_m = si.m(float(_opt('nominal-mm', str(si.mm(NOMINAL_M)))))
+    around_m = si.m(float(_opt('around-mm', str(si.mm(AROUND_M)))))
+    fallback_tol_m = si.m(float(_opt('fallback-tol-mm', str(si.mm(FALLBACK_TOL_M)))))
+    stations, verdict = run(wall, zs_m, nominal_m, around_m,
                             int(_opt('worst', str(WORST))), label=rec.label, only_surface=only,
-                            fallback_tol=float(_opt('fallback-tol', str(FALLBACK_TOL))))
+                            fallback_tol_m=fallback_tol_m)
     payload = {'label': rec.label, 'kind': rec.kind, 'u': rec.u, 'faces': len(wall.Faces),
-               'nominal': float(_opt('nominal', str(NOMINAL))),
-               'around_mm': float(_opt('around', str(AROUND_MM))),
+               'nominal_m': nominal_m, 'around_m': around_m,
                'stations': stations, 'verdict': verdict,
                'selector': nd.selector_verdict(stations)}
     if _opt('json'):

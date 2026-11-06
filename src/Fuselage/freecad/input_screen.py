@@ -78,6 +78,7 @@ sys.path.insert(0, os.path.normpath(os.path.join(HERE, '..', 'tools')))
 import FreeCAD as App                                                   # noqa: E402,N813
 import Part                                                             # noqa: E402
 
+import check_cowl_interior as cci                                       # noqa: E402
 import cowl_interior as ci                                              # noqa: E402
 import si                                                               # noqa: E402
 import cowl_tree                                                        # noqa: E402
@@ -235,12 +236,18 @@ def build_case(kind, u, case, want_hash=False, shapes_dir=None, out=None):
 
     t1 = time.time()
     wall = tip.Shape
+    # The box is read in the kernel's own millimeters, which is what this record carries; see
+    # `inputs.FINGERPRINT_DECIMALS_MM` on why that unit is pinned (IP-FC-163).
     bb = wall.BoundBox
     # The body-derived station bounds, recorded for IP-WTM-18's reason: they are the one thing a
     # saved wall cannot recover, and `corpus.gate_station_grid` reads them. Not used by this item --
     # the dense scan places its own grid from the wall's real sectioning extent -- but a 727 s build
     # should not have to be repeated to get a figure that costs forty sections here.
-    lo, hi = ci.z_extent(tip.Body.Shape)
+    # **`STATION_INSET_M`, not a bare `1.0`.** `ci.z_extent` returns meters, so the inset
+    # below was a whole meter and the recorded bounds were nonsense -- the same defect
+    # `sever_doses` shipped (IP-FC-163). Converted to millimeters at the record, because
+    # `corpus.gate_station_grid` reads these two keys as millimeters.
+    lo_m, hi_m = ci.z_extent(tip.Body.Shape)
 
     record = {
         'label': case.label, 'kind': kind, 'u': float(u), 'case': case.name,
@@ -256,8 +263,10 @@ def build_case(kind, u, case, want_hash=False, shapes_dir=None, out=None):
         # own -- they cannot see a 0.6 mm wall become a 0.4 mm one.
         'volume_raw': wall.Volume,
         'wall_bbox': [bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax],
-        'station_z_lo': lo + 1.0, 'station_z_hi': hi - 1.0,
-        'partition_slip': tip.PartitionSlip, 'inset': float(tip.Inset),
+        'station_z_lo': si.mm(lo_m + cci.STATION_INSET_M),
+        'station_z_hi': si.mm(hi_m - cci.STATION_INSET_M),
+        # `Inset` is a `Spreadsheet` cell, so it is millimeters; the key now says so.
+        'partition_slip': tip.PartitionSlip, 'inset_mm': float(tip.Inset),
         'build_s': build_s,
     }
 

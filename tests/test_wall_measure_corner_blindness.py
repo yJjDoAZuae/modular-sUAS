@@ -61,37 +61,37 @@ class TestTheFixtureIsWhatItClaims:
 
     def test_the_patch_sits_on_the_ribs_corner(self, corner):
         rib, patch = corner.features
-        assert patch['angle'] == pytest.approx(rib['half_angle'])
+        assert patch['angle_rad'] == pytest.approx(rib['half_angle_rad'])
         assert patch.get('on_corner') is True
 
     def test_the_truth_composes_both_features_across_the_patch(self, corner):
         """The overlap the radius-modifier model exists for: on the rib side of the corner the wall
         is `wall + rise - depth`, on the other side `wall - depth`, and the patch spans both."""
         rib, patch = corner.features
-        r = corner.r_outer - patch['depth'] / 2.0
-        z = patch['z_mid']
-        inside = patch['angle'] - patch['half_angle'] * 0.5      # rib side
-        outside = patch['angle'] + patch['half_angle'] * 0.5     # plain-wall side
+        r = corner.r_outer - patch['depth_m'] / 2.0
+        z = patch['z_mid_m']
+        inside = patch['angle_rad'] - patch['half_angle_rad'] * 0.5      # rib side
+        outside = patch['angle_rad'] + patch['half_angle_rad'] * 0.5     # plain-wall side
         got_in = corner.true_thickness_at(r * np.cos(inside), r * np.sin(inside), z)
         got_out = corner.true_thickness_at(r * np.cos(outside), r * np.sin(outside), z)
-        assert got_in == pytest.approx(truth.WALL + rib['rise'] - patch['depth'])
-        assert got_out == pytest.approx(truth.WALL - patch['depth'])
+        assert got_in == pytest.approx(truth.WALL_M + rib['rise_m'] - patch['depth_m'])
+        assert got_out == pytest.approx(truth.WALL_M - patch['depth_m'])
 
     def test_the_wall_really_is_thin_there(self, corner, loops):
         """Read off the geometry, not from the truth function: the outer radius drops by `depth`
         over the patch, and the patch straddles the rib's corner."""
         _rib, patch = corner.features
-        outer, _inner = loops(corner, patch['z_mid'])
+        outer, _inner = loops(corner, patch['z_mid_m'])
         r = np.hypot(outer[:, 0], outer[:, 1])
         ang = np.arctan2(outer[:, 1], outer[:, 0])
-        near = np.abs(ang - patch['angle']) < patch['half_angle'] * 0.5
+        near = np.abs(ang - patch['angle_rad']) < patch['half_angle_rad'] * 0.5
         assert near.sum() > 3
-        assert r[near].max() == pytest.approx(truth.R_OUTER - patch['depth'], abs=2e-3)
+        assert r[near].max() == pytest.approx(truth.R_OUTER_M - patch['depth_m'], abs=2e-3)
 
     def test_the_bore_still_has_its_re_entrant_corners(self, corner, loops):
         """The patch must not have destroyed the corner it is meant to sit on."""
         _rib, patch = corner.features
-        _outer, inner = loops(corner, patch['z_mid'], 1440)
+        _outer, inner = loops(corner, patch['z_mid_m'], 1440)
         p = sections.resample_by_arc_length(inner, 1440)[:, :2]
         prev, nxt = np.roll(p, 1, axis=0), np.roll(p, -1, axis=0)
         cross = ((p - prev)[:, 0] * (nxt - p)[:, 1] - (p - prev)[:, 1] * (nxt - p)[:, 0])
@@ -102,14 +102,14 @@ class TestTheFixtureIsWhatItClaims:
 def _depth_seen(measure, t, loops):
     """How much of the corner patch's true depth a measure reports."""
     _rib, patch = t.features
-    outer, inner = loops(t, patch['z_mid'])
+    outer, inner = loops(t, patch['z_mid_m'])
     pts, thick = measure(outer, inner)
     if pts.shape[0] == 0:
         return 0.0, 0
     # The thinnest the wall truly gets anywhere at this station, from the truth function.
-    want = min(truth.WALL - patch['depth'], truth.WALL + _rib['rise'] - patch['depth'])
-    seen = truth.WALL - float(np.nanmin(thick))
-    return seen / patch['depth'], pts.shape[0], want
+    want = min(truth.WALL_M - patch['depth_m'], truth.WALL_M + _rib['rise_m'] - patch['depth_m'])
+    seen = truth.WALL_M - float(np.nanmin(thick))
+    return seen / patch['depth_m'], pts.shape[0], want
 
 
 class TestWhichMeasuresAreBlindAtACorner:
@@ -137,7 +137,7 @@ class TestWhichMeasuresAreBlindAtACorner:
                 'C4 is BLIND at a corner: saw %.3f of a %.3f mm defect from %d samples. It '
                 'excludes corner-adjacent samples and a corner is where this defect is, so its '
                 'exactly-nominal reading on a real wall cannot be trusted and it is disqualified.'
-                % (frac, corner.features[1]['depth'], n))
+                % (frac, corner.features[1]['depth_m'], n))
 
     def test_every_candidate_is_reported_at_a_corner(self, corner, loops, capsys):
         """The comparative table. A measure that is blind here is unusable whatever else it does,

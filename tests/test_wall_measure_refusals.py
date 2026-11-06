@@ -75,11 +75,11 @@ class TestTheName(object):
     def test_the_station_is_carried_at_four_decimals_so_it_matches_the_log(self):
         # The round note and the `Unconverged` message both print `%.4f`, and matching a file to
         # the line that produced it by eye is the whole reason the station is in the name.
-        name = refusals.artifact_name('tail_shell', 3.0, z=-73.18185)
+        name = refusals.artifact_name('tail_shell', 3.0, z_m=-0.07318185)
         assert '_z-73.1818' in name or '_z-73.1819' in name
 
     def test_a_dose_is_carried_when_there_is_one(self):
-        assert '_d0.03' in refusals.artifact_name('tail_shell', 3.0, delta=0.03)
+        assert '_d0.03mm' in refusals.artifact_name('tail_shell', 3.0, delta_m=3.0e-5)
 
     def test_an_absent_part_is_left_out_rather_than_rendered(self):
         # `'%.4f' % None` raises, and a name containing "None" reads as a station called None.
@@ -89,7 +89,7 @@ class TestTheName(object):
         assert '_d' not in name
 
     def test_a_dose_of_zero_is_a_dose_and_not_an_absence(self):
-        assert '_d0' in refusals.artifact_name('tail_shell', 3.0, delta=0.0)
+        assert '_d0mm' in refusals.artifact_name('tail_shell', 3.0, delta_m=0.0)
 
     def test_the_extension_is_the_kernels_own_format(self):
         assert refusals.artifact_name('tail_shell', 3.0).endswith('.brep')
@@ -115,13 +115,15 @@ class TestSaving(object):
 
     def test_the_shape_is_handed_to_the_exporter_with_its_path(self, tmp_path):
         export = _Recorder()
-        rec = refusals.save(_Refusal(shape='the-cavity', z=-73.1818), str(tmp_path),
-                            'tail_shell', 3.0, export, delta=0.03)
+        # `z` on the exception is the port's own attribute name and stays; `delta_m` is this
+        # module's parameter and is SI (IP-FC-163), so the 0.03 mm dose is 3.0e-5 m.
+        rec = refusals.save(_Refusal(shape='the-cavity', z=-0.0731818), str(tmp_path),
+                            'tail_shell', 3.0, export, delta_m=3.0e-5)
         assert len(export.calls) == 1
         shape, path = export.calls[0]
         assert shape == 'the-cavity'
         assert path == rec['path']
-        assert rec['z'] == pytest.approx(-73.1818)
+        assert rec['z_m'] == pytest.approx(-0.0731818)
 
     def test_the_artifact_goes_in_its_own_subdirectory(self, tmp_path):
         # A reader should not have to parse a filename to tell a diagnosis from a result.

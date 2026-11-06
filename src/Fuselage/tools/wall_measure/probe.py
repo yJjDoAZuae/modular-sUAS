@@ -3,7 +3,7 @@
 **Why this module exists.** Driving the booleans after the fit needs two things the construction
 does not otherwise offer: a way to perturb the eroded contour every row is built from, and a way to
 seed a station set the production floor would thin. Both were first built as **parameters on
-`cavity` and `shell_solid`** -- `contour_probe` and `station_floor_mm`
+`cavity` and `shell_solid`** -- `contour_probe` and `station_floor_mm` as it was then named
 ([OQ-DES-CW34](../../../../doc/design/cowl.md#open-questions)) -- which put measurement-only
 features in the signature of the subsystem's production entry point. That was judged unacceptable,
 which the decision itself had recorded as reversible, and this module is the replacement.
@@ -30,6 +30,13 @@ pinned boundary row, both of which read as clean null results (§4.4).
 
 *Restoration is unconditional.* `__exit__` puts back whatever was there even when the body raises,
 because a dose series that fails partway must not leave the next build perturbed.
+
+**SI, because the construction is SI** (IP-FC-163). Both quantities crossing this seam are lengths
+-- a station `z` and a station floor -- and `cowl_interior` hands meters in and expects meters
+back. A probe that answered a millimeter floor to `_probe_floor(default_floor_m)` would silently
+raise the floor by a thousand and thin every station pair the construction derived, which the
+construction would then report as its own station set. So the names end `_m` and nothing here
+converts.
 """
 
 #: The attribute the seam lives under on the construction module.
@@ -43,42 +50,42 @@ class ProbeInUse(Exception):
 class Probe(object):
     """What a measurement may change about the construction, and nothing else.
 
-    `contour(z, pts)` is applied to the eroded contour of **every** row the construction builds,
+    `contour(z_m, pts)` is applied to the eroded contour of **every** row the construction builds,
     which is the only placement that works: section 5's second pass rebuilds its rows from
     `fit_at` after the rib cut, so a perturbation applied to `_refine`'s output is discarded on the
     first post-cut round.
 
-    `station_floor(default)` replaces `station_floor(t)` for the per-patch union. `0.0` restores the
-    unfiltered union the construction seeded before IP-FC-144 -- it declines to *drop* stations the
-    construction derived for itself, and is not a way to force one in.
+    `station_floor(default_m)` replaces `station_floor(t_m)` for the per-patch union. `0.0`
+    restores the unfiltered union the construction seeded before IP-FC-144 -- it declines to *drop*
+    stations the construction derived for itself, and is not a way to force one in.
 
     `calls` counts how many rows the contour hook actually transformed, so a reading is never
     quoted without evidence that something moved.
     """
 
-    __slots__ = ('contour_fn', 'station_floor_mm', 'calls', 'stations')
+    __slots__ = ('contour_fn', 'station_floor_m', 'calls', 'stations_m')
 
-    def __init__(self, contour=None, station_floor_mm=None):
+    def __init__(self, contour=None, station_floor_m=None):
         self.contour_fn = contour
-        self.station_floor_mm = None if station_floor_mm is None else float(station_floor_mm)
+        self.station_floor_m = None if station_floor_m is None else float(station_floor_m)
         self.calls = 0
-        #: Every `z` the contour hook transformed, in order, so the station actually moved is on
+        #: Every `z_m` the contour hook transformed, in order, so the station actually moved is on
         #: record rather than assumed from the request.
-        self.stations = []
+        self.stations_m = []
 
-    def contour(self, z, pts):
-        """The contour the construction should use at `z`. Identity when no hook is set."""
+    def contour(self, z_m, pts):
+        """The contour the construction should use at `z_m`. Identity when no hook is set."""
         if self.contour_fn is None:
             return pts
-        out = self.contour_fn(z, pts)
+        out = self.contour_fn(z_m, pts)
         if out is not pts:
             self.calls += 1
-            self.stations.append(float(z))
+            self.stations_m.append(float(z_m))
         return out
 
-    def station_floor(self, default):
-        """The floor to thin the per-patch union with. `default` when none is set."""
-        return default if self.station_floor_mm is None else self.station_floor_mm
+    def station_floor(self, default_m):
+        """The floor to thin the per-patch union with. `default_m` when none is set."""
+        return default_m if self.station_floor_m is None else self.station_floor_m
 
     @property
     def moved(self):
@@ -86,8 +93,8 @@ class Probe(object):
         return self.calls > 0
 
     def __repr__(self):
-        return '<Probe contour=%s floor=%s calls=%d>' % (
-            self.contour_fn is not None, self.station_floor_mm, self.calls)
+        return '<Probe contour=%s floor_m=%s calls=%d>' % (
+            self.contour_fn is not None, self.station_floor_m, self.calls)
 
 
 class Installed(object):
@@ -123,15 +130,15 @@ class Installed(object):
         return False                       # never swallow the body's exception
 
 
-def installed(module, contour=None, station_floor_mm=None, probe=None):
+def installed(module, contour=None, station_floor_m=None, probe=None):
     """A `with` block that installs a probe on `module`, as `Installed`.
 
     Pass `probe` to install one you already hold -- a dose series keeps its own so it can read
-    `calls` afterwards -- or `contour` and `station_floor_mm` to have one built.
+    `calls` afterwards -- or `contour` and `station_floor_m` to have one built.
     """
     if probe is None:
-        probe = Probe(contour, station_floor_mm)
-    elif contour is not None or station_floor_mm is not None:
+        probe = Probe(contour, station_floor_m)
+    elif contour is not None or station_floor_m is not None:
         raise ValueError('pass a probe or its parts, not both')
     return Installed(module, probe)
 
