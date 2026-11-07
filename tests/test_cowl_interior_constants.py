@@ -46,12 +46,17 @@ SOURCE = os.path.join(_HERE, '..', 'src', 'Fuselage', 'freecad', 'cowl_interior.
 #: visible here, and it also put them in `tools/unit_regime.json` where their unit is recorded.
 #: The sixth, `cell_boundary_planes`'s `direction_tol`, exists because one `tol` was doing a
 #: length's job and a unit vector's at once and the conversion had to separate them.
+#:
+#: **One row left on 2026-11-06** -- `_outward_normal(step_m=OUTWARD_STEP_M)` -- when IP-FC-155
+#: retired Metric A (OQ-DES-CW25 alternative 3) and removed the face-role labeller that was
+#: `_outward_normal`'s only caller. A row leaving this set is the expected shape of a removal,
+#: not a loss of coverage: the set is a record of what a driver cannot sweep, and a function
+#: that no longer exists cannot be swept at all.
 FROZEN_DEFAULTS = {
     ('smoothed', 'tol_m', 'REFIT_TOL_M'),
     ('eroded_body', 'tol_m', 'REFIT_TOL_M'),
     ('_smoothed_open', 'tol_m', 'REFIT_TOL_M'),
     ('eroded_arc', 'tol_m', 'REFIT_TOL_M'),
-    ('_outward_normal', 'step_m', 'OUTWARD_STEP_M'),
     ('z_extent', 'tol_m', 'END_INSET_M'),
     ('_finished_wall_gap', 'plane_tol_m', 'FINISHED_PLANE_TOL_M'),
     ('cavity', 'tau_m', 'TAU_M'),

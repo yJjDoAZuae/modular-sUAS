@@ -2,11 +2,6 @@
 
     freecadcmd check_cowl_interior.py --pass --kind=tail_shell
 
-Add --clearance-check to also run OQ-DES-CW24's rib clearance-margin scan (Metric A, flag-only --
-never fails the build, and costs on the order of an hour on top of the ordinary build above). Off
-by default; see cowl_interior.clearance_margin_scan. It is a clearance diagnostic, not a
-wall-thickness measurement and not a construction-failure check -- see CLEARANCE_MARGIN_MM.
-
 **The wall and rib checks are the load-bearing ones.** Volume agreement says two solids enclose
 the same space; it does not say the wall is where it should be, and a wall in the wrong place
 with a compensating error elsewhere passes on volume alone.
@@ -472,12 +467,6 @@ def rib_gap(body, notches, z_m, t_m, t_cut_m):
 
 def main():
     kind = _opt('kind', 'tail_shell')
-    # **Opt-in, off by default (OQ-DES-CW24).** `cowl_interior.clearance_margin_scan` costs on
-    # the order of an hour on top of an ordinary build, so it is never run unless asked for --
-    # `--clearance-check` forces a second recompute with `tip.ClearanceCheck` set, which only
-    # re-executes `_CowlShell` (the one object whose input property changed), not the build
-    # upstream of it.
-    clearance_check = '--clearance-check' in sys.argv
     builder = {'tail_shell': cowl_tree.tail_shell,
                'nose_cowl_shell': cowl_tree.nose_cowl_shell}[kind]
     params = {'tail_shell': cowl_tree.PARAMS_TAIL_SHELL,
@@ -485,8 +474,6 @@ def main():
 
     doc = App.newDocument('check')
     tip = cowl_tree.emit(doc, None, params, builder)
-    if clearance_check:
-        tip.ClearanceCheck = True
     doc.recompute()
 
     wall = tip.Shape
@@ -691,53 +678,6 @@ def main():
     else:
         print('  _thin_stations keeps the last station, displacing its neighbor')
 
-    # -- the face roles the clearance minimum is classified against (IP-FC-148, OQ-DES-CW25)
-    #
-    # Checked on the real cutting tools rather than on a constructed stand-in, because what these
-    # assertions are really guarding is that the labels still mean what OQ-DES-CW25 asks about
-    # after whatever the next change to the buttress profile turns out to be. A slab has exactly
-    # two cheeks and they are antiparallel; exactly one face of each profile is the far edge that
-    # cuts nothing; and every tool has a cut floor, or there is nothing for the minimum to land on.
-    role_bad = 0
-    for i, raw in enumerate([n.Shape for n in tip.Notches]):
-        for solid in raw.Solids:
-            roles = ci.tool_face_roles(solid)
-            cheeks = [r for r in roles if r['role'] == 'cheek']
-            outers = [r for r in roles if r['role'] == 'outer']
-            floors = [r for r in roles if r['role'] == 'floor']
-            if len(cheeks) != 2:
-                print('  tool %d has %d cheek face(s), not 2  <-- FAIL' % (i, len(cheeks)))
-                role_bad += 1
-            elif cheeks[0]['normal'].dot(cheeks[1]['normal']) > -0.999:
-                print('  tool %d\'s two cheeks are not antiparallel (dot %.4f)  <-- FAIL'
-                      % (i, cheeks[0]['normal'].dot(cheeks[1]['normal'])))
-                role_bad += 1
-            if len(outers) != 1:
-                print('  tool %d has %d far face(s), not 1  <-- FAIL' % (i, len(outers)))
-                role_bad += 1
-            if not floors:
-                print('  tool %d has no cut floor  <-- FAIL' % i)
-                role_bad += 1
-    if role_bad:
-        bad += role_bad
-    else:
-        print('  tool_face_roles: every tool has 2 antiparallel cheeks, 1 far face and a floor')
-    # `closest` has to return the distance `distances` returns, or the face a minimum is
-    # attributed to is not the face the reported minimum is on. Pure plane geometry on a
-    # unit square, so there is no length here to convert -- `_Polyline` is homogeneous and
-    # this asserts an identity between two of its own methods.
-    square = [(0.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)]
-    probes = [(2.0, 1.0), (-1.5, 1.5), (4.0, 3.0), (2.0, 7.0)]
-    line = ci._Polyline(square)
-    want = float(min(line.distances(probes)))
-    got = line.closest(probes)
-    if got is None or abs(got[0] - want) > 1.0e-12:
-        print('  _Polyline.closest disagrees with distances: %s against %.12f  <-- FAIL'
-              % (got, want))
-        bad += 1
-    else:
-        print('  _Polyline.closest agrees with distances to %.1e' % abs(got[0] - want))
-
     # -- the sample count does not depend on the unit its inputs are written in (IP-FC-160)
     #
     # **This case reproduces a real failure, which is why it is a case and not a comment.**
@@ -830,15 +770,6 @@ def main():
             print('  the offset ladder records its rung: z -20.0000 on rung %d at n = %d '
                   '(first count %d), refit %.3e mm'
                   % (probe['rung'], probe['n'], probe['n0'], si.mm(probe['moved_m'])))
-
-    # -- the clearance margin (OQ-DES-CW24), opt-in only
-    if clearance_check:
-        print('  clearance margin (Metric A, OQ-DES-CW24): %d station(s) under %.3f mm, '
-              'worst %.6f mm -- flag-only, does not fail the build'
-              % (tip.ThinWallFlags, si.mm(ci.CLEARANCE_MARGIN_M),
-                 tip.WorstClearanceMargin))
-        print('    whether this metric is kept at all is OQ-DES-CW25 (cowl.md); its companion '
-              'ratio was removed 2026-10-04, it did not measure tool-to-tool crowding')
 
     print('%s: %s' % (kind, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
     sys.stdout.flush()

@@ -379,9 +379,11 @@ The SI standard above applies to:
 - **Analysis, optimization, and solver work** in any language.
 - **Any future refactoring target** — when a module is genuinely rewritten, it comes back SI.
 
-It does **not** apply to the existing OpenSCAD generator path.
+It does **not** apply to the **OpenSCAD artifacts**: the `.scad` sources, the parameter
+axis CSVs as populated, the JSON shape definitions as authored, and the exported meshes. It
+**does** apply to the Python that derives a variant's parameters and drives the sweep.
 
-### ⚠ The OpenSCAD path stays in millimeters. Do not convert it.
+### ⚠ The OpenSCAD artifacts stay in millimeters. Do not convert them.
 
 The generators copied in from the source repository work in **millimeters throughout** —
 `standard_values()` returns `unit_width = 100`, `unit_length = 100`, `corner_radius = 10`,
@@ -389,20 +391,49 @@ The generators copied in from the source repository work in **millimeters throug
 `extrusion_width = 0.4` and `layer_height = 0.2`; and every parameter axis CSV is
 populated to match.
 
-That is a **deliberate exemption, not technical debt.** The OpenSCAD implementation is
-transitional: Phase 3 replaces it with Python-driven FreeCAD. Converting code that is
-scheduled for replacement spends real risk for no benefit — the unit regime is load-bearing
-across Python, every `.scad` module, every CSV axis, and every JSON shape definition at
-once, and a partial conversion produces geometry that is wrong by a factor of 1000 in one
-dimension, renders cleanly, and exports without error.
+**That is a deliberate exemption, not technical debt, and its purpose is traceability.** The
+`.scad` sources are the record of the original design, and they stay in millimeters so the
+implementation remains checkable against it. That is the whole of the reason, and it does not
+expire when the sweep does — which is why the exemption is stated here as a list of
+artifacts rather than as a transitional allowance.
+
+A second, independent reason to leave the artifacts alone: the unit regime is load-bearing
+across every `.scad` module, every CSV axis and every JSON shape definition at once, and a
+partial conversion produces geometry that is wrong by a factor of 1000 in one dimension,
+renders cleanly, and exports without error.
+
+#### What the exemption does not cover
+
+**The Python that derives parameters is ordinary project code and is in scope of the SI
+standard.** `derived_parameters()` in `tools/fuselage_variants.py` is the case that made this
+ambiguous and is settled by
+[freecad_migration.md, OQ-ARCH-25](../architecture/freecad_migration.md#open-questions): it
+operates in meters, the parameter CSV read converts in, and the `.scad` emission converts out
+— which is exactly what the file-interface table above already prescribes. Nothing about
+the artifacts changes.
+
+**Superseded wording, 2026-11-07.** This section previously said *"Never convert existing sweep
+code to SI, as a task or as a side effect of one"* and *"New code that consumes the sweep's
+output converts mm → m at its own boundary and says so, rather than reaching in and
+changing the source."* Read literally, both covered Python as well as `.scad`, and the first
+was cited as forbidding the conversion OQ-ARCH-25 then decided on. The rules below say the same
+thing about the artifacts and no longer say it about the code around them.
 
 **Rules:**
 
-- **Never convert existing sweep code to SI**, as a task or as a side effect of one.
-- **Do not "fix" a `_mm` name to `_m`** in that code. The name is accurate; the value really
-  is millimeters.
-- New code that *consumes* the sweep's output converts mm → m at its own boundary and says
-  so, rather than reaching in and changing the source.
+- **Never convert an exempt artifact** — a `.scad` source, a parameter axis CSV, a JSON
+  shape definition, an exported mesh — as a task or as a side effect of one.
+- **Do not "fix" a `_mm` name to `_m`** in one. The name is accurate; the value really is
+  millimeters.
+- **The Python is in scope.** A module that derives, resolves or drives is SI like any other,
+  and converts at the boundary where it writes an artifact or reads one. Check the module's
+  declared regime in [`tools/unit_regime.json`](../../src/Fuselage/tools/unit_regime.json)
+  rather than assuming the whole directory is exempt: a module with no declaration is `si`.
+- **The gate on any change upstream of emission is byte-identical `.scad` output**, not
+  agreement within a tolerance. Traceability is the reason for the exemption, so the test has
+  to be that the artifact did not move at all — and the sweep's own `--resume` staleness
+  key hashes the definition file, so anything less marks every part stale.
+- New code that *consumes* an exempt artifact converts at its own boundary and says so.
 - When touching an inherited file, state its unit regime in a comment at the top rather
   than assuming a reader will know.
 

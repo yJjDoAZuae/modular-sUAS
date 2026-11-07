@@ -449,8 +449,12 @@ box in meters must equal the OpenSCAD part's bounding box in millimeters divided
 It is worth restating why this deserves a dedicated check — a 1000× error still renders,
 still exports, and still passes `isValid()`. It fails only at the printer.
 
-**The existing OpenSCAD path stays in millimeters and is never converted.** It has one
-phase left; converting it spends real risk for no benefit.
+**The OpenSCAD artifacts stay in millimeters and are never converted** — the `.scad`
+sources, the parameter axis CSVs as populated, the JSON shape definitions as authored, and the
+exported meshes. The reason is traceability: the `.scad` sources are the record of the original
+design and stay checkable against it, which does not expire when the sweep does. **The Python
+around them is not exempt**; `derived_parameters()` operates in meters and converts at the
+emission boundary, decided as [OQ-ARCH-25](#open-questions).
 
 ### Where the port stands against this, measured
 
@@ -1061,6 +1065,7 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 | ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
 | ARCH-24 | decided 2026-11-02 | How does `tools/wall_measure` reach the unit standard, when a committed test asserts it may import nothing outside numpy and the standard library -- so that it stays loadable under FreeCAD's embedded interpreter -- and `freecad/si.py` imports FreeCAD? -- **alternative 1: `freecad/units.py` is admitted to the allowlist**, named explicitly so admitting one pure module does not admit `si.py` behind it. Both of the alternative's premises were checked before acting and both moved. The package's own boundary over `units` is `wall_measure/kern.py`; the conversion landed as IP-FC-163 and the package is SI as of 2026-11-06 |
+| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by Alex as the only one of the five satisfying three requirements he set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants, shown reachable by a 20 520-field round-trip survey. Unblocks IP-FC-159 |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -3844,6 +3849,100 @@ converting them "would be the defect".
 What this does **not** turn on is any measurement nobody has taken: the subsystem's size, its
 constant count, its allowlist and the identity of the three kernel-touching modules are all
 measured above. It is a decision about where a dependency may point.
+
+### OQ-ARCH-25 — Where does the port's SI parameter layer sit? — DECIDED 2026-11-07
+
+**Resolution: alternative 3 — convert at the derivation.** `derived_parameters()` returns
+meters; the parameter CSV read converts in; the `.scad` emission converts out; the exported JSON
+is meters. Chosen by Alex on 2026-11-07 as the only one of the five alternatives satisfying the
+three requirements he set the same day.
+
+**The question was: where does the single millimeter-to-meter conversion sit?** Five
+alternatives differed on that one axis and nothing else — none changed any geometry. Traced
+on one real value, `panel_thickness` for the `3/16in` panel variant, 4.7625 mm = 0.0047625 m:
+
+| | CSV column | `derived_parameters()` | exported JSON | sheet cell | geometry module |
+| --- | --- | --- | --- | --- | --- |
+| *Before* | mm | mm | mm | mm | mixed — `Params` is SI, sheet readers are mm |
+| 1 at the port's reader | mm | mm | mm | mm | m |
+| 2 at the file | mm | mm | m | mm | m |
+| **3 at the derivation — CHOSEN** | mm | **m** | **m** | mm | m |
+| 4 a second derivation in SI | mm | mm and a second one in m | mm | mm | m |
+| 5 declare the inflow exempt | mm | mm | mm | mm | mm |
+
+*(An earlier revision of this table omitted row 5 while the list below numbered five
+alternatives. The row is restored here; alternative 5 is the one in which nothing converts
+anywhere.)*
+
+**The requirements, and what each eliminated.**
+
+- **R1** — *"The derivation of parameters should be implemented only once whether they come
+  from millimeters, imperial, or some other source."* Eliminates **4** only: two
+  implementations of one derivation, distinguished solely by their inputs' unit. It does not
+  constrain which unit the single derivation computes in, so 1, 2, 3 and 5 all survived it.
+- **R2** — *"`derived_parameters()` should operate in the project's standard units."*
+  Eliminates **1, 2 and 5**, which all leave the derivation computing in millimeters.
+- **R3** — *"`derived_parameters()` should operate in meters and the exported JSON should be
+  in meters."* Confirms **3** rather than narrowing further, since its row already has the
+  export in meters: once the derivation is SI the export writes what it is handed.
+
+**This carries no reversal of the OpenSCAD exemption, and an earlier draft of this question was
+wrong to say it did.** Alex, 2026-11-07: *"I did not tell you that all code that was associated
+with the OpenSCAD had to operate internally in mm. I meant the OpenSCAD files themselves needed
+to remain in mm so that the implementation remained traceable back to my original design."* The
+exempt artifacts are therefore the **`.scad` sources, the parameter axis CSVs as populated, and
+the exported meshes** — all unchanged by this decision. Alternative 3 is what the standard's
+own file-interface table already prescribes: *"Reading a parameter CSV or shape JSON | in |
+Declared unit to m, rad"* and *"Emitting `.scad` source | out | m to mm, rad to deg"*.
+
+**What general.md needs is a wording fix, not an amendment.** Its rules are written wider than
+that intent — *"Never convert existing sweep code to SI"* and *"New code that consumes the
+sweep's output converts mm to m at its own boundary … rather than reaching in and changing
+the source"* — which read as covering `derived_parameters()`, Python rather than a `.scad`
+file. The fix names the protected artifacts instead of "sweep code". **It also closes a standing
+contradiction rather than opening one:** `unit_regime.json` declares 13 modules `presentation`
+and 16 `external`, and `fuselage_variants` is neither, so it falls to the default `si` regime
+with an inline ceiling reading *"not yet converted (IP-FC-160)"*. The audit has classified this
+module as SI-with-a-backlog since 2026-11-01; only the guideline's prose disagreed.
+
+**The gate is byte-identity, not a tolerance.** Because the exemption's purpose is that the
+`.scad` implementation stays checkable against the original design, the test is that the emitted
+`.scad` is unchanged byte for byte. The sweep's `--resume` staleness key hashes the definition
+file, so anything less marks all 576 parts stale.
+
+**Measured 2026-11-07, and byte-identity is reachable.** The risk was that a millimeter value
+divided by 1000 and multiplied back does not return the identical float, which would move the
+emitted digits. Every variant of both bulkhead families was resolved through
+`export_parameters.resolve` and every numeric field of every table round-tripped: **576 variants
+resolved (1 408 combinations refused), 20 520 numeric fields checked, 0 failed an exact round
+trip.** A hand-picked sample was run first and passed, which is not a survey; this is the
+survey. The field-by-field comparison through `mm_to_m` and the first ported part measured
+against its baseline remain as cross-checks, and they are what finally feed
+`units.bbox_m_matches_mm`, dead code today because `check_si.py` exercises it only on a
+constructed box.
+
+**Two constraints attach to the choice.**
+
+1. **The `units` guard lands before the exported JSON's unit changes.** `export_parameters.py`
+   already writes `'units': 'mm and degrees, as the OpenSCAD path uses them'` into every
+   document and **nothing reads it** — advisory text, not a checked field. Four readers
+   bypass `freecad/parameters.py` and `json.load` the document themselves (`build_part.py`,
+   `build_sheet.py` twice, `check_bay_interchange.py`), as does
+   `tests/test_export_parameters.py`. Done in the other order, the first stale millimeter file
+   left in a scratch tree seeds a sheet 1000x wrong with no error.
+2. **The sheet cell stays millimeters.** FreeCAD evaluates a `Spreadsheet::Sheet` cell as a
+   millimeter quantity, so the seed converts m to mm on the way in, exactly as
+   `cowl_tree._CowlShell.execute` already converts `si.m(obj.Inset)` on the way out.
+
+**One question this does not decide.** Whether the sheet itself should carry SI, by storing
+parameters as `App::PropertyLength` or quantity-typed cells, which would remove the sheet
+boundary rather than relocating the conversion. It is not an alternative to anything above —
+one derivation sits behind it either way — and its prerequisite is a measurement nobody has
+taken: whether a quantity-typed cell drives an expression identically to a float cell, under a
+fresh build and under an edit-in-place recompute. Cheap on one real document. File it as its own
+question if it is wanted as a decision.
+
+**Unblocks IP-FC-159.**
 
 ## References
 
