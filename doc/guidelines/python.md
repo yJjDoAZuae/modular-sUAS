@@ -71,21 +71,35 @@ Name the quantity you mean: that last field was called `nozzle_diameter` until I
 while every use of it was a wall *N* extrusions thick. See
 [general.md](general.md#units--si-is-the-project-standard).
 
-**The existing OpenSCAD sweep code is millimeters and stays that way.** It is transitional —
-roadmap Phase 3 replaces it with FreeCAD — so it is explicitly exempt from the SI standard.
-Do not convert it, and do not rename its `_mm` identifiers. See
-[general.md](general.md#-the-openscad-path-stays-in-millimeters-do-not-convert-it).
+**The OpenSCAD *artifacts* are millimeters and stay that way — the `.scad` sources, the
+parameter axis CSVs as populated, the JSON shape definitions as authored, and the exported
+meshes.** The reason is traceability: the `.scad` sources are the record of the original design
+and stay checkable against it. Do not convert one, and do not rename a `_mm` identifier in one.
+See [general.md](general.md#-the-openscad-artifacts-stay-in-millimeters-do-not-convert-them).
+
+**The exemption covers artifacts, not directories.** An earlier version of this section said
+*"the existing OpenSCAD sweep code is millimeters and stays that way"* and tabulated
+"`src/Fuselage/tools/` sweep path and everything it calls" as millimeters. That was wider than
+the exemption's intent, and it is corrected here: the Python that derives, resolves or drives is
+ordinary project code in SI. `derived_parameters()` is the case that made it ambiguous, settled
+by [freecad_migration.md, OQ-ARCH-25](../architecture/freecad_migration.md#open-questions).
 
 Which regime applies:
 
-| Code | Units |
+| Code or artifact | Units |
 | --- | --- |
-| `src/Fuselage/tools/` sweep path and everything it calls | millimeters, degrees |
+| `.scad` sources, parameter axis CSVs, JSON shape definitions, exported meshes | millimeters, degrees |
+| Python that derives, resolves or drives a variant | SI, converting where it reads or writes one of the above |
 | The FreeCAD port (Phase 3) | SI, converting at the FreeCAD boundary |
 | Analysis, optimization, solvers, new standalone tooling | SI |
 
-New SI code that consumes the sweep's output converts mm → m at its own boundary and names
-the conversion. Do not reach into the sweep to change its regime.
+**Do not assume a directory's regime — read it.**
+[`tools/unit_regime.json`](../../src/Fuselage/tools/unit_regime.json) declares each module's
+regime, and a module with no declaration is `si`. Only `presentation`, `external` and
+`boundary` modules may hold a millimeter value, and each such exemption carries a reason.
+
+New SI code that consumes an exempt artifact converts mm → m at its own boundary and names
+the conversion. Changing an artifact's own regime is a decision, not a refactor.
 
 The unit multiplier `U` is dimensionless — name what it scales, not `U` itself.
 

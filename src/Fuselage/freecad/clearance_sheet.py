@@ -98,10 +98,10 @@ DIM_X_MM = (-1.55, 1.65)
 DIM_TICK_MM = 0.35
 
 #: Surface-outline point counts at which Metric A is re-measured on each drawn station. The tool
-#: gets twice each count, which is the 200/400 ratio `_min_wire_distance` ships.
+#: gets twice each count, which is the 200/400 ratio the retired scan shipped.
 #:
 #: **This is the measurement the whole figure exists to support, so it is taken here rather than
-#: quoted.** Metric A is a sampled quantity: `_min_wire_distance` reduces one outline to points
+#: quoted.** Metric A is a sampled quantity: it reduces one outline to points
 #: and the other to chords and returns the least point-to-chord distance. At a station where the
 #: two outlines cross, the exact distance is zero and that method cannot return it, because no
 #: sample is a crossing point. What it returns instead is a leftover, and re-running it at other
@@ -109,7 +109,7 @@ DIM_TICK_MM = 0.35
 #:
 #: Measured on `nose_cowl_shell` at `U` = 1, `z` = -36.9470: 0.000081 mm at the shipped 200/400,
 #: and 0.000081 to 0.216 mm across this range -- a factor of 2700, no convergence toward the
-#: exact zero, and `CLEARANCE_MARGIN_MM` crossed in both directions. A flagged station is
+#: exact zero, and `METRIC_A_FLAG_MM` crossed in both directions. A flagged station is
 #: therefore a fact about where the samples fell, not about the part.
 #:
 #: **An earlier revision swept the station instead of the sampling**, on the since-withdrawn
@@ -118,8 +118,22 @@ DIM_TICK_MM = 0.35
 #: sampling sweep is what distinguishes the two, because a real distance would survive it.
 METRIC_A_DENSITIES = (100, 150, 200, 250, 300, 400, 600, 1000, 2000, 5000, 20000)
 
-#: The sampling `_min_wire_distance` ships, and so the one the scan's own figures come from.
+#: The sampling the retired scan shipped, and so the one its own figures come
+#: from. `_metric_a_at` reproduces that scan exactly at this count against
+#: twice it, which is what keeps these figures comparable to the numbers the
+#: scan published before IP-FC-155 removed it.
 METRIC_A_SHIPPED = 200
+
+#: Metric A's own thin-wall flag line, in millimeters: the threshold the scan
+#: warned below, and the number notes 8 and 10 on the sheet quote.
+#:
+#: **Held here rather than imported, because the metric it belongs to no longer
+#: exists.** It was `cowl_interior.CLEARANCE_MARGIN_M` until IP-FC-155 retired
+#: Metric A outright (OQ-DES-CW25 alternative 3). This sheet is the surviving
+#: record of what that metric measured and why it was nothing, so it has to be
+#: able to draw the threshold it is refuting without the refuted code being
+#: kept alive to supply it.
+METRIC_A_FLAG_MM = 0.01
 
 #: Step, in mm, for the census of a tool's whole axial run.
 #:
@@ -280,13 +294,16 @@ def _run_census(surf, tool, step=CENSUS_STEP_MM):
 
 
 def _metric_a_at(wires_a, wires_b, n_a, n_b):
-    """`_min_wire_distance`'s own computation with its sampling counts exposed.
+    """The retired scan's own computation, with its sampling counts exposed.
 
-    Deliberately a re-implementation of three lines rather than a call: the point of the sweep
-    is to vary the two `Number` arguments that function hard-codes, and it takes neither. It
-    reproduces that function exactly at `n_a` = 200, `n_b` = 400 -- measured 0.000080625 mm at
-    `nose_cowl_shell` `U` = 1, `z` = -36.9470, against the scan's own 0.000081 -- which is what
-    makes the rest of the sweep comparable to a shipped figure.
+    Written as a re-implementation rather than a call because the point of the sweep is to
+    vary the two `Number` arguments `cowl_interior._min_wire_distance` hard-coded, and it
+    took neither. It reproduced that function exactly at `n_a` = 200, `n_b` = 400 --
+    measured 0.000080625 mm at `nose_cowl_shell` `U` = 1, `z` = -36.9470, against the scan's
+    own 0.000081 -- which is what makes this sweep comparable to the figures that scan
+    published. **It is now the only copy**: IP-FC-155 retired Metric A and removed
+    `_min_wire_distance` with it, so this is a record of what was measured, not a second
+    reading of live code.
     """
     a_pts = []
     for w in wires_a:
@@ -481,12 +498,20 @@ def build(kind, u, out_dir):
         row['dilated_reach'] = y_surf - y_dil
 
         # **Metric A itself, measured here rather than quoted.** The figure exists to say what
-        # this number is worth, so the number has to be on the sheet. `clearance_margin_scan`
-        # costs about an hour because it samples a whole cowl adaptively; the per-station
-        # quantity it reports is one `tool_clearance_ranked` call, which is cheap. Calling the
-        # scan's own function means the sheet cannot drift from what the scan would print.
-        ranked = ci.tool_clearance_ranked(smooth, ribs, si.m(z))
-        row['metric_a'] = si.mm(ranked[0][1]) if ranked else None
+        # this number is worth, so the number has to be on the sheet.
+        #
+        # **Inlined, because the scan it came from is gone.** This was one
+        # `ci.tool_clearance_ranked` call until IP-FC-155 retired Metric A. The
+        # ranking it performed is the nearest of the per-tool sampled distances,
+        # which is four lines over `_metric_a_at` -- the same arithmetic, at the
+        # same shipped sampling, so the figure drawn is still the figure the
+        # scan published.
+        ranked = sorted(
+            d for d in (_metric_a_at([w for w in ci._slice_wires(smooth, si.m(z)) if w],
+                                     [w for w in ci._slice_wires(rib, si.m(z)) if w],
+                                     METRIC_A_SHIPPED, 2 * METRIC_A_SHIPPED)
+                        for rib in ribs) if d is not None)
+        row['metric_a'] = ranked[0] if ranked else None
 
         # **The exact answer, from the kernel, against the sampled one.** `distToShape` on the
         # two section wires is the real in-plane distance and returns 0.0 where they cross;
@@ -497,14 +522,14 @@ def build(kind, u, out_dir):
                                      for a in s_wires for b in d_wires)
 
         # **And the sampled figure's dependence on its own sampling**, which is what says
-        # whether it is a measurement at all. Each entry is one more `_min_wire_distance` on
+        # whether it is a measurement at all. Each entry is one more `_metric_a_at` on
         # wires already in hand.
         sweep = []
         for n in METRIC_A_DENSITIES:
             got = _metric_a_at(s_wires, d_wires, n, 2 * n)
             sweep.append(dict(surface_points=n, tool_segments=2 * n, metric_a=got,
                               flagged=bool(got is not None
-                                           and got < si.mm(ci.CLEARANCE_MARGIN_M))))
+                                           and got < METRIC_A_FLAG_MM)))
         row['metric_a_sweep'] = sweep
         seen = [e['metric_a'] for e in sweep if e['metric_a'] is not None]
         if seen:
@@ -696,7 +721,7 @@ def build(kind, u, out_dir):
                 '8. Metric A is the clearance between those same two outlines -- the',
                 '   fitted interior surface and the dilated tool -- and the scan warns',
                 '   on any station below %.3f mm, since a tool that close to the cavity'
-                % si.mm(ci.CLEARANCE_MARGIN_M),
+                % METRIC_A_FLAG_MM,
                 '   leaves no material between the slot and the inside of the part.',
                 '9. Note 6 is the same pair of outlines %.3f mm PAST each other, so they'
                 % abs(row['dilated_reach']),
@@ -712,7 +737,7 @@ def build(kind, u, out_dir):
                     '   point count, %d to %d, gives %.6f to %.3f mm -- every one of them'
                     % (METRIC_A_DENSITIES[0], METRIC_A_DENSITIES[-1], lo, hi),
                     '   wrong, with the %.3f mm warning line inside the range.'
-                    % si.mm(ci.CLEARANCE_MARGIN_M),
+                    % METRIC_A_FLAG_MM,
                 ]
         else:
             metric_note = [

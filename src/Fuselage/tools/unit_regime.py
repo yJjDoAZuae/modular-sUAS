@@ -8,7 +8,7 @@ and 125 completed work items without anything noticing. A standard that only a r
 drifts again the same way, so this module makes it mechanical.
 
 **What this tool checks, and why it is a manifest rather than a pattern match.** A name cannot
-be trusted to say what a number is: `TAU = 0.05` is a length in millimeters, `CHEEK_DOT = 0.9`
+be trusted to say what a number is: `TAU = 0.05` is a length in millimeters, `CAP_COSINE = 0.9`
 is a dot product, `RIB_FACETS = 48` is a count, and `UNITS_PER_EM = 2048` is a font design
 unit. Guessing from the name is how an audit gets a number like "173 millimeter constants"
 roughly right and individually wrong. So every module-level numeric constant in the port is

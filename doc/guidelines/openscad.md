@@ -108,19 +108,31 @@ signature, not as a sweep of its own.
 
 ## Geometry Practice
 
-- **Millimeters and degrees throughout — the whole OpenSCAD path, not just the `.scad`.**
+- **Millimeters and degrees in the `.scad` sources and the artifacts beside them.**
   OpenSCAD is nominally unitless, but `rotate()` takes degrees and every slicer reads an
-  exported mesh as millimeters, so `.scad` is fixed to mm/deg. The Python sweep code that
-  drives it is millimeters too.
+  exported mesh as millimeters, so `.scad` is fixed to mm/deg. The parameter axis CSVs and the
+  JSON shape definitions are populated to match, and stay that way.
 
   The project standard elsewhere is SI — see
-  [general.md](general.md#units--si-is-the-project-standard) — but **this path is explicitly
-  exempt.** It is transitional: roadmap Phase 3 replaces it with Python-driven FreeCAD, and
-  SI arrives there, in new code. Do not convert this path, and do not "fix" a `_mm` name to
-  `_m`; the name is accurate.
+  [general.md](general.md#units--si-is-the-project-standard) — and **these artifacts are
+  explicitly exempt, for traceability**: the `.scad` sources are the record of the original
+  design and stay checkable against it. Do not convert one, and do not "fix" a `_mm` name to
+  `_m` in one; the name is accurate.
 
-  New code that consumes this path's output converts mm → m at its own boundary rather than
-  reaching in and changing the source.
+  **The exemption stops at the artifacts.** An earlier version of this entry read "the whole
+  OpenSCAD path, not just the `.scad` … The Python sweep code that drives it is millimeters
+  too", which was wider than the exemption's intent. The Python that derives, resolves or
+  drives a variant is ordinary project code in SI, converting where it writes an artifact or
+  reads one — see
+  [freecad_migration.md, OQ-ARCH-25](../architecture/freecad_migration.md#open-questions),
+  which settled it for `derived_parameters()`. Read a module's declared regime in
+  [`tools/unit_regime.json`](../../src/Fuselage/tools/unit_regime.json) rather than assuming a
+  directory is exempt; a module with no declaration is `si`.
+
+  New code that consumes one of these artifacts converts mm → m at its own boundary rather
+  than reaching in and changing the source. **Any change upstream of `.scad` emission is gated
+  on the emitted `.scad` being byte-identical**, because traceability is the reason the
+  exemption exists.
 
   Exported STL and 3MF **must** be millimeters regardless of what the rest of the project
   does. Those formats carry no unit metadata; a mesh exported in meters loads at 1/1000
