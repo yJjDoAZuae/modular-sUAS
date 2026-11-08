@@ -548,3 +548,91 @@ def test_every_markdown_page_is_readable_as_utf8():
     for rel, p in sorted(dc.read_pages().items()):
         with io.open(p.path, encoding='utf-8') as fh:
             assert fh.read() == p.text, rel
+
+
+# ------------------------------------------------------------
+# no personal names in the repository
+# ------------------------------------------------------------
+#
+# **Every name in these tests is read from git at run time, never written here.** A test that
+# asserted on a literal name would put that name into the repository -- which is the thing being
+# prevented -- and it would also be the one file the gate could never be allowed to flag. So the
+# fixtures are built from `git_identities()` itself.
+
+
+def _a_name():
+    """One alphabetic identity to build fixtures from, or skip if git cannot supply one."""
+    names = [t for t in dc.git_identities() if t.isalpha()]
+    if not names:
+        pytest.skip('git supplied no identity, so there is nothing to build a fixture from')
+    return names[0]
+
+
+def test_the_identity_list_is_not_empty():
+    """An empty list means the gate silently passes everything, which is its only failure mode."""
+    assert dc.git_identities(), 'no identity read from git -- the gate would pass everything'
+
+
+def test_the_global_identity_is_included_not_just_the_effective_one():
+    """**The bug this test exists for.** A repository may carry a deliberately pseudonymous
+    *local* identity, as this one does, so `git config user.name` returns a handle and not the
+    name that must stay out of the tree. A gate reading only the effective value refuses the
+    handle and permits the person.
+    """
+    import subprocess
+    try:
+        got = subprocess.run(['git', 'config', '--global', 'user.name'],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        pytest.skip('git unavailable')
+    if got.returncode != 0 or not got.stdout.strip():
+        pytest.skip('no global identity configured on this machine')
+    tokens = dc.git_identities()
+    for part in got.stdout.decode('utf-8').split():
+        if len(part) >= dc.IDENTITY_MIN and part.lower() not in dc.NOT_PERSONAL:
+            assert part in tokens, 'the global identity must be refused, not just the local one'
+
+
+def test_a_name_in_a_document_is_refused():
+    found = dc.check_identities(pages_of(('design/a.md', 'Chosen by %s.\n' % _a_name())))
+    assert len(found) == 1
+    assert found[0].check == 'identities'
+
+
+def test_the_line_number_is_where_the_name_is():
+    text = 'one\ntwo\nrequested by %s\n' % _a_name()
+    found = dc.check_identities(pages_of(('design/a.md', text)))
+    assert [f.where for f in found] == [3]
+
+
+def test_impersonal_attribution_is_silent():
+    assert dc.check_identities(pages_of(
+        ('design/a.md', 'Decided on direct instruction. The project owner scheduled it.\n'))) == []
+
+
+def test_a_name_inside_a_longer_word_is_not_a_match():
+    """Word boundaries, so a `scalex` in a Blender file or an `Alexandria` in prose is left
+    alone. Built by surrounding the real token with letters rather than by naming a case."""
+    name = _a_name()
+    assert dc.check_identities(pages_of(('design/a.md', 'the %sandria %sscale\n'
+                                         % (name, name)))) == []
+
+
+def test_the_platform_author_is_not_treated_as_a_person():
+    """`GitHub` appears as a committer name on web-made commits, and prose about GitHub is
+    ordinary. `NOT_PERSONAL` is what keeps the gate from refusing it."""
+    assert 'github' in dc.NOT_PERSONAL
+    assert dc.check_identities(pages_of(('design/a.md', 'pushed via GitHub\n'))) == []
+
+
+def test_a_license_may_name_its_copyright_holder():
+    """The one exemption, and it is a real case: a copyright notice names its holder."""
+    holder = page('Copyright %s\n' % _a_name(), rel='LICENSE')
+    assert dc.check_identities({'LICENSE': holder}) == []
+    # The exemption is by filename only, so the same text anywhere else is still refused.
+    assert dc.check_identities({'design/a.md': holder}) != []
+
+
+def test_the_real_documentation_tree_carries_no_personal_name():
+    found = dc.check_identities(dc.read_pages())
+    assert not found, '%d finding(s):\n%s' % (len(found), '\n'.join(repr(f) for f in found))

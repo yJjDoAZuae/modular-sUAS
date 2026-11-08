@@ -1065,8 +1065,8 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 | ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
 | ARCH-24 | decided 2026-11-02 | How does `tools/wall_measure` reach the unit standard, when a committed test asserts it may import nothing outside numpy and the standard library -- so that it stays loadable under FreeCAD's embedded interpreter -- and `freecad/si.py` imports FreeCAD? -- **alternative 1: `freecad/units.py` is admitted to the allowlist**, named explicitly so admitting one pure module does not admit `si.py` behind it. Both of the alternative's premises were checked before acting and both moved. The package's own boundary over `units` is `wall_measure/kern.py`; the conversion landed as IP-FC-163 and the package is SI as of 2026-11-06 |
-| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by <user> as the only one of the five satisfying three requirements he set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants -- **recorded as reachable, and it is not; see OQ-ARCH-26**. Unblocks IP-FC-159 |
-| ARCH-26 | open | **What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?** OQ-ARCH-25 set IP-FC-159's gate at byte-identical `.scad` and recorded it as reachable. Measured 2026-11-07 on the derivation rather than the inflow: **523 of 544 parts (96.1%) change text**, by two mechanisms neither of which any conversion operator removes -- a whole number of millimeters is not a whole number of meters, and the millimeter path's own 1.1 ULP rounding residue is a property of the order of operations. No geometry moves. **Blocks IP-FC-159** |
+| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by the project owner as the only one of the five satisfying three requirements set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants -- **recorded as reachable, and it is not; see OQ-ARCH-26**. Unblocks IP-FC-159 |
+| ARCH-26 | open | **What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?** OQ-ARCH-25 set IP-FC-159's gate at byte-identical `.scad` and recorded it as reachable. Measured 2026-11-07 on the derivation rather than the inflow: **523 of 544 parts (96.1%) change text**, by two mechanisms neither of which any conversion operator removes -- a whole number of millimeters is not a whole number of meters, and the millimeter path's own 1.1 ULP rounding residue is a property of the order of operations. No geometry moves. **Reframed 2026-11-08 by R1, a requirement set on direct instruction: a value carrying an epsilon offset must not become a reference value in the verification.** Measured against it, **114 reference values on disk today already carry residue** -- `flange_thickness` reading 1.7999999999999998 where the design means 1.8 -- from an exact integer count times an inexact binary 0.6 or 0.2, which has nothing to do with units. So the corpus has this defect now, independent of IP-FC-159, and R1 makes alternative 3 (round at emission, 12 significant figures) **necessary**; what stays open is the gate, between 1 and 2. **Blocks IP-FC-159** |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -3707,7 +3707,7 @@ converting the port's consumers of it.
 
 ### OQ-ARCH-24 — How does `wall_measure` reach the unit standard, when it may not import the conversion layer? — RESOLVED 2026-11-02
 
-**Resolution: alternative 1 — `freecad/units.py` is admitted to the allowlist.** <user> authorized
+**Resolution: alternative 1 — `freecad/units.py` is admitted to the allowlist.** The project owner authorized
 completing the unit repair on 2026-11-02. `tools/wall_measure` now imports `units`, which holds
 `MM_PER_M`, `M_PER_MM`, `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions and imports
 only `math`. There is no new file, no duplicated factor, and exactly one definition of the
@@ -3855,7 +3855,7 @@ measured above. It is a decision about where a dependency may point.
 
 **Resolution: alternative 3 — convert at the derivation.** `derived_parameters()` returns
 meters; the parameter CSV read converts in; the `.scad` emission converts out; the exported JSON
-is meters. Chosen by <user> on 2026-11-07 as the only one of the five alternatives satisfying the
+is meters. Chosen on direct instruction, 2026-11-07, as the only one of the five alternatives satisfying the
 three requirements he set the same day.
 
 **The question was: where does the single millimeter-to-meter conversion sit?** Five
@@ -3888,7 +3888,7 @@ anywhere.)*
   export in meters: once the derivation is SI the export writes what it is handed.
 
 **This carries no reversal of the OpenSCAD exemption, and an earlier draft of this question was
-wrong to say it did.** <user>, 2026-11-07: *"I did not tell you that all code that was associated
+wrong to say it did.** On direct instruction, 2026-11-07: *"I did not tell you that all code that was associated
 with the OpenSCAD had to operate internally in mm. I meant the OpenSCAD files themselves needed
 to remain in mm so that the implementation remained traceable back to my original design."* The
 exempt artifacts are therefore the **`.scad` sources, the parameter axis CSVs as populated, and
@@ -4053,16 +4053,20 @@ something already settled, which is why this is filed rather than resolved in pa
    established for `variant_output_baseline` — *"differences are enumerated in a ledger and
    justified, not absorbed"*. *Drawbacks:* needs one full sweep, and a reviewed sign-off on the
    ledger before the corpus is adopted. *Prerequisite:* a full sweep, which is expensive and is
-   <user>'s call to schedule.
+   the project owner's call to schedule.
 
-3. **Round at the emission boundary and accept the one-time change.** Emit
-   `round(value_m × 1000, 9)`. *Benefits:* the emitted text stops being sensitive to the order of
-   operations at all, so this class of churn cannot recur on any later refactor — including the
-   `PartDesign::` move. *Drawbacks:* it does not meet byte-identity either, missing 1 018 of
-   14 188 by cleaning up residue the current file carries, so it still needs whichever of 1 or 2
-   is chosen; and it puts a formatting decision inside the emission path, where a reader would
-   have to know the grid to predict the file. *Prerequisite:* a decision on how many decimals,
-   which is a new free parameter.
+3. **Round at the emission boundary and accept the one-time change.** **Required by R1, and
+   the rule is 12 significant figures — `float('%.12g' % value_mm)` — not a decimal count.**
+   *Benefits:* it is what R1 asks for; it repairs the 114 residue values the corpus carries
+   today; and the emitted text stops being sensitive to the order of operations at all, so this
+   class of churn cannot recur on any later refactor, including the `PartDesign::` move.
+   *Drawbacks:* it does not meet byte-identity against the **current** corpus — it was measured
+   missing 1 018 of 14 188, every one of them a residue value it corrects — so it still needs
+   whichever of 1 or 2 is chosen for how that one-time change is recorded; and it puts a
+   precision decision inside the emission path, where a reader has to know the rule to predict
+   the file. *Prerequisite:* none remaining. An earlier revision of this alternative proposed
+   `round(value_m × 1000, 9)` and called the precision "a new free parameter"; both are
+   corrected below, and the decimal form was wrong rather than merely unchosen.
 
 4. **Derive twice, so the OpenSCAD emission keeps millimeter arithmetic.** This is OQ-ARCH-25's
    alternative 4, eliminated there by R1 — *"the derivation of parameters should be implemented
@@ -4089,9 +4093,93 @@ something already settled, which is why this is filed rather than resolved in pa
    argues against. *Prerequisite:* a date for the OpenSCAD retirement, which does not exist
    today.
 
+#### R1, and what it eliminates — set on direct instruction, 2026-11-08
+
+> *"Most if not all of the parameter values are intentionally either whole number millimeter
+> values or are some small denominator fraction of an integer value. I would prefer that values
+> that have small epsilon offsets not become reference values in the verification."*
+
+**The premise is correct, and checking it found that the defect it describes is already in the
+corpus.** Every value the sweep emits was classified across all seven part kinds — the three
+bulkhead families and the four cowl kinds — 9 800 non-zero lengths in all:
+
+| class | instances | distinct | what it is |
+| --- | --- | --- | --- |
+| exact short decimal | 9 320 | 250 | the design intent R1 describes |
+| **epsilon residue over a short decimal** | **114** | **7** | **already reference values on disk** |
+| genuinely irrational | 466 | 16 | `greeble_thickness`, `greeble_nub_thickness` |
+
+The exact values need at most **five decimal places**, and the value that needs all five is
+`panel_thickness = 0.79375` mm — 1/32 inch exactly, which is precisely the "small denominator
+fraction of an integer value" R1 names. 4 645 of them are whole millimeters.
+
+**The 114 residue values have nothing to do with units, and that is the finding.** They are
+`flange_thickness` and `plate_thickness`, both computed as an exact integer count times a
+printer dimension: `ceil(n·U) · extrusion_width` and `ceil(plate_layers·U) · layer_height`.
+Neither 0.6 nor 0.2 is representable in binary, so `3 × 0.6` is `1.7999999999999998` and
+`3 × 0.2` is `0.6000000000000001`. All seven:
+
+| alias | on disk today | the design means | parts |
+| --- | --- | --- | --- |
+| `flange_thickness` | 1.7999999999999998 | 1.8 | 27 |
+| `plate_thickness` | 1.2000000000000002 | 1.2 | 23 |
+| `plate_thickness` | 0.6000000000000001 | 0.6 | 20 |
+| `plate_thickness` | 2.4000000000000004 | 2.4 | 20 |
+| `flange_thickness` | 3.5999999999999996 | 3.6 | 20 |
+| `flange_thickness` | 5.3999999999999995 | 5.4 | 2 |
+| `flange_thickness` | 7.199999999999999 | 7.2 | 2 |
+
+So R1 is not a constraint on how IP-FC-159 is done. **It is a defect report against the corpus as
+it stands**, and it would be worth acting on if IP-FC-159 never happened.
+
+**One family is genuinely irrational, so "emit a clean value" cannot mean "emit the exact
+value".** `greeble_thickness` is `max(2·√U·w, 2·w)` — the greeble wall scales in extrusions
+rather than as a fraction of the airframe (`derived_parameters`'s own note) — and a square root
+has no decimal form at any precision. 466 instances, 16 distinct values, two aliases. For these
+the rule is a statement about displayed precision, not about recovering an intended number.
+
+**The rule is 12 significant figures, and it has to be significant figures rather than decimal
+places.** Both were measured over every emitted value:
+
+| rule | exact values changed | residue repaired | largest shift to an irrational value |
+| --- | --- | --- | --- |
+| 5 decimal places | 0 | 114 of 114 | 3.846 × 10⁻⁶ mm |
+| **12 significant figures** | **0** | **114 of 114** | **2.653 × 10⁻¹² mm** |
+
+Both satisfy R1. Significant figures are preferred on two counts. The shift it costs the
+irrational family is six orders smaller, 2.7 picometers against 3.8 nanometers. And **a decimal
+count means different physical resolution in different units, and this corpus is mixed**: the
+cowl kinds emit `oml_length_m`, `oml_offset_x_m` and `oml_scale_m_per_mm` in *meters* beside
+millimeter lengths and dimensionless fractions of `unit_width`. Five decimals is 10 nm on a
+millimeter field and 0.01 mm on a meter one — exactly `WALL_TOL`. Today's meter-valued fields
+(0.05, 0.1, −0.25, 0.0, 0.001) are all short enough that a 5-decimal grid happens to be exact for
+them, which is luck and not design. Significant figures have no such dependence.
+
+**What R1 eliminates, and what it does not.**
+
+- **Eliminates 4 and 6 outright.** Both leave the derivation in millimeters, which is where the
+  114 residue values are produced. Alternative 4 was already excluded by OQ-ARCH-25's R1; this is
+  a second, independent reason.
+- **Eliminates 1 and 2 as *complete* answers.** Each decides what the gate is and neither cleans
+  a value, so on its own either one freezes `1.7999999999999998` into the corpus as a reference —
+  1 by accepting it within a tolerance, 2 by re-rendering it unchanged into a new frozen baseline.
+- **Makes 3 necessary**, as the only alternative that acts on the values themselves.
+- **Leaves the gate open, between 1 and 2.** Rounding changes the emitted text of the parts
+  carrying those 114 values whether or not the units move, so there is still a one-time corpus
+  change to account for, and R1 does not say how to record it. That is the remaining decision.
+- **Alternative 5 is untouched by R1** and remains independent: if the generated `.scad` retires,
+  there is no verification corpus to keep clean.
+
+**A reversal worth recording.** The six-operator measurement of 2026-11-07 included `'%.12g'` and
+scored it a failure, "missing 1 018 of 14 188 **in the opposite direction** … producing a cleaner
+number than the millimeter path's own". That is the same measurement, and under R1 those 1 018 are
+not misses. They are the corrections R1 asks for. Nothing about the arithmetic changed; the gate
+it was being judged against did.
+
 #### Recommendation
 
-**Alternative 2.** It is alternative 1 with the project's own ledger discipline attached, and the
+**Alternative 3 is now required, so the live question is 2 against 1 for the gate — and the
+recommendation stays 2.** It is alternative 1 with the project's own ledger discipline attached, and the
 discipline is what makes the difference: the reason to prefer it is not that the numbers are
 smaller but that 523 changed files become a reviewed, enumerated, explained event instead of a
 quiet weakening of a rule that was written three days earlier. OQ-ARCH-15 settled this exact
@@ -4103,14 +4191,28 @@ mechanism 2 a fact about floating-point ordering, so neither can be engineered a
 implementation. A gate that cannot be met by any correct implementation is not protecting
 anything; it is only deferring the change.
 
-Alternative 3 is worth taking **in addition** to 2 rather than instead of it, and that is a
-separate call. Its value is forward-looking: the same churn will arrive again at the
-`PartDesign::` move and at any later refactor that reorders this arithmetic, and a rounded
+**Alternative 3 is taken alongside it, and is no longer a separate call** — R1 requires it. An
+earlier revision of this recommendation called it "worth taking in addition to 2 … and that is a
+separate call", costing "one new free parameter, the decimal count". Both are superseded: the
+choice is made, the rule is 12 significant figures, and the decimal form it proposed was wrong
+for a mixed-unit corpus rather than merely unchosen.
+
+Its value beyond R1 is still forward-looking, and that part stands: the same churn arrives again
+at the `PartDesign::` move and at any later refactor that reorders this arithmetic, and a rounded
 emission is the only option here that makes the `.scad` text stable under reordering rather than
-merely re-baselined once. Its cost is one new free parameter, the decimal count.
+re-baselined once.
+
+**Taking 2 and 3 together also settles what the new baseline should contain**, which neither
+settles alone. The corpus is re-rendered once, and the ledger entry records two separate things
+rather than one: the parts whose text moved because the derivation changed unit, and the 114
+values that were repaired from residue to the decimal the design intends. The second group is a
+correction the project would want recorded even on its own, and merging it into "the unit change
+churned everything" would hide it.
 
 Alternative 6 is the one to take if the OpenSCAD retirement is nearer than it looks, since it
-spends nothing. That depends on a date this document does not have.
+spends nothing. That depends on a date this document does not have. **R1 weakens it, though, and
+did not before:** holding IP-FC-159 leaves the 114 residue values as reference values for however
+long the hold lasts, and they are not a consequence of the conversion.
 
 ## References
 

@@ -287,8 +287,36 @@ def fix(root=None):
     return changed
 
 
+def check_identities(root=None):
+    """`[(path, line, token)]` for every source file carrying a contributor's name or address.
+
+    **The other half of `doc_check`'s identity gate, over the tree that gate cannot see.** It
+    walks `doc/` only; the rule is absolute and applies to source comments, manifests, `.scad`
+    files and test names just as much. The identity list and the exemptions come from
+    `doc_check` rather than being restated, the same arrangement `BRITISH` already has, so the
+    two halves cannot disagree about what counts as a name.
+
+    An empty identity list means git could not be reached, and that is returned as a finding
+    rather than as silence -- a check that did not run must not read as a check that passed.
+    """
+    names = doc_check.git_identities()
+    if not names:
+        return [(ROOT, 0, '(could not read any git identity -- this check did NOT run)')]
+    pattern = re.compile(r'\b(%s)\b' % '|'.join(re.escape(n) for n in names), re.I)
+    out = []
+    for path in source_files(root):
+        if os.path.basename(path) in doc_check.IDENTITY_EXEMPT:
+            continue
+        with io.open(path, 'rb') as fh:
+            text = fh.read().decode('utf-8', 'replace')
+        for m in pattern.finditer(text):
+            out.append((path, text[:m.start()].count('\n') + 1, m.group(1)))
+    return out
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    identities = check_identities()
     rows = fix() if '--fix' in argv else check()
     words = sum(r[1] for r in rows)
     renames = sum(r[2] for r in rows)
@@ -303,7 +331,21 @@ def main(argv=None):
         print('NOT changed -- a British stem inside a longer token with no entry in RENAMES:')
         for path, (token, _off) in sorted(set((p, l) for p, l in leftover)):
             print('    %-58s %s' % (os.path.relpath(path, ROOT), token))
-    return 1 if (rows and '--fix' not in argv) else 0
+
+    # **Printed whether or not it found anything**, because "no personal name in the tree" is a
+    # result and a missing line is not. `--fix` does not touch these: a name is removed by
+    # rewriting the sentence around it, which no substitution table can do.
+    print('')
+    if identities:
+        print('PERSONAL NAMES -- %d, and none of these is fixed automatically:' % len(identities))
+        for path, line, token in identities:
+            print('    %-58s :%-5s %s' % (os.path.relpath(path, ROOT), line, token))
+        print('    Rewrite the sentence instead -- "on direct instruction", "the project '
+              'owner", or drop the attribution.')
+    else:
+        print('personal names in source: 0')
+
+    return 1 if ((rows and '--fix' not in argv) or identities) else 0
 
 
 if __name__ == '__main__':

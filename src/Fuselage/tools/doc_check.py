@@ -858,6 +858,126 @@ def fix_spelling_tree(root=DOC):
     return changed
 
 
+# ----------------------------------------------------------------------------------------------
+# No personal names in the repository.
+#
+# **This is a gate because remembering was tried and did not work.** The rule is absolute and
+# long-standing, and the name still reached committed documents four separate times, always in the
+# same shape: a natural-sounding attribution while recording who decided something -- "a
+# requirement from <name>", "<name>'s call to schedule". Each time the remedy adopted was to be
+# more careful. A check that runs on every invocation is the remedy that does not depend on
+# anyone's attention.
+#
+# **The names are read from git, never stored here.** A hardcoded deny-list would put the very
+# string this gate exists to keep out of the tree into the tree, and into every clone of it. So
+# the identities come from `git config user.name`/`user.email` and from the distinct authors in
+# the history, at the moment the check runs. The gate therefore carries no personal data, needs no
+# maintenance when a contributor joins, and cannot be defeated by someone forgetting to update it.
+# ----------------------------------------------------------------------------------------------
+
+#: Files permitted to carry an identity, with the reason. A LICENSE names its copyright holder and
+#: that is its job; anything else needs a reason written here before it is added.
+IDENTITY_EXEMPT = {
+    'LICENSE': 'a copyright notice names its holder',
+    'LICENSE.md': 'same',
+    'LICENSE.txt': 'same',
+}
+
+#: Shortest token treated as identifying. Two letters produce false matches against ordinary
+#: words; three is the shortest that does not. A one- or two-letter given name would slip through,
+#: which is a stated limitation rather than an oversight.
+IDENTITY_MIN = 3
+
+
+#: Author names that identify a platform or a tool rather than a person, and tokens that are a
+#: project or address fragment. Subtracted so the gate does not refuse ordinary prose about
+#: GitHub, or the project's own name.
+NOT_PERSONAL = {'github', 'gitlab', 'web', 'flow', 'noreply', 'users', 'com', 'org', 'net',
+                'anthropic', 'claude', 'opus', 'bot', 'action', 'actions', 'modular', 'suas',
+                'none', 'unknown', 'root', 'admin', 'user'}
+
+
+def git_identities(root=None):
+    """Every name and address git knows for this repository's contributors, as a sorted list.
+
+    **Every scope is read, and `--global` is the one that matters.** A repository may deliberately
+    carry a pseudonymous *local* identity -- this one does -- so `git config user.name` returns the
+    pseudonym and not the name that must be kept out of the tree. A gate built on the effective
+    value would refuse the pseudonym, which is harmless, and permit the real name, which is the
+    entire point of it. Found by reading the configuration rather than assuming it: local here is
+    an opaque handle, global is a person.
+
+    History authors are included too, so a name that appears only in old commits is still refused
+    in new prose.
+
+    Returns `[]` when git cannot be reached, which callers must treat as "the check did not run"
+    rather than "nothing found" -- a clean reading from a check that never executed is the failure
+    mode this gate exists to avoid.
+    """
+    import subprocess
+
+    cwd = root or os.path.dirname(os.path.abspath(__file__))
+    probes = []
+    for scope in ('--global', '--local', '--system'):
+        probes.append(['config', scope, 'user.name'])
+        probes.append(['config', scope, 'user.email'])
+    probes.append(['log', '--all', '--format=%an%n%ae%n%cn%n%ce'])
+
+    raw = []
+    reached = False
+    for args in probes:
+        try:
+            done = subprocess.run(['git'] + args, cwd=cwd, stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL)
+        except OSError:
+            continue
+        reached = True
+        if done.returncode == 0:
+            raw.extend(done.stdout.decode('utf-8', 'replace').split('\n'))
+    if not reached:
+        return []
+
+    tokens = set()
+    for line in raw:
+        line = line.strip()
+        if not line:
+            continue
+        if '@' in line:
+            tokens.add(line)                       # the address entire
+        # Tokenized whole, domain included: an employer's domain identifies a person about as
+        # well as a surname does, and `NOT_PERSONAL` carries the ones that are not names.
+        for token in re.split(r'[^A-Za-z0-9]+', line):
+            # Must contain a letter. A bare number -- a GitHub account id turns up in a noreply
+            # address -- is not a name, and refusing one would fail on an ordinary measurement
+            # that happened to match.
+            if (len(token) >= IDENTITY_MIN and re.search(r'[A-Za-z]', token)
+                    and token.lower() not in NOT_PERSONAL):
+                tokens.add(token)
+    return sorted(tokens)
+
+
+def check_identities(pages):
+    """Refuse any page carrying a contributor's name or address, outside the exempt files."""
+    names = git_identities()
+    if not names:
+        return [Finding('identities', '(repository)',
+                        'could not read any git identity, so this check did NOT run -- it was '
+                        'not clean, it was skipped')]
+    pattern = re.compile(r'\b(%s)\b' % '|'.join(re.escape(n) for n in names), re.I)
+    found = []
+    for rel, page in sorted(pages.items()):
+        if os.path.basename(rel) in IDENTITY_EXEMPT:
+            continue
+        for m in pattern.finditer(page.text):
+            where = page.text[:m.start()].count('\n') + 1
+            found.append(Finding(
+                'identities', rel,
+                'carries a contributor identity (%r). No personal names in the repository -- '
+                'say "on direct instruction", "the project owner" or drop the attribution.'
+                % m.group(1), where))
+    return found
+
+
 CHECKS = (
     ('links', check_links),
     ('images', check_images),
@@ -866,6 +986,7 @@ CHECKS = (
     ('plan-index', check_plan_index),
     ('references', check_references),
     ('spelling', check_spelling),
+    ('identities', check_identities),
 )
 
 

@@ -454,6 +454,10 @@
    "reason": "a page-space zero test for TechDraw geometry",
    "unit": "mm"
   },
+  "doc_check.IDENTITY_MIN": {
+   "reason": "a minimum token length in characters, below which a word is too short to be a name",
+   "unit": "none"
+  },
   "doc_check.SEPARATOR": {
    "reason": "a regex over two dash characters; the number is a code point",
    "unit": "none"
