@@ -92,7 +92,7 @@ def representatives():
 #: airframe's sizes are multiples of** -- a reader looking at a family sheet is looking at the
 #: shape, and the shape they have in their head is the unit one. A family that does not cover
 #: it is drawn at whichever of its sizes is nearest, which keeps the choice a rule rather than
-#: an accident of dictionary order: before 2026-09-07 this took `rows[0]`, so the panelled
+#: an accident of dictionary order: before 2026-09-07 this took `rows[0]`, so the paneled
 #: bulkhead family was drawn at U = 0.5 and the reader had no way to know it was the smallest
 #: variant of eight.
 REPRESENTATIVE_U = 1.0

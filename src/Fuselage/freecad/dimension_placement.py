@@ -936,7 +936,7 @@ def check_placement(placed, geometry_edges, frame, text_height_mm=std.TEXT_HEIGH
     # **Not witness-vs-witness.** Section 5.2's H4 permits that crossing by name -- "crossing
     # another witness line is conventional and permitted" -- because nesting only orders each
     # axis group against itself (5.3 item 1), and two dimensions on perpendicular axes have no
-    # nesting relationship to satisfy it with. Measured on the panelled bulkhead's corner
+    # nesting relationship to satisfy it with. Measured on the paneled bulkhead's corner
     # detail, 2026-09-07: the horizontal-axis `G` and the vertical-axis `K` cross witnesses at
     # (60, 68.8), (60, 75.0), (48, 68.8) and (48, 75.0), on a layout every hard constraint
     # accepts, which is the documented case working as decided rather than a gap to close.

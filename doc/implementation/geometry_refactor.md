@@ -272,14 +272,14 @@ Closes OQ-DES-B6, and with it the refactor. `greeble_tolerance` was threaded pos
 through `bulkhead_section_full` → `_octant` → `bulkhead_section` and then thrown away:
 `greeble_tolerance_local = 0` was what reached `corner_end()`.
 
-**Chosen: drop the parameter, not honour it.** Both options were behavior-identical
+**Chosen: drop the parameter, not honor it.** Both options were behavior-identical
 today, since every caller passed zero. The deciding argument is that *the greeble post is
 nominal* is an **invariant, not a setting** — all fit clearance lives on the corner's
 bore because splitting it makes the joint carry it twice. A module that accepts a
 tolerance it must ignore in order to stay correct advertises control it does not have,
 and the person most likely to reach for it is someone whose parts will not snap together:
 they would change the number, see nothing happen, and conclude the geometry was at fault.
-Honouring the caller would have bought that knob back at the price of re-opening the
+Honoring the caller would have bought that knob back at the price of re-opening the
 double-clearance failure mode the design deliberately closed.
 
 Removed from three SCAD signatures and four internal call sites, from
@@ -332,7 +332,7 @@ All the long calls are now **keyword arguments**, so the next signature change i
 error rather than a silent shift — the same reasoning as IP-GEO-2, applied to the caller
 that had already been bitten by it.
 
-**A hazard removed on judgement, not on request.** Cells 7–11 ran full sweeps into
+**A hazard removed on judgment, not on request.** Cells 7–11 ran full sweeps into
 `'variant_output'`. A stray *Run All* would have overwritten the protected output. They
 now write to an `OUTPUT_DIR` constant set to `test_fuse_output`, with a pointer to the
 CLI for real sweeps.

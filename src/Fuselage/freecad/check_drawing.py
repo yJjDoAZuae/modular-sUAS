@@ -34,7 +34,7 @@ this project passes arguments in, and a checker that only took one of the two sp
 be a small trap for whoever runs it next.
 
 **Every kind with an annotation set, not just the corner.** It was corner-only until
-2026-08-27, which is how the corner's unpanelled family went unbuilt long enough for its
+2026-08-27, which is how the corner's unpaneled family went unbuilt long enough for its
 sheet to become undrawable -- a check that only ever builds one variant of one kind is a check
 that reports on one variant of one kind.
 
@@ -85,7 +85,7 @@ PARAMS_KEY = {'corner': 'corner_parameters', 'bulkhead': 'parameters',
              'boom_bulkhead': 'boom_parameters'}
 
 
-def is_panelled(params):
+def is_paneled(params):
     return abs(params.get('panel_thickness', 0.0)) > 1e-9
 
 
@@ -153,9 +153,9 @@ def family_of(document, kind, params, type_name=None):
 
     The panel test is asked of the *table* rather than of the topology signature, because the
     signature is computed in the virtualenv from a resolved parameter object this side cannot
-    build. A family whose table carries `panel_thickness` is the panelled one.
+    build. A family whose table carries `panel_thickness` is the paneled one.
     """
-    wanted = is_panelled(params)
+    wanted = is_paneled(params)
     span = sheet_annotations.corner_seat_span(params)
     seated = span is not None and span > 0.0
     for candidate in document['families']:

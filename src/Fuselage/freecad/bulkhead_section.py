@@ -97,9 +97,9 @@ EXPECT_BBOX_M = (-0.040, -0.0136569, 0.0, 0.0, 0.0051375, 0.006)
 # **The one variant REF and EXPECT_BBOX actually describe -- checked, not assumed.** Found
 # 2026-09-10: `main()` took whatever `params.json` a caller passed on faith, and `out/` is
 # gitignored, so a file named `ref_end_bolt.params.json` is whatever the last regeneration
-# left there -- 0mm panel one day, 3/16in the next. Comparing the unpanelled octant against
+# left there -- 0mm panel one day, 3/16in the next. Comparing the unpaneled octant against
 # these numbers reads as a 2.88% volume miss and a bounding box that moved, which is neither:
-# the panelled octant reproduces REF to 2e-6 mm3, so the constants were always right and the
+# the paneled octant reproduces REF to 2e-6 mm3, so the constants were always right and the
 # file passed in was the wrong variant, silently. `main()` now checks the seed's own `variant`
 # before trusting it, rather than reporting a geometry regression that was really a file mixup.
 REF_VARIANT = {'U': 1.0, 'bulkhead_type_name': 'end_bolt', 'panel_name': '3/16in'}
@@ -270,7 +270,7 @@ def main():
         # Comparing anyway reports a volume/bbox "regression" that is really a file mismatch,
         # which is exactly the failure IP-FC-56 found by hand on 2026-09-10: `out/` is
         # gitignored, so a file named `ref_end_bolt.params.json` is whatever the last
-        # regeneration left there, and the panelled octant this constant describes reproduces
+        # regeneration left there, and the paneled octant this constant describes reproduces
         # it to 2e-6 mm3.
         mismatch = True
         print('  ref     = -- REFUSED: REF/EXPECT_BBOX are U=%s %s panel=%s; this file is '

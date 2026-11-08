@@ -97,6 +97,62 @@ MM3_PER_M3 = MM_PER_M * MM_PER_M * MM_PER_M
 PA_PER_MPA = 1.0e6
 
 
+# --------------------------------------------------------------------------------
+# What unit a generated document declares itself to be in
+# --------------------------------------------------------------------------------
+#
+# **A file that cannot say which unit it is in cannot be checked, and this one could not.**
+# Both generated parameter documents -- `tools/export_parameters.py`'s variant file and
+# `tools/freecad_render.py`'s definition file -- have always carried a `units` field, and
+# **nothing read it**: it was prose for a human, not a checked value. A millimeter document
+# and a meter document were therefore indistinguishable to every consumer, and four readers
+# load one without going through `freecad/parameters.py` at all. OQ-ARCH-25 moves
+# `derived_parameters()` to meters, which changes what these files mean, so the field becomes
+# a token a reader refuses on (IP-FC-159).
+#
+# The tokens name the unit of the document's *length* values. Angles are degrees in both
+# documents and are not part of the token, because no document has ever carried radians and
+# inventing a spelling for a case that does not exist would be guessing at a format.
+
+#: Lengths in millimeters.
+PARAM_UNITS_MM = 'mm'
+
+#: Lengths in meters.
+PARAM_UNITS_M = 'm'
+
+#: Every token a reader may accept, in the order a listing should show them.
+PARAM_UNITS = (PARAM_UNITS_MM, PARAM_UNITS_M)
+
+#: The long spelling both writers emitted before the field was a token, and still the value
+#: `tools/freecad_render.definition_text` writes. Read as `mm`.
+#:
+#: **It is public, and the definition file keeps it, because that text is what `--resume`
+#: compares byte for byte.** Replacing it with `PARAM_UNITS_MM` would be a pure wording change
+#: that marks all 576 parts stale, so the guard was introduced without touching it. The
+#: variant file from `tools/export_parameters.py` has no byte-comparison consumer and writes
+#: the short token. Both are the same unit, which is the point of normalizing them here rather
+#: than letting each reader match strings.
+PARAM_UNITS_MM_LEGACY = 'mm and degrees, as the OpenSCAD path uses them'
+
+_TOKEN_OF = {PARAM_UNITS_MM: PARAM_UNITS_MM,
+             PARAM_UNITS_M: PARAM_UNITS_M,
+             PARAM_UNITS_MM_LEGACY: PARAM_UNITS_MM}
+
+
+def param_units_token(declared):
+    """The token `declared` means, or `None` when it means nothing this version knows.
+
+    `None` is the answer for a missing field and for an unrecognized one alike, and the caller
+    refuses on both. **Those two cases must not be told apart by defaulting**: a document with
+    no `units` is older than the guard, and one with an unknown `units` is newer than this
+    reader -- and guessing `mm` for either is precisely the silent 1000x error the guard
+    exists to prevent.
+    """
+    if declared is None:
+        return None
+    return _TOKEN_OF.get(str(declared).strip())
+
+
 def m_to_mm(value):
     """Meters to millimeters, crossing out of SI into FreeCAD's API or a mesh export."""
     return value * MM_PER_M

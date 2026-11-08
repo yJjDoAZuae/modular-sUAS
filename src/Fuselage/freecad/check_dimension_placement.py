@@ -159,7 +159,7 @@ def centered_frame(width, height):
     return (-width / 2.0, -height / 2.0, width / 2.0, height / 2.0)
 
 
-# The compacted family table at its widest, from `check_table_width.py` -- the panelled corner,
+# The compacted family table at its widest, from `check_table_width.py` -- the paneled corner,
 # 11 columns abreast of a 3-column panel block. Recorded here rather than recomputed because
 # this checker does not read the family data, and cross-checked there: the width budget it
 # reports is derived from `VIEW_WIDTH_RECORDED_MM` below, so the two cannot drift apart without

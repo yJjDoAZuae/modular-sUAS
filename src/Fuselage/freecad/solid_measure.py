@@ -326,7 +326,7 @@ def surface_difference(a, b, samples=SURFACE_SAMPLES, seed=99, deflection_m=DEFL
     **Why this exists: the boolean symmetric difference does not work between two solids that
     were built independently.** Measured 2026-09-06 on two `tail_shell` builds from identical
     inputs, `a.cut(b)` and `b.cut(a)` returned shapes with `isValid()` false, in 9 and 7 solids,
-    totalling 28.874616 mm3 over 1054 s -- for a pair whose volumes agree to 0.006186 mm3. A
+    totaling 28.874616 mm3 over 1054 s -- for a pair whose volumes agree to 0.006186 mm3. A
     difference planted inside one of them turned up in the wrong half with the wrong sign. The
     boolean *is* exact between solids that share surfaces, where it recovered a planted
     0.001 mm3 exactly in 2 s, so **check `isValid()` on both halves and use the boolean when it

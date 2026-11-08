@@ -10,7 +10,7 @@ phrase/label functions) has full coverage. `corner_annotations`, `bulkhead_annot
 real, already-relied-on fixtures in out/*.params.json -- every concrete number a docstring in
 sheet_annotations.py cites as "measured on the built solid"/"verified against ... worked
 example" is checked exactly against the real fixture that produces it, not just exercised
-structurally. Every conditional branch (`panelled`, `has_bolt`, `has_greeble`, `seated`, the
+structurally. Every conditional branch (`paneled`, `has_bolt`, `has_greeble`, `seated`, the
 `dual` boom's mirrored collet) is exercised with a real fixture that actually takes that branch,
 not a synthetic stand-in, using the real `is_cowling`/`is_interconnect`/panel-stock/boom-type
 variants already committed in out/. All three real annotation builders are additionally run end
@@ -128,7 +128,7 @@ def test_axis_line_scales_a_non_unit_direction():
 # ------------------------------------------------------------
 
 def test_topology_phrase_uses_the_pinned_phrase_pair_for_a_boolean():
-    assert sa.topology_phrase('panel.thickness != 0', True) == 'PANELLED'
+    assert sa.topology_phrase('panel.thickness != 0', True) == 'PANELED'
     assert sa.topology_phrase('panel.thickness != 0', False) == 'NO PANEL'
 
 
@@ -147,12 +147,12 @@ def test_branch_phrase_names_only_conditions_that_vary_among_siblings():
     sibling = {'key': 'b', 'topology': [['panel.thickness != 0', False],
                                         ['corner seating flat', True]]}
     # Only the first condition differs between the two -- the second must not appear.
-    assert sa.branch_phrase(family, [family, sibling]) == 'PANELLED'
+    assert sa.branch_phrase(family, [family, sibling]) == 'PANELED'
 
 
 def test_branch_phrase_with_no_siblings_names_every_condition():
     family = {'key': 'a', 'topology': [['panel.thickness != 0', True]]}
-    assert sa.branch_phrase(family, ()) == 'PANELLED'
+    assert sa.branch_phrase(family, ()) == 'PANELED'
 
 
 def test_variant_phrase_reads_out_the_swept_axes():
@@ -374,7 +374,7 @@ def test_corner_annotations_matches_every_built_solid_measurement(corner_params)
     assert by_name['panel_pocket'].value == pytest.approx(4.8625, abs=1e-4)
 
 
-def test_corner_annotations_drops_panel_quantities_when_unpanelled(cowling_bulkhead_params):
+def test_corner_annotations_drops_panel_quantities_when_unpaneled(cowling_bulkhead_params):
     """A corner with no panel states no panel pocket -- section 2's structural-zero rule, using
     the corner_parameters half of the real cowling fixture (panel_thickness=0)."""
     corner_p = _load('ref_cowling_bolt.params.json', 'corner_parameters')
@@ -427,18 +427,18 @@ def test_corner_annotations_seat_note_is_unconditional_and_pocket_is_not(
     joint 3's clearance) was declared nowhere on the corner's sheet -- a nonzero value would
     be demanded-and-silent. The fix added an unconditional 'seat' note (present whether or
     not a panel is fitted, since the joint it states exists on every corner) carrying the new
-    'corner_clearance' Quantity, bringing the note count from 3 to 4 unpanelled and 4 to 5
-    panelled, per the item's own measured counts."""
+    'corner_clearance' Quantity, bringing the note count from 3 to 4 unpaneled and 4 to 5
+    paneled, per the item's own measured counts."""
     quantities, _dims, notes, _construction, _views = sa.corner_annotations(corner_params)
     keys = [key for key, _anchor, _lines in notes]
     assert 'seat' in keys
     assert 'corner_clearance' in _by_name(quantities)
     seat_lines = next(lines for key, _a, lines in notes if key == 'seat')
     assert any('BULKHEAD SEAT' in line for line in seat_lines)
-    assert len(keys) == 5   # bore, socket, mold, seat, pocket -- this fixture is panelled
+    assert len(keys) == 5   # bore, socket, mold, seat, pocket -- this fixture is paneled
 
-    unpanelled_p = _load('ref_cowling_bolt.params.json', 'corner_parameters')
-    _q, _d, notes_u, _c, _v = sa.corner_annotations(unpanelled_p)
+    unpaneled_p = _load('ref_cowling_bolt.params.json', 'corner_parameters')
+    _q, _d, notes_u, _c, _v = sa.corner_annotations(unpaneled_p)
     keys_u = [key for key, _a, _l in notes_u]
     assert 'seat' in keys_u
     assert 'pocket' not in keys_u
@@ -448,7 +448,7 @@ def test_corner_annotations_seat_note_is_unconditional_and_pocket_is_not(
 def test_corner_construction_marks_the_bore_and_the_one_real_diagonal(corner_params):
     construction = sa.corner_construction(
         corner_params, radius=10.0, bore=2.05, seat=5.1375, thickness=4.7625,
-        extension=7.2625, panelled=True)
+        extension=7.2625, paneled=True)
     marks = [c for c in construction if c[0] == sa.CENTER_MARK]
     lines = [c for c in construction if c[0] == sa.CENTER_LINE]
     assert marks == [(sa.CENTER_MARK, (0.0, 0.0), 2.05)]
@@ -460,13 +460,13 @@ def test_corner_construction_marks_the_bore_and_the_one_real_diagonal(corner_par
     assert p2 == pytest.approx((10.0 * root_half, 10.0 * root_half))
 
 
-def test_corner_construction_draws_panels_only_when_panelled(corner_params):
-    panelled = sa.corner_construction(corner_params, 10.0, 2.05, 5.1375, 4.7625, 7.2625, True)
-    unpanelled = sa.corner_construction(corner_params, 10.0, 2.05, 5.1375, 0.0, 7.2625, False)
-    assert any(c[0] == sa.REFERENCE for c in panelled)
-    assert not any(c[0] == sa.REFERENCE for c in unpanelled)
+def test_corner_construction_draws_panels_only_when_paneled(corner_params):
+    paneled = sa.corner_construction(corner_params, 10.0, 2.05, 5.1375, 4.7625, 7.2625, True)
+    unpaneled = sa.corner_construction(corner_params, 10.0, 2.05, 5.1375, 0.0, 7.2625, False)
+    assert any(c[0] == sa.REFERENCE for c in paneled)
+    assert not any(c[0] == sa.REFERENCE for c in unpaneled)
     # Two panel rectangles (the y = x mirror pair), per the docstring.
-    assert sum(1 for c in panelled if c[0] == sa.REFERENCE) == 2
+    assert sum(1 for c in paneled if c[0] == sa.REFERENCE) == 2
 
 
 # ------------------------------------------------------------
@@ -576,14 +576,14 @@ def test_detail_radius_is_the_farthest_feature_plus_a_quarter_margin():
 
 
 def test_bulkhead_views_detail_carries_bolt_and_post_only_when_present():
-    with_both = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, panelled=True,
+    with_both = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, paneled=True,
                                   has_greeble=True, has_bolt=True)
     detail = next(v for v in with_both if v.name == 'DETAIL A')
     assert 'bolt_offset' in detail.dimensions
     assert 'bolt' in detail.notes
     assert 'post' in detail.notes
 
-    neither = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, panelled=False,
+    neither = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, paneled=False,
                                 has_greeble=False, has_bolt=False)
     detail2 = next(v for v in neither if v.name == 'DETAIL A')
     assert 'bolt_offset' not in detail2.dimensions
@@ -592,11 +592,11 @@ def test_bulkhead_views_detail_carries_bolt_and_post_only_when_present():
     assert 'panel_pocket' not in detail2.dimensions
 
 
-def test_bulkhead_views_plan_carries_panel_span_only_when_panelled():
-    panelled = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, panelled=True)
-    unpanelled = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, panelled=False)
-    plan_p = next(v for v in panelled if v.name == 'PLAN')
-    plan_u = next(v for v in unpanelled if v.name == 'PLAN')
+def test_bulkhead_views_plan_carries_panel_span_only_when_paneled():
+    paneled = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, paneled=True)
+    unpaneled = sa.bulkhead_views({}, 50.0, 40.0, 32.0, 5.0, 4.45, paneled=False)
+    plan_p = next(v for v in paneled if v.name == 'PLAN')
+    plan_u = next(v for v in unpaneled if v.name == 'PLAN')
     assert 'panel_span' in plan_p.dimensions
     assert 'panel_span' not in plan_u.dimensions
     assert 'enclosed_span' in plan_p.dimensions and 'enclosed_span' in plan_u.dimensions
@@ -605,7 +605,7 @@ def test_bulkhead_views_plan_carries_panel_span_only_when_panelled():
 def test_bulkhead_construction_marks_all_four_longeron_axes(bulkhead_params):
     construction = sa.bulkhead_construction(
         bulkhead_params, half=50.0, axis=40.0, bolt_axis=32.0, bore=2.05, boss_radius=5.0,
-        seat=45.1375, thickness=4.7625, panelled=True, has_bolt=True)
+        seat=45.1375, thickness=4.7625, paneled=True, has_bolt=True)
     marks = [c for c in construction if c[0] == sa.CENTER_MARK]
     # Four longeron bores plus four bolt bosses.
     assert len(marks) == 8
@@ -620,7 +620,7 @@ def test_bulkhead_construction_marks_all_four_longeron_axes(bulkhead_params):
 def test_bulkhead_construction_omits_bolt_marks_when_has_bolt_is_false(bulkhead_params):
     construction = sa.bulkhead_construction(
         bulkhead_params, half=50.0, axis=40.0, bolt_axis=32.0, bore=2.05, boss_radius=5.0,
-        seat=45.1375, thickness=4.7625, panelled=True, has_bolt=False)
+        seat=45.1375, thickness=4.7625, paneled=True, has_bolt=False)
     marks = [c for c in construction if c[0] == sa.CENTER_MARK]
     assert len(marks) == 4   # longeron bores only
 
@@ -628,18 +628,18 @@ def test_bulkhead_construction_omits_bolt_marks_when_has_bolt_is_false(bulkhead_
 def test_bulkhead_construction_draws_four_diagonals_and_axes(bulkhead_params):
     construction = sa.bulkhead_construction(
         bulkhead_params, half=50.0, axis=40.0, bolt_axis=32.0, bore=2.05, boss_radius=5.0,
-        seat=45.1375, thickness=4.7625, panelled=True, has_bolt=True)
+        seat=45.1375, thickness=4.7625, paneled=True, has_bolt=True)
     lines = [c for c in construction if c[0] == sa.CENTER_LINE]
     assert len(lines) == 4   # x-axis, y-axis, and both diagonals
 
 
-def test_bulkhead_construction_draws_four_panels_when_panelled(bulkhead_params):
-    panelled = sa.bulkhead_construction(
+def test_bulkhead_construction_draws_four_panels_when_paneled(bulkhead_params):
+    paneled = sa.bulkhead_construction(
         bulkhead_params, 50.0, 40.0, 32.0, 2.05, 5.0, 45.1375, 4.7625, True, True)
-    unpanelled = sa.bulkhead_construction(
+    unpaneled = sa.bulkhead_construction(
         bulkhead_params, 50.0, 40.0, 32.0, 2.05, 5.0, 45.1375, 0.0, False, True)
-    assert sum(1 for c in panelled if c[0] == sa.REFERENCE) == 4
-    assert sum(1 for c in unpanelled if c[0] == sa.REFERENCE) == 0
+    assert sum(1 for c in paneled if c[0] == sa.REFERENCE) == 4
+    assert sum(1 for c in unpaneled if c[0] == sa.REFERENCE) == 0
 
 
 def test_bulkhead_construction_places_the_corner_reference_at_all_four_axes(bulkhead_params):
@@ -726,7 +726,7 @@ def test_boom_bulkhead_construction_draws_only_the_one_real_mirror(boom_bulkhead
     assert lines[0][2] == (0.0, boom_bulkhead_params['unit_width'] / 2.0)
 
 
-def test_boom_bulkhead_annotations_drops_panel_quantities_when_unpanelled(dual_boom_params):
+def test_boom_bulkhead_annotations_drops_panel_quantities_when_unpaneled(dual_boom_params):
     params = dict(dual_boom_params)
     params['panel_thickness'] = 0.0
     params['panel_tolerance'] = 0.0

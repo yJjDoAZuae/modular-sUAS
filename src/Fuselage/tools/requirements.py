@@ -234,7 +234,7 @@ DESIGN = {
         'shallower than overhang_angle_from_bed measured from the bed',
         cites=('AR-PRT-3',),
         rationale='The half of printability that can be settled by measurement rather than by '
-                  'judgement. `overhang_angle_from_bed` is 35 degrees FROM THE BED, one value '
+                  'judgment. `overhang_angle_from_bed` is 35 degrees FROM THE BED, one value '
                   'for the project since OQ-DES-CW11, and the constants file carries its '
                   'reason. It already governs the nose plate pocket and every cowl buttress. '
                   '**Nothing evaluates it across the parts yet** -- see IP-FC-95 -- but unlike '

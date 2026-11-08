@@ -88,7 +88,7 @@ from render_variant import settings
 #
 # **`panel.is_metric` is deliberately not here, and it is the reason this list is declared
 # rather than taken as "every boolean".** It is a boolean, and the mechanical rule would put
-# it in -- doubling every panelled family for no difference in the part. It reaches only
+# it in -- doubling every paneled family for no difference in the part. It reaches only
 # `generate_*_filename_from_params`; it never reaches geometry. `check_topology_fields`
 # asserts that separation rather than trusting this comment.
 #
@@ -127,8 +127,8 @@ def _corner_seating_flat(flat, mapped):
     to 179, losing four flats of 3.15 mm2 each.
 
     **This is a feature, so section 5.1 puts it in the partition.** Before it was added, three
-    of the thirteen families held both kinds of part -- 24 of the panelled corner's 216, 8 of
-    the panelled end bulkhead's 72, and 4 of the panelled interconnect's 36 -- so their sheets
+    of the thirteen families held both kinds of part -- 24 of the paneled corner's 216, 8 of
+    the paneled end bulkhead's 72, and 4 of the paneled interconnect's 36 -- so their sheets
     showed an outline a twelfth of their own variants do not have. Splitting them takes the
     drawing set from 13 family sheets to 16.
 
@@ -264,7 +264,7 @@ DIMENSION_SCHEME = os.path.join(
 # at all -- `bolt_offset` is not a feature that type has -- so an unrestricted `bulkhead`
 # carrier obliged its sheet to state a hole and boss the part does not have.
 #
-# IP-FC-110: row 5 reads *panelled bulkhead* for the same reason, decided generally in
+# IP-FC-110: row 5 reads *paneled bulkhead* for the same reason, decided generally in
 # OQ-DES-D12 on 2026-09-06 -- a bulkhead with no panel was still being asked for `panel_offset`,
 # since that name stays nonzero whether or not the part has a panel to offset.
 #
@@ -277,7 +277,7 @@ CARRIED_BY = {
     'nose closure': ('nose', 'tail'),
     'cowling bulkhead': ('bulkhead',),
     'bolted bulkhead': ('bulkhead',),
-    'panelled bulkhead': ('bulkhead', 'boom_bulkhead'),
+    'paneled bulkhead': ('bulkhead', 'boom_bulkhead'),
     'seated bulkhead': ('bulkhead', 'boom_bulkhead'),
 }
 
@@ -293,7 +293,7 @@ CARRIED_BY = {
 # "has this joint"). A part absent from this dict is carried by every family of the kinds
 # `CARRIED_BY` names for it, which is the ordinary case.
 #
-# IP-FC-110: `panelled bulkhead` replaces testing each of row 5's names for being zero, which
+# IP-FC-110: `paneled bulkhead` replaces testing each of row 5's names for being zero, which
 # is the proxy that failed -- `panel_offset` keeps an ordinary nonzero value on a bulkhead with
 # no panel (`bulkhead-end_anchor_end_bolt-257941`, `bulkhead-interconnect-b591ef`), so the
 # per-value test left it demanded of a joint the part does not have. Reading the family's own
@@ -307,7 +307,7 @@ CARRIED_BY = {
 # since it has a real bolt hole and boss, just none of the fillets or web that reach one on the
 # end type.
 CARRIED_BY_FEATURE = {
-    'panelled bulkhead': ('panel.thickness != 0', (True,)),
+    'paneled bulkhead': ('panel.thickness != 0', (True,)),
     'cowling bulkhead': ('bulkhead.type', ('COWLING',)),
     'bolted bulkhead': ('bulkhead.type', ('END', 'COWLING')),
     # OQ-DES-D10: row 3's corner-seating-flat joint, referred to via the same
@@ -779,7 +779,7 @@ def sheet_blocks(tables):
     it is read on.
 
     **Blocks print abreast, so a sheet is as deep as its deepest block** -- OQ-DES-D5, and it
-    halves what the panelled families cost. Two blocks led by different axes have nothing to do
+    halves what the paneled families cost. Two blocks led by different axes have nothing to do
     with each other, so stacking them adds their row counts for no reason but habit.
 
     Returns a list of (leading axis, tables, printed rows).
@@ -945,7 +945,7 @@ def families():
                            for axis, group, rows in sheet_blocks(tables)],
                 # **The deepest block, not the sum of them**, since OQ-DES-D5 decided the
                 # blocks print side by side. Summing was right while they were stacked in one
-                # column, and it is what made the panelled families cost 19 rows; abreast they
+                # column, and it is what made the paneled families cost 19 rows; abreast they
                 # cost 10, and the two numbers differ by a layout choice rather than by
                 # anything about the part.
                 'sheet_rows': max([r for _a, _g, r in sheet_blocks(tables)] or [0]),

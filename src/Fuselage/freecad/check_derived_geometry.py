@@ -90,14 +90,14 @@ def corner_faces(p):
     panel_branch = (overlap + offset) - seat_y
     seat_span = max(bore_branch, panel_branch) - panel_branch
 
-    panelled = (thickness + fit) > 0
+    paneled = (thickness + fit) > 0
 
     return [
         Face('mold line', 'Y', radius, (offset - fit) * length, True,
              'DES-3: the corner meets the panel at the mold line and stops there'),
-        Face('panel seat', 'Y', seat_y, (overlap + fit) * length, panelled,
+        Face('panel seat', 'Y', seat_y, (overlap + fit) * length, paneled,
              'DES-3: the seat is set back by the panel and its fit, so the panel lands flush'),
-        Face('panel end stop', 'X', stop_x, (thickness + fit) * length, panelled,
+        Face('panel end stop', 'X', stop_x, (thickness + fit) * length, paneled,
              'DES-5: the panel bottoms out on clearance, not on the stop'),
         Face('bulkhead seating flat', 'X', -(overlap + offset) + p['corner_tolerance'],
              seat_span * length, seat_span > 0,

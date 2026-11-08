@@ -322,7 +322,7 @@ def build_sheet(doc, params, seed=None, extra=()):
         # Measured 2026-09-06: without it `cowl_nose_tip.emit(doc)` and
         # `cowl_nose_plate.emit(doc)` raise `TypeError: set() argument 2 must be str, not
         # float`, while `cowl_nose_cowl` and `cowl_tail` build -- four sibling modules
-        # presenting one interface, two of which could not honour it unseeded. It went
+        # presenting one interface, two of which could not honor it unseeded. It went
         # unnoticed because `cowl.main()`, the reference check for those two, calls the
         # builder directly and never makes a sheet.
         #

@@ -109,6 +109,34 @@ RENAMES = {
         'test_the_station_itself_does_not_count_as_its_own_neighbor',
     'test_thin_stations_keeps_the_last_station_displacing_its_neighbour':
         'test_thin_stations_keeps_the_last_station_displacing_its_neighbor',
+    # The `panelled` family, added 2026-11-07 with the dictionary entries that found it. This
+    # is the first British spelling in this project to have reached *code* rather than only
+    # prose: `is_panelled` was a module-level predicate in `check_drawing.py`, and
+    # `unpanelled` a local in four modules and eleven places in one test file. It survived
+    # every earlier pass because no pass had the word.
+    #
+    # None of these is an external API: the predicate is defined and called in
+    # `check_drawing.py` alone, and the rest are locals and test names, checked before the
+    # list was written for the reason the note above gives.
+    'is_panelled': 'is_paneled',
+    'unpanelled': 'unpaneled',
+    'unpanelled_p': 'unpaneled_p',
+    'test_boom_bulkhead_annotations_drops_panel_quantities_when_unpanelled':
+        'test_boom_bulkhead_annotations_drops_panel_quantities_when_unpaneled',
+    'test_bulkhead_construction_draws_four_panels_when_panelled':
+        'test_bulkhead_construction_draws_four_panels_when_paneled',
+    'test_bulkhead_views_plan_carries_panel_span_only_when_panelled':
+        'test_bulkhead_views_plan_carries_panel_span_only_when_paneled',
+    'test_corner_annotations_drops_panel_quantities_when_unpanelled':
+        'test_corner_annotations_drops_panel_quantities_when_unpaneled',
+    'test_corner_construction_draws_panels_only_when_panelled':
+        'test_corner_construction_draws_panels_only_when_paneled',
+    'test_check_families_counts_cowl_sets_separately_from_panelled_families':
+        'test_check_families_counts_cowl_sets_separately_from_paneled_families',
+    'test_scaling_family_of_a_metric_panelled_part':
+        'test_scaling_family_of_a_metric_paneled_part',
+    'test_scaling_family_of_a_panelled_part_is_u_plus_unit_plus_panel':
+        'test_scaling_family_of_a_paneled_part_is_u_plus_unit_plus_panel',
 }
 
 BRITISH = doc_check.BRITISH

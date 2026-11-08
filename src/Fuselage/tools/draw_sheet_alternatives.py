@@ -16,7 +16,7 @@ packing result rather than an area subtraction.
     freecadcmd check_table_width.py --pass families.json sheets.json
     python draw_sheet_alternatives.py sheets.json out.html
 
-The running example is the **panelled corner**, which is both the family OQ-DES-D1 was decided
+The running example is the **paneled corner**, which is both the family OQ-DES-D1 was decided
 on and the largest table of the thirteen.
 
 **Unit regime: millimeters**, which is what a page is measured in.

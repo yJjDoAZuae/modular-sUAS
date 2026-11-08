@@ -116,13 +116,15 @@ class TestCowlInteriorHelpers:
                             math.radians(35.0))
         assert caught.value.message
 
-    def test_polyline_closest_agrees_with_distances(self, ci):
-        square = [(0.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)]
-        probes = [(2.0, 1.0), (-1.5, 1.5), (4.0, 3.0), (2.0, 7.0)]
-        line = ci._Polyline(square)
-        want = min(line.distances(probes))
-        got = line.closest(probes)
-        assert got[0] == pytest.approx(want, abs=1e-12)
+    # `test_polyline_closest_agrees_with_distances` was removed 2026-11-07 with IP-FC-155.
+    # `_Polyline.closest` returned the nearest probe along with its distance, and its only
+    # caller was Metric A's `_min_wire_distance`. Metric A was retired -- it measured a
+    # clearance that is identically zero wherever it can be evaluated, 160 of 160 stations --
+    # and the method went with it. `distances` remains and is covered by the wall-thickness
+    # tests, which are what actually use it.
+    #
+    # Removed rather than rewritten against `distances` alone: that would have asserted that
+    # `min(distances(...))` equals `min(distances(...))`.
 
     def test_thin_stations_removes_a_crowded_pair_and_keeps_both_ends(self, ci):
         floor = ci.station_floor(0.0006)

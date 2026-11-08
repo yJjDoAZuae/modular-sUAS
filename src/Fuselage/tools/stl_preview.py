@@ -35,15 +35,15 @@ from pathlib import Path
 import numpy as np
 
 # The part is chromatic and the background is not, so the two separate by hue as
-# well as by value. A grey part on a grey ground has only value to work with, and
+# well as by value. A gray part on a gray ground has only value to work with, and
 # the shading range runs straight through the background tone: any face turned
-# away from the light lands on roughly the background's grey and its silhouette
+# away from the light lands on roughly the background's gray and its silhouette
 # stops reading there.
 BACKGROUND = (0x26, 0x28, 0x2C)     # neutral dark; no hue to compete with the part
 FACE_FRONT = (0xA6, 0xC6, 0xE6)     # light blue
 
 # Back faces mark a defect (see `render`), so this must stay unmistakable against
-# FACE_FRONT. It used to be blue, which was fine against a grey part and useless
+# FACE_FRONT. It used to be blue, which was fine against a gray part and useless
 # against a blue one. Red-orange is the widest hue separation available here, and
 # reads as a fault besides.
 FACE_BACK = (0xD2, 0x4B, 0x38)

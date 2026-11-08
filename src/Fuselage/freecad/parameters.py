@@ -27,6 +27,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import units
+
 from corner_common import is_entry_point, script_args
 
 # The tables the export can carry, by the key each occupies in the JSON.
@@ -82,9 +84,54 @@ EXPECTED_TO_DIFFER = {
 }
 
 
+#: The unit token every reader in this tier expects a generated parameter document to declare.
+#:
+#: **This is one constant and not a per-caller argument on purpose.** Every reader of these
+#: documents wants the same thing -- the unit the tier it feeds is written in -- so a reader
+#: choosing its own expectation is a way for two of them to disagree about one file. When
+#: IP-FC-159 moves `derived_parameters()` to meters, this line and the two writers change
+#: together, and anything still holding a millimeter document is refused by name.
+EXPECT_UNITS = units.PARAM_UNITS_MM
+
+
+def require_units(doc, path='the parameter file', expect=None):
+    """Refuse a parameter document that does not declare the unit this reader expects.
+
+    **The field existed for a long time and nothing read it**, so a millimeter document and a
+    meter one were the same document as far as every consumer was concerned. That is the one
+    failure mode a unit change to a generated file has: not an error, but a part built to the
+    wrong size from a stale file left in a scratch tree.
+
+    Written to stderr and flushed before the exit, for the reason `table_of` gives: freecadcmd
+    discards the message a `SystemExit` carries, so a refusal raised the obvious way produces
+    no output at all.
+    """
+    expect = EXPECT_UNITS if expect is None else expect
+    declared = doc.get('units')
+    token = units.param_units_token(declared)
+    if token == expect:
+        return token
+    if token is None:
+        why = ('declares %r, which this reader does not recognize'
+               % (declared,)) if declared is not None else 'declares no `units` at all'
+        hint = ('Re-export it with tools/export_parameters.py. A document with no `units` '
+                'predates the field being checked; one with an unknown `units` was written by '
+                'a newer tool than this reader.')
+    else:
+        why = 'declares its lengths in %r' % token
+        hint = ('This tier reads %r. Re-export the parameter file rather than converting it '
+                'by hand -- the conversion belongs at the one boundary that owns it.'
+                % expect)
+    sys.stderr.write('parameters: %s %s, and this reader requires %r.\n%s\n'
+                     % (path, why, expect, hint))
+    sys.stderr.flush()
+    raise SystemExit(1)
+
+
 def load(path):
     with open(path) as f:
         doc = json.load(f)
+    require_units(doc, path)
     if not doc.get('valid'):
         raise RuntimeError('%s is a combination the sweep would not generate' % path)
     return doc

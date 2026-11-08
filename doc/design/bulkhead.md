@@ -613,7 +613,7 @@ RESOLVED 2026-08-06.** It was threaded positionally through `bulkhead_section_fu
 reached `corner_end()`. The value the sweep passed (`GREEBLE_TOLERANCE_BULKHEAD_MM`,
 itself zero) had no effect, and setting it non-zero would have done nothing at all.
 
-**Chosen: drop the parameter** (IP-GEO-21), rather than honour the caller's value.
+**Chosen: drop the parameter** (IP-GEO-21), rather than honor the caller's value.
 
 The deciding argument is that *the post is nominal* is an **invariant, not a setting**.
 All greeble fit clearance lives on the corner's bore by design, because splitting it
@@ -622,7 +622,7 @@ must ignore in order to stay correct is advertising control it cannot offer — 
 person most likely to reach for it is someone whose parts do not snap together, who
 would change the number, see no difference, and conclude the geometry is at fault.
 
-Honouring the caller instead would have been behavior-identical today, since every
+Honoring the caller instead would have been behavior-identical today, since every
 caller passes zero. It was rejected because it re-opens the double-clearance failure
 mode the design deliberately closed, in exchange for a knob nobody should turn.
 
@@ -934,7 +934,7 @@ so nobody could tune it deliberately.
 2. **Fix the call and re-tune the constants** so the built geometry is unchanged — i.e.
    decide the current dimensions were right and express them deliberately.
    *Benefits:* keeps a flown geometry exactly while making it explicit and parametric.
-   *Drawbacks:* needs a judgement about which of the current dimensions were wanted.
+   *Drawbacks:* needs a judgment about which of the current dimensions were wanted.
    *Prerequisites:* none.
 
 3. **Port it faithfully, bug included**, and defer.
@@ -946,7 +946,7 @@ so nobody could tune it deliberately.
 **Recommendation: alternative 2 if the current web dimensions are wanted, otherwise 1.**
 Either way the call is fixed — alternative 3 preserves a defect precisely where it is
 hardest to find later. The real question is only whether the *current* dimensions should be
-kept, and that is a judgement about a flown part rather than about the code.
+kept, and that is a judgment about a flown part rather than about the code.
 
 **Porting in the meantime follows alternative 3**, so the port continues and matches the
 existing reference; switching later is a change to two constants.

@@ -1032,7 +1032,7 @@ stand-in wherever one was available:**
 
 **Two modules judged not to need a `check_*.py` at all, and why.** `preview.py` and
 `geometry_branches.py`'s own top-level purpose are not acceptance tests -- `preview.py` renders
-PNGs for a human to look at ("that judgement needs eyes on the part"), matching the already-
+PNGs for a human to look at ("that judgment needs eyes on the part"), matching the already-
 excluded `draw_*.py` evidence generators from IP-TEST-4; confirmed it still runs cleanly for
 real regardless. `mesh_to_brep.py` and `build_sheet.py` were audited and already fully correct
 (real exit codes, proper flush) with no fix needed; both confirmed running for real too --
@@ -1398,9 +1398,9 @@ Five rows were genuine gaps and were closed for real:
   confirms `panel_extension` and the dimension's far endpoint both move by exactly the probed
   delta, tracking `flat_x` rather than staying fixed.
 - **IP-FC-112** (`corner_annotations`'s unconditional `'seat'` note / `corner_clearance`
-  Quantity): the note-count claim (3->4 unpanelled, 4->5 panelled) was never pinned. Added
+  Quantity): the note-count claim (3->4 unpanelled, 4->5 paneled) was never pinned. Added
   `test_corner_annotations_seat_note_is_unconditional_and_pocket_is_not`, checked against both
-  the real panelled fixture (5 notes) and the real unpanelled cowling fixture (4 notes).
+  the real paneled fixture (5 notes) and the real unpanelled cowling fixture (4 notes).
 - **IP-FC-127** (`cowl_interior.z_extent`'s tessellation fallback): "latent rather than live"
   per the item's own words -- the fallback only fires when `Shape.BoundBox` is grossly loose
   relative to the real part (874% on the nose tip), and nothing committed builds the nose tip

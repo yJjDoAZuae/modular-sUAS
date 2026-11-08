@@ -137,7 +137,7 @@ STEP_IMPORT_SCALE = MODEL_UNIT_MM / _MM_PER_DECLARED_FOOT   # 3.28084
 def _set_cad_len_unit(vsp, unit):
     """Set the CAD export length unit, if the parm exists.
 
-    Retained because it is the parm one reaches for, and a future OpenVSP may honour it.
+    Retained because it is the parm one reaches for, and a future OpenVSP may honor it.
     **Known not to affect ExportFile(EXPORT_STEP) in 3.50.5** -- the output is
     byte-identical either way. The scale assertion after export is the real guard.
     """

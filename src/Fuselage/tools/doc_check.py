@@ -147,6 +147,40 @@ BRITISH = {
     'centimetre': 'centimeter', 'centimetres': 'centimeters',
     'centreline': 'centerline', 'centrelines': 'centerlines',
     'fibre': 'fiber', 'fibres': 'fibers',
+    # ------------------------------------------------------------------------------------
+    # Added 2026-11-07, and the reason they were missing is worth more than the words.
+    #
+    # **Every entry above this block was found by an earlier pass over this tree**, so the
+    # dictionary could only ever be as complete as those passes happened to be -- a set built
+    # from one source proves that it copied that source and nothing more. These came from the
+    # opposite direction: a list of the common British/American pairs for technical prose,
+    # written without reference to the dictionary or to the repository, then matched against
+    # the tree. Thirteen forms were present and unknown to the gate -- 109 words and 25
+    # identifier renames across 34 source files, plus 71 replacements across 8 doc pages --
+    # including `panelled`, which had reached code: a predicate in `check_drawing.py` and a
+    # local in four more modules. `source_spelling.py` and `doc_check.py` both reported clean
+    # the whole time, which is the point: a gate that only knows what it was taught cannot
+    # report its own gaps, so the list has to be challenged from outside periodically.
+    #
+    # Three near misses are deliberately NOT here, because the scan's own inflection guesses
+    # produced them and each would do damage: `axe` would rewrite `axes`, the plural of
+    # `axis`, which this project uses constantly for parameter axes; `programme` would reach
+    # into `programming`; and `towards` is ordinary American English, not a British spelling.
+    # A dictionary entry is a rename applied across the tree, so a wrong one is worse than a
+    # missing one.
+    # ------------------------------------------------------------------------------------
+    'judgement': 'judgment', 'judgements': 'judgments',
+    'acknowledgement': 'acknowledgment', 'acknowledgements': 'acknowledgments',
+    'panelled': 'paneled', 'panelling': 'paneling',
+    'totalling': 'totaling', 'totalled': 'totaled',
+    'grey': 'gray', 'greys': 'grays', 'greyscale': 'grayscale',
+    'honour': 'honor', 'honours': 'honors',
+    'honoured': 'honored', 'honouring': 'honoring',
+    'analogue': 'analog', 'analogues': 'analogs',
+    'defence': 'defense', 'defences': 'defenses',
+    'modeller': 'modeler', 'modellers': 'modelers',
+    'signalling': 'signaling', 'signalled': 'signaled',
+    'labeller': 'labeler', 'labellers': 'labelers',
 }
 
 #: Merged after the literal so a hand entry can override a generated one if a family ever needs

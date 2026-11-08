@@ -3752,7 +3752,7 @@ Three properties of this failure are measured and worth knowing when diagnosing 
   areas 14723.0 and 14723.1 mm², centers of mass agreeing to 0.0025 mm, 12 of 16 vertices
   bit-identical.
 - **It is bounded by slot cuts and nothing else.** Sampling its ten faces against the real cutter,
-  four faces totalling 225.46 mm² lie on buttress slot cuts and the remaining 14497.57 mm² is
+  four faces totaling 225.46 mm² lie on buttress slot cuts and the remaining 14497.57 mm² is
   exactly twice its own 7248.7 mm² wall surface. It is the wall region the slots already very
   nearly isolate.
 

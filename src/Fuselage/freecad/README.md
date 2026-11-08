@@ -225,7 +225,7 @@ freecadcmd preview.py            # corner, three views, plus the OpenSCAD refere
 ```
 
 Volume agreement says two solids enclose the same space; it does not say the shape is right.
-That judgement needs eyes on the part, and this is how to get them without a GUI.
+That judgment needs eyes on the part, and this is how to get them without a GUI.
 
 Output lands in `preview/` and is regenerable — delete it freely. `ref_corner.stl` beside
 this script is the OpenSCAD comparison mesh; it is a build artifact too, kept only so the

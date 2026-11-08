@@ -38,7 +38,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# `freecad/units.py` owns the unit vocabulary this document declares itself in, and imports
+# nothing from FreeCAD, so it reads under this interpreter as well as the port's. One
+# definition of the token, shared by the writer here and the reader in `freecad/parameters.py`.
+sys.path.insert(0, os.path.normpath(os.path.join(HERE, '..', 'freecad')))
 os.chdir(HERE)                         # the CSV axes resolve relative to this directory
+
+import units
 
 import fuselage_variants as fv
 
@@ -221,7 +227,13 @@ def main(argv):
         'variant': {'U': p['U'], 'bulkhead_type_name': p['bulkhead_type_name'],
                     'panel_name': p['panel_name']},
         'valid': bool(valid),
-        'units': 'mm and degrees, as the OpenSCAD path uses them',
+        # **A token, not prose, because a reader refuses on it (IP-FC-159).** It was a sentence
+        # for a human and nothing read it, which made a millimeter document and a meter one the
+        # same document to every consumer. `freecad/parameters.require_units` now refuses one it
+        # does not expect; `units.param_units_token` still accepts the old sentence as `mm`, so
+        # a document already on disk keeps its meaning.
+        'units': units.PARAM_UNITS_MM,
+        'angles': 'degrees',
         'source': 'derived_parameters() via export_parameters.py -- do not hand-edit',
     }
 

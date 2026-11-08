@@ -432,7 +432,7 @@ the profile algebra above exactly.
 
 ![The ramp at the end of Top2Safe, square on the mirror plane](img/cowl_rib_cut/cw24_ramp_detail.png)
 
-*`Top2Safe`'s slot (blue) in the real blank (grey), square on the `y` = 0 mirror plane at the
+*`Top2Safe`'s slot (blue) in the real blank (gray), square on the `y` = 0 mirror plane at the
 $\zeta$ = -294 end. $r$ runs across, $\zeta$ up; white is outside the part, and the vertical edge
 at the left is the part's own outer surface.*
 
@@ -1725,7 +1725,7 @@ surface. The outer surface arrives as a NURBS solid (the tail's is nine faces of
 points along the body). The slots are 0.1 mm wide and do not scale with the aircraft — they
 are fold lines for vase-mode printing, not gaps, and two of the tail's eleven slots cross each
 other inside the solid at ±30°. Cutting a 0.1 mm slot across another 0.1 mm slot in a curved
-NURBS body is the hardest case a solid modeller meets, because the two sides of a slot are
+NURBS body is the hardest case a solid modeler meets, because the two sides of a slot are
 0.1 mm apart while the curves bounding them are computed by approximation.
 
 A FreeCAD document is made of *document objects* — a `Part::Cut`, a `PartDesign::Pocket` — and
@@ -1806,7 +1806,7 @@ tools into a cutter, and both cowls intersect the blank with masks. Both come ou
 
 * **Fuse.** `PartDesign::Boolean` of type `Fuse` returns a *compound* rather than a union, at
   every fuzzy value tried (−1, 0, 1e-09, 1e-08, 1e-07, 1e-06). Fusing `Top1` with `Diag11`,
-  which overlap by about 1.1 mm³, returned two solids totalling 2015.7495 — exactly the sum of
+  which overlap by about 1.1 mm³, returned two solids totaling 2015.7495 — exactly the sum of
   the two inputs, with none of the overlap removed. Over the six overlapping tools it gives
   6065.3155 where the correct union is 6061.7611.
 * **Common.** The nose's first mask intersection — a box against the NURBS blank — comes back
@@ -3595,6 +3595,55 @@ distinguish them and none is offered.
    where stations are affordable they are already measured not to help.
    *Prerequisites:* one run of `tau_study.py` on a tail with a raised budget, which is hours and
    may not terminate; bound it before starting it.
+
+**Measured 2026-11-07: the nose's deficit is the fit's own error, almost one for one, across the
+whole swept range — and that is not what the tail does.**
+
+The nose shell was built and measured at all eight swept sizes, 24 stations each, 192 stations in
+all, 21 minutes for the batch. Until now this check had only ever run at `U` = 1: it had no size
+argument, and one was added (`check_cowl_interior.py --u=`) because neither this question nor
+IP-FC-143 is about `U` = 1. Both figures below are in-plane and read at the same station set.
+
+| `U` | fit's own worst wall error | finished wall deficit, selected measure | deficit / fit error | wall mm³ |
+| --- | --- | --- | --- | --- |
+| 0.5 | 0.0019 | 0.0011 (0.1× `WALL_TOL`) | 0.58 | 2 406.52 |
+| 0.75 | 0.0032 | 0.0025 (0.2×) | 0.78 | 5 446.63 |
+| 1.0 | 0.0037 | 0.0031 (0.3×) | 0.84 | 9 722.45 |
+| 1.5 | 0.0051 | 0.0038 (0.4×) | 0.75 | 21 924.36 |
+| 2.0 | 0.0067 | 0.0050 (0.5×) | 0.75 | 39 000.28 |
+| 2.5 | 0.0086 | 0.0065 (0.7×) | 0.76 | 60 943.23 |
+| 3.0 | 0.0100 | 0.0083 (0.8×) | 0.83 | 87 717.60 |
+| 4.0 | 0.0153 | 0.0140 (1.4×) | 0.92 | 155 600.57 |
+
+Three things in it are new.
+
+**The deficit is monotone in `U` and crosses `WALL_TOL` between 3.0 and 4.0.** It was two isolated
+points before — the nose at `U` = 4 and the tail at `U` = 0.5 — and a trend cannot be read from
+two points at different kinds. Every size between is now measured, and the nose is compliant at
+six of eight and non-compliant at `U` = 4 only, by the selected measure.
+
+**The deficit is 0.58 to 0.92 of the error the fit itself reports, at every one of the eight
+sizes.** That ratio does not drift and does not depend on `U`. On a nose, the finished wall is
+essentially as thin as the fit was allowed to be and no thinner, so the mechanism downstream of
+the fit — the erosion, the rib cut, the mirror — adds little or nothing to the deficit.
+
+**That is the opposite of what IP-WTM-44 found on a tail**, and the disagreement is the useful
+part. There, pass 1 converges to 0.0073 mm against the un-notched OML while the finished wall
+stays at 0.0481 mm referenced to the notched one, which is why the recommendation above concludes
+the tail's residual "lives in that difference and not in the fit". On the nose the residual *is*
+the fit. **The two kinds have different dominant mechanisms**, which is the first mechanical
+explanation for something this question already recorded as a bare fact: that tightening `TAU`
+takes the nose at `U` = 4 from 0.01403 to 0.00378 mm while doing nothing measurable on a tail.
+Alternatives 1 and 5 are therefore not competing accounts of one defect; each may be the right
+answer for one kind.
+
+**What this does not establish.** The magnitudes are in-plane and so understate the real deficit,
+by a measured 2.9–7.0× on the fitted surface — see OQ-DES-CW33, which is open and blocks any claim
+that an in-plane pass means a wall meets `WALL_TOL`. The ratio and the trend are between two
+in-plane figures read at one station set, so they are self-consistent and are what this evidence
+is for; the absolute column is not a compliance verdict. Nor is the nose's ratio shown to hold on
+a tail — the tail is 20 to 80 minutes a build against the nose's 75 to 376 seconds, and that batch
+has not been run.
 
 **Recommendation**
 

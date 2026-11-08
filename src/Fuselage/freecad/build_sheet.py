@@ -52,6 +52,7 @@ import FreeCAD as App
 import check_drawing
 import dimension_placement as dp
 import drawing
+import parameters
 import sheet_annotations
 import sheet_naming
 from corner_common import is_entry_point, script_args
@@ -125,6 +126,10 @@ def main():
 
     with open(params_path, encoding='utf-8') as handle:
         exported = json.load(handle)
+    # Read straight out of the document rather than through `parameters.load`, so the unit it
+    # declares is checked here or nowhere (IP-FC-159). A sheet drawn from a document in the
+    # wrong unit carries a dimension table that is wrong by a factor of 1000 and looks right.
+    parameters.require_units(exported, params_path)
     params = exported[check_drawing.PARAMS_KEY[kind]]
 
     family = None

@@ -11,7 +11,7 @@ red the instant something new appears.
 names the commit that caused it and why that commit was right. A part not in the ledger is a
 failure by default, which is the whole point -- silence is not acceptance.
 
-**What it does not do** is decide whether the accumulated total is acceptable. That judgement
+**What it does not do** is decide whether the accumulated total is acceptable. That judgment
 belongs to the review at the `PartDesign::` end state, where OQ-ARCH-15 places a person
 signing off on the whole accumulated difference before the baseline is retired.
 

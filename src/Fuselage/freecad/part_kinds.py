@@ -69,7 +69,7 @@ KINDS = {
 # interconnect's title and beside a table of the interconnect's own values.
 #
 # `fuselage_variants.bulkhead_render` already routes an unbuilt type to OpenSCAD rather than to
-# a builder that would ignore the distinction. This is that judgement applied to the drawing.
+# a builder that would ignore the distinction. This is that judgment applied to the drawing.
 #
 # IP-FC-132: `cowling_anchor` and `cowling_bolt` added once `bulkhead_section.emit()` grew an
 # `is_cowling` branch, and `interconnect` added once `bulkhead_full.emit()` grew an

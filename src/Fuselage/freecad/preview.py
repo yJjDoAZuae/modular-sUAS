@@ -1,7 +1,7 @@
 """Render a generated FreeCAD part to PNGs for visual inspection.
 
 Volume agreement says two solids enclose the same amount of space. It does not say they are
-the same shape, and it certainly does not say the shape is *right* -- that judgement needs
+the same shape, and it certainly does not say the shape is *right* -- that judgment needs
 eyes on the part. This exports a generated shape to a mesh and renders it through
 [`stl_preview`](../tools/stl_preview.py), the software rasterizer the OpenSCAD sweep already
 uses, so FreeCAD output and OpenSCAD output are drawn by the same renderer with the same

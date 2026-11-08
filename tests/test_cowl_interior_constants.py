@@ -48,7 +48,7 @@ SOURCE = os.path.join(_HERE, '..', 'src', 'Fuselage', 'freecad', 'cowl_interior.
 #: length's job and a unit vector's at once and the conversion had to separate them.
 #:
 #: **One row left on 2026-11-06** -- `_outward_normal(step_m=OUTWARD_STEP_M)` -- when IP-FC-155
-#: retired Metric A (OQ-DES-CW25 alternative 3) and removed the face-role labeller that was
+#: retired Metric A (OQ-DES-CW25 alternative 3) and removed the face-role labeler that was
 #: `_outward_normal`'s only caller. A row leaving this set is the expected shape of a removal,
 #: not a loss of coverage: the set is a record of what a driver cannot sweep, and a function
 #: that no longer exists cannot be swept at all.

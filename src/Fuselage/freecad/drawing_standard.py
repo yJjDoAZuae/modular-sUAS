@@ -182,7 +182,7 @@ TABLE_COLUMN_GUTTER_MM = 1.0
 #
 # It was the view's 3.5 mm until 2026-08-27, and that was never a decision: nothing chose it,
 # the table simply inherited `TEXT_HEIGHT_MM` because there was one constant. The cost of the
-# inheritance was the whole of a reported blocker -- at 3.5 mm the panelled corner's table is
+# inheritance was the whole of a reported blocker -- at 3.5 mm the paneled corner's table is
 # 138.9 mm into a 108.5 mm band, and at 2.5 mm it is **104.0 mm, which fits** -- so a value
 # nobody had picked was about to buy a change to the shape of the drawing set.
 #
@@ -234,7 +234,7 @@ TEXT_HEIGHT_MM = 3.5
 UNITS_PER_EM = 2048
 
 # **A text height on a drawing is a cap height, not an em size, and the difference is 33%.**
-# ISO 3098 specifies `h` as the height of a capital, and TechDraw honours that: it scales the
+# ISO 3098 specifies `h` as the height of a capital, and TechDraw honors that: it scales the
 # font so the ascender comes out at the `TextSize` it is given. Measured in the rendered page,
 # 2026-09-07: text set to 2.5 mm draws at a 3.3 mm em and text set to 3.5 mm draws at 4.7 mm,
 # both of which are `h * UNITS_PER_EM / TYPO_ASCENDER_UNITS` to the rounding the SVG writes.
@@ -495,7 +495,7 @@ LINE_PHANTOM = 5
 
 #: Ink for construction geometry. Black, like everything else the sheet prints -- a
 #: construction line is distinguished by its *dash pattern*, which survives a photocopier and
-#: a monochrome plot, and not by being grey, which does not.
+#: a monochrome plot, and not by being gray, which does not.
 CONSTRUCTION_COLOR = (0.0, 0.0, 0.0, 1.0)
 
 #: How far a center mark's arms reach past the feature they mark, as a fraction of its radius.

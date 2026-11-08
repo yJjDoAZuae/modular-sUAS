@@ -27,7 +27,7 @@ control, that a comparison can run against with the 2.4 GB tree absent entirely,
 that cost the same single read pass to produce as a checksum would have.
 
 **What it cannot answer** is whether the accumulated difference is acceptable. That is a
-judgement, taken at review time against the ledger of accepted departures (IP-FC-80),
+judgment, taken at review time against the ledger of accepted departures (IP-FC-80),
 and OQ-ARCH-15 places it after the `PartDesign::` end state with a person signing it off.
 
 Usage, from the repository root:

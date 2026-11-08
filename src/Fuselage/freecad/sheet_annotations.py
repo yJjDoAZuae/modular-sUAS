@@ -237,7 +237,7 @@ def axis_line(direction, reach):
 #: falls back to its own text, which reads as unfinished -- which it is -- rather than
 #: silently dropping a branch the sheets differ by.
 TOPOLOGY_PHRASES = {
-    'panel.thickness != 0': ('PANELLED', 'NO PANEL'),
+    'panel.thickness != 0': ('PANELED', 'NO PANEL'),
     'corner seating flat': ('CORNER SEAT', 'NO CORNER SEAT'),
     'boom_bulkhead.make_vert_web': ('VERTICAL WEB', 'NO VERTICAL WEB'),
     'boom_bulkhead.make_lower_web': ('LOWER WEB', 'NO LOWER WEB'),
@@ -508,7 +508,7 @@ def corner_annotations(params, product=FAMILY):
     joint, not a dimension the sheet is missing, and the corner's two families differ by
     exactly that: one has a panel slot and one does not. `drawing_families` already drops
     those columns from the table as structural zeros. Until 2026-08-27 this function did not
-    drop them from the annotation set, so the unpanelled corner's sheet asked for a
+    drop them from the annotation set, so the unpaneled corner's sheet asked for a
     `panel_pocket` dimension of 0.00 -- and section 5.2's H5 refused it at every preferred
     scale, correctly, because a dimensioned zero asserts an inspectable coincident fit and
     there is nothing there to inspect. The sheet could not be drawn at all. **`panel_extension`
@@ -567,7 +567,7 @@ def corner_annotations(params, product=FAMILY):
     flat_x = -(params['panel_overlap'] + params['panel_offset']) + corner_fit
     extension = -flat_x
 
-    panelled = abs(thickness) > dp.ZERO_MM
+    paneled = abs(thickness) > dp.ZERO_MM
 
     declared = [
         Quantity('corner_radius', radius, ('corner_radius',)),
@@ -592,15 +592,15 @@ def corner_annotations(params, product=FAMILY):
         # to place it between. Unlike those two, `corner_tolerance` is not doubled: it is
         # already a single flat-to-flat gap (`flat_x`'s own `+ corner_tolerance` term), not a
         # radius standing in for a diametral one. Every corner built to date has
-        # `corner_tolerance = 0` (OQ-DES-C5), so `panelled`'s structural-zero filter drops this
-        # column today exactly as it drops `panel_pocket` on an unpanelled corner -- the point
+        # `corner_tolerance = 0` (OQ-DES-C5), so `paneled`'s structural-zero filter drops this
+        # column today exactly as it drops `panel_pocket` on an unpaneled corner -- the point
         # is that it stops being contingent on staying 0: before this, no quantity on either
         # sheet named `corner_tolerance` at all, so a nonzero value would have been
         # `unstated` and demanded-and-silent rather than shown, at either sheet's completeness
         # check. See doc/design/dimension_scheme.md's register, row 3.
         Quantity('corner_clearance', corner_fit, ('corner_tolerance',), constant=True),
     ]
-    if panelled:
+    if paneled:
         declared += [
             Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
             Quantity('panel_thickness', thickness, ('panel_thickness',)),
@@ -637,7 +637,7 @@ def corner_annotations(params, product=FAMILY):
     pocket_x = -(extension + params['panel_offset']) / 2.0
 
     dimensions = []
-    if panelled:
+    if paneled:
         # The pocket the panel seats in, which is the one interface on this part that *is* a
         # distance between two real parallel faces.
         dimensions.append(
@@ -669,7 +669,7 @@ def corner_annotations(params, product=FAMILY):
         # face `panel_extension` dimensions for joint 4, doing double duty (register row 3).
         # Unconditional, unlike 'pocket' below: this joint exists on every corner whether or
         # not a panel is fitted, since `corner_tolerance` is carried entirely on the corner
-        # (the bulkhead re-evaluates the same shape at 0) regardless of panelling. Anchored at
+        # (the bulkhead re-evaluates the same shape at 0) regardless of paneling. Anchored at
         # the same point `panel_extension`'s dimension terminates at, since that is the face
         # this states the clearance for. Declaring `corner_clearance` without a note that
         # prints it would satisfy section 3's completeness bookkeeping while stating nothing
@@ -678,7 +678,7 @@ def corner_annotations(params, product=FAMILY):
         ('seat', (-extension, seat, 0.0),
          ('BULKHEAD SEAT', '%s CLEARANCE' % w('corner_clearance'))),
     ]
-    if panelled:
+    if paneled:
         notes.append(
             ('pocket', (pocket_x, seat, 0.0),
              ('%s POCKET' % w('panel_pocket'),
@@ -686,7 +686,7 @@ def corner_annotations(params, product=FAMILY):
               '%s CLEARANCE' % w('panel_tolerance'))))
 
     construction = corner_construction(params, radius, bore, seat, thickness, extension,
-                                       panelled)
+                                       paneled)
     # **One view, because the corner is already a detail.** It is a section a few millimeters
     # across drawn at 5:1, and every quantity on it is about the same few millimeters -- there
     # is no pair of scales to separate. What crowds this sheet is the four multi-line notes,
@@ -697,7 +697,7 @@ def corner_annotations(params, product=FAMILY):
     return quantities, dimensions, notes, construction, views
 
 
-def corner_construction(params, radius, bore, seat, thickness, extension, panelled):
+def corner_construction(params, radius, bore, seat, thickness, extension, paneled):
     """The corner's center mark, its one symmetry axis, and the panels it seats.
 
     **One center mark, because the corner has one located axis.** The longeron bore, the
@@ -746,7 +746,7 @@ def corner_construction(params, radius, bore, seat, thickness, extension, panell
         (CENTER_LINE, (-extension, -extension),
          (radius * root_half, radius * root_half)))
 
-    if panelled:
+    if paneled:
         # **How far past the part's end face the panel is drawn, and why it is short.** The
         # outline goes into the bbox the dimension placer lanes around, so every millimeter of
         # overhang is a millimeter the part loses on the sheet: drawn a full mold line radius
@@ -791,7 +791,7 @@ def bulkhead_annotations(params, product=FAMILY):
     **DES-3's interior aperture is dimensioned on the plan, `enclosed_span` -- IP-FC-135,
     closing the gap OQ-DES-D3 decided on 2026-08-22.** It is the ring's inner boundary past
     the flange, `unit_width - 2*(panel_thickness + panel_tolerance) - 2*flange_thickness`, and
-    it is declared unconditionally rather than only when panelled: at `panel_thickness = 0`
+    it is declared unconditionally rather than only when paneled: at `panel_thickness = 0`
     the pocket term vanishes and the expression still names a real pair of parallel faces, the
     flange's own inner boundary with no panel setback ahead of it.
 
@@ -816,7 +816,7 @@ def bulkhead_annotations(params, product=FAMILY):
     boss = params['bolt_thickness']
     offset = params['bolt_offset']
 
-    panelled = abs(thickness) > dp.ZERO_MM
+    paneled = abs(thickness) > dp.ZERO_MM
     # IP-FC-132: a cowling bulkhead has no greeble post or nub -- `if (!is_cowling)` is
     # exactly what gates the corner_end cut that forms them out of the source, and an
     # interconnect keeps both (only is_cowling gates it, not is_interconnect). Without this
@@ -843,9 +843,9 @@ def bulkhead_annotations(params, product=FAMILY):
     seat = half - pocket
 
     # DES-3 / OQ-DES-D3 (resolved 2026-08-22): the interior aperture, the ring's own inner
-    # boundary past the flange -- IP-FC-135. Unconditional, not gated by `panelled`: at
+    # boundary past the flange -- IP-FC-135. Unconditional, not gated by `paneled`: at
     # panel_thickness = 0 the pocket vanishes and this reduces to `half - flange_thickness`,
-    # which is still a real pair of parallel faces on an unpanelled part. Verified against
+    # which is still a real pair of parallel faces on an unpaneled part. Verified against
     # the design doc's own worked example, 1U/3-16in: 50 - 4.8625 - 1.2 = 43.9375.
     aperture_half = seat - params['flange_thickness']
     enclosed_span = 2.0 * aperture_half
@@ -906,7 +906,7 @@ def bulkhead_annotations(params, product=FAMILY):
     # 392.8500 mm2, matching this row's own worked example to four decimals.
     half_span = axis - params['panel_offset'] - params['panel_overlap']
     span = 2.0 * half_span
-    if panelled:
+    if paneled:
         declared += [
             Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
             Quantity('panel_thickness', thickness, ('panel_thickness',)),
@@ -937,7 +937,7 @@ def bulkhead_annotations(params, product=FAMILY):
     # the reason is measurable rather than aesthetic. The face sits at
     # `unit_width/2 - panel_thickness - panel_tolerance`, which follows *both* size axes, so
     # tabulating it directly prints a band of **eight columns** -- one per panel stock -- of
-    # three-digit numbers, and the panelled end family's table came to **167.0 mm** against a
+    # three-digit numbers, and the paneled end family's table came to **167.0 mm** against a
     # 108.5 mm band. Split into the mold line (`U` alone) and the pocket (`panel` alone) it is
     # two ordinary columns.
     #
@@ -964,7 +964,7 @@ def bulkhead_annotations(params, product=FAMILY):
         dimensions.append(
             (by_name['bolt_offset'], (axis, axis, 0.0), (bolt_axis, bolt_axis, 0.0),
              dp.HORIZONTAL, offset))
-    if panelled:
+    if paneled:
         # The setback from the mold line to the seating face, which is the panel and its fit.
         #
         # **Taken at the longeron axis rather than on the plate's own centerline**, and the
@@ -989,7 +989,7 @@ def bulkhead_annotations(params, product=FAMILY):
     #
     # **Not the flat's span, which was the first attempt and cost eight table columns.** The
     # span is `max(a, b) - b` of the two branches, so it follows `U` and the panel stock both
-    # and prints as a band; the panelled end bulkhead's table came to 158.6 mm against a
+    # and prints as a band; the paneled end bulkhead's table came to 158.6 mm against a
     # 108.5 mm band. The offset is the same face located from the axis instead of measured
     # across, and where the bore branch wins it is a function of `U` alone.
     dimensions.append(
@@ -1022,7 +1022,7 @@ def bulkhead_annotations(params, product=FAMILY):
         ('corner_seat', (axis - seat_offset * 0.7, axis + seat_offset * 0.7, 0.0),
          ('%s CORNER SEAT' % w('corner_seat_offset'),
           'CLEARS BORE AND LEAD-IN' if seated else 'SET BY PANEL ENTRY')))
-    if panelled:
+    if paneled:
         notes.append(
             ('seat', (axis, seat, 0.0),
              ('%s POCKET FROM MOLD LINE' % w('panel_pocket'),
@@ -1030,8 +1030,8 @@ def bulkhead_annotations(params, product=FAMILY):
               '%s CLEARANCE' % w('panel_tolerance'))))
 
     construction = bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius,
-                                         seat, thickness, panelled, has_bolt)
-    views = bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled,
+                                         seat, thickness, paneled, has_bolt)
+    views = bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, paneled,
                            has_greeble, has_bolt)
     return quantities, dimensions, notes, construction, views
 
@@ -1049,7 +1049,7 @@ def detail_radius(axis, bolt_axis, boss_radius, nub_radius, corner_radius):
     return DETAIL_MARGIN * max(corner_radius, bolt_reach, nub_radius)
 
 
-def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panelled,
+def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, paneled,
                    has_greeble=True, has_bolt=True):
     """The bulkhead's plan and its corner detail, and what each carries.
 
@@ -1081,7 +1081,7 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
         detail_notes.insert(1, 'bolt')
     if has_greeble:
         detail_notes.insert(1, 'post')
-    if panelled:
+    if paneled:
         detail_dimensions.append('panel_pocket')
         detail_notes.append('seat')
     # OQ-DES-D11: the seating face's exposed span is a whole-plate dimension, like the mold
@@ -1089,7 +1089,7 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
     # corner detail alongside the pocket depth. `enclosed_span` (IP-FC-135) joins it there for
     # the same reason -- it spans nearly the whole plate and is declared unconditionally.
     plan_dimensions = (('mold_half_width', 'longeron_offset', 'enclosed_span', 'panel_span')
-                       if panelled else
+                       if paneled else
                        ('mold_half_width', 'longeron_offset', 'enclosed_span'))
     return [
         SheetView('PLAN', dimensions=plan_dimensions),
@@ -1100,7 +1100,7 @@ def bulkhead_views(params, half, axis, bolt_axis, boss_radius, nub_radius, panel
 
 
 def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat, thickness,
-                          panelled, has_bolt=True):
+                          paneled, has_bolt=True):
     """The bulkhead's center marks, its four symmetry axes, and the panels it seats.
 
     **Four center lines, because the plate has four mirrors and every dimension on the sheet
@@ -1163,7 +1163,7 @@ def bulkhead_construction(params, half, axis, bolt_axis, bore, boss_radius, seat
          tuple((sx, sy, axis, axis) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)),
          'CORNER'))
 
-    if panelled:
+    if paneled:
         end = axis - params['panel_offset']
         inner = half - thickness
         for sign in (-1.0, 1.0):
@@ -1234,7 +1234,7 @@ def boom_bulkhead_annotations(params, product=FAMILY):
 
     thickness = params['panel_thickness']
     panel_fit = params['panel_tolerance']
-    panelled = abs(thickness) > dp.ZERO_MM
+    paneled = abs(thickness) > dp.ZERO_MM
     pocket = thickness + panel_fit
     seat = half - pocket
     half_span = axis - params['panel_offset'] - params['panel_overlap']
@@ -1264,7 +1264,7 @@ def boom_bulkhead_annotations(params, product=FAMILY):
         Quantity('boom_y_position', y_pos, ('boom_y_position',), constant=True),
         Quantity('boom_z_position', z_pos, ('boom_z_position',), constant=True),
     ]
-    if panelled:
+    if paneled:
         declared += [
             Quantity('panel_pocket', pocket, ('panel_thickness', 'panel_tolerance')),
             Quantity('panel_span', span,
@@ -1286,7 +1286,7 @@ def boom_bulkhead_annotations(params, product=FAMILY):
         (by_name['enclosed_span'], (-aperture_half, -aperture_half, 0.0),
          (-aperture_half, aperture_half, 0.0), dp.VERTICAL, enclosed_span),
     ]
-    if panelled:
+    if paneled:
         dimensions.append(
             (by_name['panel_pocket'], (axis, seat, 0.0), (axis, half, 0.0),
              dp.VERTICAL, pocket))

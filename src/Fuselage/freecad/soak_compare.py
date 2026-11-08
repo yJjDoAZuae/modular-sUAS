@@ -35,7 +35,7 @@ tessellation cannot corrupt it the way it corrupts `mesh_volume`.
 **What a boolean would give instead, and why it is not used here.** `solid_measure` records
 that the boolean symmetric difference is exact between solids that share surfaces and unusable
 between independently built ones -- on two `tail_shell` builds it returned invalid shapes in 9
-and 7 solids totalling 28.87 mm3, over 1054 s, for a pair whose walls agree to 2.08. Two builds
+and 7 solids totaling 28.87 mm3, over 1054 s, for a pair whose walls agree to 2.08. Two builds
 from separate processes are exactly the case it fails on.
 """
 import json

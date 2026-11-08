@@ -107,25 +107,25 @@ def check_families(entries, quiet=False):
     for _path, rel in entries:
         families.setdefault(scaling_family(rel), set()).add(part_id(rel))
 
-    panelled = {k: v for k, v in families.items() if "/" in k}
-    if not panelled:
+    paneled = {k: v for k, v in families.items() if "/" in k}
+    if not paneled:
         return []
 
     counts: dict[frozenset, int] = {}
-    for parts in panelled.values():
+    for parts in paneled.values():
         key = frozenset(parts)
         counts[key] = counts.get(key, 0) + 1
     expected = max(counts, key=lambda k: (counts[k], len(k)))
 
-    short = sorted((k for k in panelled if expected - panelled[k]),
-                   key=lambda k: (len(panelled[k]), k))
-    extra = sorted(k for k in panelled if panelled[k] - expected)
+    short = sorted((k for k in paneled if expected - paneled[k]),
+                   key=lambda k: (len(paneled[k]), k))
+    extra = sorted(k for k in paneled if paneled[k] - expected)
 
     if not quiet:
-        print(f"  families  : {len(panelled)} (one U scale + one panel stock each), "
-              f"{len(families) - len(panelled)} cowl set(s)")
+        print(f"  families  : {len(paneled)} (one U scale + one panel stock each), "
+              f"{len(families) - len(paneled)} cowl set(s)")
         if extra:
-            sample = sorted(panelled[extra[0]] - expected)
+            sample = sorted(paneled[extra[0]] - expected)
             print(f"              {len(extra)} carry parts beyond the common set of "
                   f"{len(expected)}, as expected: "
                   + ", ".join(sample[:3]) + (" ..." if len(sample) > 3 else ""))
@@ -133,8 +133,8 @@ def check_families(entries, quiet=False):
             print(f"              every family carries all {len(expected)} common parts")
 
     for key in short[:12]:
-        missing = sorted(expected - panelled[key])
-        print(f"    SHORT  {key:<38} {len(panelled[key])}/{len(expected)}  missing "
+        missing = sorted(expected - paneled[key])
+        print(f"    SHORT  {key:<38} {len(paneled[key])}/{len(expected)}  missing "
               + ", ".join(missing[:3]) + (" ..." if len(missing) > 3 else ""))
     if len(short) > 12:
         print(f"    ... {len(short) - 12} more short families")

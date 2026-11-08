@@ -109,6 +109,45 @@ def main():
     if not under_ok:
         failures.append('describe_bbox_mismatch did not name the m-written-as-mm direction')
 
+    # ------------------------------------------------------------
+    # What unit a generated document declares itself to be in (IP-FC-159).
+    #
+    # **Both directions, because a guard verified only on the accept path is not verified.**
+    # The whole value of this field is that an unrecognized or absent declaration is refused
+    # rather than guessed at: guessing `mm` for a document written by a newer tool is exactly
+    # the silent 1000x error the guard exists to stop. `MM` is expected to be refused -- a
+    # spelling this version does not know is not a spelling it may interpret.
+    # ------------------------------------------------------------
+    token_cases = [
+        (u.PARAM_UNITS_MM_LEGACY, u.PARAM_UNITS_MM,
+         'the long spelling the definition file writes'),
+        ('mm', u.PARAM_UNITS_MM, 'the short token'),
+        ('m', u.PARAM_UNITS_M, 'meters'),
+        (' mm ', u.PARAM_UNITS_MM, 'surrounding space is not another unit'),
+        (None, None, 'a document predating the field'),
+        ('', None, 'an empty declaration'),
+        ('inches', None, 'a unit this project does not use'),
+        ('MM', None, 'a spelling this version does not know'),
+    ]
+    for declared, want, why in token_cases:
+        got = u.param_units_token(declared)
+        ok = got == want
+        print('  %-52s %-20s %-20s  %s'
+              % ('param_units_token: ' + why, repr(declared)[:20], repr(want),
+                 'ok' if ok else 'FAIL'))
+        if not ok:
+            failures.append('param_units_token(%r) gave %r, not %r' % (declared, got, want))
+
+    # Every token a reader may accept has to normalize to itself, or the constant and the
+    # lookup table have drifted apart -- which would read as a working guard.
+    for token in u.PARAM_UNITS:
+        ok = u.param_units_token(token) == token
+        print('  %-52s %-20s %-20s  %s'
+              % ('PARAM_UNITS member normalizes to itself', repr(token), repr(token),
+                 'ok' if ok else 'FAIL'))
+        if not ok:
+            failures.append('%r is in PARAM_UNITS but does not normalize to itself' % token)
+
     print('')
     print('check_units: %d failure(s)' % len(failures))
     for f in failures:

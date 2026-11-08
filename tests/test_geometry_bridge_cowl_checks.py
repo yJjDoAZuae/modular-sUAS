@@ -413,6 +413,86 @@ class TestStationMeasures:
         assert cci.station_measures(broken, si_m(z), WALL_M, TOL_M) is None
 
 
+class TestStationReportSaysWhyThereIsNoMeasurement:
+    """IP-FC-152's prerequisite: the three no-measurement cases, told apart.
+
+    `station_measures` collapses all three to `None`, which is the right answer for a caller that
+    wants a thickness — and it meant the acceptance check printed *"fewer than two loops — no wall
+    here"* for every one of them, including the case where the ring has come apart into arcs. So
+    the one finding `section_regions` was built to produce was reported under a sentence denying
+    it had happened.
+
+    That blocks IP-FC-152 specifically. It asks for the annulus test to run inside `shell_solid`
+    and refuse a broken ring, and its stated prerequisite is a survey of how often the test fires
+    on geometry that is legitimately not an annulus — a slot's end cap can break the ring without
+    the wall being wrong. A rate cannot be surveyed while its outcome is indistinguishable in the
+    output from a station that simply missed the part.
+    """
+
+    def test_a_healthy_wall_reports_no_reason_at_all(self, cci, tube):
+        """The success path carries no `reason` key, so a caller tests one thing rather than
+        comparing against a sentinel."""
+        got = cci.station_report(tube, HEIGHT_M / 2.0, WALL_M, TOL_M)
+        assert 'reason' not in got
+        assert got['incumbent'][2] == pytest.approx(WALL_M, abs=TOL_M)
+
+    def test_the_report_and_the_older_function_agree_on_every_field(self, cci, tube):
+        """`station_measures` is a wrapper over this, and that has to stay true: the fifteen tests
+        above it assert on its exact contract, and a second implementation of the same reduction
+        would own every error it made."""
+        z_m = HEIGHT_M / 2.0
+        assert cci.station_report(tube, z_m, WALL_M, TOL_M) == \
+            cci.station_measures(tube, z_m, WALL_M, TOL_M)
+
+    def test_a_station_that_misses_the_part_says_no_loop_pair(self, cci, tube):
+        """A station above the tube cuts nothing, so there are no loops to pair. This is the case
+        the old message actually described — and the only one of the three it fitted."""
+        got = cci.station_report(tube, HEIGHT_M + 0.050, WALL_M, TOL_M)
+        assert got['reason'] == cci.NO_LOOP_PAIR
+        assert cci.station_measures(tube, HEIGHT_M + 0.050, WALL_M, TOL_M) is None
+
+    def test_a_ring_broken_into_two_arcs_says_broken_ring(self, cci, tube, Part, App):
+        """**The distinction this class exists for.** Two partial-height opposing slots leave one
+        solid whose section comes apart into two arcs at this station — the real `tail_shell` case
+        from OQ-DES-CW26, where the gap across the break was reported as a 0.355705 mm wall.
+
+        The slots must stay partial-height: full-height ones split the tube into two solids, each
+        measured on its own as a single-loop strip, and the guard never engages. That is the
+        function working correctly on two pieces, not the defect.
+        """
+        z = HEIGHT / 2.0
+        a = Part.makeBox(4.0, 4.0, 10.0, App.Vector(R_OUTER - 2.0, -2.0, z - 5.0))
+        b = Part.makeBox(4.0, 4.0, 10.0, App.Vector(-R_OUTER - 2.0, -2.0, z - 5.0))
+        broken = tube.cut(a).cut(b)
+        assert len(broken.Solids) == 1, 'the wall must stay one solid, as the real one does'
+        got = cci.station_report(broken, si_m(z), WALL_M, TOL_M)
+        assert got['reason'] == cci.BROKEN_RING
+
+    def test_a_single_arc_is_not_reported_as_a_broken_ring(self, cci, tube, Part, App):
+        """**The converse, and it is the one that decides whether IP-FC-152 can refuse a build.**
+        One radial slot leaves a C: a single closed loop, which the strip estimator measures
+        correctly at the wall's true thickness. `_is_annulus` is `False` here too, so a build-time
+        guard written on that predicate alone would refuse a wall that is entirely sound.
+
+        The reason codes keep the two apart: this station reports no reason at all, and only the
+        two-arc case above reports `BROKEN_RING`.
+        """
+        notch = Part.makeBox(4.0, 4.0, HEIGHT + 2.0, App.Vector(R_OUTER - 2.0, -2.0, -1.0))
+        broken = tube.cut(notch)
+        wires = _wires_at(broken, HEIGHT / 2.0, App)
+        assert len(wires) == 1 and cci._is_annulus(wires) is False
+        got = cci.station_report(broken, HEIGHT_M / 2.0, WALL_M, TOL_M)
+        assert 'reason' not in got
+        assert got['incumbent'][3] == pytest.approx(WALL_M, abs=TOL_M)
+
+    def test_every_reason_the_report_can_give_is_named_in_the_tuple(self, cci):
+        """`STATION_REASONS` is what a surveying caller fixes its columns from, so a reason missing
+        from it would be counted by nobody."""
+        assert set(cci.STATION_REASONS) == {cci.NO_LOOP_PAIR, cci.BROKEN_RING,
+                                            cci.TOO_FEW_SAMPLES}
+        assert len(set(cci.STATION_REASONS)) == len(cci.STATION_REASONS)
+
+
 class TestSeamEdgesAreNotListedTwice:
     """A vendor assumption `boolean_edges.anomalous_edges` was built on, put to the kernel — and
     refuted. Kept because it is what the classifier's design now rests on.

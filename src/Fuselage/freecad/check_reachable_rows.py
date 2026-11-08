@@ -30,7 +30,7 @@ that build.** `is_cowling` and `is_interconnect` gate entire branches in Python
 which objects to construct at all) rather than through a live formula, so no run of this
 checker will ever call them reachable -- that is not evidence they are unread, it is evidence
 this checker cannot see a Python-level branch. Rows read only by a cowling or interconnect or
-panelled build likewise need that specific kind of seed passed in to show up as reachable at
+paneled build likewise need that specific kind of seed passed in to show up as reachable at
 all; run this across every type and panel state a family has, the same way
 `sweep_unread_rows.py` asks for several seeds, and only the intersection is a structural claim
 about the family as a whole.
@@ -159,7 +159,7 @@ def main():
          'Still not permission to delete on its own: a row a Python branch reads with '
          '`.get()` rather than an expression (`is_cowling`, `is_interconnect`) will always '
          'land here too, and a row this list omits only because no cowling, interconnect or '
-         'panelled seed was passed is not thereby proven read.')
+         'paneled seed was passed is not thereby proven read.')
     return 0
 
 

@@ -529,7 +529,7 @@ def layout(blocks, letters, text_height_mm=None, pitch_mm=None):
     column and the thing on the view that points at it cannot disagree.
 
     **Blocks print abreast**, separated by twice the column gutter, because that is what
-    OQ-DES-D5 decided and what makes a panelled family cost its deepest block rather than the
+    OQ-DES-D5 decided and what makes a paneled family cost its deepest block rather than the
     sum of them. Twice the gutter because the single gutter is the space *inside* a block,
     where a rule separates two columns; between two blocks there are two frame rules and the
     gap has to read as wider than the one inside.

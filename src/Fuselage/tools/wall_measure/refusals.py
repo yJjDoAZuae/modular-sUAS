@@ -83,7 +83,7 @@ def escape(volume_m3, pieces, valid, span_m=None, tol_m3=ESCAPE_TOL_M3,
         return INVALID, ('%d piece(s) at %.6f mm3, and the residue is not a valid shape -- its '
                          'volume is not a figure to read' % (pieces, volume_mm3))
     if volume_m3 > tol_m3:
-        return ESCAPED, ('%d piece(s) totalling %.6f mm3 of cavity outside the blank'
+        return ESCAPED, ('%d piece(s) totaling %.6f mm3 of cavity outside the blank'
                          % (pieces, volume_mm3))
     narrow = span_m is not None and span_m <= sliver_m
     return SLIVER, ('%d piece(s) with %.6f mm3 between them, under the %.1e mm3 floor%s -- real '

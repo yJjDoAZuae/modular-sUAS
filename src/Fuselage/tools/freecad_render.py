@@ -28,12 +28,21 @@ import importlib.util
 import json
 import os
 import shutil
+import sys
 
 import geometry_version
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FREECAD_DIR = os.path.normpath(os.path.join(HERE, '..', 'freecad'))
 BUILDER = os.path.join(FREECAD_DIR, 'build_part.py')
+
+# `freecad/units.py` owns the unit vocabulary the definition file declares itself in, and
+# imports nothing from FreeCAD, so one definition of the token serves the writer here and the
+# reader in `freecad/parameters.py` (IP-FC-159).
+if FREECAD_DIR not in sys.path:
+    sys.path.insert(0, FREECAD_DIR)
+
+import units                                                             # noqa: E402
 
 # Where freecadcmd lives. Environment first so a machine with it elsewhere needs no edit.
 ENV_VAR = 'FREECADCMD'
@@ -160,7 +169,14 @@ def definition_text(kind, params, variant=None):
     doc = {
         'kind': kind,
         'variant': variant or {},
-        'units': 'mm and degrees, as the OpenSCAD path uses them',
+        # **Deliberately still the long spelling, and shared rather than typed (IP-FC-159).**
+        # `build_part` now refuses a definition file whose `units` it does not recognize, and
+        # `units.param_units_token` reads this spelling as `mm` -- so the guard is in force
+        # without this value changing. It must not change for a wording improvement: this text
+        # is what `--resume` compares byte for byte, so editing it marks all 576 parts stale.
+        # When `derived_parameters()` moves to meters this becomes `units.PARAM_UNITS_M`, and
+        # the one-time staleness is then the correct signal rather than noise.
+        'units': units.PARAM_UNITS_MM_LEGACY,
         'source': 'derived_parameters() via fuselage_variants.py -- do not hand-edit',
         'geometry': {'version': version, 'modules': modules},
         'parameters': {k: float(v) for k, v in sorted(params.items())},

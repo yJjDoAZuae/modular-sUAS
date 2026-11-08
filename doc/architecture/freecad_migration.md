@@ -799,7 +799,7 @@ OpenSCAD. **That was a measurement, not a design question** — and it has now b
 > runs for hours. Negligible regardless of what a real ported part costs to build — which
 > makes the conclusion robust to the one quantity still unknown.
 >
-> A caveat kept deliberately: the boolean-heavy case is a *synthetic* analogue at 7,776
+> A caveat kept deliberately: the boolean-heavy case is a *synthetic* analog at 7,776
 > triangles, while real bulkheads run 25,000–37,000. A true part will build more slowly,
 > which only strengthens the conclusion by raising the denominator.
 
@@ -1065,7 +1065,8 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 | ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
 | ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
 | ARCH-24 | decided 2026-11-02 | How does `tools/wall_measure` reach the unit standard, when a committed test asserts it may import nothing outside numpy and the standard library -- so that it stays loadable under FreeCAD's embedded interpreter -- and `freecad/si.py` imports FreeCAD? -- **alternative 1: `freecad/units.py` is admitted to the allowlist**, named explicitly so admitting one pure module does not admit `si.py` behind it. Both of the alternative's premises were checked before acting and both moved. The package's own boundary over `units` is `wall_measure/kern.py`; the conversion landed as IP-FC-163 and the package is SI as of 2026-11-06 |
-| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by <user> as the only one of the five satisfying three requirements he set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants, shown reachable by a 20 520-field round-trip survey. Unblocks IP-FC-159 |
+| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by <user> as the only one of the five satisfying three requirements he set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants -- **recorded as reachable, and it is not; see OQ-ARCH-26**. Unblocks IP-FC-159 |
+| ARCH-26 | open | **What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?** OQ-ARCH-25 set IP-FC-159's gate at byte-identical `.scad` and recorded it as reachable. Measured 2026-11-07 on the derivation rather than the inflow: **523 of 544 parts (96.1%) change text**, by two mechanisms neither of which any conversion operator removes -- a whole number of millimeters is not a whole number of meters, and the millimeter path's own 1.1 ULP rounding residue is a property of the order of operations. No geometry moves. **Blocks IP-FC-159** |
 
 ### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
 
@@ -1808,7 +1809,7 @@ which is "where the vertical line `x = bbf_cx` meets the circle of radius `r_bol
 about the bolt center", evaluated to a number. See [OQ-DES-B14](../design/bulkhead.md), which
 is one instance of this question.
 
-**The variation argument does not settle it.** The obvious defence of coordinates is that the
+**The variation argument does not settle it.** The obvious defense of coordinates is that the
 geometry is not one shape but a family, and the relationships that hold are not the same at
 every parameter value — a constraint set that is satisfiable at `U = 2` may not be at
 `U = 0.5`. That is true, and it is *already represented*: it is exactly what the `max(...; 0)`
@@ -3910,13 +3911,21 @@ module as SI-with-a-backlog since 2026-11-01; only the guideline's prose disagre
 `.scad` is unchanged byte for byte. The sweep's `--resume` staleness key hashes the definition
 file, so anything less marks all 576 parts stale.
 
-**Measured 2026-11-07, and byte-identity is reachable.** The risk was that a millimeter value
-divided by 1000 and multiplied back does not return the identical float, which would move the
-emitted digits. Every variant of both bulkhead families was resolved through
-`export_parameters.resolve` and every numeric field of every table round-tripped: **576 variants
-resolved (1 408 combinations refused), 20 520 numeric fields checked, 0 failed an exact round
-trip.** A hand-picked sample was run first and passed, which is not a survey; this is the
-survey. The field-by-field comparison through `mm_to_m` and the first ported part measured
+**Measured 2026-11-07 — and the conclusion drawn here was wrong. Byte-identity is not
+reachable. See OQ-ARCH-26.** The survey itself stands and its result is unchanged: every variant
+of both bulkhead families was resolved through `export_parameters.resolve` and every numeric
+field of every table round-tripped, **576 variants resolved (1 408 combinations refused), 20 520
+numeric fields checked, 0 failed an exact round trip.** A hand-picked sample was run first and
+passed, which is not a survey; that was the survey.
+
+What it measured was the *inflow*: whether an input value survives millimeters → meters →
+millimeters unchanged. It does. What it did not measure is the *derivation* — the arithmetic
+between the input and the emitted number — and that is where the emitted digits are decided.
+`2 · √U · 0.0006 · 1000` and `2 · √U · 0.6` are not the same expression in floating point.
+Measured the second way on 2026-11-07, 523 of the 544 parts change text. The reasoning error was
+treating a round trip of the inputs as a round trip of the output, which is the same shape of
+mistake as the hand-picked sample: a real measurement answering a narrower question than the
+claim it was used for. The field-by-field comparison through `mm_to_m` and the first ported part measured
 against its baseline remain as cross-checks, and they are what finally feed
 `units.bbox_m_matches_mm`, dead code today because `check_si.py` exercises it only on a
 constructed box.
@@ -3943,6 +3952,165 @@ fresh build and under an edit-in-place recompute. Cheap on one real document. Fi
 question if it is wanted as a decision.
 
 **Unblocks IP-FC-159.**
+
+### OQ-ARCH-26 — What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?
+
+The sweep in `src/Fuselage/tools/fuselage_variants.py` writes an OpenSCAD source file for each
+of the 544 parts it builds. It writes them through `solid2`, whose `py2openscad` renders every
+number by calling Python's `str()` on it — full precision, no formatting. `75.0` is written
+`75.0`, and the adjacent double `75.00000000000001` is written out in full. There is no
+rounding anywhere between a derived value and the text on disk.
+
+Three settled rules currently converge on those files. [general.md](../guidelines/general.md)
+says *"The gate on any change upstream of emission is byte-identical `.scad` output"*, not
+agreement within a tolerance. [openscad.md](../guidelines/openscad.md) says the same, *"because
+traceability is the reason the exemption exists"*. And OQ-ARCH-25, decided 2026-11-07, set that
+byte-identity as IP-FC-159's gate and recorded it as *"shown reachable by a 20 520-field
+round-trip survey"*.
+
+**It is not reachable, and the survey behind that claim measured the wrong quantity.** The
+round-trip survey asked whether an input value survives millimeters → meters → millimeters
+unchanged. It does — 20 520 of 20 520 fields, and re-confirmed on every length column of every
+axis CSV. It did not ask what the *derivation* does, and the derivation is what decides the
+emitted digits.
+
+Measured 2026-11-07 over every variant of the three non-cowl sweeps, by running the real
+`derived_parameters()` twice — once as it stands, once with every length constant, every length
+CSV column and the printer settings set to their meter values, which is the meter
+implementation without editing the module: **523 of 544 parts, 96.1%, would have their
+definition text change.** The changes come from two independent mechanisms, and no conversion
+operator removes either.
+
+**Mechanism 1 — a whole number of millimeters is not a whole number of meters.**
+`bulkhead_size_variants.csv` holds `bulkhead_thickness` as `4`, `5`, `6`, `8`, `10`, `12`, `16`,
+and pandas reads an all-integer column as `int64`. `str(4)` is `4`; `str(0.004 * 1000)` is
+`4.0`. `fuselage_variants.py` already states the consequence, in its own comment beside
+`load_constants`: *"several of these reach solid2 and an int that becomes 100.0 changes the
+generated .scad text."* No integer means 4 mm in meters, so the type is lost at the conversion
+whatever the arithmetic does. This mechanism accounts for `bulkhead_thickness` in 412 parts,
+`panel_overlap` in 352, `cowl_flange_height` in 132, `bolt_thickness` in 31, `boom_key_width`
+and `boom_key_height` in 27 each, and `panel_offset` in 16.
+
+The first valid corner variant the sweep reaches shows mechanism 1 by itself. Rendered through
+`solid2` both ways, this is the entire difference for that part — two characters:
+
+```
+today   fuselage_corner(U = 0.5, bulkhead_thickness = 4,   … panel_overlap = 0,   …);
+meters  fuselage_corner(U = 0.5, bulkhead_thickness = 4.0, … panel_overlap = 0.0, …);
+```
+
+**Mechanism 2 — the millimeter path's own rounding residue.** Scaling the constants to meters
+and multiplying back lands one or two units in the last place away from the millimeter result.
+Over the whole corpus the largest relative difference is **2.368 × 10⁻¹⁶, about 1.1 ULP of a
+double**, and the largest absolute difference is **2.274 × 10⁻¹³ mm**, on `corner.length` at
+U = 4 where 1200.0 mm becomes 1200.0000000000002 mm. For scale against the tolerances the
+project actually states: the tightest one anywhere in it,
+`check_unread_rows.GEOMETRY_TOL_PER_U` at 10⁻⁹ mm at U = 1, is **4 400 times larger**, and the
+0.01 mm wall-thickness tolerance is **4.4 × 10¹⁰ times larger**. The affected names are `unit_length` in 152 parts, `unit_width` in
+120, `web_width` in 120, `flange_thickness` in 69, `greeble_thickness` and
+`greeble_nub_thickness` in 65 each, `panel_offset` in 60, `boom_z_position`, `boom_diameter`,
+`boom_collet_thickness` and `boom_key_web_width` in 57 each, `bolt_thickness` in 43, and
+`boom_y_position` in 38.
+
+**No choice of conversion operator fixes mechanism 2, and the converse was tested too.** Six
+candidates were measured over all 14 188 length field-variant pairs. `m × 1000.0` and
+`float(Decimal(m) × 1000)` each miss 1 638. `m ÷ 0.001` misses 904 — better, and still not
+zero. The three rounding candidates, `round(m × 1000, 9)`, `round(m × 1000, 12)` and
+`'%.12g'`, each miss 1 018, and they miss *in the opposite direction*: they fail by producing a
+**cleaner** number than the millimeter path's own. The text on disk today says
+`flange_thickness = 1.7999999999999998`; rounding gives `1.8`. The digits in the file are a
+property of the order of operations, so nothing applied at the boundary reproduces them.
+
+**What is at stake, and what is not.** No geometry moves. 1.1 ULP is below any tolerance the
+project states, and the integer-to-float change moves nothing at all — OpenSCAD parses `4` and
+`4.0` to the same value. What moves is the `.scad` *text*, and with it the sweep's `--resume`
+staleness key, which hashes the definition file. The cost is therefore a re-render of 523 parts
+and a `variant_output_baseline` comparison that has to account for it. No part that has been
+printed changes shape.
+
+**Why this is a decision rather than an implementation detail.** The byte-identity rule was
+written into general.md and openscad.md on 2026-11-07, in the same session that decided
+OQ-ARCH-25, on the belief that it was reachable. Either the rule admits a stated exception, or
+the rule stands and IP-FC-159 cannot proceed as OQ-ARCH-25 decided it. Both are changes to
+something already settled, which is why this is filed rather than resolved in passing.
+
+#### Alternatives
+
+1. **Gate on geometric equivalence instead of byte-identity, for this change only.** Replace the
+   test with: every emitted parameter agrees with its millimeter value to a relative 10⁻¹²
+   (about 4 500 times the measured residue), and an integer rendered as a float is accepted.
+   *Benefits:* IP-FC-159 lands as OQ-ARCH-25 decided it, and the gate still catches any real
+   error, since a genuine mistake in this change is a factor of 1000 and not 10⁻¹⁶. *Drawbacks:*
+   the exempt-artifact guarantee weakens from "did not move" to "moved within a bound", and the
+   bound then needs maintaining; 523 definition files change with no ledger saying which or why.
+   *Prerequisite:* none beyond what is already measured.
+
+2. **Freeze a new emitted corpus, record the change as a reviewed ledger entry, and keep
+   byte-identity as the standing rule against it.** Re-render the 523 parts once, enumerate them
+   with the per-alias mechanism and magnitude, and gate every later change on byte-identity
+   against the new corpus. *Benefits:* the rule keeps its strength for all future work and the
+   one exception is written down rather than absorbed, which is the mechanism OQ-ARCH-15 already
+   established for `variant_output_baseline` — *"differences are enumerated in a ledger and
+   justified, not absorbed"*. *Drawbacks:* needs one full sweep, and a reviewed sign-off on the
+   ledger before the corpus is adopted. *Prerequisite:* a full sweep, which is expensive and is
+   <user>'s call to schedule.
+
+3. **Round at the emission boundary and accept the one-time change.** Emit
+   `round(value_m × 1000, 9)`. *Benefits:* the emitted text stops being sensitive to the order of
+   operations at all, so this class of churn cannot recur on any later refactor — including the
+   `PartDesign::` move. *Drawbacks:* it does not meet byte-identity either, missing 1 018 of
+   14 188 by cleaning up residue the current file carries, so it still needs whichever of 1 or 2
+   is chosen; and it puts a formatting decision inside the emission path, where a reader would
+   have to know the grid to predict the file. *Prerequisite:* a decision on how many decimals,
+   which is a new free parameter.
+
+4. **Derive twice, so the OpenSCAD emission keeps millimeter arithmetic.** This is OQ-ARCH-25's
+   alternative 4, eliminated there by R1 — *"the derivation of parameters should be implemented
+   only once"*. *Benefits:* the only alternative under which the emitted `.scad` genuinely cannot
+   move, since the arithmetic producing it is untouched. *Drawbacks:* it is the alternative a
+   stated requirement already excluded, and it duplicates 149 lines whose two copies would have
+   to be kept in agreement by hand. *Prerequisite:* reversing R1.
+
+5. **Retire the generated `.scad` first, then convert.** OQ-ARCH-4 already decided the OpenSCAD
+   path retires after IP-FC-13; bringing that forward removes the artifact the gate is about.
+   *Benefits:* the conflict dissolves rather than being adjudicated, and no gate is needed.
+   *Drawbacks:* the OpenSCAD path is still the comparison backend for the kinds that have no
+   FreeCAD generator, and `compare_backends.py` and the `variant_output_baseline` ledger both
+   rest on it, so retiring it early removes the port's own reference while the port is
+   unfinished. *Prerequisite:* an inventory of which kinds still have no FreeCAD generator, and
+   of what loses its reference.
+
+6. **Hold IP-FC-159 until the OpenSCAD path retires on its own schedule.** Change nothing; leave
+   `derived_parameters()` in millimeters and let the conversion happen when there is no `.scad`
+   to keep identical. *Benefits:* no rule is weakened and no corpus is re-rendered. *Drawbacks:*
+   the port's parameter inflow stays millimeters for the duration, which is the conformance gap
+   OQ-ARCH-23 recorded and IP-FC-158 was scheduled to close; every module downstream keeps
+   converting at its own edge in the meantime, which is the arrangement `si.py`'s own docstring
+   argues against. *Prerequisite:* a date for the OpenSCAD retirement, which does not exist
+   today.
+
+#### Recommendation
+
+**Alternative 2.** It is alternative 1 with the project's own ledger discipline attached, and the
+discipline is what makes the difference: the reason to prefer it is not that the numbers are
+smaller but that 523 changed files become a reviewed, enumerated, explained event instead of a
+quiet weakening of a rule that was written three days earlier. OQ-ARCH-15 settled this exact
+trade for `variant_output_baseline` and settled it that way.
+
+The measurements support it on substance as well. Both mechanisms are understood, both are
+bounded, and both are inherent rather than incidental — mechanism 1 is a fact about integers and
+mechanism 2 a fact about floating-point ordering, so neither can be engineered away by a better
+implementation. A gate that cannot be met by any correct implementation is not protecting
+anything; it is only deferring the change.
+
+Alternative 3 is worth taking **in addition** to 2 rather than instead of it, and that is a
+separate call. Its value is forward-looking: the same churn will arrive again at the
+`PartDesign::` move and at any later refactor that reorders this arithmetic, and a rounded
+emission is the only option here that makes the `.scad` text stable under reordering rather than
+merely re-baselined once. Its cost is one new free parameter, the decimal count.
+
+Alternative 6 is the one to take if the OpenSCAD retirement is nearer than it looks, since it
+spends nothing. That depends on a date this document does not have.
 
 ## References
 

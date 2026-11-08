@@ -34,6 +34,9 @@ import Part
 import cowl_interior as ci
 import si
 import cowl_tree
+# For `_literals`, which separates a module's literal rows from its `=` expression rows. Used by
+# `main`'s `--u=` seed; see the note there on why the seed must be the whole parameter set.
+import parameters
 from corner_common import is_entry_point
 
 from wall_measure import candidates, sections
@@ -94,9 +97,45 @@ def _opt(name, default=None):
 #: **Bullseye, because it is the one that handles a hole.** Given the two wires of a wall section,
 #: `Part::FaceMakerBullseye` returns one face with two wires -- an outer boundary and one hole --
 #: and `Part::FaceMakerCheese` agrees with it exactly (958.819 mm2 on the reference station, both).
-#: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totalling
+#: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totaling
 #: 150914 mm2, the sum of the two enclosed areas rather than the material between them.
 FACE_MAKER = 'Part::FaceMakerBullseye'
+
+
+# ------------------------------------------------------------------------------------------
+# Why a station has no thickness to report.
+#
+# **There are three such cases and they were printed as one, naming the wrong one.** Until
+# 2026-11-07 `station_measures` returned a bare `None` for all of them and the acceptance
+# check printed "fewer than two loops -- no wall here" whichever had happened. One of the
+# three is that sentence. Another is the ring having come apart into arcs, which is the
+# defect IP-FC-150 built `section_regions` to catch -- and a station rejected for it was
+# reported under a message asserting something else about it.
+#
+# That mattered beyond the wording. IP-FC-152 asks for the annulus test to run at build time
+# and refuse a broken ring, and its stated prerequisite is a survey of how often the test
+# fires on geometry that is legitimately not an annulus -- a slot's end cap can break the
+# ring without the wall being wrong. That rate cannot be surveyed while the test's outcome
+# is indistinguishable in the output from "the station missed the part".
+# ------------------------------------------------------------------------------------------
+
+#: No solid at this station gave two loops, so there is no inner/outer pair to measure
+#: across. Normally a station that misses the part, or one in a region with no cavity.
+NO_LOOP_PAIR = 'no loop pair'
+
+#: The section's loops are not one region with one hole: the ring is broken into arcs. The
+#: distance between two arcs is the gap across the break, not a wall thickness -- see
+#: `_station_distances` and cowl.md OQ-DES-CW26.
+BROKEN_RING = 'broken ring'
+
+#: Loops were found and paired, but fewer than two distances came back, so there is no
+#: spread to report. Distinct from `NO_LOOP_PAIR`: the pairing happened and the sampling
+#: produced almost nothing, which is a discretization result rather than a geometric one.
+TOO_FEW_SAMPLES = 'too few samples'
+
+#: Every reason, for a caller that tabulates them and wants its columns fixed in advance
+#: rather than discovered from the data.
+STATION_REASONS = (NO_LOOP_PAIR, BROKEN_RING, TOO_FEW_SAMPLES)
 
 
 def wall_samples(perimeter_m, arc_m=WALL_ARC_M):
@@ -225,12 +264,34 @@ def station_measures(wall, z_m, expect_m, tol_m, arc_m=WALL_ARC_M):
     against a tail build of 1 200 to 4 900 s. That is deliberate for now -- IP-WTM-10 asks for both
     reported over one corpus so they can be compared on real builds rather than on saved walls.
     """
-    out = _station_distances(wall, z_m, arc_m)
-    if out is None:
-        return None
-    d, selected, n_per_loop = out
+    got = station_report(wall, z_m, expect_m, tol_m, arc_m)
+    return None if got.get('reason') else got
+
+
+def station_report(wall, z_m, expect_m, tol_m, arc_m=WALL_ARC_M):
+    """`station_measures`, but it always answers -- and says why when there is nothing to say.
+
+    Returns the same dict `station_measures` returns, or, where that returns `None`, a dict
+    carrying a single `'reason'` drawn from `STATION_REASONS`. Nothing else differs, and
+    `station_measures` is a two-line wrapper over this.
+
+    **It exists because the three no-measurement cases were indistinguishable to a caller.**
+    A bare `None` says a station produced no thickness and not which of three things happened
+    there, and the acceptance check printed one of the three as the explanation for all of
+    them. The distinction is load bearing for IP-FC-152: that item moves the annulus test into
+    the build, and its prerequisite is knowing how often the test fires on geometry that is
+    legitimately not an annulus. `BROKEN_RING` has to be countable on its own for that to be
+    measurable at all.
+
+    Separate rather than folded into `station_measures` so the older function keeps its exact
+    contract. Every existing caller and all fifteen of its tests treat `None` as "no wall
+    here", which is correct and should not have to change to gain a reason code.
+    """
+    d, selected, n_per_loop, reason = _station_distances(wall, z_m, arc_m)
+    if reason:
+        return {'reason': reason}
     if len(d) < 2:
-        return None
+        return {'reason': TOO_FEW_SAMPLES}
     d = sorted(d)
     near = sum(1 for v in d if abs(v - expect_m) <= tol_m)
     return {'incumbent': (len(d), near, d[0], d[len(d) // 2], d[-1]),
@@ -242,10 +303,14 @@ def station_measures(wall, z_m, expect_m, tol_m, arc_m=WALL_ARC_M):
 def _station_distances(wall, z_m, arc_m=WALL_ARC_M):
     """One section, every solid: both measures' raw distances and the discretization they used.
 
-    Returns `(incumbent_distances, selected_distances, samples_per_loop)`, or `None` where there is
-    no thickness to report -- which is two cases and not one: a station with fewer than two loops
-    across every solid, and a station whose section is not an annulus at all, because the ring has
-    come apart into arcs. Both mean "no wall here" and both callers count that as a failure.
+    Returns `(incumbent_distances, selected_distances, samples_per_loop, reason)`. `reason` is
+    `None` when there are distances, and otherwise one of `STATION_REASONS` saying why there is no
+    thickness to report -- which is two cases here and not one: a station with fewer than two loops
+    across every solid (`NO_LOOP_PAIR`), and a station whose section is not an annulus at all
+    because the ring has come apart into arcs (`BROKEN_RING`). Both mean "no wall here" to a caller
+    that only wants a number, and `station_measures` still collapses them to `None` for the callers
+    that do. They are returned apart because they are different findings about the part, and one of
+    them is the defect `section_regions` exists to catch.
 
     Separate from `station_measures` so that the geometry and the statistics are not interleaved:
     this reaches the kernel, that reduces arrays.
@@ -287,7 +352,7 @@ def _station_distances(wall, z_m, arc_m=WALL_ARC_M):
             # (cowl.md OQ-DES-CW26). `None` is the right answer, not a number: it is what this
             # function already returns for a station with no wall, and both callers already treat
             # that as a failure rather than skipping it.
-            return None
+            return [], [], None, BROKEN_RING
         if len(loops) >= 2:
             # **One spacing, derived from whichever loop is longer, applied to both.** The outer
             # loop used to be discretized eight times as densely as the inner, to keep its chords
@@ -334,7 +399,7 @@ def _station_distances(wall, z_m, arc_m=WALL_ARC_M):
             length_m = si.length_m(loops[0])
             if length_m > 0.0:
                 d.extend([2.0 * area_m2 / length_m] * 8)
-    return d, selected, n_per_loop
+    return d, selected, n_per_loop, (None if d else NO_LOOP_PAIR)
 
 
 def in_plane_width(tool, t_cut_m):
@@ -472,8 +537,34 @@ def main():
     params = {'tail_shell': cowl_tree.PARAMS_TAIL_SHELL,
               'nose_cowl_shell': cowl_tree.PARAMS_NOSE_COWL_SHELL}[kind]
 
+    # **`--u=` exists because this check has only ever run at U = 1, and that is not where the
+    # known defect is.** IP-FC-143 records the wall going out of tolerance *at the high end of the
+    # swept range*, and IP-FC-152 needs the broken-ring rate across that range before a build-time
+    # refusal can be written. Neither is reachable from a check pinned to one size.
+    #
+    # Nothing here scales anything by hand, and that is the point: `U` is a literal row of
+    # `cowl_tree.PARAMS_*` and `unit_width` is the expression `=U * 100`, so replacing the one
+    # literal makes every fraction-of-unit_width row follow from it -- which is the whole reason
+    # those rows are held as fractions (see `fuselage_variants.cowl_parameters`). The wall inset
+    # and `buttress_cut_thickness` are absolute and correctly do not move: a nozzle does not
+    # scale with the airframe.
+    #
+    # **A seed is the whole parameter set, not an override, and `build_sheet` enforces that.**
+    # Passing `{'U': u}` alone is refused by name -- it reported fourteen undefined literal rows
+    # on the first attempt -- because a partial seed is how a part gets built with a module's own
+    # reference values silently substituted for a variant's. So the module's own literals are the
+    # base and `U` is replaced in a copy of them, which is the same shape as
+    # `boom_bulkhead.VARIANTS`'s overlays and is checked the same way by
+    # `parameters.check_variant_overlays`. `parameters._literals` is reused rather than
+    # reimplemented: it already knows that a row starting with `=` is an expression and must be
+    # left for the sheet to evaluate.
+    u = float(_opt('u', '1.0'))
+    seed = None
+    if u != 1.0:
+        seed = dict(parameters._literals(params), U=u)
+
     doc = App.newDocument('check')
-    tip = cowl_tree.emit(doc, None, params, builder)
+    tip = cowl_tree.emit(doc, seed, params, builder)
     doc.recompute()
 
     wall = tip.Shape
@@ -485,8 +576,10 @@ def main():
     t_cut_m = si.m(float(doc.getObject('Params').get('buttress_cut_thickness')))
 
     wall_m3, notched_m3 = si.volume_m3(wall), si.volume_m3(notched)
-    print('%s: wall %.4f mm3  valid=%s  solids=%d  shells=%d'
-          % (kind, wall_m3 * si.MM3_PER_M3, wall.isValid(), len(wall.Solids),
+    # U on the headline, because every figure below scales with it and a reading quoted without
+    # it cannot be compared with another.
+    print('%s at U = %g: wall %.4f mm3  valid=%s  solids=%d  shells=%d'
+          % (kind, u, wall_m3 * si.MM3_PER_M3, wall.isValid(), len(wall.Solids),
              len(wall.Shells)))
     print('  notched blank %.4f mm3   cavity %.4f mm3   wall is %.2f%% of the blank'
           % (notched_m3 * si.MM3_PER_M3, (notched_m3 - wall_m3) * si.MM3_PER_M3,
@@ -517,6 +610,10 @@ def main():
     bad = 0
     worst_thin_m = 0.0
     worst_selected_m = 0.0
+    # Counted per reason so a run says which of the three no-measurement cases it met and how
+    # often. `BROKEN_RING`'s count on a build that is otherwise sound is the false-positive rate
+    # IP-FC-152 names as its prerequisite, and this is where it becomes readable.
+    reasons = {}
     # **Both measures, with the incumbent leading and gating (IP-WTM-10).** The selected measure --
     # `corner_excluded_min`, chosen against this subsystem's five pre-committed gates -- is reported
     # beside it rather than instead of it, for one corpus, so the two can be compared on real builds
@@ -525,9 +622,14 @@ def main():
     # measure on the evidence of the measure it replaces.
     for i in range(STATIONS):
         z_m = lo_m + (hi_m - lo_m) * i / float(STATIONS - 1)
-        got = station_measures(wall, z_m, t_m, ci.WALL_TOL_M)
-        if got is None:
-            print('    z %9.4f   fewer than two loops -- no wall here' % si.mm(z_m))
+        got = station_report(wall, z_m, t_m, ci.WALL_TOL_M)
+        if got.get('reason'):
+            # **The reason, not a guess at it.** This line used to read "fewer than two loops --
+            # no wall here" for all three no-measurement cases, including the one where the ring
+            # has come apart into arcs -- so the defect `section_regions` was built to catch was
+            # reported under a sentence denying it had happened.
+            reasons[got['reason']] = reasons.get(got['reason'], 0) + 1
+            print('    z %9.4f   %s -- no wall here' % (si.mm(z_m), got['reason']))
             bad += 1
             continue
         n, near, low_m, med_m, high_m = got['incumbent']
@@ -547,6 +649,12 @@ def main():
         print('    z %9.4f   %3d/%3d within tol   min %.4f  median %.4f  max %.4f%s%s'
               % (si.mm(z_m), near, n, si.mm(low_m), si.mm(med_m), si.mm(high_m),
                  sel_text, flag))
+    # **Printed even when it is all zeros**, because "no station was rejected" is a result and a
+    # missing line is not. A `broken ring` count here is the figure IP-FC-152 is waiting on: on a
+    # build whose wall is otherwise sound it is the annulus test's false-positive rate, and that
+    # rate is what says whether the test can refuse a build or only report on one.
+    print('    stations with no measurement, by reason: %s'
+          % ('  '.join('%s %d' % (r, reasons.get(r, 0)) for r in STATION_REASONS)))
     print('    worst thin reading: %.4f mm under nominal, %.1fx the %.3f mm tolerance'
           % (si.mm(worst_thin_m), worst_thin_m / ci.WALL_TOL_M, si.mm(ci.WALL_TOL_M)))
     print('    worst thin reading, selected measure: %.4f mm under nominal, %.1fx tolerance'
@@ -771,7 +879,8 @@ def main():
                   '(first count %d), refit %.3e mm'
                   % (probe['rung'], probe['n'], probe['n0'], si.mm(probe['moved_m'])))
 
-    print('%s: %s' % (kind, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
+    print('%s at U = %g: %s'
+          % (kind, u, 'OK' if bad == 0 else '%d CHECK(S) FAILED' % bad))
     sys.stdout.flush()
     return 1 if bad else 0
 

@@ -166,7 +166,7 @@ sheets, which an unrestricted *bulkhead* carrier could not tell from a drawing t
 forgotten it. The cowling type keeps the obligation — it has a real bolt hole and boss, just
 none of the fillets or web that reach it on the end type.
 
-**Row 5 reads *panelled bulkhead*, decided generally rather than for this row alone under
+**Row 5 reads *paneled bulkhead*, decided generally rather than for this row alone under
 [OQ-DES-D12](#open-questions) on 2026-09-06.** A bulkhead with no panel — the 0 mm families
 `bulkhead-end_anchor_end_bolt-257941` and `bulkhead-interconnect-b591ef` — has no panel-to-flange
 joint to state, but `panel_offset` is not the zero that would have said so: it keeps an ordinary
@@ -192,7 +192,7 @@ row may name more than one drawing there, comma-separated; row 3 is the only one
 | 2 | bulkhead greeble post → corner socket | socket radius = `longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance`; post radius = `longeron_radius + longeron_tolerance + greeble_thickness`, the same sum without the clearance — so the whole fit is cut out of the corner | `greeble_tolerance` 0.05 | corner | corner |
 | 3 | corner seating faces → bulkhead | `flat_offset = −max(longeron_radius + longeron_tolerance + extrusion_width, (panel_overlap + panel_offset) − (corner_radius − panel_thickness − panel_tolerance)) + corner_tolerance·√2`; `flat_x = −(panel_overlap + panel_offset) + corner_tolerance` | `corner_tolerance` 0.0 | corner | corner, seated bulkhead |
 | 4 | panel → corner | seat at `corner_radius − panel_thickness − panel_tolerance`, a rebate `panel_thickness + panel_tolerance` deep from the mold line; end stop at `panel_offset − panel_tolerance`; extension `panel_overlap + panel_offset` | `panel_tolerance` 0.1 | corner | corner |
-| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | panelled bulkhead | panelled bulkhead |
+| 5 | panel → bulkhead flange | outer face, which is the panel's seating surface, at `unit_width/2 − panel_thickness − panel_tolerance`; exposed span `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap` | `panel_tolerance` 0.1 | paneled bulkhead | paneled bulkhead |
 | 6 | boom tube → boom bulkhead collet | `collet_radius = boom_diameter/2 + boom_collet_thickness + boom_tolerance` | `boom_tolerance` 0.2 | bulkhead | bulkhead |
 | 7 | cowl → cowling bulkhead flange | flange outer radius = `corner_radius − n_p·w − cowl_flange_tolerance`; flange height `2·U` | `cowl_flange_tolerance` 0.2 | cowling bulkhead | cowling bulkhead |
 | 8 | nose closure → cowl shell | base offset = `n_p·w + nose_flange_tolerance` | `nose_flange_tolerance` −0.1 | nose closure | nose closure |
@@ -432,7 +432,7 @@ that possible is measured rather than assumed — asking, for each dimension, wh
 actually a function of over the whole family.
 
 **But the family must be partitioned by topology, not by size.** A no-panel variant and a
-panelled one cannot share a sheet, because a callout pointing at a feature that is not there is
+paneled one cannot share a sheet, because a callout pointing at a feature that is not there is
 worse than no drawing at all — the reader trusts it. This is §2's structural-zero rule
 reappearing at the sheet level: where a dimension is absent because the *joint* is absent, that
 is a different drawing, not a blank cell in the table. Size, by contrast, changes only the
@@ -461,7 +461,7 @@ reach the same OpenSCAD module with the same arguments and differ in exactly one
 sizes. `offset_single` and `dual` likewise: the boom bulkhead has no mirrored second boom, and
 the two differ only in where the single boom sits. The cowling types account for the rest, and
 for a different reason: `bulkhead_validity_check` refuses a cowling row with a panel, so a
-panelled cowling family does not exist to be drawn.
+paneled cowling family does not exist to be drawn.
 
 **Five coupled fields rather than two, and the three new ones are the same finding.** Demoting
 a type axis from a sheet to a table column is what makes `bolt_hole_radius`, `boom_y_position`
@@ -481,7 +481,7 @@ at the size and placement they were measured on. The
 tables sharing a leading axis are **one block**, not several: a `U` table and a `U` × panel
 matrix put the same eight values of `U` down the left, so printed separately that column is
 printed twice. Merged, the single-axis fields are ordinary columns and each coupled field is a
-band of columns inside the same table. The panelled corner then costs a 10-row `U` block and a
+band of columns inside the same table. The paneled corner then costs a 10-row `U` block and a
 9-row panel block — 19 of 19, with **nothing spare**. That is a fit in the arithmetic and not on
 paper: one more dimension, one more panel stock, or a title row above the table puts them on a
 second sheet.
@@ -492,7 +492,7 @@ was ever checked against. Measured, the table as first laid out cost **a third o
 compacted and packed abreast it costs **a ninth**, printing the same values.
 
 **So the row figures above are an artifact of stacking the blocks**, and so is the budget they
-were measured against. Packed abreast the panelled corner costs **10 rows, not 19** — and under
+were measured against. Packed abreast the paneled corner costs **10 rows, not 19** — and under
 the decided layout the table sits *beside* the title block rather than above it, so the budget
 is the band's depth rather than a full column. At the table's own 2.5 mm text and ISO 3098's
 1.4 h line spacing the band holds **13 rows**, and no family needs more than 10. The figures in
@@ -940,7 +940,7 @@ which is how close the sheet came to working untouched.
 table.** It came from the widest *parameter mapping* any family carries at §3's floor, 95.1 mm,
 which is what the compaction ladder measures because that is the content OQ-DES-D1 was decided
 on. What a sheet prints is its **quantity** table — the columns the view's callout letters
-point at — and the widest of those is the panelled corner's at **105.8 × 35.0 mm**, 10 mm
+point at — and the widest of those is the paneled corner's at **105.8 × 35.0 mm**, 10 mm
 wider. The envelope narrows to match. The pinned block is 130.0 × 46.0 and still fits, with
 **2.7 mm of width and 0.8 mm of depth to spare**, so the decision holds; the margin is simply
 smaller than the number said, and a margin quoted from a table nobody prints is not a margin.
@@ -1014,7 +1014,7 @@ Measured, which is what settled it. The seating flat's span is `max(a, b) - b` o
 branches of that floor, so it is **exactly zero when the panel branch wins**, and the face is
 gone rather than narrow: the corner goes from 54 faces to 52 and the bulkhead from 187 to 179,
 losing four flats of 3.15 mm² each. Three of the thirteen families held both kinds of part —
-**24 of the panelled corner's 216, 8 of the panelled end bulkhead's 72, and 4 of the panelled
+**24 of the paneled corner's 216, 8 of the paneled end bulkhead's 72, and 4 of the paneled
 interconnect's 36**. Splitting them takes the drawing set from **13 family sheets to 16**, and
 that is the price of the sheets being true.
 
@@ -1028,7 +1028,7 @@ object split the boom bulkhead's four families into eight for a distinction its 
 have, and the set came out at 18 rather than 16.
 
 *The dimension is the seat's offset, not the flat's span.* The span follows `U` and the panel
-stock both, so it prints as a band of eight columns and the panelled end bulkhead's table came
+stock both, so it prints as a band of eight columns and the paneled end bulkhead's table came
 to **158.6 mm** against a 108.5 mm band. The same face located from the longeron axis instead
 of measured across it is `max(a, b)`, and where the bore branch wins — which is every member
 of a family the flat exists on, by construction — that is a function of `U` alone. One column.
@@ -1456,7 +1456,7 @@ two candidate points, `_leader_clear` re-verifies the bent leader crosses nothin
 in frame before it is accepted. `PlacedNote.leader` is now two points or three; `drawing.bind_notes`
 already drew `DrawLeaderLine.WayPoints` as a list, so the third point cost nothing there.
 
-**Measured working**: on the panelled bulkhead's `DETAIL A`, the `bore` note's leader — which
+**Measured working**: on the paneled bulkhead's `DETAIL A`, the `bore` note's leader — which
 used to run straight from (58.7, 62.8) to (94.6, 16.0), crossing `G`'s witness at (60.0, 61.1)
 — now bends through (60.0, 58.2) and clears it.
 

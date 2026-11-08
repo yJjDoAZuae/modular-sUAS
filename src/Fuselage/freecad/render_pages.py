@@ -47,7 +47,7 @@ reason the visibility below has to happen first.
 **Everything has to be made visible first, and that is not a detail.** The sheets are built
 by `freecadcmd`, which has no view providers at all, so an `.FCStd` from it carries no record
 of what is shown. Opening it in the GUI creates those view providers fresh with `Visibility`
-defaulted *off* -- 222 of them on a corner sheet -- and TechDraw honours that when it builds
+defaulted *off* -- 222 of them on a corner sheet -- and TechDraw honors that when it builds
 the page scene. The result is not an empty page, which would be obvious: the views and the
 dimensions come through and **the template does not**, so the sheet renders complete except for
 its frame and title block, which reads as a drawing that was never given a border rather than

@@ -359,7 +359,7 @@ def fig_greeble_buried(a, alabel, c, clabel, cid):
              'both branches of its conditional</text>')
     b.append('<text class="lbl" x="0" y="28">left %s, right %s &mdash; same panel, so only the '
              'size flips the branch; each scaled to its own fillet</text>' % (alabel, clabel))
-    b.append('<text class="lbl" x="0" y="42">grey is the finished octant, teal the plain '
+    b.append('<text class="lbl" x="0" y="42">gray is the finished octant, teal the plain '
              'flange material, purple the bolt-flange fillet, amber the web-to-bolt, red '
              'this one</text>')
     b.append('<text class="lbl" x="0" y="%.0f">the reference switches and it changes nothing: '

@@ -20,7 +20,7 @@ across processes, and that is what this adds.
 
 **Verified 2026-09-06 that the seeding actually takes effect**, because a cross-process hash
 test that silently fails to vary the seed is a check that compares nothing: `freecadcmd`
-honours `PYTHONHASHSEED`, giving `hash('probe')` of 7018796803104437630, 4008879868145172077
+honors `PYTHONHASHSEED`, giving `hash('probe')` of 7018796803104437630, 4008879868145172077
 and -9081287195077309814 for seeds 1, 2 and 3. **The check re-establishes this every run** --
 each child reports its own `hash` probe, and identical probes are a failure rather than a pass,
 whatever the digests say. That is the difference between this check and one that would go green

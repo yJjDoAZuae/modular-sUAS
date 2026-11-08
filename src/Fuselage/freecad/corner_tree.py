@@ -390,7 +390,7 @@ def _section(doc, tag, z0, h):
     #
     # IP-FC-88: tests `slot_reach`/`slot_depth`, the real feature, rather than `slot_w`/
     # `slot_d`, which now carry `slot_overshoot` unconditionally and so are never exactly 0 --
-    # checking them would build a degenerate box on every unpanelled variant instead of
+    # checking them would build a degenerate box on every unpaneled variant instead of
     # skipping it.
     if not _degenerate(doc, 'slot_reach', 'slot_depth'):
         node = _cut(doc, tag + 'CutSlot', node,

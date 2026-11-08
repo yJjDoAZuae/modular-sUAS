@@ -25,12 +25,12 @@ def _rel(*parts):
 # scaling_family
 # ------------------------------------------------------------
 
-def test_scaling_family_of_a_panelled_part_is_u_plus_unit_plus_panel():
+def test_scaling_family_of_a_paneled_part_is_u_plus_unit_plus_panel():
     rel = _rel('U_1.0', 'imperial', 'panel_1_8in', 'corner_FX_1.0.stl')
     assert sc.scaling_family(rel) == 'U_1.0/imperial/panel_1_8in'
 
 
-def test_scaling_family_of_a_metric_panelled_part():
+def test_scaling_family_of_a_metric_paneled_part():
     rel = _rel('U_2.0', 'metric', 'panel_6mm', 'bulkhead.stl')
     assert sc.scaling_family(rel) == 'U_2.0/metric/panel_6mm'
 
@@ -148,7 +148,7 @@ def test_check_families_returns_empty_when_no_family_has_a_panel_level(capsys):
     assert sc.check_families(entries, quiet=False) == []
 
 
-def test_check_families_counts_cowl_sets_separately_from_panelled_families(capsys):
+def test_check_families_counts_cowl_sets_separately_from_paneled_families(capsys):
     common = ['corner_FX_1.0.stl']
     entries = _entries(
         *[_rel('U_1.0', 'metric', 'panel_A', p) for p in common],

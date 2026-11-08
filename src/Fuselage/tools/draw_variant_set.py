@@ -19,7 +19,7 @@ here as blockers, are resolved as of 2026-09-21 -- neither is why these two are 
 **Some of the nine are also legitimately absent at particular `U`/panel pairs, and that is
 reported, not silently skipped.** The cowling types have no panel joint of their own --
 measured under IP-FC-135, "no panel interaction, one design for both cowls" -- so the sweep
-marks every panel above 0mm invalid for them. Rather than report every panelled set as owing
+marks every panel above 0mm invalid for them. Rather than report every paneled set as owing
 two parts the design does not have at any panel, this draws the cowling types from their own
 valid 0mm regardless of which panel the rest of the set is for, and says so on the sheet
 (`DrawingTitle` already states the type; `sheet_annotations.coverage_rows` states 0mm). Every

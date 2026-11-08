@@ -169,6 +169,10 @@ def load_seed(params_path, kind):
     module_name, table = KINDS[kind]
     with open(params_path) as f:
         doc = json.load(f)
+    # The unit is checked on both branches, and on this one it has to be checked *here*: the
+    # definition file is read straight out of `doc` below rather than through
+    # `parameters.load`, so nothing else would ever look at what unit it declares (IP-FC-159).
+    parameters.require_units(doc, params_path)
     if 'kind' not in doc:
         return parameters.seed(params_path, table)      # a variant: pick this part's table
     if doc['kind'] != kind:

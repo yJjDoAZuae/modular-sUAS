@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import FreeCAD as App
 
 import build_part as bp
+import units
 from corner_common import is_entry_point
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -94,9 +95,14 @@ def _check_load_seed():
         ok = False
 
     os.makedirs(SCRATCH, exist_ok=True)
+    # **Every fixture here declares its unit, because `load_seed` now refuses one that does
+    # not (IP-FC-159).** These two were written without a `units` field and the guard rejected
+    # them the moment it landed -- which is the guard working, not a test to be loosened. A
+    # fixture that omits it is a document `build_part` would refuse in production too.
     swept_ok_path = os.path.join(SCRATCH, 'swept_ok.json')
     with open(swept_ok_path, 'w') as f:
-        json.dump({'kind': 'bulkhead', 'parameters': {'U': 2.0, 'FX': 1.0}}, f)
+        json.dump({'kind': 'bulkhead', 'units': units.PARAM_UNITS_MM,
+                   'parameters': {'U': 2.0, 'FX': 1.0}}, f)
     seed2 = bp.load_seed(swept_ok_path, 'bulkhead')
     if seed2 != {'U': 2.0, 'FX': 1.0}:
         print('  FAIL load_seed: sweep-shape file (kind matches) -> %r' % (seed2,))
@@ -104,7 +110,8 @@ def _check_load_seed():
 
     swept_bad_path = os.path.join(SCRATCH, 'swept_bad.json')
     with open(swept_bad_path, 'w') as f:
-        json.dump({'kind': 'corner', 'parameters': {'U': 2.0}}, f)
+        json.dump({'kind': 'corner', 'units': units.PARAM_UNITS_MM,
+                   'parameters': {'U': 2.0}}, f)
     try:
         bp.load_seed(swept_bad_path, 'bulkhead')
         print('  FAIL load_seed: mismatched kind did not raise')
@@ -114,8 +121,39 @@ def _check_load_seed():
             print('  FAIL load_seed: mismatch message %r missing both kind names' % str(exc))
             ok = False
 
+    # -- the unit declaration itself, refused in three ways and accepted in two
+    #
+    # **The accept cases are as load-bearing as the refusals.** A guard that refuses
+    # everything also "passes" a refusal test, so the long spelling the definition file still
+    # writes and the short token the variant file writes both have to get through.
+    unit_cases = [
+        ({'kind': 'bulkhead', 'parameters': {'U': 1.0}}, False, 'no units field'),
+        ({'kind': 'bulkhead', 'units': 'inches', 'parameters': {'U': 1.0}}, False,
+         'a unit this project does not use'),
+        ({'kind': 'bulkhead', 'units': units.PARAM_UNITS_M, 'parameters': {'U': 1.0}}, False,
+         'meters, while this tier still reads millimeters'),
+        ({'kind': 'bulkhead', 'units': units.PARAM_UNITS_MM_LEGACY,
+          'parameters': {'U': 1.0}}, True, 'the long spelling'),
+        ({'kind': 'bulkhead', 'units': units.PARAM_UNITS_MM,
+          'parameters': {'U': 1.0}}, True, 'the short token'),
+    ]
+    for i, (doc, want_ok, why) in enumerate(unit_cases):
+        path = os.path.join(SCRATCH, 'units_%d.json' % i)
+        with open(path, 'w') as f:
+            json.dump(doc, f)
+        try:
+            bp.load_seed(path, 'bulkhead')
+            got_ok = True
+        except SystemExit:
+            got_ok = False
+        if got_ok != want_ok:
+            print('  FAIL load_seed: %s was %s, expected %s'
+                  % (why, 'accepted' if got_ok else 'refused',
+                     'accepted' if want_ok else 'refused'))
+            ok = False
+
     if ok:
-        print('  load_seed: OK (3/3)')
+        print('  load_seed: OK (3/3 shapes, 5/5 unit declarations)')
     return ok
 
 
