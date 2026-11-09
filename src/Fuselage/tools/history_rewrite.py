@@ -360,6 +360,28 @@ def apply_to(target, table=None):
     return counts
 
 
+def _exempt_everywhere(paths):
+    """Whether a blob is reachable *only* at paths the gate exempts.
+
+    The gate skips a small set of files by basename -- the fixture module that must hold
+    synthetic path shapes in order to test the patterns at all. A history scan has to honor the
+    same exemption or it reports the fixtures as exposure, and a verification that cries wolf on
+    its own test data is one someone learns to read past.
+
+    The exemption is taken from `doc_check.IDENTITY_EXEMPT`, the list the gate itself consults,
+    rather than restated here: two lists drift, and the one that drifts silently is this one.
+
+    Two deliberate strictnesses. Every path the blob is reachable at must be exempt, because the
+    same bytes committed once as a fixture and once as a real file are one object, and the real
+    one decides. And a blob with no known path is never exempt -- an unreachable object has no
+    basename to clear it, so it is scanned.
+    """
+    paths = list(paths)
+    if not paths:
+        return False
+    return all(os.path.basename(p) in inv.doc_check.IDENTITY_EXEMPT for p in paths)
+
+
 def verify(target, progress=None):
     """Scan a rewritten repository with the **inventory's** instrument, not with the rules.
 
@@ -398,6 +420,8 @@ def verify(target, progress=None):
         for i, (sha, _size) in enumerate(blobs):
             data = inv.read_one(proc, sha)
             if data is None:
+                continue
+            if _exempt_everywhere(where.get(sha, ())):
                 continue
             for kind, matched, whole in inv.scan_blob(data, scrub_pat):
                 if not inv.gate_worthy(kind, matched, whole):

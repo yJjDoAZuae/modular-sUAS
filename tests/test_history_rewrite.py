@@ -240,6 +240,35 @@ class TestRemovalsAndRedactions:
             assert stem not in source, 'the module names a removed path'
 
 
+class TestTheHistoryScanHonorsTheGatesExemption:
+    """The fixture module holds synthetic path shapes on purpose, so a history scan that does
+    not exempt it reports its own test data as exposure -- and a check that cries wolf is one
+    people learn to read past."""
+
+    def test_a_blob_only_at_an_exempt_path_is_skipped(self):
+        assert hr._exempt_everywhere(['tests/path_fixtures.py'])
+
+    def test_the_exemption_is_read_from_the_gates_own_list(self):
+        """Not restated here. Two lists drift, and this is the one that drifts silently."""
+        assert 'path_fixtures.py' in hr.inv.doc_check.IDENTITY_EXEMPT
+
+    def test_an_ordinary_path_is_not_exempt(self):
+        assert not hr._exempt_everywhere(['src/Fuselage/tools/history_rewrite.py'])
+
+    def test_one_real_path_decides_against_the_whole_blob(self):
+        """Identical bytes committed as a fixture and as a real file are one object."""
+        assert not hr._exempt_everywhere(['tests/path_fixtures.py', 'src/real_thing.py'])
+
+    def test_a_blob_with_no_known_path_is_never_exempt(self):
+        """An unreachable object has no basename to clear it, so it gets scanned."""
+        assert not hr._exempt_everywhere([])
+
+    def test_the_basename_is_what_matters_not_the_directory(self):
+        """`rev-list --objects` names a path as of whichever commit reached it, and the fixture
+        module has not always lived where it lives now."""
+        assert hr._exempt_everywhere(['some/older/place/path_fixtures.py'])
+
+
 class TestTheResiduePatternCoversEveryRule:
     def test_it_matches_anything_the_table_would_replace(self):
         residue = hr._residue_pattern(table())
