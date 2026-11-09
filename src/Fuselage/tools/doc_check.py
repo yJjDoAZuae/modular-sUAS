@@ -263,12 +263,23 @@ class Page(object):
         return self.rel.startswith('implementation/') and not self.rel.endswith('PLANS.md')
 
 
+#: A page kept locally and deliberately not tracked, by the same `.local.` convention the
+#: identity inventory's report uses. These are skipped rather than checked.
+#:
+#: **Why skipping is necessary and not merely tidy.** A local copy of a plan would be read as a
+#: second, independent page: every open question in it would be a duplicate declaration, every
+#: work item a second registration, and the plan index would be reported as missing an entry that
+#: is in fact present twice. The checks would be reporting on a file that is not part of the
+#: repository at all.
+LOCAL_SUFFIX = '.local.md'
+
+
 def read_pages(root=DOC):
     """Every markdown page under `root`, keyed by its path relative to `root`, in sorted order."""
     out = {}
     for dirpath, _dirs, files in os.walk(root):
         for name in sorted(files):
-            if not name.endswith('.md'):
+            if not name.endswith('.md') or name.endswith(LOCAL_SUFFIX):
                 continue
             path = os.path.join(dirpath, name)
             rel = os.path.relpath(path, root)
@@ -881,6 +892,14 @@ IDENTITY_EXEMPT = {
     'LICENSE': 'a copyright notice names its holder',
     'LICENSE.md': 'same',
     'LICENSE.txt': 'same',
+    # The path-shape tests have to contain path shapes or they prove nothing: a fixture written
+    # as `\\<server>\<share>` exercises the benign filter instead of the detector, and the
+    # highest-value test in that suite is the one asserting a UNC pattern matches a real UNC
+    # path. Collecting every synthetic path in one named, exempt module keeps the hole narrow
+    # and visible rather than spread across the suite, where each fixture would be a finding and
+    # the gate would become something to switch off. Every token in it is invented, and the
+    # suite asserts that none matches a real identity or a host discovered in this repository.
+    'path_fixtures.py': 'synthetic path shapes the pattern tests need; tokens asserted unreal',
 }
 
 #: Shortest token treated as identifying. Two letters produce false matches against ordinary

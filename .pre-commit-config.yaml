@@ -1,0 +1,61 @@
+# Commit-time gates.
+#
+# **Why these run here and not only in a test.** A rule that nothing enforces at commit time is
+# a rule that gets reintroduced: doc/guidelines/general.md forbids a personal identifier or a
+# machine-specific path in any tracked file, and until these hooks existed nothing checked it.
+#
+# There is already a precedent for this shape of fix in the project: nbstripout is installed as
+# a git filter specifically so a captured notebook cell output cannot be committed "including
+# whatever path or machine-local detail happened to be on screen when the cell last ran"
+# (pyproject.toml). These hooks apply the same idea to every other file type.
+#
+# **`language: python`, not `language: system`, and the difference is not cosmetic.** `system`
+# runs the entry against whatever is on `PATH`, and git does not launch a hook with this
+# project's virtual environment on `PATH` -- an IDE or TortoiseGit launches it with even less.
+# On Windows a bare `python` then resolves to the Microsoft Store app-execution alias, which
+# prints an install advertisement and exits 9009, so the hook fails for a reason that has
+# nothing to do with what it checks. `language: python` makes pre-commit create and supply its
+# own interpreter, so the hooks depend on nothing but pre-commit itself.
+#
+# This works because all three tools import only the standard library and each other. Adding a
+# third-party import to any of them breaks the hooks until it is listed in
+# `additional_dependencies` here.
+#
+# Verify a change to this file the way git runs it, not the way a terminal does: the first
+# version passed under `uv run pre-commit` and failed on a real commit.
+#
+# Install with:   uv run pre-commit install && uv run pre-commit install --hook-type pre-push
+# Bypass once:    git commit --no-verify        (and then fix what it found)
+# Remove:         uv run pre-commit uninstall
+repos:
+  - repo: local
+    hooks:
+      # Staged files only, which is both correct for a commit hook and fast: the whole tree
+      # costs about twelve seconds, a handful of staged files about one.
+      - id: identity-gate
+        name: no personal identifier or machine-specific path
+        entry: python src/Fuselage/tools/identity_inventory.py --gate
+        language: python
+        pass_filenames: true
+        stages: [pre-commit]
+
+      # Reads bytes, so it covers binaries -- a .blend's last-used directory and a PNG's render
+      # stamp appear in neither git grep nor a UTF-8 decode. Text files are covered by the two
+      # hooks below as well, which is deliberate: the three sources disagree sometimes, and a
+      # disagreement is information.
+      - id: source-identity-and-spelling
+        name: American spellings and no names in source
+        entry: python src/Fuselage/tools/source_spelling.py
+        language: python
+        pass_filenames: false
+        stages: [pre-push]
+
+      # The documentation's structural invariants, including its own identity check. On push
+      # rather than commit because it reads the whole doc tree and takes long enough that a
+      # per-commit run would be the thing people disable.
+      - id: doc-invariants
+        name: documentation invariants
+        entry: python src/Fuselage/tools/doc_check.py
+        language: python
+        pass_filenames: false
+        stages: [pre-push]

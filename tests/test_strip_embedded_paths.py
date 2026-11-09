@@ -40,7 +40,7 @@ def png_chunk(name, payload):
 
 
 def make_png(text_chunks=(), width=1, height=1):
-    """A structurally valid 1x1 greyscale PNG, plus whatever text chunks are asked for."""
+    """A structurally valid 1x1 grayscale PNG, plus whatever text chunks are asked for."""
     ihdr = struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0)
     raw = b''.join(b'\x00' + b'\x80' * width for _ in range(height))
     out = sep.PNG_SIG + png_chunk(b'IHDR', ihdr)
@@ -159,7 +159,7 @@ class TestTheBlendEditNeverChangesTheLength:
         assert sep.blend_validate(clean)['blocks'] == 3
 
     def test_the_bytes_around_the_field_are_untouched(self):
-        """Padding must not bleed past the string into the neighbouring values."""
+        """Padding must not bleed past the string into the neighboring values."""
         data = make_blend(FAKE_PATH)
         clean, _ = sep.overwrite_in_span(data, PATTERN)
         assert clean.count(b'\x01' * 8) == 1

@@ -32,6 +32,11 @@ dev = [
     # is committed verbatim, including whatever path or machine-local detail happened
     # to be on screen when the cell last ran.
     "nbstripout>=0.7",
+    # src/Fuselage/tools/history_rewrite.py runs through this, as `uv run git-filter-repo`. It
+    # is declared here rather than borrowed from whatever environment happens to have it,
+    # because a rewrite performed with undeclared tooling is not captured in uv.lock and so is
+    # not reproducible from this repository. MIT, pure Python, no dependencies of its own.
+    "git-filter-repo>=2.47",
 ]
 
 [tool.uv]

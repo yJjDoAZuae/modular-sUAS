@@ -610,6 +610,56 @@ Review checklist:
   `parts/` and `lib/` rules silently match `src/Fuselage/parts/` and would exclude
   irreplaceable CAD — verify with `git check-ignore -v` before assuming a file is tracked.
 
+### ⚠ No personal data and no machine-specific paths. Ever.
+
+**No personal identifier belongs in this repository** — not in prose, not in a comment, not in
+an identifier, not in a commit message, and not inside a binary's metadata. In scope:
+
+- a contributor's name, in any form, including as the attribution for a decision;
+- an email address;
+- the name of a machine, a network share, or a drive mapping;
+- an absolute path beneath a user profile, which carries the account name along with it.
+
+**This is a privacy rule and it is separate from the portability rule.** [Anchor every path to
+`__file__`](#anchor-every-path-to-__file__-never-to-the-working-directory) forbids absolute
+paths because a dead drive mapping makes generated geometry unrenderable; that is a correctness
+concern, and a path like `/opt/shared/project/...` would satisfy it while still naming someone.
+Both rules apply to the same text for different reasons, and neither implies the other.
+
+**Attribute a decision without naming anyone.** "On direct instruction", "the maintainer" and
+"the project owner" each carry the same information a name would. A design document records
+*what* was decided and *why*, and a reader needs neither the decider's name nor their address
+to act on it. Git already records authorship; a document repeating it adds nothing and spreads
+it into every file that cites the decision.
+
+**Describe a constraint by its property, never by its identity.** Where a passage has to explain
+machine-specific behavior, the explanatory force is always in the property — that storage is a
+network share, that a path is in extended-length UNC form — and never in which share or which
+host. Say the property. A generic placeholder for the root is acceptable where the shape of the
+path is the point.
+
+**Mechanical enforcement exists, and it is a backstop rather than the rule.**
+[`tools/doc_check.py`](../../src/Fuselage/tools/doc_check.py) and
+[`tools/source_spelling.py`](../../src/Fuselage/tools/source_spelling.py) both refuse any file
+carrying an identity they read out of git at run time, reading `--global` as well as `--local`
+because a deliberately pseudonymous local identity would otherwise hide the real one. Treat a
+clean run as the floor and not the ceiling: a list-driven check only ever proves it copied its
+list, so it cannot report the entry nobody gave it. The rule binds whether or not a tool catches
+the violation.
+
+**Binaries carry paths where no text search will find them.** A `.blend` stores a last-used
+directory and a paste-buffer path; a render stores the file it came from in a PNG `tEXt` chunk;
+a FreeCAD document stores its own save location. None of those appear in `git grep`. Use
+[`tools/strip_embedded_paths.py`](../../src/Fuselage/tools/strip_embedded_paths.py) to scan and
+clean them, and prefer ignoring a regenerable binary outright over committing one and cleaning
+it afterwards.
+
+**A violation is not fixed by removing it from the working tree.** It persists in every commit
+whose tree contains it, an exposure that outlives the edit and can only be repaired by rewriting
+history — the maintainer's decision, never Claude's, and expensive enough that avoiding the
+violation is the only cheap option. `src/Fuselage/tools/history_rewrite.py` carries the mechanics
+and the reasoning.
+
 ---
 
 ## Documentation and Math Formatting

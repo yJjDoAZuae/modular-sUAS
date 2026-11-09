@@ -180,3 +180,27 @@ The parameter sheet is the documentation of what is adjustable. If something you
 change is not in it, that is a signal: either the parameter exists upstream and should be
 exposed, or the change is new design work rather than re-parameterization. Both are fine —
 they are just different jobs.
+
+---
+
+## Telling the two toolchains' previews apart
+
+`freecad/out/preview/` collects ad-hoc inspection renders. It is **not** sweep output: nothing
+in it came from a parametric sweep run, so none of it belongs in `variant_output/`. Everything
+there is regenerable and safe to delete.
+
+Two toolchains write into that one folder, and keeping them distinguishable is the whole reason
+the distinction is written down rather than left to the filenames.
+
+| Produced by | From | How you can tell |
+| --- | --- | --- |
+| FreeCAD | [`freecad/preview.py`](../../src/Fuselage/freecad/preview.py), off the ported CSG trees | no `.scad` beside it |
+| OpenSCAD | [`tools/render_variant.py`](../../src/Fuselage/tools/render_variant.py), which derives one variant and renders it | **a `.scad` sits next to the `.stl`** |
+
+That last column is the usable rule: the OpenSCAD path emits a `.scad` beside each `.stl`, so a
+`.scad` next to a mesh means OpenSCAD made it.
+
+Every PNG in the folder is rasterized by
+[`tools/stl_preview.py`](../../src/Fuselage/tools/stl_preview.py) at the same camera regardless
+of which toolchain produced the mesh, which is what makes a FreeCAD render and an OpenSCAD
+render of the same part directly comparable rather than merely similar-looking.

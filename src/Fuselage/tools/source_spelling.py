@@ -31,6 +31,7 @@ import subprocess
 import sys
 
 import doc_check
+import identity_inventory
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -302,6 +303,13 @@ def check_identities(root=None):
     names = doc_check.git_identities()
     if not names:
         return [(ROOT, 0, '(could not read any git identity -- this check did NOT run)')]
+    # The forge's own addresses are no more personal than a domain name, and they arrive in the
+    # identity list only because they appear as a committer on merge commits. Excluding them here
+    # is what keeps this half from disagreeing with `identity_inventory`'s, which already holds
+    # them out of the rewrite's replacement list for the same reason.
+    names = [n for n in names if n.lower() not in identity_inventory.BENIGN_IDENTITY]
+    if not names:
+        return []
     pattern = re.compile(r'\b(%s)\b' % '|'.join(re.escape(n) for n in names), re.I)
     out = []
     for path in source_files(root):
@@ -345,7 +353,24 @@ def main(argv=None):
     else:
         print('personal names in source: 0')
 
-    return 1 if ((rows and '--fix' not in argv) or identities) else 0
+    # **The binary half, which no text gate can see.** `check_identities` above decodes each
+    # source file as UTF-8 and matches names in it, which covers prose, code, manifests and test
+    # names. A `.blend`'s last-used directory and a PNG's render stamp appear in neither that
+    # pass nor `git grep`, so they are scanned as bytes, over every tracked path rather than only
+    # the source extensions. Printed unconditionally, for the same reason as the line above.
+    embedded = identity_inventory.gate()
+    print('')
+    if embedded:
+        print('EMBEDDED PATHS -- %d across %d tracked file(s):'
+              % (len(embedded), len({p for p, _w, _k, _s in embedded})))
+        for path, where, kind, text in embedded:
+            print('    %-50s :%-6s %-13s %s' % (path, where, kind, text[:60]))
+        print('    Use src/Fuselage/tools/strip_embedded_paths.py for a binary; rewrite the '
+              'line for a text file.')
+    else:
+        print('embedded paths in tracked files: 0')
+
+    return 1 if ((rows and '--fix' not in argv) or identities or embedded) else 0
 
 
 if __name__ == '__main__':

@@ -268,3 +268,22 @@ src/Fuselage/freecad/out/
 # .FCStd deliverable (UC-2, IP-FC-14) goes to variant_output/, already ignored.
 *.FCStd
 *.FCStd[0-9]
+
+# FreeCAD's other backup extension. Nothing here writes one today and the convention in this
+# project is .FCStd1, so this is a backstop rather than an observed problem -- but the rule it
+# backs up is absolute, so it does not wait for a first offence.
+*.FCBak
+
+# The identity inventory is, by construction, a file listing verbatim every personal and
+# machine-specific string that doc/guidelines/general.md forbids. It is generated so the gate
+# and the history rewrite can be built from a measured list instead of an authored one, and
+# committing it would be precisely the defect it exists to repair. Regenerate it with
+# src/Fuselage/tools/identity_inventory.py; never track it.
+identity_inventory.local.txt
+*.local.txt
+
+# Documents kept in the working tree on purpose and deliberately not published. A `.local.md`
+# is not a draft -- it is a page whose content is wanted locally and whose *subject* is not for
+# a public remote. `doc_check` skips the suffix rather than reading such a page as a second
+# independent copy of whatever it duplicates.
+*.local.md
