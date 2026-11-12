@@ -764,6 +764,14 @@
   "greeble_web.REF_VOL_M3": {
    "unit": "m3"
   },
+  "identity_inventory.GATE_MIN_LENGTH": {
+   "reason": "a minimum match length in characters, below which a candidate is too short to be a path",
+   "unit": "none"
+  },
+  "identity_inventory.GATE_MIN_SEPARATORS": {
+   "reason": "a minimum count of path separators in a match, below which it is not path-shaped",
+   "unit": "none"
+  },
   "input_screen.HASH_DEFLECTION_M": {
    "unit": "m"
   },

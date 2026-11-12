@@ -24,6 +24,14 @@
 # Verify a change to this file the way git runs it, not the way a terminal does: the first
 # version passed under `uv run pre-commit` and failed on a real commit.
 #
+# **`always_run: true` on the pre-push hooks, because `pass_filenames: false` does not imply it.**
+# pre-commit decides which hooks to run from the list of changed files, and a hook with no
+# matching file is skipped whether or not it wanted filenames. A force-push is the case where
+# that bites: the remote commit no longer exists in the rewritten history, so the changed-file
+# list comes out empty and both whole-tree checks report "(no files to check) Skipped". That is
+# the one push where the gate matters most. Observed on the 2026-11-11 history rewrite, where
+# both hooks skipped and only a manual run beforehand had checked anything.
+#
 # Install with:   uv run pre-commit install && uv run pre-commit install --hook-type pre-push
 # Bypass once:    git commit --no-verify        (and then fix what it found)
 # Remove:         uv run pre-commit uninstall
@@ -48,6 +56,7 @@ repos:
         entry: python src/Fuselage/tools/source_spelling.py
         language: python
         pass_filenames: false
+        always_run: true
         stages: [pre-push]
 
       # The documentation's structural invariants, including its own identity check. On push
@@ -58,4 +67,5 @@ repos:
         entry: python src/Fuselage/tools/doc_check.py
         language: python
         pass_filenames: false
+        always_run: true
         stages: [pre-push]
