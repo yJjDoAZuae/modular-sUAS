@@ -520,8 +520,16 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # the same dose. This runs inside the `except` and before the `finally` below, which
             # is the only window where the shape is still valid. `wall_measure.refusals` never
             # raises, deliberately: a failed write must not replace the refusal it was recording.
+            # `delta` is millimeters here -- it is what `delta_mm` in the record is set from --
+            # and `save` takes meters, so it converts at this call rather than anywhere inside.
+            # Until 2026-11-13 this passed `delta=`, which `save` has never had: the keyword was
+            # `delta_m` after IP-FC-163 and the call was not moved with it. That raised
+            # `TypeError` *inside this except block*, replacing the refusal being diagnosed with
+            # a failure to diagnose it -- the one outcome `wall_measure.refusals` is written to
+            # prevent, reached by the call site instead of by the module.
             kept = wm_refusals.save(exc, out_dir, kind, u,
-                                    lambda shape, path: shape.exportBrep(path), delta=delta)
+                                    lambda shape, path: shape.exportBrep(path),
+                                    delta_m=si.m(delta))
             if kept is not None:
                 rec['refusal_artifact'] = kept
                 if kept.get('error'):

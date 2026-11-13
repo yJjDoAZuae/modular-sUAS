@@ -1,11 +1,12 @@
 """Remove an absolute path embedded inside a binary asset, without disturbing what it draws.
 
-**Why this exists.** Three tracked binaries in this repository -- two Blender documents and one
-Cycles render -- carry an absolute user-profile path in their internal data. None of those paths
-is an asset reference: they are a last-used directory, Blender's paste-buffer temp path, and the
-render stamp naming the `.blend` a picture came from. Nothing needs relinking, so re-exporting
-the files in Blender would rewrite thousands of unrelated bytes to fix a few dozen, and would
-leave the geometry equal only by assumption rather than by construction.
+**Why this exists.** A Blender document and a Cycles render can carry an absolute user-profile
+path in their internal data without any of it being an asset reference -- a last-used directory,
+a paste-buffer temp path, a render stamp naming the `.blend` a picture came from. Nothing needs
+relinking in that case, so re-exporting the file would rewrite thousands of unrelated bytes to
+fix a few dozen, and would leave the geometry equal only by assumption rather than by
+construction. This tool exists so that repair can be made by construction instead, and it stays
+because the commit gate needs something that reads bytes rather than decoded text.
 
 Both formats admit a repair that is provably confined to the offending bytes:
 

@@ -117,11 +117,18 @@ def shape_of(exc):
 def station_of(exc):
     """The station a refusal's worst reading was at, in meters, or `None`.
 
-    `Unconverged.z` is set by `cowl_interior`, which stores SI, so this is already meters and
-    nothing converts (IP-FC-163). The attribute keeps its own short name because it belongs to
-    the port's exception class, not to this module.
+    `Unconverged.z_m` is set by `cowl_interior`, which stores SI, so this is already meters and
+    nothing converts (IP-FC-163).
+
+    **The attribute is `z_m`, and reading `z` instead returned `None` for every refusal.**
+    IP-FC-163's SI conversion renamed the exception's attribute and this reader was not moved
+    with it. Nothing failed: `getattr` with a default is the correct shape for this function and
+    it dutifully returned the default, so every refusal artifact was named as though the refusal
+    had no station -- the one field that says where to look. Found 2026-11-13, and it is the
+    failure mode a unit conversion has that a name sweep cannot see, because the old name still
+    reads like a sensible attribute.
     """
-    z_m = getattr(exc, 'z', None)
+    z_m = getattr(exc, 'z_m', None)
     return None if z_m is None else float(z_m)
 
 

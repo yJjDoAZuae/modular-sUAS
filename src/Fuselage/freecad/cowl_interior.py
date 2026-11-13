@@ -586,13 +586,25 @@ class Unconverged(Exception):
     fitted surface for the pre-cut station budget.
     """
 
-    def __init__(self, message, shape=None, z_m=None):
+    def __init__(self, message, shape=None, z_m=None, rounds=()):
         Exception.__init__(self, message)
         #: The shape the refusal's measurement was taken on, or `None`. A reference, not a copy.
         self.shape = shape
         #: The station the worst reading was at **in meters**, or `None` when the refusal is not
         #: about one.
         self.z_m = z_m
+        #: Per round of the post-cut pass, which intervals were flagged and how badly -- empty for
+        #: a refusal that is not the post-cut pass's.
+        #:
+        #: **Why the list and not just its length.** The message reports a count, and a count
+        #: cannot distinguish the two readings this item is stuck between: round 1 flags 19 of 38
+        #: intervals and round 2 flags 46 of 57, and that is either the same deficit seen at finer
+        #: spacing or a *different* surface, because round 1's own insertions re-fit the patch
+        #: before round 2 measures it. Those predict different things about where the flags sit --
+        #: the same `z` regions, or moved -- and the counts are identical under both. Each entry is
+        #: `{'round', 'worst_m', 'worst_z_m', 'intervals'}` with `intervals` a tuple of
+        #: `(patch_index, interval_index, z_lo_m, z_hi_m, gap_m)`, all lengths in meters.
+        self.rounds = tuple(rounds)
 
 
 # --------------------------------------------------------------------------------
@@ -2726,8 +2738,10 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     current_scan = round0_scan_by_patch
     worst_finished_m = 0.0
     worst_finished_z_m = None
+    round_records = []                             # one entry per round, carried by a refusal
     for round_ in range(POST_CUT_ROUNDS + 1):
         insertions = {}                            # (ei, i) -> worst gap seen in that interval
+        interval_bounds = {}                       # (ei, i) -> (z_lo_m, z_hi_m) for that interval
         worst_finished_m = 0.0
         worst_finished_z_m = None
         for ei, entry in enumerate(patch_entries):
@@ -2792,8 +2806,20 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                     # insertions and never reached this line.
                     slot = (ei, i)
                     insertions[slot] = max(insertions.get(slot, 0.0), gap_m)
+                    interval_bounds[slot] = (z_a_m, z_b_m)
         if not insertions:
             break
+        # **Where the flags sit, kept for the refusal to carry.** Built from the same dict the
+        # loop already fills, so it measures nothing extra and cannot disagree with the count in
+        # the message below.
+        round_records.append({
+            'round': round_ + 1,
+            'worst_m': worst_finished_m,
+            'worst_z_m': worst_finished_z_m,
+            'intervals': tuple(
+                (ei_, i_, interval_bounds[(ei_, i_)][0], interval_bounds[(ei_, i_)][1], gap)
+                for (ei_, i_), gap in sorted(insertions.items())),
+        })
         if round_ == POST_CUT_ROUNDS:
             raise Unconverged(
                 'section 5\'s second pass wanted more stations after %d round(s) of re-cutting '
@@ -2805,7 +2831,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                    'unrecorded' if worst_finished_z_m is None
                    else '%.4f' % si.mm(worst_finished_z_m),
                    len(insertions)),
-                shape=solid, z_m=worst_finished_z_m)
+                shape=solid, z_m=worst_finished_z_m, rounds=round_records)
         note('    post-cut refine: round %d, worst finished-wall gap %.4f mm over %.3f at '
              'z = %s mm, inserting %d station(s)'
              % (round_ + 1, si.mm(worst_finished_m), si.mm(tau_m),
@@ -2836,7 +2862,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                        si.mm(worst_finished_m), si.mm(tau_m),
                        'unrecorded' if worst_finished_z_m is None
                        else '%.4f' % si.mm(worst_finished_z_m)),
-                    shape=solid, z_m=worst_finished_z_m)
+                    shape=solid, z_m=worst_finished_z_m, rounds=round_records)
             new_rows = [(z_m, fit_at(z_m)) for z_m in new_zs_m]
             surf2 = _fit(new_rows)
             main2, extra2 = assemble_patch(surf2, new_rows, entry['is_lo_end'],

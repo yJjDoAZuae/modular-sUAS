@@ -15,12 +15,21 @@ from wall_measure import refusals                                   # noqa: E402
 
 
 class _Refusal(Exception):
-    """Stands in for `cowl_interior.Unconverged`, which cannot be imported without FreeCAD."""
+    """Stands in for `cowl_interior.Unconverged`, which cannot be imported without FreeCAD.
 
-    def __init__(self, message='refused', shape=None, z=None):
+    **The attribute is `z_m` because the real one's is.** Until 2026-11-13 this double carried
+    `z`, which is what `station_of` read -- so the double and the reader agreed with each other
+    and disagreed with production, and every test passed while every real refusal was named as
+    though it had no station. `TestTheDoubleMatchesTheRealException` below is what stops that
+    recurring: a double is only evidence while it is still the same shape as the thing it stands
+    in for, and nothing checks that by itself.
+    """
+
+    def __init__(self, message='refused', shape=None, z_m=None, rounds=()):
         Exception.__init__(self, message)
         self.shape = shape
-        self.z = z
+        self.z_m = z_m
+        self.rounds = tuple(rounds)
 
 
 class _Bare(Exception):
@@ -55,13 +64,13 @@ class TestWhatAnExceptionCarries(object):
         assert refusals.station_of(_Bare('no z here')) is None
 
     def test_a_station_comes_back_as_a_float(self):
-        z = refusals.station_of(_Refusal(z='-73.1818'))
+        z = refusals.station_of(_Refusal(z_m='-73.1818'))
         assert isinstance(z, float)
         assert z == pytest.approx(-73.1818)
 
     def test_a_station_of_zero_is_a_station_and_not_an_absence(self):
         # `if z:` would drop it. A station at z = 0 is a legitimate height on these parts.
-        assert refusals.station_of(_Refusal(z=0.0)) == 0.0
+        assert refusals.station_of(_Refusal(z_m=0.0)) == 0.0
 
 
 class TestTheName(object):
@@ -117,7 +126,7 @@ class TestSaving(object):
         export = _Recorder()
         # `z` on the exception is the port's own attribute name and stays; `delta_m` is this
         # module's parameter and is SI (IP-FC-163), so the 0.03 mm dose is 3.0e-5 m.
-        rec = refusals.save(_Refusal(shape='the-cavity', z=-0.0731818), str(tmp_path),
+        rec = refusals.save(_Refusal(shape='the-cavity', z_m=-0.0731818), str(tmp_path),
                             'tail_shell', 3.0, export, delta_m=3.0e-5)
         assert len(export.calls) == 1
         shape, path = export.calls[0]
@@ -144,7 +153,7 @@ class TestSaving(object):
         # The sharpest trap in this module. This runs inside a caller's `except` block, so a
         # raise here would replace the refusal being diagnosed with a failure to diagnose it.
         export = _Recorder(fail=IOError('the network share went away'))
-        rec = refusals.save(_Refusal(shape='s', z=-1.0), str(tmp_path),
+        rec = refusals.save(_Refusal(shape='s', z_m=-1.0), str(tmp_path),
                             'tail_shell', 3.0, export)
         assert rec is not None
         assert 'IOError' in rec['error'] or 'OSError' in rec['error']
@@ -263,7 +272,15 @@ class TestTheConstructionHandsOverItsShape(object):
 
     def test_the_exception_accepts_a_shape_and_a_station(self):
         src = open(COWL_INTERIOR, encoding='utf-8').read()
-        assert 'def __init__(self, message, shape=None, z_m=None):' in src
+        assert 'def __init__(self, message, shape=None, z_m=None, rounds=()):' in src
+
+    def test_the_exception_carries_the_post_cut_rounds(self):
+        """The count in a refusal's message cannot separate 'the same deficit at finer
+        spacing' from 'a different surface after round 1 re-fit the patch'; the per-interval
+        list can, and IP-FC-146 is stuck between exactly those two readings."""
+        src = open(COWL_INTERIOR, encoding='utf-8').read()
+        assert 'self.rounds = tuple(rounds)' in src
+        assert src.count('rounds=round_records') == 2
 
     def test_there_are_refusal_sites_to_check(self):
         # Guards the two tests below from passing because the parse found nothing.
@@ -296,3 +313,75 @@ class TestThisModuleDoesNotNeedTheKernel(object):
         src = open(refusals.__file__.replace('.pyc', '.py'), encoding='utf-8').read()
         for forbidden in ('import FreeCAD', 'import Part', 'from FreeCAD', 'from Part'):
             assert forbidden not in src
+
+
+#: The two modules this one stands in for, read as text. Neither can be imported here -- both
+#: import FreeCAD -- so the checks below are structural, which is the point: they fail when a
+#: name moves, which is precisely what importing would have caught and a hand-written double
+#: cannot.
+_PORT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     'src', 'Fuselage', 'freecad')
+
+
+def _source(name):
+    with open(os.path.join(_PORT, name), encoding='utf-8') as fh:
+        return fh.read()
+
+
+class TestTheDoubleMatchesTheRealException(object):
+    """A double is evidence only while it is still shaped like the thing it stands in for.
+
+    Found 2026-11-13: `_Refusal` carried `z` and `station_of` read `z`, so they agreed with each
+    other and disagreed with `Unconverged`, which carries `z_m`. Every test in this file passed
+    and every real refusal was named as though it had no station. The suite could not see it,
+    because nothing in it ever touched the real class.
+    """
+
+    def test_the_real_exception_sets_the_attributes_this_double_sets(self):
+        src = _source('cowl_interior.py')
+        for attribute in ('self.shape =', 'self.z_m =', 'self.rounds ='):
+            assert attribute in src, attribute
+
+    def test_the_real_exception_does_not_set_a_bare_z(self):
+        """The old name, which this module read for weeks after it stopped existing."""
+        assert 'self.z =' not in _source('cowl_interior.py')
+
+    def test_station_of_reads_the_attribute_the_port_actually_writes(self):
+        assert refusals.station_of(_Refusal(z_m=-0.2941530)) == pytest.approx(-0.2941530)
+
+    def test_an_exception_carrying_only_the_old_name_reads_as_no_station(self):
+        """Stated as a fact rather than left implicit: nothing falls back, so a future rename
+        fails loudly here instead of quietly returning `None` everywhere."""
+
+        class _OldStyle(Exception):
+            def __init__(self):
+                self.shape, self.z = 's', -0.29
+
+        assert refusals.station_of(_OldStyle()) is None
+
+
+class TestTheCallSitesPassKeywordsSaveAccepts(object):
+    """`save` runs inside a caller's `except`, so a wrong keyword there is not a wrong keyword --
+    it is a `TypeError` raised while diagnosing a refusal, which replaces the finding with a
+    failure to record it. That is the one outcome this module exists to prevent, and it was
+    reachable from the call site rather than from the module.
+
+    Found 2026-11-13: `sever_doses` called `save(..., delta=delta)` after IP-FC-163 renamed the
+    parameter to `delta_m`. It would have raised on the first refusal it tried to save.
+    """
+
+    def test_every_keyword_sever_doses_passes_to_save_exists(self):
+        import inspect
+        import re
+        src = _source('sever_doses.py')
+        call = re.search(r'wm_refusals\.save\((.*?)\)\s*$', src, re.S | re.M)
+        assert call is not None, 'the call site moved; this test must move with it'
+        passed = set(re.findall(r'(\w+)\s*=', call.group(1)))
+        accepted = set(inspect.signature(refusals.save).parameters)
+        assert passed <= accepted, 'passes %s which save does not accept' % (passed - accepted)
+
+    def test_it_passes_the_station_in_meters_not_millimeters(self):
+        """`delta` there is millimeters -- the record's own field is `delta_mm` -- and `save`
+        takes meters, so the conversion has to be visible at the call."""
+        src = _source('sever_doses.py')
+        assert 'delta_m=si.m(delta)' in src
