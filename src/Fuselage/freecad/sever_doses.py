@@ -163,14 +163,17 @@ def _opt(name, default=None):
     return default
 
 
-def ring_state_at(wall, z):
+def ring_state_at(wall, z_m):
     """The annulus identity at one station: `(state, faces, wires, area)`.
 
     `state` is `'annulus'`, `'broken'` or `'unreadable'`. Factored out of `ring_states` so
     `break_extent` can bisect with exactly the classification the scan used -- a refinement that
     asked the question a second way would be measuring a different quantity.
+
+    `z_m` is meters, because `_slice_wires` is (IP-FC-163). Handing it millimeters sliced every
+    station a thousand times outside the part, so every scan station read `unreadable`.
     """
-    wires = [w for w in ci._slice_wires(wall, z) if w.isClosed()]
+    wires = [w for w in ci._slice_wires(wall, z_m) if w.isClosed()]
     got = cci.section_regions(wires)
     if got is None:
         return 'unreadable', None, None, None
@@ -199,8 +202,7 @@ def ring_states(wall, z_lo_m, z_hi_m, stations=None, scan_m=SCAN_M):
     continuous, broken, unreadable, worst = 0, 0, 0, None
     detail = []
     for z_m in rb.scan_grid(z_lo_m, z_hi_m, stations):
-        z = si.mm(z_m)
-        state, faces, wire_counts, area = ring_state_at(wall, z)
+        state, faces, wire_counts, area = ring_state_at(wall, z_m)
         if state == 'unreadable':
             unreadable += 1
             detail.append({'z_m': z_m, 'state': 'unreadable'})
@@ -230,8 +232,8 @@ def break_extent(wall, detail, tol_m=EXTENT_TOL_M):
     """
     grid = [item['z_m'] for item in detail]
     states = [item['state'] for item in detail]
-    # The grid and the tolerance are SI; only the kernel section is millimeters.
-    found = rb.extents(lambda z_m: ring_state_at(wall, si.mm(z_m))[0], grid, states, tol_m)
+    # The grid, the tolerance and the section are all SI; `_slice_wires` converts for the kernel.
+    found = rb.extents(lambda z_m: ring_state_at(wall, z_m)[0], grid, states, tol_m)
     faces = dict((item['z_m'], item.get('faces')) for item in detail)
     for span in found:
         first, last = span['broken_stations_z']
@@ -256,7 +258,7 @@ HEALTHY_M = 5.46556e-4
 SILENT_M = 3.55705e-4
 
 
-def target_station(kept, z_lo, z_hi, notch_edges, want=None, tol=1.0e-6):
+def target_station(kept, z_lo, z_hi, notch_edges, want_m=None, tol_m=1.0e-6):
     """Which station to displace: an interior notch edge, never an end of the patch.
 
     **Not "nearest to the historical `z`".** That station belongs to a `U` = 3.0 tail, which is
@@ -270,27 +272,43 @@ def target_station(kept, z_lo, z_hi, notch_edges, want=None, tol=1.0e-6):
     not a boundary row. Falls back to the station nearest the middle if no interior notch edge
     survives the floor.
 
-    **`want` names an exact station instead, and raises rather than substituting a near one.**
+    **`want_m` names an exact station instead, and raises rather than substituting a near one.**
     Recreating OQ-DES-CW26's own result means displacing the row it displaced, and a target chosen
     as "nearest to" a height that is not in the set is how this harness produced a null result
     once already: at `U` = 0.5 it collapsed onto the patch's pinned first station. So an exact
     request that the station set cannot satisfy is an error, and the error names the nearest
     station and its distance, because that is the diagnosis -- a station absent at this floor is
     the finding, not a reason to move the probe somewhere else.
+
+    **`want_m` is meters, like everything in `kept`, and the caller converts.** It took a
+    millimeter value until 2026-11-13 and the diagnosis below reported a meters difference
+    labeled "mm", so a target given in the units this module's own usage example prints missed
+    by a factor of a thousand and the error blamed the station floor for it. The floor advice is
+    now given only when the nearest station is near enough for the floor to be the explanation.
     """
     interior = [z for z in kept[1:-1]]
     if not interior:
         raise ci.PreconditionFailed('the patch has no interior station to displace')
-    if want is not None:
-        exact = [z for z in interior if abs(z - want) <= tol]
+    if want_m is not None:
+        exact = [z for z in interior if abs(z - want_m) <= tol_m]
         if not exact:
-            near = min(kept, key=lambda z: abs(z - want))
+            near_m = min(kept, key=lambda z: abs(z - want_m))
+            off_m = abs(near_m - want_m)
+            # Inside the patch and merely not in the set: the floor is the likely reason. Far
+            # outside it: the floor cannot explain that, and saying so sends the reader to the
+            # units instead of to a flag they have probably already passed.
+            if z_lo - abs(z_hi - z_lo) <= want_m <= z_hi + abs(z_hi - z_lo):
+                why = ('At the production floor that station is thinned away -- pass --floor=0 '
+                       'to seed the unfiltered union it belongs to.')
+            else:
+                why = ('That target is outside the patch z = %.4f..%.4f mm entirely, so no floor '
+                       'setting can produce it. `--target` is millimeters, like every other z '
+                       'this harness prints.' % (si.mm(z_lo), si.mm(z_hi)))
             raise ci.PreconditionFailed(
-                'no interior station at z = %.7f in this set of %d; the nearest is %.7f, '
-                '%.7f mm away. At the production floor that station is thinned away -- pass '
-                '--floor=0 to seed the unfiltered union it belongs to.'
-                % (want, len(kept), near, abs(near - want)))
-        return exact[0], any(abs(exact[0] - e) <= tol for e in notch_edges)
+                'no interior station at z = %.7f mm in this set of %d; the nearest is %.7f mm, '
+                '%.7f mm away. %s'
+                % (si.mm(want_m), len(kept), si.mm(near_m), si.mm(off_m), why))
+        return exact[0], any(abs(exact[0] - e) <= tol_m for e in notch_edges)
     edges = [z for z in interior
              if any(abs(z - e) <= 1.0e-6 for e in notch_edges)]
     pool = edges or interior
@@ -298,8 +316,18 @@ def target_station(kept, z_lo, z_hi, notch_edges, want=None, tol=1.0e-6):
     return min(pool, key=lambda z: abs(z - middle)), bool(edges)
 
 
-def probe_for(delta, target_z, normals, tol=1.0e-6):
-    """A contour hook that nudges the station at `target_z` by `delta` mm, radially.
+def probe_for(delta_mm, target_z_m, normals, tol_m=1.0e-6):
+    """A contour hook that nudges the station at `target_z_m` by `delta_mm`, radially.
+
+    **The dose is millimeters and the contour is meters, so this converts.** Until
+    2026-11-13 it passed the millimeter dose straight to `fit_response.nudge`, whose argument
+    is `delta_m`, so a 0.03 mm dose moved the row 0.03 m -- thirty millimeters. The
+    construction answered that correctly: the fitted surface read 24 to 29.5 mm off the
+    exterior at exactly the displaced station, decaying over about 5 mm, and section 5 refused
+    with an 18.49 mm wall error that looked like a construction defect and was a dose a
+    thousand times too large. The contours became SI under IP-FC-163; the records from before
+    it store the station as -283.995, which is millimeters, so the runs on file before that
+    conversion applied the dose they claimed and are unaffected.
 
     Applied to the eroded contour as `cavity` builds it, so every row the construction makes --
     including the ones section 5's second pass inserts after the rib cut -- carries the
@@ -311,8 +339,10 @@ def probe_for(delta, target_z, normals, tol=1.0e-6):
     `pts` unchanged is how this hook declines a row, and the probe does not count those.
     """
 
-    def hook(z, pts):
-        if delta == 0.0 or abs(z - target_z) > tol:
+    delta_m = si.m(delta_mm)
+
+    def hook(z_m, pts):
+        if delta_m == 0.0 or abs(z_m - target_z_m) > tol_m:
             return pts
         # **Radial from the origin, not from the arc's centroid.** Every cell boundary plane
         # passes through the origin and contains the part's axis, so a ray from (0, 0) lies in
@@ -320,8 +350,8 @@ def probe_for(delta, target_z, normals, tol=1.0e-6):
         # tail row it sits near (-3.5, 13.0), which lifts the arc's two ends off the construction
         # plane and makes `_side_caps` fail with `Failed to create face from wire` -- measured,
         # identically at every magnitude, after the build was already paid for.
-        out = fr.nudge(pts, delta, center=(0.0, 0.0))
-        if not fr.plane_ends_held([(z, pts)], [(z, out)], normals):
+        out = fr.nudge(pts, delta_m, center=(0.0, 0.0))
+        if not fr.plane_ends_held([(z_m, pts)], [(z_m, out)], normals):
             raise ci.PreconditionFailed(
                 'the nudge moved a row end off its construction plane, so the patch could not '
                 'be closed. The displacement must be radial from the axis; see '
@@ -332,12 +362,67 @@ def probe_for(delta, target_z, normals, tol=1.0e-6):
 
 
 def _moved(probe):
-    """What a probe actually did, for the record. `None` when there was no probe at all."""
+    """What a probe actually did, for the record. `None` when there was no probe at all.
+
+    **`stations_m`, and the record is millimeters.** This read `probe.stations` until
+    2026-11-13, which `Probe` has not had since IP-FC-163 renamed it -- and `Probe.__slots__`
+    means the attribute does not merely read as empty, it raises. `_moved` runs on every outcome
+    this harness records, success and both failure paths, so no dose could be written at all,
+    and the raise happens *after* the build: a 70 minute run would finish and then discard its
+    own result. Found by a run that got as far as the dose table and wrote no row.
+
+    The fields carry `_mm` because the rest of this record does (`delta_mm`, `target_z_mm`) and
+    because an unsuffixed `station` holding meters next to a `delta_mm` holding millimeters is
+    the same trap one layer down. The pre-rename records held millimeters under the old names,
+    so the numbers are comparable across the change; only the keys differ.
+    """
     if probe is None:
         return None
+    stations_mm = [si.mm(z_m) for z_m in probe.stations_m]
     return {'calls': probe.calls,
-            'station': probe.stations[-1] if probe.stations else None,
-            'distinct_stations': sorted(set(probe.stations))}
+            'station_mm': stations_mm[-1] if stations_mm else None,
+            'distinct_stations_mm': sorted(set(stations_mm))}
+
+
+def _export_brep(shape, path):
+    """Write whatever a refusal carries, which is not always a `TopoShape`.
+
+    `Unconverged` carries "the fitted surface for the pre-cut station budget", and a
+    `Part.BSplineSurface` is geometry rather than topology -- it has no `exportBrep`. Measured
+    2026-11-13: the pre-cut refusal is the one this harness actually produces, so the one case
+    the exporter did not handle was the common one, and the artifact was skipped with
+    `AttributeError: 'Part.BSplineSurface' object has no attribute 'exportBrep'` every time.
+
+    `toShape()` is the kernel's own geometry-to-topology step and is what the surface would
+    have to go through to be written at all; doing it here keeps `wall_measure.refusals` free
+    of the kernel, which is the division that makes it testable.
+    """
+    if not hasattr(shape, 'exportBrep') and hasattr(shape, 'toShape'):
+        shape = shape.toShape()
+    shape.exportBrep(path)
+
+
+def _rounds(exc):
+    """The post-cut pass's per-round interval lists, for the record. `()` when there are none.
+
+    Carried by `cowl_interior.Unconverged` and dropped on the floor until 2026-11-13: the
+    exception grew the field and nothing wrote it down, so a refusal that had the data still
+    produced a record without it. Lengths become millimeters here, like every other length in
+    this record.
+    """
+    out = []
+    for entry in getattr(exc, 'rounds', ()) or ():
+        out.append({
+            'round': entry['round'],
+            'worst_mm': si.mm(entry['worst_m']),
+            'worst_z_mm': (None if entry['worst_z_m'] is None
+                           else si.mm(entry['worst_z_m'])),
+            'intervals': [{'patch': ei, 'interval': i,
+                           'z_lo_mm': si.mm(lo_m), 'z_hi_mm': si.mm(hi_m),
+                           'gap_mm': si.mm(gap_m)}
+                          for ei, i, lo_m, hi_m, gap_m in entry['intervals']],
+        })
+    return out
 
 
 def _save_wall(wall, out_dir, kind, u, delta):
@@ -384,7 +469,7 @@ def thickness_at(wall, z_m, t_m):
             'worst_low': worst_low, 'median': median, 'worst_high': worst_high}
 
 
-def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
+def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
     started = time.time()
     print('')
     print('%s at U = %g: the booleans after the fit, under a row displacement.' % (kind, u))
@@ -400,9 +485,9 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
     if floor_mm is not None:
         print('  station floor overridden to %.3f mm -- the unfiltered union, '
               'which is the pre-IP-FC-144 station set' % float(floor_mm))
-    if want_z is not None:
-        print('  displacing z = %.7f exactly; an absent station is an error, not a substitution'
-              % want_z)
+    if want_z_m is not None:
+        print('  displacing z = %.7f mm exactly; an absent station is an error, not a substitution'
+              % si.mm(want_z_m))
     print('  incumbent reading taken at z = %.4f mm, where the healthy wall reads %.6f mm and '
           'the silent failure read %.6f mm'
           % (si.mm(BREAK_Z_M), si.mm(HEALTHY_M), si.mm(SILENT_M)))
@@ -428,7 +513,15 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # crossing `wall_vanish` and `tau_study` were getting wrong.
             t_m = si.m(float(params.get('cowl_n_perimeters'))
                        * float(params.get('extrusion_width')))
-            overhang = float(params.get('overhang_angle_from_bed'))
+            # **Degrees on the sheet, radians in the construction.** `shell_solid` takes
+            # `overhang_rad`, and this passed the sheet value straight through until
+            # 2026-11-13, so the P1 slope guard compared real radians against 35 of them
+            # and refused every dose before building anything -- reporting the limit as
+            # `overhang_angle_from_bed = 2005.35`, which is 35 radians printed in
+            # degrees, the number that gave it away. `cowl.from_flat` converts this row
+            # for the production path (`cowl.ANGLE_ROWS`); this harness builds its
+            # parameters itself and so has to convert for itself too.
+            overhang_rad = si.deg_to_rad(float(params.get('overhang_angle_from_bed')))
             # The planes the nudge has to respect, read off the cell itself rather than assumed
             # from the mirror chain -- the same source `cavity` uses.
             normals = [(p.x, p.y) for p in ci.cell_boundary_planes(body_node.Shape)]
@@ -444,7 +537,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # `station_floor` is SI; the override arrives already converted from `--floor-mm`.
             floor_m = ci.station_floor(t_m) if floor_mm is None else si.m(float(floor_mm))
             kept = ci._thin_stations(union, floor_m)
-            target, is_edge = target_station(kept, p_lo, p_hi, notch_edges, want=want_z)
+            target, is_edge = target_station(kept, p_lo, p_hi, notch_edges, want_m=want_z_m)
             rec.update(target_z_mm=si.mm(target), target_is_notch_edge=is_edge,
                        floor_mm=si.mm(floor_m), seeded_stations=len(union),
                        kept_stations=len(kept))
@@ -463,7 +556,7 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # the next one perturbed.
             with wm_probe.installed(ci, probe=probe):
                 wall = ci.shell_solid(cell_cut.Shape, body_node.Shape, notch_compound(tools),
-                                      t_m, overhang, mirrors, report=report)
+                                      t_m, overhang_rad, mirrors, report=report)
             w_lo, w_hi = ci.z_extent(wall)
             s_lo, s_hi = w_lo + ci.END_INSET_M, w_hi - ci.END_INSET_M
             cont, broken, unread, worst, detail = ring_states(wall, s_lo, s_hi)
@@ -503,7 +596,10 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             elif inc.get('error'):
                 at_break = 'error'
             else:
-                at_break = '%.6f' % inc.get('worst_low', float('nan'))
+                # Millimeters, like the banner this column is read against: `worst_low` is
+                # the incumbent's own meters, and printed raw a healthy 0.000547 sat beside a
+                # stated 0.546556 mm and read as a thousandfold collapse.
+                at_break = '%.6f' % si.mm(inc.get('worst_low', float('nan')))
             print('   %6.3f   %-13s %6d  %-9s  %-8s  %6d  %6d  %-9s %4.0f%s'
                   % (delta, 'built', len(wall.Solids),
                      '%.3e' % report['partition_slip'] if 'partition_slip' in report else '--',
@@ -527,9 +623,9 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
             # `TypeError` *inside this except block*, replacing the refusal being diagnosed with
             # a failure to diagnose it -- the one outcome `wall_measure.refusals` is written to
             # prevent, reached by the call site instead of by the module.
-            kept = wm_refusals.save(exc, out_dir, kind, u,
-                                    lambda shape, path: shape.exportBrep(path),
+            kept = wm_refusals.save(exc, out_dir, kind, u, _export_brep,
                                     delta_m=si.m(delta))
+            rec['rounds'] = _rounds(exc)
             if kept is not None:
                 rec['refusal_artifact'] = kept
                 if kept.get('error'):
@@ -540,7 +636,13 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z=None):
                              '' if 'bytes' not in kept
                              else ' (%.1f MB)' % (kept['bytes'] / 1048576.0)))
         except Exception as exc:                                  # noqa: BLE001
-            rec.update(outcome='error', error=traceback.format_exc()[-600:],
+            # **The whole traceback, not its last 600 characters.** The tail holds the
+            # frame that raised; the cause is usually further up, in which call produced
+            # the operand. Measured 2026-11-13: a `Null shape` from the OML blank showed
+            # three frames and none of the ones that would say which build asked for it,
+            # in a file whose only purpose is to be read afterwards and where size costs
+            # nothing.
+            rec.update(outcome='error', error=traceback.format_exc(),
                        moved_row=_moved(probe))
             print('   %6.3f   %-13s %s  (%.0f s)'
                   % (delta, 'ERROR', str(exc)[:46], time.time() - at))
@@ -576,7 +678,9 @@ def main():
     run(_opt('kind', 'tail_shell'), float(_opt('u', '0.5')), doses,
         os.path.normpath(_opt('out-dir', OUT_DIR)),
         floor_mm=None if floor is None else float(floor),
-        want_z=None if target is None else float(target))
+        # `--target` is millimeters, like `--floor` and like every z this harness prints;
+        # `target_station` compares against the SI station set, so it converts here.
+        want_z_m=None if target is None else si.m(float(target)))
 
 
 if is_entry_point(__name__):

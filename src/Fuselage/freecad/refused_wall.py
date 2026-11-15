@@ -77,7 +77,7 @@ from wall_measure import ring_breaks as rb                               # noqa:
 # rather than restated: a refinement that asked the question a second way would be measuring a
 # different quantity, and this script exists to measure the *same* one on a shape that survived.
 # Importing is safe -- that module runs `main()` behind `is_entry_point`.
-from sever_doses import (BREAK_Z, HEALTHY_MM, SCAN_M, SILENT_MM,         # noqa: E402
+from sever_doses import (BREAK_Z_M, HEALTHY_M, SCAN_M, SILENT_M,         # noqa: E402
                          ring_states, break_extent, thickness_at)
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out', 'refused_wall')
@@ -319,11 +319,17 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
         doc.recompute()
         body_node, tools, mirrors, cell_cut = cowl_tree.pieces(doc)
         params = doc.getObject('Params')
-        t = float(params.get('cowl_n_perimeters')) * float(params.get('extrusion_width'))
+        # **Meters, because `thickness_at` takes `t_m`.** This was the sheet product in
+        # millimeters until 2026-11-13 and was passed straight to `thickness_at`, so the
+        # incumbent reading compared every sample against 0.6 m. It went unnoticed because the
+        # module could not be imported at all: IP-FC-163 renamed the three constants below and
+        # this import was not moved with them, so nothing here has run since.
+        t_m = si.m(float(params.get('cowl_n_perimeters'))
+                   * float(params.get('extrusion_width')))
         blank = cell_cut.Shape
         body = body_node.Shape
         say('  tree built in %.0f s; t = %.3f mm, %d mirror step(s)'
-            % (time.time() - started, t, len(mirrors)))
+            % (time.time() - started, si.mm(t_m), len(mirrors)))
 
         say('  reading the refusal artifact...')
         cavity_shape = load_brep(brep)
@@ -420,16 +426,19 @@ def run(brep, kind, u, out_dir, z_of_interest=None, want_containment=False):
                     say('     break over %.3f mm, z %.4f to %.4f, up to %s arc(s)'
                         % (si.mm(span['extent_m']), si.mm(span['z_lo']),
                            si.mm(span['z_hi']), span['max_faces']))
-            rec['local_incumbent'] = thickness_at(wall, z_of_interest, t)
+            # The same millimeter station `local_scan` converts four lines up, converted the same
+            # way here: `thickness_at` is SI and was being handed millimeters as meters.
+            rec['local_incumbent'] = thickness_at(wall, si.m(z_of_interest), t_m)
             keep('local scanned')
 
-        rec['incumbent_at_break'] = thickness_at(wall, BREAK_Z, t)
+        rec['incumbent_at_break'] = thickness_at(wall, BREAK_Z_M, t_m)
         inc = rec['incumbent_at_break'] or {}
         say('')
         say('     incumbent at z = %.4f (healthy %.6f, silent failure %.6f): %s'
-            % (BREAK_Z, HEALTHY_MM, SILENT_MM,
+            % (si.mm(BREAK_Z_M), si.mm(HEALTHY_M), si.mm(SILENT_M),
                'REFUSED -- not an annulus' if inc.get('refused')
-               else inc.get('error') or '%.6f mm' % inc.get('worst_low', float('nan'))))
+               else inc.get('error')
+               or '%.6f mm' % si.mm(inc.get('worst_low', float('nan')))))
         keep('measured')
 
         # 4. Opt-in and last: did the cavity leave the blank? Unbounded -- see the docstring.
