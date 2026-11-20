@@ -49,6 +49,9 @@ MODULE_NAMES = (
     ('corner_common', 'corner_common'),
     ('solid_measure', 'solid_measure'),
     ('mesh_stats', 'mesh_stats'),
+    # IP-FC-169: the rib-cut detector is qualified on residues of known depth, which only a
+    # synthetic fixture can supply.
+    ('rib_cut_detector', 'rib_cut_detector'),
 )
 
 

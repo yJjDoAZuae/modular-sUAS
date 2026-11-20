@@ -236,3 +236,38 @@ class TestTheRingScanSlicesInMeters(object):
             src = fh.read()
         assert 'def _slice_wires(shape, z_m):' in src
         assert 'si.mm(z_m))' in src
+
+
+class TestTheRibResidueIsReadUnderItsRealKey(object):
+    """`cavity` writes `rib_residue_m3`; the harness read `rib_residue`, which no longer exists,
+    so every record carried `rib_residue: null` and the table printed `--`."""
+
+    def _ci(self):
+        ci_py = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             'src', 'Fuselage', 'freecad', 'cowl_interior.py')
+        with io.open(ci_py, 'r', encoding='utf-8', newline='') as fh:
+            return fh.read()
+
+    def test_cavity_writes_the_m3_key(self):
+        assert 'report.update(rib_residue_m3=rib_residue_m3,' in self._ci()
+
+    def test_the_harness_reads_it_and_converts_once(self):
+        src = _source()
+        assert "report.get('rib_residue')" not in src
+        assert "report['rib_residue']" not in src
+        assert "report['rib_residue_m3'] * si.MM3_PER_M3" in src
+
+
+class TestTheControlKeepsItsCavity(object):
+    """IP-FC-169 qualifies a rib-cut detector against a known-good cavity, and the control's
+    finished wall cannot be turned back into one."""
+
+    def test_cavity_hands_the_cut_cavity_out(self):
+        ci_py = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             'src', 'Fuselage', 'freecad', 'cowl_interior.py')
+        with io.open(ci_py, 'r', encoding='utf-8', newline='') as fh:
+            assert 'rib_tool=tool, cavity_shape=solid)' in fh.read()
+
+    def test_the_harness_saves_it_for_the_control(self):
+        src = _source()
+        assert "rec['cavity_path'] = _save_wall(report['cavity_shape']" in src

@@ -2898,9 +2898,12 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
         report.update(smooth_volume_m3=si.volume_m3(smooth),
                       smooth_faces=len(smooth.Faces), smooth_shape=smooth)
     if report is not None:
+        # `cavity_shape` is the cut cavity itself, a reference like `rib_tool` beside it: IP-FC-169
+        # qualifies a rib-cut detector against a known-good cavity, and this is the only place a
+        # successful build has one.
         report.update(rib_residue_m3=rib_residue_m3,
                       cavity_volume_m3=si.volume_m3(solid),
-                      cavity_faces=len(solid.Faces), rib_tool=tool)
+                      cavity_faces=len(solid.Faces), rib_tool=tool, cavity_shape=solid)
 
     # **`worst_wall` now reports the finished-wall criterion, not the smooth-surface one.**
     # The smooth surface passing its own criterion no longer means the finished wall does --

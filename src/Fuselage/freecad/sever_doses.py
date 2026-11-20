@@ -562,7 +562,10 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
             cont, broken, unread, worst, detail = ring_states(wall, s_lo, s_hi)
             rec.update(outcome='built', solids=len(wall.Solids), volume=wall.Volume,
                        partition_slip=report.get('partition_slip'),
-                       rib_residue=report.get('rib_residue'),
+                       # `rib_residue_m3` is the key `cavity` writes since IP-FC-163; reading
+                       # `rib_residue` returned None on every build, so the column was blank.
+                       rib_residue_mm3=(None if report.get('rib_residue_m3') is None
+                                        else report['rib_residue_m3'] * si.MM3_PER_M3),
                        annulus=cont, broken=broken, unreadable=unread,
                        worst_station=worst, stations=detail,
                        scan_mm=si.mm(SCAN_M), scan_stations=len(detail),
@@ -572,6 +575,11 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
             flag = ''
             if delta == 0.0:
                 rec['shape_path'] = _save_wall(wall, out_dir, kind, u, delta)
+                # The control's cavity is the known-good case a rib-cut detector is qualified
+                # against (IP-FC-169); the wall alone cannot be turned back into it.
+                if report.get('cavity_shape') is not None:
+                    rec['cavity_path'] = _save_wall(report['cavity_shape'], out_dir,
+                                                    kind + '_cavity', u, delta)
             if broken:
                 flag = '   RING BROKEN'
                 # **Measured here, on the wall already in memory.** Recovering this later would
@@ -603,7 +611,8 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
             print('   %6.3f   %-13s %6d  %-9s  %-8s  %6d  %6d  %-9s %4.0f%s'
                   % (delta, 'built', len(wall.Solids),
                      '%.3e' % report['partition_slip'] if 'partition_slip' in report else '--',
-                     '%.4f' % report['rib_residue'] if 'rib_residue' in report else '--',
+                     ('%.4f' % (report['rib_residue_m3'] * si.MM3_PER_M3)
+                      if 'rib_residue_m3' in report else '--'),
                      cont, broken, at_break, time.time() - at, flag))
         except (ci.Unconverged, ci.PreconditionFailed) as exc:
             rec.update(outcome=type(exc).__name__, error=str(exc)[:400],

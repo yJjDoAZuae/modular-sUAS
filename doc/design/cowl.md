@@ -5082,6 +5082,23 @@ project is left with an instrument that can tell two solids apart properly. If i
 operands truly are identical, alternative 3 becomes worth its cost; if it shows they are not, this
 stops being a kernel question at all.
 
+### OQ-DES-CW39 — The rib-cut residue check cannot tell a failed cut from a clean one — RESOLVED 2026-11-19
+
+**Resolved by requirement, not by choice.** The question was filed as a menu of six detection
+methods with a recommendation. The maintainer's direction: the answer follows from the requirement
+-- detect a failed rib cut with no false negatives and no false positives -- with the method
+selected on evidence of suitability for the failure mode and proven reliability. Applied in
+[cowl_interior_surface.md §7.2](cowl_interior_surface.md): every method measured so far is
+eliminated by its own evidence (three booleans each produced a measured false negative; volume
+accounting cannot resolve the threshold; the sampled methods cannot see a residue smaller than their
+spacing at the 0.01 mm threshold), so the requirement calls for an exact detector, and finding and
+qualifying one is IP-FC-169 against the criteria in §7.2.
+
+**One premise of the question as filed was wrong.** It said the post-cut refusal "pointed this
+investigation at station density". The refusal's message already says that a gap approaching `t` is
+material absent and that more stations will not close it. The diagnosis went astray for other
+reasons, chiefly the dose harness's unit defects (IP-FC-146).
+
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full
 - [freecad_migration.md](../architecture/freecad_migration.md) — UC-9 (OML as a surface),

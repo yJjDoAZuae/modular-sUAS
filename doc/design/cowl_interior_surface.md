@@ -3700,6 +3700,18 @@ three-solid cut above is what **would** have happened, and no amount of logging 
 run could have shown it. That is the whole value of the artifact: a refusal's shape lets the steps
 it prevented be run deliberately, once, outside the build.
 
+**Why the strips come loose: the ribs on that face are never cut, and the residue check cannot see it.** Measured 2026-11-15 with `freecad/strip_ligament.py`, on the IP-FC-163 rerun of this same case (`tail_shell`, `U` = 3.0, δ = 0.030 mm at `z` = -283.9951339, refused at the same two stations, detaching the same 4349.3071 and 718.2009 mm³ pieces). The healthy reference is the δ = 0 control wall from the same run.
+
+**The strips are not torn off; the material that held them on is missing.** The strips touch the main body nowhere: their nearest approach at every station is a slot width, 0.10 to 1.20 mm, and the healthy wall at that point is full thickness. Instead the dosed cell wall is about 9 430 mm³ lighter than the healthy one.
+
+**The missing material is three ribs' worth, the full length of the part.** Comparing the healthy and dosed sections at 60 stations, 5 mm apart, finds the same three regions missing from `z` = -289 to -16: 17.8 mm² along the long slot line above the strips, 8.940 mm² on the cell boundary plane (identical at every station), and 7.14 mm² along the V slots. Together they come to about 9 150 mm³. Each station's area difference is accounted for by the regions found to within 5 mm², except at the two ends and at `z` = -71.4 and -66.4, which nothing here relies on.
+
+**Those regions are rib, and the dosed cavity contains them.** At a point inside each region, chosen to be inside it rather than at its centroid (a rib joined to a wall is not convex, and the centroids fell outside the material), the healthy wall has material, the dosed cavity contains the point, and so does the rib tool rebuilt exactly as `cavity` builds it -- `dilated_notches`, then one fuse. The points fall in ribs 3, 5, 7, 8, 9 and 10, the six on the `x` ≈ -150 face. So the cut left those ribs inside the cavity along the whole length.
+
+**The build's residue check read 0.000000 mm³ on that cavity, and it reads the same when rerun.** `cut_and_check` decides the ribs were removed when `cut.common((tool,), RIB_CUT_FUZZ_MM)` has no volume. Rerun on the saved cavity with the rebuilt tool, that call returns an **empty shape** in 231 s: no solids, no faces, volume zero. An empty result is exactly what success looks like, so the check cannot tell a complete failure from a clean cut. The same call against one rib at a time finds the material: 4973.5, 2615.5, 472.7, 213.5 and 366.3 mm³ in ribs 3, 5, 7, 9 and 10, 8641.5 mm³ in all, against the 9 150 the sections found. Rib 8 alone also returns empty although two points lie inside both it and the cavity, so the per-rib form can miss too.
+
+**What this does and does not establish.** It establishes the mechanism of the severance -- the ribs on one face are not cut, so the slots they bridge isolate the strips -- and that the check meant to catch exactly this is blind to it, by measurement on the real operands. It does **not** establish why a 0.03 mm nudge at one station makes the fused cut fail for six ribs along the whole part, while the δ = 0 control cuts them correctly. How it must be detected is section 7.2.
+
 **One measurement caution, recorded rather than quoted around.** The three solids sum to
 97 771.9650 mm³ while the compound's own `Volume` reads **97 746.5724** — 25.39 mm³ apart, 0.026 %.
 Nothing above depends on which is right, since the comparison uses the piece volumes and those match
@@ -3952,6 +3964,163 @@ defect needs one solid whose section has two non-nested loops, which is what the
 presented and what the synthetic case now presents for a thousandth of the cost.
 
 ---
+
+
+### 7.2 Detecting a failed rib cut
+
+**The requirement.** A check on the rib cut must never pass a cut that left rib material in the
+cavity, and must never refuse a cut that did not: no false negatives and no false positives. That is
+the standard [OQ-ARCH-19](../architecture/freecad_migration.md) already decided for a screen: its
+errors may run one way only, toward a flag, and every flag is then settled by an exact criterion.
+The method is selected by evidence against that standard, not by preference.
+
+**What counts as a failed cut is set by the wall, not chosen.** Rib material left in the cavity is
+wall missing from the finished part. The finished wall's thickness tolerance is `WALL_TOL_M` =
+1.0e-5 m (0.01 mm), so a residue that removes more than that from the wall is a failure, and one
+within the cut's own fuzz (`RIB_CUT_FUZZ_MM` = 1.0e-5 mm) is not.
+
+**What the evidence eliminates.** Each method below has been measured on the real operands of the
+2026-11-15 case in section 7: a `tail_shell` at `U` = 3.0 whose cavity holds rib material along six
+ribs, localized independently by points inside the healthy wall, the cavity and the rebuilt tool.
+
+| method | evidence | against the requirement |
+| --- | --- | --- |
+| volume of `cut.common((tool,), fuzz)`, the current check | returned an empty shape on a cavity holding at least 8641.5 mm³ of rib | false negative |
+| the same boolean, one rib at a time | rib 8 returned empty with points inside both it and the cavity | false negative |
+| volume accounting, smooth minus cut against the overlap | `Shape.Volume` is wrong by 0.16-0.24 % on these solids (IP-FC-119), 13 000-19 000 mm³ here, larger than the signal | cannot resolve the threshold |
+| 2D section booleans at scan stations | 4 of 60 stations returned results that did not account for the area difference; nothing between stations is seen | not one-way |
+| the downstream refusals (finished-wall gap, solid count) | caught this case, but only because the wall severed and the gap crossed measured sections | sampled, not one-way |
+| point containment at sampled points | flagged every region tested, 27 of 27; never run on a known-good cavity | a residue thinner than the spacing is missed, and the threshold would need 0.01 mm spacing over ribs of about 1e5 mm³ each |
+
+**No method measured so far meets the requirement.** The booleans have each produced a measured
+false negative, and the sampled methods cannot see a residue smaller than their spacing, which at
+the 0.01 mm threshold is not affordable. The requirement therefore calls for a detector whose
+answer about each rib follows from the shape's exact geometry rather than from a boolean's result
+or a sample. Finding one and proving it is qualification work, IP-FC-169, not a choice among the
+methods above.
+
+**What any detector must show before it is used.** These are the qualification criteria, and a
+detector is accepted only when it meets all of them:
+
+- it flags the saved dosed cavity, naming ribs 3, 5, 7, 8, 9 and 10;
+- it passes the δ = 0 control built in the same run;
+- it flags synthetic residues of known size at and above `WALL_TOL_M` and passes ones within the
+  cut's fuzz;
+- its error direction is argued from how it computes, as OQ-ARCH-19 argued for
+  `mesh_stats.canonical_hash`, not inferred from a pass rate on the cases above.
+
+**The existing checks stay.** The volume residue still catches a partial residue that its boolean
+computes correctly, and the finished-wall gap and solid count are acceptance checks on the part.
+None of them is the detector this section requires, and none is removed by it.
+
+**The detector, and why its errors run one way.** `freecad/rib_cut_detector.py`, with its decision
+rule in `wall_measure/rib_cut.py`. It rests on four facts, each of which can be checked on its own:
+
+- **What is being asked.** Let `R` be rib-tool material left in the cavity. When the cavity is one
+  connected solid not contained in the tool, `R` has volume exactly when some point of the tool's
+  boundary lies inside the cavity. A path inside the cavity from a point of `R` to a point outside
+  the tool has to cross the tool's boundary. So the question becomes: does any tool face enter the
+  cavity?
+- **Every tool face is a flat polygon.** Each rib is a union of translated copies of a polyhedral
+  slab, so the fused tool has no curved face. The detector counts and reports any face that is not
+  flat.
+- **Each face is tested away from the boundary, not on it.** In a correct cut the tool's faces lie
+  *on* the cavity's boundary, and coincident geometry is where booleans and sectioning break. So
+  each face is copied `ε + c` into the tool (`ε` = `WALL_TOL_M`, `c` = `ε / 2`) and shrunk in from
+  its edges. The copy is used only if a distance certificate shows it lies at least `ε + c` from the
+  **whole** tool boundary, not only from its own face. Where one copy of the whole face cannot be
+  built, the face's exact triangulation is used, one inset triangle at a time.
+- **A face passes only on two certificates.** Its copy is at least `c` from the cavity's boundary,
+  and a point of it lies outside the cavity. Anything else, including a failed computation, is a
+  flag. Any part of a face that could not be placed is reported as unexamined area, never as a pass.
+
+**Why the threshold is exactly the wall tolerance, at any angle between faces.** Residue shallower
+than `ε` lies within `ε` of the tool boundary. Every copy is at least `ε + c` from that boundary, so
+such residue stays at least `c` from every copy and every face clears. Residue reaching more than `ε`
+past a face comes within `c` of that face's copy, so the face flags. The first version certified
+copies only `c` from the tool boundary. A synthetic 0.009 mm residue then flagged the faces *beside*
+the one it was behind, a false positive the angle-free argument above removes. Measured on synthetic
+residues of known depth, 0.0095 mm clears and 0.0105 mm flags, on a square edge and on a 30-degree
+one (`tests/test_geometry_bridge_rib_cut_detector.py`).
+
+**Containment is read from the boundary's normals, not by casting a ray.** Both certificates need
+to know which side of a boundary a copy is on. The first versions asked `isInside`, which casts a
+ray, and on the dosed cavity it put nine copies on ribs 0, 1 and 2 partly inside: one point
+inside and another outside, although each copy was at least 0.015 mm from the cavity's boundary
+and so could only be on one side. Those were the detector's only flags beyond the six uncut
+ribs, and every one was the ray caster. The reading used instead is pure geometry. A copy
+certified clear of a boundary is entirely on one side of it, so one point decides. At that point,
+take the nearest boundary point: inside a face, the sign against the face's outward normal is the
+side; on an edge, the offset is solved against the two faces' outward normals, and is outside a
+convex edge or inside a concave one only when both coefficients agree.
+
+At a vertex the reading depends on the vertex's shape. If every edge leaving it lies on the inner
+side of every face meeting there, the vertex is convex: the solid there is the intersection of
+those faces' half-spaces, and the point is outside exactly when it is on the outer side of at least
+one face. A concave vertex is the mirror case. A saddle vertex is neither, and the reading declines
+there rather than guess.
+
+A declined reading is not the end. A point at distance d from the boundary has no boundary within
+d of it, so every point within d is on its side. The reading is therefore retried at points
+0.9 d away in many directions, where the nearest boundary point lies on a face or an edge
+instead of the vertex. This is exact, and it rests only on the distance measurement the
+certificate already uses.
+
+The first qualification runs showed why this matters. Before vertices were handled, 73 faces on the
+correctly cut control flagged, and so did two faces on rib 0 of the dosed cavity. Every one was a
+copy certified clear of the cavity whose reading had come back undecided. The two on rib 0,
+0.35 mm and 0.56 mm clear, were nearest saddle vertices, where a B-spline wall face meets two rib-cut planes. With the vertex
+rule and the empty-ball retry, all 523 of those copies were decided, and all read outside.
+
+It is tested on solids with known answers: a concave edge, a 30-degree convex edge, convex and
+concave vertices, and a saddle vertex, where it must decline. Ray casting is still run beside it,
+and every case where it contradicts a decided reading is counted in the record.
+
+**What it cannot see.** Residue confined to the inset margin along a face's edges, or along a
+triangle's edges on the triangulation path. The area left unexamined is counted and reported per
+face, and qualification requires it to be accounted for.
+
+**Qualification results, 2026-11-19.** Both runs used the same rebuilt tool: 2,740 faces with a
+total area of 1,897,410 mm2, all planar. Results are in `out/rib_cut_detector_q2/`.
+
+| | Dosed cavity | δ = 0 control |
+| --- | --- | --- |
+| Faces flagged | 340 | 0 |
+| Ribs named | 3, 5, 7, 8, 9, 10 | none |
+| Faces cleared | 1,376 | 1,677 |
+| Faces untestable | 1,024 | 1,063 |
+| Area never examined | 2,983.75 mm2 | 2,983.75 mm2 |
+| Undecided containment readings | 0 | 0 |
+| Ray casting contradicting a decided reading | 10 copies | 0 |
+
+Against the criteria:
+
+- **The dosed cavity is flagged, naming exactly ribs 3, 5, 7, 8, 9 and 10.** That matches the
+  uncut ribs `strip_ligament.py` found independently. Of the 340 flags, 186 are copies closer to
+  the cavity than the clearance, and 154 are copies certified clear of the cavity's boundary and
+  read inside it.
+- **The control raises no flag.**
+- **The synthetic residues behave at the threshold.** On a square edge and a 30-degree edge,
+  0.0095 mm clears and 0.0105 mm flags.
+- **The error direction is argued from how the detector computes**, earlier in this section.
+
+The ten contradictions are all on the dosed cavity, and eight of them are on faces the detector
+cleared. Had ray casting decided containment, those would have been false flags.
+
+**What is still open is the area never examined.** It is 2,983.75 mm2, about 0.16% of the tool's
+surface, and it depends on the tool alone, which is why both runs agree to the last digit. It
+lies on small facets of the 48-gon that stands in for the dilation disc:
+
+- 509 faces whose every triangle is too small for any inset, median area 1.0 mm2;
+- 294 faces where no copy fits 0.015 mm inside the tool, median area 2.6 mm2;
+- the unplaced parts of 221 to 260 more faces, whose placed parts all cleared.
+
+That area is reported as untestable, never passed. But the requirement is not met while it
+remains. Counting it as a pass would let a residue confined to those facets through. Counting it
+as a fail would flag the correctly cut control. Closing it is the remaining work of IP-FC-169.
+
+**If no exact detector can be found,** the requirement cannot be met with these operations, and
+whether to relax it is a requirements question to be filed then, with the evidence from IP-FC-169.
 
 ## 8. Deliberately not specified here
 
