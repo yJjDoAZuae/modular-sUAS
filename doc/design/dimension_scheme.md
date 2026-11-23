@@ -646,13 +646,37 @@ belong in its interface-conventions section, and what stays here is the drawing-
 
 ## Open questions
 
-| ID | Question | Blocking |
-| --- | --- | --- |
+No open questions.
 
+### OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants? — RESOLVED 2026-08-22
 
-### OQ-DES-D1 — What carries the size variation, when the largest family is 384 variants? — DECIDED 2026-08-22: factor the table by axis, and add a second product
+**Problem**
 
-**Chosen: alternative 2, plus alternative 5 as a companion rather than a competitor.**
+§5.1 puts variants that differ only in size on one family sheet, with a value table of sizes.
+Applied to the sweep, the corner family had 384 variants, far more rows than a sheet holds, and
+the row counts had never been checked against a sheet. The question was what carries the size
+variation.
+
+**Alternatives**
+
+1. **Continuation sheets.** No change to the scheme, but roughly 60 sheets of table.
+2. **Factor the table by axis.** The corner's 384 rows become about 22 rows plus two small
+   matrices, at the cost of a lookup per callout.
+3. **Promote a size axis to a sheet axis.** Every table fits, but §5.1's rule that sheets differ
+   by features stops holding.
+4. **Tabulate the expressions, not the values.** A fixed dozen rows, but not an inspectable
+   drawing.
+5. **Generate a single-variant sheet on demand.** One number per callout, but a second drawing
+   product that can disagree with the first.
+
+**Recommendation**
+
+Alternative 2, with alternative 5 as a later addition: 21 of the corner's 23 varying fields
+follow a single axis, so factoring removes duplication rather than information.
+
+**Decision**
+
+Alternative 2, plus alternative 5 as a companion rather than a competitor.
 
 **The family drawing factors its table by axis.** One short table per size axis with each callout
 labeled by the axis it follows, plus a small matrix for each coupled field. The corner's 384-row
@@ -660,13 +684,6 @@ table becomes an 8-row `U` table, a 6-row `FX` table and an 8-row panel table �
 8 × 6 matrix for `corner.length` and an 8 × 8 matrix for `panel.offset`. The measurement that
 supports this is recorded in §5.1: across every part family in the sweep the entire coupled
 surface is those two fields, and the two cowling bulkheads are coupled to nothing at all.
-
-> **The counts in this note are the ones the question was decided on, and three of them were
-> estimates that turned out wrong. §5.1a carries the measured figures** — 13 family sheets rather
-> than 18, five coupled fields rather than two, and 19 rows to a sheet rather than about 25. The
-> decision stands on all three: every family fits one sheet, which is more than the question asked
-> for. The note is left as written because it records what was decided and why; §5.1a is where the
-> numbers now live.
 
 **And the build also emits single-variant drawing sets.** A set is keyed on **`U` and panel
 thickness**, and it holds a drawing for every part needed to build a fuselage at that size and
@@ -690,6 +707,8 @@ over a six-row table**, and a set holds 11 drawings rather than 16.
 | View carries | a lettered callout | the value, except where a dimension is tabled |
 | Total sheets | 13 | 792 |
 
+**Rationale**
+
 The five bulkheads and three boom bulkheads do **not** collapse the same way, and the reason is
 not the one first given here. It is not that every type axis is topology — §5.1a measures that
 two of them are not — but that a set is a **build kit**: `end_bolt` and `end_anchor` are two
@@ -705,6 +724,20 @@ need. The single-variant sheet is what a shop receives: one number per callout, 
 chance of reading the wrong row. Alternative 2's one real drawback was that a per-axis lookup asks
 the reader to combine tables correctly; the second product removes that from the person least
 placed to absorb it.
+
+**Alternative 3 was rejected rather than deferred**, on the reasoning given when the question was
+filed: promoting a size axis to a sheet axis buys a fitting table by making the partition mean
+nothing, and §5.1's rule is what lets a reader trust that a callout points at a feature the part
+actually has.
+
+**Caveats**
+
+> **The counts in this note are the ones the question was decided on, and three of them were
+> estimates that turned out wrong. §5.1a carries the measured figures** — 13 family sheets rather
+> than 18, five coupled fields rather than two, and 19 rows to a sheet rather than about 25. The
+> decision stands on all three: every family fits one sheet, which is more than the question asked
+> for. The note is left as written because it records what was decided and why; §5.1a is where the
+> numbers now live.
 
 **A consequence that has to be carried, because it reverses a simplification.**
 [OQ-ARCH-18](../architecture/freecad_migration.md#open-questions) was withdrawn on the grounds
@@ -731,16 +764,20 @@ general note, a symbol — belongs to the standards-compliance question §6 list
 recorded here because the `FX` decision is what creates the requirement, and an unmarked
 not-to-scale dimension on an otherwise true-scale sheet is a drawing that lies quietly.
 
-**Alternative 3 was rejected rather than deferred**, on the reasoning given when the question was
-filed: promoting a size axis to a sheet axis buys a fitting table by making the partition mean
-nothing, and §5.1's rule is what lets a reader trust that a callout points at a feature the part
-actually has.
+**Where it is recorded**
 
 *Implementation: IP-FC-21 (family drawings), IP-FC-84 (single-variant sets).*
 
-### OQ-DES-D2 — How does a dimension state a joint, when the reader is integrating rather than inspecting? — DECIDED 2026-08-22: the dimension is the feature as built, and a callout beside it names the hardware
+### OQ-DES-D2 — How does a dimension state a joint, when the reader is integrating rather than inspecting? — RESOLVED 2026-08-22
 
-**Chosen: alternative 3.** A dimension gives the feature the way the part actually is, and the
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 3. A dimension gives the feature the way the part actually is, and the
 callout beside it says what the feature is for:
 
 ```
@@ -751,6 +788,8 @@ FOR ⌀4.00 LONGERON
 
 Both readers are served by one annotation, and the two numbers cannot drift apart, because the
 callout and the dimension are generated from the same expression.
+
+**Rationale**
 
 **Why the other three lost, which the drawings made plain in a way the prose had not.**
 Dimensioning only the features as built states none of the three hardware sizes and not by
@@ -763,6 +802,8 @@ the thirteen family sheets measure 19 of 19 available rows with nothing spare (�
 OQ-DES-D5's layout every family measures 10 of 10, which is the same finding at a different
 budget). The
 callout costs nothing off the view.
+
+**Caveats**
 
 **The risk this takes on, stated because it is real and not yet measured.** §5.2's hard
 constraints are about the rectangle an annotation occupies, and a three-line callout is several
@@ -778,24 +819,41 @@ interface in the register with no clearance parameter (§3, gap 2). What the cal
 make that *visible*: it prints the fastener beside the hole, where a bare `⌀4.00` says nothing
 and a reader has no way to notice the bolt will not pass.
 
+**Where it is recorded**
+
 *The alternatives as drawn are in
 [`draw_dimension_alternatives.py`](../../src/Fuselage/tools/draw_dimension_alternatives.py),
 which annotates the corner's mid-bay section four ways from geometry traced off the built
 solid. Implementation: IP-FC-21.*
 
-### OQ-DES-D3 — The drawing's rule for what to dimension can only see parts that are in the model — DECIDED 2026-08-22: the aperture is a dimension and goes on the drawings; volume goes in a data block
+### OQ-DES-D3 — The drawing's rule for what to dimension can only see parts that are in the model — RESOLVED 2026-08-22
+
+**Problem**
+
+The drawing's rule for what to dimension is "dimension it if another part's shape depends on
+it". That rule cannot see properties that matter but involve no mating part, such as a
+bulkhead's interior aperture span or a part's volume, so neither appeared on any drawing.
+
+**Alternatives**
+
+1. **Leave the rule, and leave both off the drawing.** The rule stays one mechanical sentence.
+2. **Widen the rule to include what the airframe has to carry.** The aperture becomes an
+   ordinary dimension between two real faces.
+3. **Keep the rule for dimensions, and add a properties block that is not a dimension set.**
+   Aperture, volume, wall area and material, under a rule of their own.
+4. **A properties block on the single-variant sheets only.** The family sheets keep the joint
+   rule untouched.
+
+**Recommendation**
+
+Alternative 4: keep the joint rule intact, and put these properties somewhere honestly labeled
+as not a dimension.
+
+**Decision**
 
 **The aperture span is a dimension, and it is worth having on the drawings.** It is not a
 special case needing a new kind of annotation: it is the distance between two real, parallel,
 planar faces, and it dimensions exactly like the bore or the panel pocket does.
-
-Measured on the built parts to confirm that before generating it, because a dimension across a
-bounding box that merely touches at some corner feature would not be one:
-
-| Part | Interior faces | Area of each | Span |
-| --- | --- | --- | --- |
-| frame bulkhead | ±43.9375 in **both** axes | 247.3 mm² | **87.875** |
-| boom bulkhead | ±39.1375 in both axes | 93.7 mm² | **78.275** |
 
 **And it is an expression over the parameters, not a measurement** — which matters, because a
 dimension bound to a measured face is bound to the topology, and IP-FC-5 established that face
@@ -812,18 +870,6 @@ The two differ in their last term because the ring's inner boundary is set by th
 frame bulkhead and by the web on a boom bulkhead. That is a real difference between the parts,
 not a naming inconsistency.
 
-**A caveat the boom bulkhead needs and the frame bulkhead does not.** On a boom bulkhead the
-span between the interior faces is 78.275 in both axes, but the *clear* opening is
-78.275 × 66.402, because the boom collet intrudes from one side. The dimension is the span; the
-obstruction is visible in the view. A reader asking "what fits through" needs to look at the
-view and not only at the number, and on this part alone those are two different answers.
-
-**What this changes in §1.** The membership test was *dimension it if another part's geometry
-depends on it*, which is a test about joints. The aperture has no joint — nothing in the model
-mates with it — and everything the airframe carries depends on it. The rule gains a second
-clause and stays closed rather than open-ended: the enclosed span of each part that has one, by
-name, so the completeness test remains a lookup rather than a judgment.
-
 **Volume goes in a data block.** Either a data area or a callout was acceptable; the block is
 chosen because a callout points *at* a feature and volume is a property of the whole part, so a
 leader would have nothing to land on. It carries the solid volume and the wall area, which are
@@ -835,11 +881,59 @@ On a single-variant sheet the block is three lines. On a family sheet, volume an
 with every size axis, so they become two more columns in the factored tables — which costs sheet
 *width* rather than rows, and width has not been budgeted the way §5.1a budgeted rows.
 
+**Rationale**
+
+Measured on the built parts to confirm that before generating it, because a dimension across a
+bounding box that merely touches at some corner feature would not be one:
+
+| Part | Interior faces | Area of each | Span |
+| --- | --- | --- | --- |
+| frame bulkhead | ±43.9375 in **both** axes | 247.3 mm² | **87.875** |
+| boom bulkhead | ±39.1375 in both axes | 93.7 mm² | **78.275** |
+
+**Caveats**
+
+**A caveat the boom bulkhead needs and the frame bulkhead does not.** On a boom bulkhead the
+span between the interior faces is 78.275 in both axes, but the *clear* opening is
+78.275 × 66.402, because the boom collet intrudes from one side. The dimension is the span; the
+obstruction is visible in the view. A reader asking "what fits through" needs to look at the
+view and not only at the number, and on this part alone those are two different answers.
+
+**Where it is recorded**
+
+**What this changes in §1.** The membership test was *dimension it if another part's geometry
+depends on it*, which is a test about joints. The aperture has no joint — nothing in the model
+mates with it — and everything the airframe carries depends on it. The rule gains a second
+clause and stays closed rather than open-ended: the enclosed span of each part that has one, by
+name, so the completeness test remains a lookup rather than a judgment.
+
 *Implementation: IP-FC-21.*
 
-### OQ-DES-D4 — Panels are to get their own OML allocation, and nothing in the model owns one — DECIDED 2026-08-22: the panel OML becomes a part
+### OQ-DES-D4 — Panels are to get their own OML allocation, and nothing in the model owns one — RESOLVED 2026-08-22
 
-**Chosen: the allocated envelope itself becomes a part, and panel designs are then made to fit
+**Problem**
+
+Panels were to get their own OML allocation, with panel shapes designed within it so one
+design could be interchanged for another. Nothing in the model owned such an envelope: a panel
+was only a thickness in `panel_variants.csv`, with no part and no drawing.
+
+**Alternatives**
+
+1. **Derive the allocation on demand from the corner and bulkhead.** Nothing new to maintain,
+   and nothing to disagree.
+2. **Add the panel as a part in the sweep, with its own drawings.** Its envelope becomes its
+   own geometry.
+3. **Record the allocation as data, validated on every sweep run, without making the panel a
+   part.**
+4. **Put the allocation on the corner and bulkhead drawings only.** No separate artifact.
+
+**Recommendation**
+
+Alternative 3, with alternative 4 done immediately regardless.
+
+**Decision**
+
+**the allocated envelope itself becomes a part, and panel designs are then made to fit
 within it.** That is not one of the four alternatives as filed — those offered a derivation, a
 *panel* part, a data file, or nothing — and it is better than any of them for one reason: an
 envelope that is a part can be checked against **geometrically**, by containment, rather than
@@ -850,6 +944,8 @@ It also keeps the panel itself out of the printed-part pipeline, which was the r
 making the *panel* a sweep part: a panel is cut sheet, not a print, and it does not fit the
 assumptions the rest of the sweep carries. The OML part is not a manufactured object at all —
 it is the space a panel is allowed to occupy.
+
+**Rationale**
 
 **The envelope is complete and every boundary of it is verified.** All of it is in §2's
 register, and each figure is an expression over parameters that a built face confirms:
@@ -881,18 +977,41 @@ an end. Neither holds, and both were checked only after being written down:
 That is also what the decision implies: the OML is a part, and what differs between faces is the
 *panel design* fitted into it, which is exactly the interchange the allocation exists to allow.
 
+**Caveats**
+
 **One real difference between stations, which is not a difference between faces.** The boom
 bulkhead presents a 75.000 mm seating face to the panel where the frame bulkhead presents
 65.475 mm — measured as 150.000 mm² and 392.850 mm² over thicknesses of 2 and 6. Different
 stations give the same panel different amounts of seat. Worth knowing; it does not bear on the
 envelope, which is set by the corner.
 
+**Where it is recorded**
+
 *Implementation: IP-FC-85 for the OML part, IP-FC-22 for the assembly drawings it appears on.*
 
-### OQ-DES-D5 — How is the value table laid out, when the view must have three quarters of the frame? — DECIDED 2026-08-22: compact the table, and draw our own title block
+### OQ-DES-D5 — How is the value table laid out, when the view must have three quarters of the frame? — RESOLVED 2026-08-22
 
-**Chosen: alternative 2.** The value table is compacted and its blocks packed abreast, and the
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 2. The value table is compacted and its blocks packed abreast, and the
 sheet gets a title block of this project's own rather than the stock ASME one.
+
+**What the decision specifies is an envelope, not a size.** For the view to reach 75 %:
+
+> **the title block fits inside 132.7 × 46.8 mm.**
+
+Any block inside that envelope gives the same view share, because past the point where the block
+is shallower than the table the band's depth *is* the table — which is why 120 × 40 and 100 × 32
+measure identically at 75.7 %. So the size is free within the envelope and should be settled by
+what the block has to hold. **The stock block misses it by 3.2 mm of width and 1.3 mm of depth**,
+which is how close the sheet came to working untouched.
+
+**Rationale**
 
 **The requirement the decision serves**, stated 2026-08-22: *the drawn view takes at least 75 %
 of the frame, and the title block and the values share what is left.* Read as the frame rather
@@ -926,25 +1045,6 @@ requirement is unreachable on the stock template whatever the table does; and it
 91.9 mm beside it, where the compacted table is 95.1, so the band placement is unavailable and
 the layout falls back to a column giving the view 38.4 %.
 
-**What the decision specifies is an envelope, not a size.** For the view to reach 75 %:
-
-> **the title block fits inside 132.7 × 46.8 mm.**
-
-Any block inside that envelope gives the same view share, because past the point where the block
-is shallower than the table the band's depth *is* the table — which is why 120 × 40 and 100 × 32
-measure identically at 75.7 %. So the size is free within the envelope and should be settled by
-what the block has to hold. **The stock block misses it by 3.2 mm of width and 1.3 mm of depth**,
-which is how close the sheet came to working untouched.
-
-**That figure was 143.4 × 46.8 mm until 2026-08-27 and it was measured against the wrong
-table.** It came from the widest *parameter mapping* any family carries at §3's floor, 95.1 mm,
-which is what the compaction ladder measures because that is the content OQ-DES-D1 was decided
-on. What a sheet prints is its **quantity** table — the columns the view's callout letters
-point at — and the widest of those is the paneled corner's at **105.8 × 35.0 mm**, 10 mm
-wider. The envelope narrows to match. The pinned block is 130.0 × 46.0 and still fits, with
-**2.7 mm of width and 0.8 mm of depth to spare**, so the decision holds; the margin is simply
-smaller than the number said, and a margin quoted from a table nobody prints is not a margin.
-
 **A defect this fixes that is not a layout problem.** The sheet states its units nowhere: cells
 are bare numbers, annotations are bare numbers, and the stock template has no field for a unit.
 A drawing whose numbers are millimeters and does not say so is wrong in a way no compaction
@@ -956,6 +1056,17 @@ the same stock block, so the sheet still states no units. Presenting `panel_offs
 expression rather than a band removes the most millimeters for the least work and removes them
 from a dimension §2's register names and §3 obliges the sheet to carry; if a printed expression
 satisfies §3 that is a change to §3 and should be argued as one.
+
+**Caveats**
+
+**That figure was 143.4 × 46.8 mm until 2026-08-27 and it was measured against the wrong
+table.** It came from the widest *parameter mapping* any family carries at §3's floor, 95.1 mm,
+which is what the compaction ladder measures because that is the content OQ-DES-D1 was decided
+on. What a sheet prints is its **quantity** table — the columns the view's callout letters
+point at — and the widest of those is the paneled corner's at **105.8 × 35.0 mm**, 10 mm
+wider. The envelope narrows to match. The pinned block is 130.0 × 46.0 and still fits, with
+**2.7 mm of width and 0.8 mm of depth to spare**, so the decision holds; the margin is simply
+smaller than the number said, and a margin quoted from a table nobody prints is not a margin.
 
 **The reserve, if a later dimension does not fit:** make panel stock a sheet axis for the
 corner, which is the only family with a wide band. It costs sheets, which are cheap, rather than
@@ -974,11 +1085,20 @@ block and parts list does. At **2.5 mm with the standard's 1.4 h spacing** the t
 on both axes than it was at 3.5 mm and 1.3 h, so the sheet obeys the lettering standard *and*
 has more room than the version that broke it. The band holds **13 rows, not 10**.
 
+**Where it is recorded**
+
 *Implementation: IP-FC-21 for the compaction, IP-FC-86 for the title block and template.*
 
-### OQ-DES-D6 — The completeness test asks what a mapping carries, not what the geometry consumes — DECIDED 2026-08-28: name the type in the register, and state joint 3 on the bulkhead
+### OQ-DES-D6 — The completeness test asks what a mapping carries, not what the geometry consumes — RESOLVED 2026-08-28
 
-**Resolution note.** Both alternatives 2 and 3 were taken, and they are not competing: the one
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Both alternatives 2 and 3 were taken, and they are not competing: the one
 error message covered two different problems.
 
 **Alternative 2 — the register's carried-by column names a type where a type owns the joint.**
@@ -1005,6 +1125,8 @@ sit at from the longeron axis, with a note saying what it clears.
 > resulting sheet then carries the dimension unconditionally, and its view is right for every
 > variant on it.
 
+**Rationale**
+
 The alternative was a table convention — a dash, or a zero, in the cells where the feature is
 missing — and that is the wrong answer for a reason worth stating: **the view is wrong too.**
 A family sheet showing an outline that some of its variants do not have is not repaired by
@@ -1017,6 +1139,23 @@ losing four flats of 3.15 mm² each. Three of the thirteen families held both ki
 **24 of the paneled corner's 216, 8 of the paneled end bulkhead's 72, and 4 of the paneled
 interconnect's 36**. Splitting them takes the drawing set from **13 family sheets to 16**, and
 that is the price of the sheets being true.
+
+**Alternative 1 remains the better question and is not foreclosed.** Asking what the geometry
+consumes rather than what the mapping carries is the general form, `check_unread_rows.py`
+(IP-FC-56) already measures it by perturbation, and the only thing missing is a decision on
+whether a family's obligation is the union or the intersection over its members. Nothing in
+this resolution depends on that. **Alternative 4 was rejected**: it closes the test by printing
+a sentence about a cowl on the drawing of a part no cowl attaches to.
+
+**Caveats**
+
+**A note on the register.** Joint 3's expression names only `corner_tolerance`, its clearance,
+and not the terms that set the nominal offset — so nothing in section 3 demanded joint 3 be
+stated on either part, and it was not. The bulkhead now states it because the part needs it
+said, not because the test asked. Whether the register's expressions should name the nominal
+as well as the adjustment is a question this resolution does not settle.
+
+**Where it is recorded**
 
 **Two things the implementation had to get right, both of which failed first.**
 
@@ -1039,26 +1178,20 @@ at that offset over root two from the longeron axis, measured on built solids at
 for 1U with 3/16 in panel where the bore branch wins and **2.0153 mm** for 0.5U with 1 mm panel
 where the panel branch does.
 
-**Alternative 1 remains the better question and is not foreclosed.** Asking what the geometry
-consumes rather than what the mapping carries is the general form, `check_unread_rows.py`
-(IP-FC-56) already measures it by perturbation, and the only thing missing is a decision on
-whether a family's obligation is the union or the intersection over its members. Nothing in
-this resolution depends on that. **Alternative 4 was rejected**: it closes the test by printing
-a sentence about a cowl on the drawing of a part no cowl attaches to.
-
-**A note on the register.** Joint 3's expression names only `corner_tolerance`, its clearance,
-and not the terms that set the nominal offset — so nothing in section 3 demanded joint 3 be
-stated on either part, and it was not. The bulkhead now states it because the part needs it
-said, not because the test asked. Whether the register's expressions should name the nominal
-as well as the adjustment is a question this resolution does not settle.
-
 *Implementation: IP-FC-21. Reported by `tools/drawing_families.py`; the condition is
 `freecad/sheet_annotations.corner_seat_span`, read from both sides; the reachability record is
 `freecad/check_unread_rows.py` (IP-FC-56).*
 
-### OQ-DES-D7 — Some register rows give the whole size of a fit, others only the clearance gap, and one check reads them all the same way — DECIDED 2026-08-30: write the whole size in every row, then make the expressions executable
+### OQ-DES-D7 — Some register rows give the whole size of a fit, others only the clearance gap, and one check reads them all the same way — RESOLVED 2026-08-30
 
-**Resolution note.** Alternatives **1 and 5**, in that order, as recommended — 5 is not an
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternatives **1 and 5**, in that order, as recommended — 5 is not an
 alternative to 1 but the thing 1 unlocks.
 
 **What was decided.**
@@ -1074,6 +1207,8 @@ alternative to 1 but the thing 1 unlocks.
    needs a new per-row statement of *which measured feature* each expression is the size of,
    which the register does not have today.
 
+**Rationale**
+
 **Why this and not the others.** The column is already the completeness test's input, so the
 choice was between making it say what the test reads it to say and adding a second column that
 has to be kept in step. One column that must be complete is easier to trust than two that must
@@ -1083,6 +1218,32 @@ the one defect a completeness test cannot report about itself. Measuring the par
 (alternative 3) answers a **different** question — which parameters reach a part — and does not
 compete, because it cannot say which fit a parameter belongs to. It remains worth doing on its
 own account.
+
+**What the figures established, and they stay.** Drawn 2026-08-30 by
+[`tools/draw_register_rows.py`](../../src/Fuselage/tools/draw_register_rows.py), reproducing the
+measured values: the greeble socket is
+`longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance` = **3.3000 mm** at
+1U, four terms stacking outward, of which the register named one; and the bulkhead's outer face
+sits at `unit_width/2 − panel_thickness − panel_tolerance` = **45.1375 mm**, which uses no
+`corner_radius` at all, while the joint does consume `corner_radius` through the face's *extent*
+— `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap`, a built face of
+392.8500 mm². That gap between what the register said and why the parameter was owed is the
+clearest single argument for alternative 1: an expression the geometry evaluates cannot be right
+by accident, and a sentence about it can.
+
+![row 2, the greeble socket as four radial terms](img/register_rows/row2_greeble_socket.svg)
+
+![row 5, the bulkhead outer face against the flat mold line](img/register_rows/row5_bulkhead_face.svg)
+
+**Row 3 needs no figure.** It is `flat_offset`, drawn with both branches of its `max` in
+[design_basis.md INT-3](design_basis.md#int-3--corner-seating-faces--bulkhead).
+
+**No answer here could have broken a drawing**, which is why the change is safe to make.
+Demonstrated 2026-08-28 by mutating the parsed register and diffing every family's drawn output:
+emptying every row, and giving every row every parameter name, both left the drawn sheets
+byte-identical and changed only the completeness report.
+
+**Caveats**
 
 **What this costs. The estimate made before deciding was too low, and the correction is
 recorded here rather than quietly absorbed.** The estimate was *three names, all already on the
@@ -1115,43 +1276,45 @@ measuring the same parts — so it confirms the drawing matches the part, not th
 what was intended. The derivation that would give the geometry something to be checked *against*
 is IP-FC-87 and is separate work.
 
-**What the figures established, and they stay.** Drawn 2026-08-30 by
-[`tools/draw_register_rows.py`](../../src/Fuselage/tools/draw_register_rows.py), reproducing the
-measured values: the greeble socket is
-`longeron_radius + longeron_tolerance + greeble_thickness + greeble_tolerance` = **3.3000 mm** at
-1U, four terms stacking outward, of which the register named one; and the bulkhead's outer face
-sits at `unit_width/2 − panel_thickness − panel_tolerance` = **45.1375 mm**, which uses no
-`corner_radius` at all, while the joint does consume `corner_radius` through the face's *extent*
-— `unit_width − 2·(corner_radius + panel_offset) − 2·panel_overlap`, a built face of
-392.8500 mm². That gap between what the register said and why the parameter was owed is the
-clearest single argument for alternative 1: an expression the geometry evaluates cannot be right
-by accident, and a sentence about it can.
-
-![row 2, the greeble socket as four radial terms](img/register_rows/row2_greeble_socket.svg)
-
-![row 5, the bulkhead outer face against the flat mold line](img/register_rows/row5_bulkhead_face.svg)
-
-**Row 3 needs no figure.** It is `flat_offset`, drawn with both branches of its `max` in
-[design_basis.md INT-3](design_basis.md#int-3--corner-seating-faces--bulkhead).
-
-**No answer here could have broken a drawing**, which is why the change is safe to make.
-Demonstrated 2026-08-28 by mutating the parsed register and diffing every family's drawn output:
-emptying every row, and giving every row every parameter name, both left the drawn sheets
-byte-identical and changed only the completeness report.
-
 **What this decision did not settle**, and it is now [OQ-DES-D10](#open-questions): row 3 says it
 is *carried by: corner*, and the seating faces are on both parts. The recommendation asked for it
 to be settled at the same time; it is a question about which drawing owns a two-part joint, and
 that is a separate decision rather than a consequence of this one.
 
+**Where it is recorded**
+
 *Implementation: `tools/drawing_families.read_register` and `check_register`, and section 2's
 register table. Tracked as IP-FC-107 (alternative 1) and IP-FC-108 (alternative 5).*
 
-### OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance — DECIDED 2026-08-28: the register is corrected; the part is right
+### OQ-DES-D8 — The register and the built corner disagree about the panel extension by one clearance — RESOLVED 2026-08-28
 
-**Resolution note.** Determined by [OQ-DES-D9](#open-questions) rather than decided separately:
+**Problem**
+
+Section 2's register, row 4, gave the corner's panel extension as
+`panel_overlap + panel_offset − panel_tolerance`, but the built corner's end face sits at
+`panel_overlap + panel_offset`, one clearance further.
+
+**Alternatives**
+
+1. **The register has a transcription error; correct it.** Agrees with two independent readings
+   of the part, but assumes the part is right.
+2. **The part is wrong; shorten the extension by a clearance.** Opens the panel slot unless the
+   slot is shortened too.
+3. **They describe different things and both are right.** The smallest change, but a redundant
+   second expression for one quantity.
+
+**Recommendation**
+
+Alternative 1: two of the row's own quantities agree with the part and the third does not,
+which is the shape of a transcription error.
+
+**Decision**
+
+Determined by [OQ-DES-D9](#open-questions) rather than decided separately:
 section 2 is an analysis of the implementation, so where it and a part disagree the part is
 right and the register is corrected. Alternative 1.
+
+**Rationale**
 
 Row 4's expression read `panel_overlap + panel_offset − panel_tolerance`. The built corner's end
 face is at `panel_overlap + panel_offset` — measured **7.2625 against 7.1625** at 1U with 3/16 in
@@ -1162,6 +1325,8 @@ bottom at `panel_overlap + panel_offset`, and the slot is therefore
 extension would have put the end face inside the slot bottom and opened the slot through the end
 of the part.
 
+**Caveats**
+
 **What this does not settle, and where it goes instead.** Whether that 0.1 mm *should* be there
 is a question about intent, and correcting an analysis to match a part cannot answer it. It is
 one of the relationships **IP-FC-87** has to derive: if the design says the corner ends at the
@@ -1169,12 +1334,21 @@ slot bottom, the geometry follows and the register was a transcription slip; if 
 corner should stop a clearance short, the part is wrong and this closure will need reopening
 against the derivation rather than against the part.
 
+**Where it is recorded**
+
 *Implementation: section 2's register table. No code depends on the difference — both forms name
 the same parameters, which is why section 3's completeness test could never have caught it.*
 
-### OQ-DES-D9 — Is section 2 the interface design, or an analysis of the implementation? — DECIDED 2026-08-28: it is analysis, and the derivation it is not is now tracked work
+### OQ-DES-D9 — Is section 2 the interface design, or an analysis of the implementation? — RESOLVED 2026-08-28
 
-**Resolution note.** Section 2 **is** an analysis of the implementation as written, and section
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Section 2 **is** an analysis of the implementation as written, and section
 1 now says so instead of claiming to be a reading of `design_constants.json`. Measured
 2026-08-28: that file carries a governing expression for **three of the seven joints** — rows 6,
 7 and 8 quote theirs verbatim — and prose for the other four, of which rows 2, 3 and 5
@@ -1197,12 +1371,7 @@ offered, both of which took the existing rows as the material to be relabelled. 
 expression read off the geometry as design intent was the move to avoid**, and deriving the
 relationship instead is what avoids it.
 
-It is tracked as **IP-FC-87**, and until it exists no reading of section 2 establishes that a
-part is built as intended — only that a drawing states what the part measures. This is the
-prerequisite [OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named on
-2026-08-07 and assigned to `doc/architecture/overview.md`, which section 1 met "by enumeration
-rather than by waiting". The enumeration was the right thing to do at the time and it is not the
-derivation.
+**Rationale**
 
 **The loop this closes.** For rows 1 and 4 the chain was: the OpenSCAD geometry → section 2 (by
 reading) → section 3's completeness test → the drawings, which are generated from
@@ -1212,12 +1381,42 @@ departing from intent — which is exactly why the test could not see OQ-DES-D8.
 section 2 is does not remove the loop; it stops the loop being read as evidence it never was.
 **IP-FC-87 is what breaks it**, by giving the geometry something to be derived from.
 
+**Caveats**
+
+It is tracked as **IP-FC-87**, and until it exists no reading of section 2 establishes that a
+part is built as intended — only that a drawing states what the part measures. This is the
+prerequisite [OQ-ARCH-7](../architecture/freecad_migration.md#open-questions) named on
+2026-08-07 and assigned to `doc/architecture/overview.md`, which section 1 met "by enumeration
+rather than by waiting". The enumeration was the right thing to do at the time and it is not the
+derivation.
+
+**Where it is recorded**
+
 *Implementation: IP-FC-87 for the derivation; section 1 carries the statement of what section 2
 is.*
 
-### OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart — DECIDED 2026-09-09: alternative 2, split into two columns
+### OQ-DES-D10 — The register's *Carried by* column also means two things, and one joint is where they come apart — RESOLVED 2026-09-09
 
-**Resolution note.** **Alternative 2.** Section 2's register now carries *Clearance on* (which
+**Problem**
+
+The register's *Carried by* column decides which drawing must explain a fit, but the phrase
+also had an older meaning: which part's geometry carries the clearance. At row 3, the
+corner-to-bulkhead joint, the two meanings named different parts.
+
+**Alternatives**
+
+1. **Name every part that carries a face, and let the column mean "whose drawing owes this".**
+2. **Split it into two columns, *Clearance on* and *Stated by*.**
+3. **Split row 3 into two rows, one per part.**
+4. **Leave the column, and record that it means "clearance on".**
+
+**Recommendation**
+
+Alternative 2: the two meanings are different facts, and both are used.
+
+**Decision**
+
+**Alternative 2.** Section 2's register now carries *Clearance on* (which
 part's geometry the gap is cut out of) and *Stated by* (every drawing section 3's completeness
 test obliges to state the joint) as two columns instead of one. Row 3 is the only row known to
 diverge: *Clearance on* stays `corner`, and *Stated by* becomes `corner, seated bulkhead`,
@@ -1238,7 +1437,9 @@ do with that feature and must stay ungated for both families, so the two can't s
 computes for the corner's own partition, referred to rather than restated, which is the same
 discipline OQ-DES-D12 applied one row over.
 
-**The rationale.** The two facts are genuinely different — one is how the geometry is built (why
+**Rationale**
+
+The two facts are genuinely different — one is how the geometry is built (why
 `corner_middle_shape` takes a `corner_tolerance` argument the bulkhead passes as zero), the other
 is what the completeness test enforces — and both are used elsewhere in this document. Collapsing
 them into one column is what produced the question; alternative 1 would have resolved it by
@@ -1250,55 +1451,118 @@ register entries and forces a decision about where the clearance value goes on a
 longer has a single part to carry it — worth revisiting if OQ-DES-D7's alternative 5 is ever
 adopted, not before.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 *Implementation: section 2's register table (done, above), and `CARRIED_BY`/`read_register` in
 [`tools/drawing_families.py`](../../src/Fuselage/tools/drawing_families.py) — the register now
 parses six columns and a *Stated by* cell may name more than one part.*
 
-### OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is — DECIDED 2026-09-09: alternative 1, dimension the exposed width
+### OQ-DES-D11 — No bulkhead drawing says how wide the panel's seating surface is — RESOLVED 2026-09-09
 
-**Resolution note.** **Alternative 1.** Each bulkhead sheet gains a dimension across the panel
+**Problem**
+
+A skin panel seats on a flat strip of the bulkhead's outer face. Where the strip sits was
+dimensioned, but no bulkhead drawing stated how wide it is, which decides how much of the panel
+is supported. The completeness test flagged it.
+
+**Alternatives**
+
+1. **Dimension the exposed width on the bulkhead sheet.**
+2. **State it in the value table without a dimension line.**
+3. **Take the width out of row 5, so the register states the position only.**
+4. **Dimension the width on the panel drawing instead.**
+
+**Recommendation**
+
+Alternative 1: the width is a number a builder or inspector wants, and alternative 3 would make
+the report pass by deleting the question.
+
+**Decision**
+
+**Alternative 1.** Each bulkhead sheet gains a dimension across the panel
 seating face's actual exposed span — `unit_width − 2·(corner_radius + panel_offset) −
 2·panel_overlap`, 65.475 mm at 1U with a 3/16 in panel — with a callout naming the four
 parameters that set it. This closes the completeness gap on all four families that had it and
 removes the "clean by accident" coverage: the width is now stated because it is the width, not
 because an unrelated dimension's `max` happened to pick the panel branch.
 
-**The rationale.** Alternative 3 (drop the width back out of row 5) would have made the report
+**The placement question inside alternative 1** — this dimension spans the full width of the
+part, so where it goes relative to the busiest region of the view is section 5.2's placement
+rule to apply, not a further decision.
+
+**Rationale**
+
+Alternative 3 (drop the width back out of row 5) would have made the report
 green by deleting the obligation OQ-DES-D7 was just decided to add — rejected for the same reason
 one row over. Alternative 2 (a table entry with no dimension line) would have weakened
 OQ-DES-D2's pair rule — a dimension carrying the feature, a callout carrying the parameter — for
 every joint, not just this one, to save one dimension line.
+
+**Caveats**
 
 **Alternative 4 is the better long-run home and is deferred, not rejected.** The panel became a
 part in its own right under OQ-DES-D4, and the width is arguably its dimension to carry rather
 than the bulkhead's. But the panel has no drawing family in the partition today, so putting it
 there is new IP-FC work rather than a documentation change — revisit once that exists.
 
-**The placement question inside alternative 1** — this dimension spans the full width of the
-part, so where it goes relative to the busiest region of the view is section 5.2's placement
-rule to apply, not a further decision.
+**Where it is recorded**
 
 *Implementation: [`freecad/sheet_annotations.py`](../../src/Fuselage/freecad/sheet_annotations.py)'s
 bulkhead quantities and dimensions (done, `panel_span`) — unblocks
 [IP-FC-109](../implementation/freecad_migration.md).*
 
-### OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint — DECIDED 2026-09-06: a row applies to the families that have its joint
+### OQ-DES-D12 — A bulkhead with no panel is asked to explain the panel joint — RESOLVED 2026-09-06
 
-**Resolution note.** **Alternative 1**, let a register row be restricted by feature rather than
+**Problem**
+
+Not every bulkhead has a panel, but register row 5, the panel-to-bulkhead fit, applied to every
+bulkhead by type, so the drawings of panel-less bulkheads were obliged to explain a joint they
+do not have.
+
+**Alternatives**
+
+1. **Let a register row be restricted by feature, not only by type.**
+2. **Split row 5, and treat panel-less bulkheads as having no joint 5.**
+3. **Widen the zero rule: a parameter is absent when its joint is absent.**
+4. **Leave it, and record that two family sheets carry an unmeetable obligation.**
+
+**Recommendation**
+
+Alternative 1, with alternative 3 as the way to describe it: a row applies to the families
+that have its joint.
+
+**Decision**
+
+**Alternative 1**, let a register row be restricted by feature rather than
 only by type — **described as alternative 3**, which is the same mechanism arriving as a
 statement about the rule rather than about the register.
 
-**The rationale.** The structural-zero filter was always a *proxy* for "the joint is not there",
+**Doing it generally rather than for row 5 was part of the choice.** The family partition
+already computes the predicate, so covering every row costs little more than covering one, and
+[OQ-DES-D6](#open-questions)'s row 7 can move onto it too — replacing a list of type names with
+the thing the list was standing in for.
+
+**Rationale**
+
+The structural-zero filter was always a *proxy* for "the joint is not there",
 and this is the case where the proxy fails: `panel_offset` keeps an ordinary non-zero value on a
 bulkhead that has no panel, so the row is demanded and no correct drawing can supply it. The fix
 is to say what was meant. Stated as alternative 3 the rule reads as one idea — **a row's
 parameters drop when the row's joint is absent from the family** — instead of as a test on a
 value that stands in for it.
 
-**Doing it generally rather than for row 5 was part of the choice.** The family partition
-already computes the predicate, so covering every row costs little more than covering one, and
-[OQ-DES-D6](#open-questions)'s row 7 can move onto it too — replacing a list of type names with
-the thing the list was standing in for.
+**Alternative 2 is explicitly rejected**, and for the reason the recommendation gave rather than
+on cost: it would put a not-a-type into `CARRIED_BY_TYPES`, a structure whose name and contents
+say *type*. That is exactly how the *Governing expression* column came to mean two things, which
+[OQ-DES-D7](#open-questions) was spent correcting. Alternative 4, recording the gap and leaving
+it, is rejected because a report with a permanent known-false entry trains its readers to skim
+it.
+
+**Caveats**
 
 **The constraint the decision carries, and it is the whole of what was left to decide.**
 Alternative 1's own drawback was that the condition has to live somewhere a document and a tool
@@ -1308,18 +1572,13 @@ register that carried its own copy of "has a panel seating face" would be a seco
 the partition, and the one that moved would win silently — which is the failure this document
 has now spent three questions on.
 
-**Alternative 2 is explicitly rejected**, and for the reason the recommendation gave rather than
-on cost: it would put a not-a-type into `CARRIED_BY_TYPES`, a structure whose name and contents
-say *type*. That is exactly how the *Governing expression* column came to mean two things, which
-[OQ-DES-D7](#open-questions) was spent correcting. Alternative 4, recording the gap and leaving
-it, is rejected because a report with a permanent known-false entry trains its readers to skim
-it.
-
 **What this does not settle.** The `corner_tolerance` direction of the same proxy — a parameter
 that is 0 on *every* part, so the filter drops it and H5 refuses to place it, leaving a
 line-to-line fit undrawn and unmentioned — is a different failure of the same test and is
 [IP-FC-112](../implementation/freecad_migration.md), not this. This question is about a row that
 is demanded where its joint is absent; that one is about a fit that is real and invisible.
+
+**Where it is recorded**
 
 *Implementation: [IP-FC-110](../implementation/freecad_migration.md), now unblocked —
 `tools/drawing_families.py`'s `CARRIED_BY_TYPES` and the structural-zero filter, and section 2's
@@ -1327,13 +1586,36 @@ register table.*
 
 ---
 
-### OQ-DES-D13 — Nine dimensions can be governed by either of two requirements, and the drawing says which for none of them — DECIDED 2026-09-06: a `GOVERNED BY` column in the value table
+### OQ-DES-D13 — Nine dimensions can be governed by either of two requirements, and the drawing says which for none of them — RESOLVED 2026-09-06
 
-**Resolution note.** **Alternative 1**, one extra column in the value table carrying the
+**Problem**
+
+DES-9 requires that where more than one requirement can govern a dimension, the drawing state
+which one produced the value shown. Nine dimensions can be governed by either of two
+requirements, nothing implemented the statement, and the value table had little spare width.
+
+**Alternatives**
+
+1. **A `GOVERNED BY` column in the value table, carrying the requirement id.**
+2. **A leader note on the view, using OQ-DES-D2's note mechanism.**
+3. **A marker on the callout, plus a legend in the spare rows.**
+4. **State it only on the single-variant sheet.**
+5. **Widen the sheet to the ANSI B frame.**
+6. **Nothing on the drawing; record it in the register instead.**
+
+**Recommendation**
+
+Alternative 1, with alternative 3's marker as the fallback.
+
+**Decision**
+
+**Alternative 1**, one extra column in the value table carrying the
 requirement id that produced each variant's value, **with alternative 3's marker held as the
 fallback** if a second column is ever needed.
 
-**The rationale, and it is not a preference.** All nine dimensions with two governing
+**Rationale**
+
+All nine dimensions with two governing
 requirements split *inside* a family — on the corner sheet 240 variants take the longeron branch
 and 24 the panel branch — so **the answer varies by row of the value table, exactly as the value
 does**. An annotation that cannot vary per variant cannot state what DES-9 asks for, which rules
@@ -1345,11 +1627,6 @@ conditional branches are unexamined and the build layer is untouched.
 table width the band layout has spare, leaving 5.1 mm. A column of branch *names* is 15.33 mm and
 does not fit — and overrunning by 3.3 mm is not a small penalty but a cliff, dropping the drawn
 view from 75.4 % to 45.3 % as the layout falls back to a column.
-
-**The constraint this decision was recorded with has been measured away.** It said a single
-column must serve the whole sheet, so its cells would have to name the *dimension* as well as
-the requirement, and that the widened cell was the thing to measure before building. Both halves
-were wrong, and the table's own factoring is why.
 
 **The family table is factored by axis — one block per distinct axis set — and no block carries
 more than one branching dimension.** Measured 2026-09-06: on the corner the three shown
@@ -1380,35 +1657,89 @@ Alternative 5 (a bigger frame) is rejected because it reopens [OQ-DES-D5](#open-
 one requirement. Alternative 6 is rejected because DES-9 says *the drawing* states it, and the
 honest form of that alternative is to amend DES-9 rather than to declare the register sufficient.
 
+**Caveats**
+
+**The constraint this decision was recorded with has been measured away.** It said a single
+column must serve the whole sheet, so its cells would have to name the *dimension* as well as
+the requirement, and that the widened cell was the thing to measure before building. Both halves
+were wrong, and the table's own factoring is why.
+
 **What this rests on that was itself corrected.** The budget above is not the one this question
 was framed against: the sheet was believed to have no spare table rows and to lose the view at an
 eleventh, and it has **three spare rows** and loses nothing until the fourteenth
 ([IP-FC-128](../implementation/freecad_migration.md)). Depth is cheap because the table sits
 beside a title block deeper than it is; **width** is where this sheet is tight.
 
-*Implementation: [IP-FC-99](../implementation/freecad_migration.md) step three.*
+**Where it is recorded**
 
+*Implementation: [IP-FC-99](../implementation/freecad_migration.md) step three.*
 
 ### OQ-DES-D14 — DES-9's own evidence is a quantity no drawing shows — RESOLVED 2026-09-06
 
-**Resolved 2026-09-06: alternative 1, as recommended.** DES-9 reaches *shown values* only,
+**Problem**
+
+DES-9 requires the drawing to state which requirement produced *the value shown*. Its
+motivating case, the corner's `flat_offset`, is an intercept no drawing shows, so the statement
+had nowhere to attach.
+
+**Alternatives**
+
+1. **Accept the wording: DES-9 reaches shown values only, and `flat_offset` is out of scope.**
+2. **Dimension `flat_offset` on the corner sheet, then annotate it.**
+3. **Annotate the face rather than the intercept.**
+4. **Amend DES-9 to cover a shown feature as well as a dimension.**
+
+**Recommendation**
+
+Alternative 1 for now, with alternative 4 filed as the honest doubt about it.
+
+**Decision**
+
+Alternative 1, as recommended. DES-9 reaches *shown values* only,
 so `flat_offset` is out of scope for the `GOVERNED BY` note: it is not a dimension any sheet
 prints, and the corner sheet carries the eleven parameters that feed it, which is what
 section 3's completeness test asks for and what an inspector measures.
+
+**Rationale**
 
 `flat_offset` is therefore **deliberately unannotated**, and that is recorded here rather
 than left to be rediscovered. The seven `GOVERNED BY` columns that do have shown values are
 unblocked (IP-FC-99 step three): corner 3, bulkhead 2, boom_bulkhead 2.
 
-**The doubt this leaves standing**, from the question as filed: the requirement then does not
+**Caveats**
+
+from the question as filed: the requirement then does not
 cover the case it was drafted from, and 24 corner sheets stay silent about a real geometry
 difference. The evidence that would reopen it is a reviewer being misled by one of those 24
 sheets. That evidence has not been sought.
 
+**Where it is recorded**
+
+Nothing was added to the drawings: `flat_offset` stays unannotated by design.
+
 ### OQ-DES-D15 — The value table does not fit the layout OQ-DES-D5 chose — RESOLVED 2026-09-07
 
-**Resolved 2026-09-07: alternative 5, reduce the table lettering, decided by the user on
-review.** The sheets are drawn on ANSI A, in OQ-DES-D5's band layout, and what gives is the
+**Problem**
+
+OQ-DES-D5 placed the value table in a band across the bottom of the frame, beside the title
+block, leaving the view 75.7 % of the frame. On the widest families the table did not fit that
+band.
+
+**Alternatives**
+
+1. **Keep the stacked strip, as a third placement the standard defines.**
+2. **Draw these families on ANSI B.**
+3. **Narrow the title block to about 100 mm.**
+4. **Split a wide family across two sheets.**
+5. **Reduce the table text below 2.5 mm.**
+
+**Recommendation**
+
+Alternative 2, ANSI B, with alternative 1 standing until it is built.
+
+**Decision**
+
+Alternative 5, reduce the table lettering, decided by the user on review. The sheets are drawn on ANSI A, in OQ-DES-D5's band layout, and what gives is the
 size of the text in the blocks beside the title block.
 
 The decision was made in these terms: *"I told you I wanted the drawing itself taking up 75 %
@@ -1418,6 +1749,8 @@ placement these sheets had been drawn in since the text metric was corrected —
 view **52.4 %** of the frame, and the recommendation above (ANSI B) would have bought the
 space by changing the paper. The user's reading is that the requirement is about the drawing
 and the table is what should pay for it.
+
+**Rationale**
 
 **What it costs, measured.** `drawing.sheet_blocks` searches
 `drawing_standard.TABLE_TEXT_HEIGHTS_MM` from 2.5 mm downward for the largest lettering at
@@ -1446,9 +1779,38 @@ its five leader notes need more at **any** scale, since note text does not shrin
 part) nor as rows (57.7 mm of height, same result). At 239.5 × 141.2 both place, and every
 bulkhead family sheet now carries a plan and a `DETAIL A`.
 
-### OQ-DES-D16 — A leader can cross a witness line, and nothing checks for it — DECIDED 2026-09-07: alternative 4, a one-bend router
+**Caveats**
 
-**Chosen: alternative 4**, over alternative 3's recommendation. `dimension_placement._route_leaders`
+None.
+
+**Where it is recorded**
+
+`drawing.sheet_blocks` and `drawing_standard.TABLE_TEXT_HEIGHTS_MM`, named above.
+
+### OQ-DES-D16 — A leader can cross a witness line, and nothing checks for it — RESOLVED 2026-09-07
+
+**Problem**
+
+A callout's leader and a dimension's witness line are both straight lines, and nothing stopped a
+leader from crossing a witness line: the placement solver checked leaders only against dimension
+lines.
+
+**Alternatives**
+
+1. **Leave it.**
+2. **Make it a hard constraint.**
+3. **Make it a soft cost in the placement score.**
+4. **Give leaders one bend, to route around an obstacle.**
+5. **Change what the colliding dimensions measure.**
+6. **Enlarge the detail's clip region.**
+
+**Recommendation**
+
+Alternative 3: it costs nothing that is not already being paid.
+
+**Decision**
+
+Alternative 4, over alternative 3's recommendation. `dimension_placement._route_leaders`
 runs once every dimension on a view has been placed (so every witness line exists), finds the
 first dimension line or witness a note's straight leader crosses, and tries bending the leader
 through one elbow past whichever end of that obstacle is nearer — `_elbow_candidates` gives the
@@ -1456,9 +1818,13 @@ two candidate points, `_leader_clear` re-verifies the bent leader crosses nothin
 in frame before it is accepted. `PlacedNote.leader` is now two points or three; `drawing.bind_notes`
 already drew `DrawLeaderLine.WayPoints` as a list, so the third point cost nothing there.
 
+**Rationale**
+
 **Measured working**: on the paneled bulkhead's `DETAIL A`, the `bore` note's leader — which
 used to run straight from (58.7, 62.8) to (94.6, 16.0), crossing `G`'s witness at (60.0, 61.1)
 — now bends through (60.0, 58.2) and clears it.
+
+**Caveats**
 
 **Kept deliberately narrow.** The hard constraint stayed dimension-line-only, exactly as before
 this alternative existed — it was **not** widened to witness lines, because a leader that
@@ -1472,14 +1838,45 @@ cannot reach a new way to fail a sheet that never needed reaching for. A leader 
 crosses a witness line after this is exactly as visible, or invisible, as it was before
 OQ-DES-D16 was filed — the router is strictly additive, not a new constraint.
 
-### OQ-DES-D17 — A dimension can inherit an unrelated note's whole band — DECIDED 2026-09-07: alternative 3, tried and measured not to reach the case it was filed on
+**Where it is recorded**
 
-**Chosen: alternative 3.** `_attempt` now builds both of section 5.3 item 5's balancings for
+`dimension_placement._route_leaders`, named in the decision.
+
+### OQ-DES-D17 — A dimension can inherit an unrelated note's whole band — RESOLVED 2026-09-07
+
+**Problem**
+
+Notes take the innermost band around the part and dimensions start outside it, so a dimension
+on the same side as an unrelated leader note inherited that note's whole band, and its witness
+line ran much longer than its standoff required.
+
+**Alternatives**
+
+1. **Leave it.**
+2. **Search the dimension's side, not just the note's.**
+3. **Score the two balancing arrangements already available.**
+4. **Let a note's side search weigh its cost to the dimensions behind it.**
+5. **Let a witness line bend around a note band.**
+
+**Recommendation**
+
+None: it depended on how often the pattern recurs and on what alternative 3 costs, neither yet
+measured.
+
+**Decision**
+
+Alternative 3. `_attempt` now builds both of section 5.3 item 5's balancings for
 an axis group of two or more — the ranked assignment and its mirror — scores each by
 `_witness_length` (total length of every witness line the group draws), and keeps the shorter
 one, but only if `_group_fits` says the swap does not push anything outside the frame the
 unswapped arrangement was inside. Implemented, and safe: the full six-sheet set still builds
 and `check_placement_determinism.py` still reports one digest across four hash seeds.
+
+**Rationale**
+
+None was recorded beyond the decision.
+
+**Caveats**
 
 **Measured not to fix the case that motivated the question.** On `corner-corner-7faa02`, `F`
 (`panel_pocket`) and `A` (`corner_radius`) are the vertical-axis group. The default assignment
@@ -1500,6 +1897,10 @@ from its line, which did not happen to be true here — but a case like `F`'s, w
 feature itself sits nearer the crowded side, needs one of alternatives 2, 4 or 5 from the
 original list, or a different question, to actually shorten. Left as a finding rather than a
 new question because no further decision has been asked for.
+
+**Where it is recorded**
+
+`_attempt`, named in the decision.
 
 ## See also
 

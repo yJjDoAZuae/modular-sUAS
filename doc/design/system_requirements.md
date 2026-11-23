@@ -503,40 +503,18 @@ the right requirements.
 
 ## Open questions
 
-**None. All three are decided**, on 2026-08-30, and the resolution notes stay below in numerical
-order because what each decided is why several parts of this document read the way they do.
+No open questions.
 
-**What replaced them is a queue, not an absence.** The three questions were about requirements
-nothing verified, a printability tier with a hole in it, and a modularity claim nothing stated.
-All three are now requirements with named checks that **have not been written**:
-[section 9.3](#93-verification-status) lists five, with their work items and the one dependency
-edge between them. That is a better state than three open questions and a worse state than a
-green run, and the table says which it is.
+### OQ-DES-SR1 — Two printability requirements have nothing above the joint — RESOLVED 2026-08-30
 
-**The live questions elsewhere are all in
-[dimension_scheme.md](dimension_scheme.md#open-questions).** **OQ-DES-D11** holds DRW-12 at
-*partial*: no bulkhead sheet says how wide the panel's seating surface is. **OQ-DES-D12 was
-decided on 2026-09-06** — a bulkhead with no panel is no longer to be asked to explain the panel
-joint, because a row's parameters now drop when the row's *joint* is absent rather than when
-their values are zero — so **DRW-12 stays partial for one reason instead of two**, and that one
-is now a build rather than a question ([IP-FC-110](../implementation/freecad_migration.md)).
-**OQ-DES-D10**, the *Carried by* column meaning two things, affects no requirement's status.
+**Posing not recovered**
 
-Two closed on 2026-08-30. **OQ-DES-D7** — the *governing expression* column meaning two things,
-which is why DRW-12 is partial — was decided: every row states the whole size, then the
-expressions become executable and are checked against the parts. **OQ-DES-DB7** was withdrawn:
-it asked whether `longeron_chamfer` should be renamed because it chamfers nothing, and it does
-chamfer something.
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
 
-### OQ-DES-SR1 — Two printability requirements have nothing above the joint — DECIDED 2026-08-30: two requirements, DES-13 and DES-14, kept separate
+**Decision**
 
-**Resolution note.** Alternative 2: one requirement for orientation, one for support.
-
-**They are two concerns and they get two requirements.** Merging them into one — which was this
-document's recommendation — would have put a real trade behind a single id: the orientation that
-prints most easily is often not the one that carries load best. It would also have merged two
-different verification states, and that is the sharper reason, because one half is computable
-today and the other is not.
+Alternative 2: one requirement for orientation, one for support.
 
 | | **DES-13** — orientation | **DES-14** — support |
 | --- | --- | --- |
@@ -544,6 +522,14 @@ today and the other is not.
 | Says | the part is modeled in the orientation it prints in, bed = x/y plane, +z = build direction, chosen so the layers carry the load | no downward-facing surface leans shallower than `overhang_angle_from_bed` from the bed |
 | Recorded how | **by construction** — every existing part is already modeled in its print orientation, so the model *is* the record | `overhang_angle_from_bed` = 35°, one value for the project, reason in the constants file |
 | Verified | **held by review**, and only half checkable even in principle | **computable, not yet computed** — IP-FC-95 |
+
+**Rationale**
+
+**They are two concerns and they get two requirements.** Merging them into one — which was this
+document's recommendation — would have put a real trade behind a single id: the orientation that
+prints most easily is often not the one that carries load best. It would also have merged two
+different verification states, and that is the sharper reason, because one half is computable
+today and the other is not.
 
 **Orientation is recorded by construction, which answers the drawback this question raised.**
 The recommendation for a merged requirement worried that *"nothing records a part's build
@@ -567,22 +553,25 @@ fault at the joint, and the hole is filled.
 Printability gaps closed. What remains uncited is the four objectives — refined by the groups
 rather than decomposed directly — and AR-MOD-2, AR-MOD-3, AR-MOD-6 and AR-MOD-7.
 
-*Implementation: `requirements.py` gains DES-13 and DES-14 and re-cites INT-9; section 4 gains
-two rows and two notes; IP-FC-95 is the overhang checker DES-14 needs.*
+**Caveats**
 
-### OQ-DES-SR2 — Three requirements are verified by nothing — DECIDED 2026-08-30: build all three, ordered by dependency
+DES-13 is held by review only: whether the chosen orientation is the right one is partly a stress analysis, which the project does not yet have the tools for. DES-14 is computable but was not yet computed when this was decided.
 
-**Resolution note.** Alternative 1: all three checks are to be built. The ordering is set by
+**Where it is recorded**
+
+Section 4, which carries DES-13 and DES-14; `requirements.py`, which adds both and re-cites INT-9; and [IP-FC-95](../implementation/freecad_migration.md), the overhang checker DES-14 needs.
+
+### OQ-DES-SR2 — Three requirements are verified by nothing — RESOLVED 2026-08-30
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 1: all three checks are to be built. The ordering is set by
 dependency rather than by cost, and only one dependency edge exists.
-
-**A phrase in this question's alternative 2 was hollow and is withdrawn.** It offered *"does not
-force a drafting decision under time pressure"* as a benefit of deferring DES-9. **There is no
-time pressure**, and there never was — the phrase was carried over from AP-3's reasoning, where
-the concern had been manufacturing a justification for the cross section rather than admitting a
-gap. It does not transfer. What was left underneath it, once the invented urgency is removed, is
-a single true observation: **DES-9's cost is sheet real estate rather than code**, so building it
-entails a layout decision that the other two do not. That is a dependency, not a reason to defer,
-and it is what sets the order below.
 
 **What each check is.**
 
@@ -598,9 +587,26 @@ a diff between two runs cannot be attributed — it might be the note, or it mig
 nondeterminism that was always there and nobody had looked for. Doing DRW-7 first makes the
 note's effect on the layout readable. The other three are independent of each other and of these.
 
+**Rationale**
+
+**A phrase in this question's alternative 2 was hollow and is withdrawn.** It offered *"does not
+force a drafting decision under time pressure"* as a benefit of deferring DES-9. **There is no
+time pressure**, and there never was — the phrase was carried over from AP-3's reasoning, where
+the concern had been manufacturing a justification for the cross section rather than admitting a
+gap. It does not transfer. What was left underneath it, once the invented urgency is removed, is
+a single true observation: **DES-9's cost is sheet real estate rather than code**, so building it
+entails a layout decision that the other two do not. That is a dependency, not a reason to defer,
+and it is what sets the order below.
+
 **DES-12 is still the one with a live failure mode**, and that is a reason to weight it, not to
 reorder: a modeling change that gives the cowl a wall destroys vase-mode printability while the
 part still builds, still exports and still measures correctly.
+
+**Caveats**
+
+None of the three checks existed when this was decided; each is a work item.
+
+**Where it is recorded**
 
 **DES-14 and DES-15 join the same queue**, from [OQ-DES-SR1](#open-questions) and
 [OQ-DES-SR3](#open-questions). Section 9.3 now lists all five together, because after this
@@ -609,9 +615,26 @@ written. The distinction this document drew a day earlier — between *"we do no
 verify this"* and *"nobody has written it yet"* — has collapsed in the useful direction, since
 the first category is now empty.
 
-### OQ-DES-SR3 — Interchange and re-ordering are delivered but not required — DECIDED 2026-08-30: DES-15, scoped to the mating features only
+[Section 9.3](#93-verification-status) lists the checks with their work items.
 
-**Resolution note.** Alternative 1, with a correction to the requirement this document drafted.
+### OQ-DES-SR3 — Interchange and re-ordering are delivered but not required — RESOLVED 2026-08-30
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 1, with a correction to the requirement this document drafted.
+
+**DES-15 is therefore stated over the mating features and says outright what it excludes.** The
+exclusion is not a concession to the current implementation; it is **AR-MOD-1**, a minimally
+constraining physical interface, which means constraining what has to be shared and deliberately
+nothing else. That is why DES-15 cites AR-MOD-1 alongside AR-MOD-2 and AR-MOD-3: two of its
+parents say what must be the same, and the third says why the rest must not be.
+
+**Rationale**
 
 **The draft was wrong, and the correction is the substance of the decision.** It proposed that
 *"every bay presents the same forward end interface as every other bay, and likewise aft"*.
@@ -622,12 +645,6 @@ bulkheads that may yet be defined — is neither a standard dimension nor a stan
 requirement over the whole end face would have been false on the day it was written and would
 have forbidden parts the design intends to have.
 
-**DES-15 is therefore stated over the mating features and says outright what it excludes.** The
-exclusion is not a concession to the current implementation; it is **AR-MOD-1**, a minimally
-constraining physical interface, which means constraining what has to be shared and deliberately
-nothing else. That is why DES-15 cites AR-MOD-1 alongside AR-MOD-2 and AR-MOD-3: two of its
-parents say what must be the same, and the third says why the rest must not be.
-
 **What this closes.** AR-MOD-2 and AR-MOD-3 were reached by nothing, so a change making one bay
 end differ from another would have violated the architecture and passed every check in the
 repository — INT-10 is about the fastener, not about the end interface being repeatable. INT-10
@@ -636,6 +653,8 @@ with no gaps left**: the six uncited are the four objectives, which the groups r
 decompose; AR-MOD-6, the wing interface, which is not a fuselage part; and AR-MOD-7, carried by a
 given.
 
+**Caveats**
+
 **It is verifiable and not yet verified.** The two ends of a built bay can be compared for
 fastener positions, bolt circle, longeron positions and OML perimeter — the same kind of
 face-level test `check_derived_geometry.py` already does — while the aperture is excluded from
@@ -643,6 +662,9 @@ the comparison by the requirement itself.
 [IP-FC-100](../implementation/freecad_migration.md) is the work item, and it joins the queue in
 [section 9.3](#93-verification-status).
 
+**Where it is recorded**
+
+DES-15 in section 4, which INT-10 now also cites; its check is [IP-FC-100](../implementation/freecad_migration.md), queued in [section 9.3](#93-verification-status).
 
 ---
 

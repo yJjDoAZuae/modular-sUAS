@@ -775,1452 +775,9 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 
 ---
 
-## Open questions
+## 8. Building the tail cowl across `U`
 
-| ID | Question | Blocking |
-| --- | --- | --- |
-| OQ-DES-CW27 | FreeCAD caches a shape's triangulation, so `solid_measure.converged_volume` run a second time on the same shape object converges at once on the cached mesh and reports the coarsest deflection as the converged one; with `tol` = 0 the identical call raises and then succeeds. The volume returned is still correct — only the convergence claim is not. Whether to defeat the cache, and at what cost on a real cowl, is the decision | Not blocking (the production path measures at one fixed deflection on a freshly built shape, so no shipped number is affected) |
-| OQ-DES-CW28 | The interior fit's convergence criterion `TAU` = 0.05 mm is **five times looser than the acceptance tolerance** `WALL_TOL` = 0.01 mm the finished wall must meet, and the walls come out just inside the criterion they were converged to — 7 of the 12 distinct corpus walls are over tolerance, every `tail_shell` at every `U`. Tightening `TAU` works on a nose (`U` = 4 goes 0.01403 → 0.00378 mm at `TAU` = 0.02) but is now **measured not to build a tail at all, at two configurations**: at both 0.02 and 0.01 a `tail_shell` at `U` = 0.5 and again at `U` = 2.0 raises `Unconverged` against the 64-station patch budget, and pass 2's own worst gap is unchanged across the whole fivefold range both times, so on a tail `TAU` is not the lever. Pass 1 meanwhile converges to 0.0073 mm, inside `WALL_TOL`, and the finished wall is unmoved — because the two passes measure out to different exteriors, the un-notched OML and the notched one, which diverge by up to 26.5 mm. The two thresholds are additionally read by two different measures, 2.81x apart at `U` = 0.5. What to do instead — accept the wall as built, make the criterion adaptive, raise the refiner's limits, or remove the residual's mechanism — is the decision | **Blocking** for any claim that a build's wall meets `WALL_TOL`; not blocking any build, which fails nothing today |
-| OQ-DES-CW29 | The acceptance gate now reports two wall-thickness measures side by side, and on a real `nose_cowl_shell` build they disagree about whether the part complies: the incumbent nearest-point minimum reads 0.0376 mm under nominal at 9 of 12 stations and fails the build, while the measure selected against five pre-committed gates reads 0.0031 mm and passes it with three times the margin. The incumbent is known not to converge; the selected measure is known to exclude samples near concave corners, which is where the incumbent's minima sit on a nose. Which of the two gates a build — and therefore whether a nose cowl is shippable today — is the decision | **Blocking** for any pass/fail verdict on a `nose_cowl_shell`; not blocking a `tail_shell`, where both measures agree the wall is over tolerance |
-| OQ-DES-CW30 | `cavity`'s output carries an **open boundary** — one edge of 3 164, 1.0587 mm long, adjacent to exactly one face, confirmed by the kernel's own adjacency and not a seam, a pole, a stray face or an artifact of the measurement. `Shape.isValid()` passes it and the construction reports `1 solids, valid=True`, so the existing check does not establish that the cavity's shell is closed. The finished walls are unaffected: all twelve carry zero such edges, so a later step resolves it. Whether the construction should refuse an open cavity shell — which would fail every `tail_shell` build today while the parts they produce are sound — is the decision | Not blocking (no shipped wall is affected; the question is what the construction should refuse) |
-| OQ-DES-CW31 | The interior fit's axial seed is a fixed **count** — `SEED_MAX` = 6 stations for any stretch over 3 mm — while a `nose_cowl_shell`'s stretch runs 22 mm at `U` = 0.5 and 176 mm at `U` = 4.0, so the axial spacing grows from 2.44 to 17.60 mm and the finished wall's error tracks it to within ±13 %, from 0.00189 to **0.01530 mm** against `WALL_TOL` = 0.01. **This is why `U` = 4.0 is the only failing nose configuration**, confirmed by its converse: raising `SEED_MAX` to 12 at fixed `U` = 4 takes the wall to 0.00733 mm, passing, at no measurable build cost. **Two premises corrected 2026-10-14.** The apparent 0.0071 mm "floor" is `TAU`, not the construction: `_refine` stops at the first subdivision inside it, and at `TAU` = 0.02 the same nose reaches 0.00268 mm — so **either lever alone makes the nose compliant** and the real floor under both is 0.00268 mm, 3.7x inside tolerance. And the 23-minutes-a-part cost objection prices the superseded 60-patch construction; every current build is `patch 1/1`, and generous seeding measures **+23 % on a nose and +33 % on a tail**. The tail prerequisite is measured too: it buys 12 %, leaving the tail 3.3x over tolerance while pass 1 improves 4.9x. So the decision is no longer a build-time trade — it is whether to adopt a correct seeding rule that fixes the nose knowing it does nothing for the tail, and whether `TAU` should do that job instead | **Blocking** a compliant `nose_cowl_shell` at `U` = 4.0; not blocking any tail, which fails for separate reasons |
-| OQ-DES-CW33 | Every wall-thickness measure in this subsystem is **in-plane**, and a plane cutting a slab inclined at θ reads `thickness / cos θ` — always thicker than the slab is. Measured with a new 3-D normal-distance measure verified first against closed-form fixtures: across four saved walls, **66 readings on the fitted interior surface, every one confirmed thin and thinner than the plane said, none exonerated**. Real worst deficits **0.0943 mm (tail `U` = 0.5), 0.0790 (nose `U` = 4.0) and 0.0645 (tail `U` = 1.0) — six to nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and 0.0226, understating by 2.9–7.0×. The surface is inclined 21.5–30.8° there and `normal / cos θ` reproduces every in-plane figure to 0.0037 mm; the in-plane column independently reproduces IP-WTM-45's 0.01345 and OQ-DES-CW28's 0.01403. **Not localized**: on the tail at `U` = 1.0, 1 954 of one station's 4 267 samples are thin on the fitted surface, 46 % of the circumference. **No measure the gate has or is choosing between can see any of it**, and in-plane severity is measured to rank the real readings *last*, so a cheap worst-`N` confirmation pass selects against the defect. Whether to filter by face class and measure, document the bias and leave the gate in-plane, or something else, is the decision | **Blocking** any claim that an in-plane pass means a wall meets `WALL_TOL`; not blocking a build, and an in-plane *failure* is still evidence of a defect |
-| OQ-DES-CW35 | `cowl_interior.py` carries a **test-only seam in production code**. A module-level `_probe`, `None` in every build, is read at two call sites through two identity accessors, so a measurement can reach the two decisions `cavity` makes for itself and nothing outside can otherwise touch: the eroded cross-section each fit row is built from, and the minimum station separation `station_floor(t)` = 0.600 mm at the current wall. It is about **eight lines of a 3 541-line module**, neither entry point's signature mentions measurement, and `_probe is None` is the only state any build has had — so no shipped geometry depends on the answer. What it costs is a reader of the construction seeing two calls that do nothing, one further accessor per future question asked, and a later edit being able to route *around* the accessor and silently disable a measurement rather than fail it, which is the exact fault that has already produced two convincing null results in this subsystem. Removing it means decomposing `cavity`: **847 lines, eight named nested functions, 21 captured names**, and the kernel's reproducibility floor makes a passing regression weak evidence that a decomposition changed nothing. Whether to keep the seam, decompose, substitute the production functions by name instead, or promote the seam to a designed extension point, is the decision | Not blocking (the seam is inert — no build, measurement or recorded figure changes whichever way this goes) |
-| OQ-DES-CW37 | The interior construction samples each station's cross-section at `n` points, clamped to `[SAMPLE_MIN, SAMPLE_MAX]` = [400, 3000], and hands those samples in as a cubic B-spline's **poles** — so **one integer sets both where the arc is observed and how many degrees of freedom describe it**, and the curve does not pass through its own samples (measured: 0.177923 mm off them on a 12-point circle, where `interpolate` is exact and tracks the circle 69x closer). When `makeOffset2D` refuses the offset the construction doubles `n` over a three-rung ladder, and that ladder is measured to point the wrong way: the curve's minimum radius falls as `n` rises (5.35 to 0.70 mm across five rungs) and failure is **not monotonic in `n`**. Walked with both constructions over identical samples, **`n` = 200 — half the shipped floor — offset 10 of 10 stations under both, while the shipped `SAMPLE_MIN` = 400 measured worst under both at 8 and 9 of 10**; interpolating buys 2.9x accuracy but **no reliability** (47 of 50 rungs against 46). Whether to add a coarser rung, lower the floor, separate the sampling from the fit, or leave it, is the decision | Not blocking (no build fails on this, and no figure in the corpus is wrong today); what it governs is the 1e-5 reproducibility floor OQ-DES-CW36 was resolved to state |
-| OQ-DES-CW38 | A `tail_shell` wall volume moved 23617.2932 → 23617.3047 mm3, 4.9e-7 relative, between two revisions whose **fitted interior (294462.4022 mm3), closed cavity (290850.6976 mm3) and notched blank are all bit-identical**, with the divergence appearing only at the cell-wall step and **no offset retry anywhere in the build** — so OQ-DES-CW36's mechanism is excluded from both sides and no cause is identified. The bit-identical claim rests on `solid_measure.solid_identity`, which compares topology counts, vertex coordinates, bounding box, area and volume and **does not compare the underlying surfaces' poles, knots or multiplicities**, so the operands are identical *by that instrument* and not yet by a stronger one. Whether to sharpen the instrument, bisect the boolean chain, or accept the effect as already covered by the stated floor, is the decision | Not blocking (nothing fails, and 4.9e-7 on a volume approaches no tolerance); what it governs is whether the floor in [cowl_interior_surface.md §10.0](cowl_interior_surface.md) stays partly unattributed |
-
-### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
-
-**Problem.** The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
-parameters control that import: `oml_scale_m_per_mm`, `oml_length_m` and `oml_offset_x_m`. All three are
-expressed in **meters**, while every other length in the OpenSCAD generator is in
-**millimeters**, and none of the three carries a unit suffix.
-
-Two of them are actively misleading. `oml_scale_m_per_mm = 1e-3` is used as a *divisor* —
-`scale = U/oml_scale_m_per_mm` — so it multiplies by 1000 while looking like it divides. And
-`oml_offset_x_m` is applied *before* the scale, so the tail's `-0.25` means −0.25 m (−250 mm
-at U = 1), not −0.25 mm; reading it as millimeters understates it a thousandfold, and the
-part still renders.
-
-The project guideline is to encode units in a name when they are not obvious from context.
-Here the context points the wrong way. This affects anyone editing a cowl parameter file
-and, more seriously, the FreeCAD port (IP-FC-12), which will read these values and
-reproduce whatever convention it infers.
-
-**Alternatives**
-
-1. **Rename with unit suffixes** — `oml_scale_m_per_mm_m_per_unit`, `oml_length_m_m`,
-   `oml_offset_x_m_m`.
-   *Benefits:* the trap disappears at the point of reading; matches the guideline; costs
-   nothing at runtime.
-   *Drawbacks:* touches the SCAD modules, both cowl JSON files, and
-   `derived_cowl_parameters()`; the standing rule is not to rename identifiers in a path
-   scheduled for replacement.
-   *Prerequisites:* none.
-
-2. **Rename only on the Python side, leave the SCAD and JSON alone.**
-   *Benefits:* the surviving layer is correct; small diff; provable byte-identical by
-   `scad_snapshot.py`.
-   *Drawbacks:* the JSON files — which a human edits — keep the misleading names, and they
-   are the most likely place for the error.
-   *Prerequisites:* none.
-
-3. **Leave the names, document the convention here, and fix it at the port.**
-   *Benefits:* no churn in retiring code; this document already records the algebra.
-   *Drawbacks:* the port is exactly when the misreading is most costly, and documentation
-   is a weaker guard than a name.
-   *Prerequisites:* none.
-
-**Recommendation: alternative 1.** This is the same argument that justified renaming
-`nozzle_diameter` to `extrusion_width` in IP-GEO-24 and it applies more strongly here,
-because the failure mode is a factor of 1000 rather than 20 %. The "do not rename retiring
-code" rule exists to avoid churn for cosmetic gain; a name that states the wrong unit is not
-cosmetic. Verify with a geometric comparison, since the generated `.scad` text changes.
-
-**RESOLVED 2026-08-09 — alternative 1, done.**
-
-| Was | Now | Why the suffix reads that way |
-| --- | --- | --- |
-| `oml_length` | `oml_length_m` | Meters, in a codebase whose every other length is millimeters |
-| `oml_offset_x` | `oml_offset_x_m` | Meters, and applied *before* the scale, so it is meters in the mesh's own frame — the tail's −0.25 is −250 mm at U = 1 |
-| `oml_scale` | `oml_scale_m_per_mm` | A **divisor**: `scale = U/oml_scale_m_per_mm`. At 1e-3 it multiplies by 1000 while the bare name suggests it divides. The suffix names the ratio in the order the division takes it |
-
-Renamed in all four places the value passes through: the SCAD module signatures
-(`cowl_geometry.scad`, `nose_cowl.scad`, `tail_cowl.scad`), the `OmlParameters` dataclass,
-and — because `derived_cowl_parameters()` copies OML fields by `fields()`, so the dataclass
-field names *are* the schema — the JSON keys in both cowl parameter files.
-
-**`_m_per_mm` rather than the `_m_per_unit` originally proposed.** "Unit" is the most
-overloaded word in this project — `U`, `unit_width`, `unit_length` — and spending it here on
-"model unit" would have planted a fresh ambiguity in the middle of a rename whose whole
-purpose was removing one. `_m_per_mm` names both ends of the ratio and borrows nothing.
-
-**Verified geometry-identical**, which was the stated requirement. This change alters SCAD
-module signatures, so the generated `.scad` text necessarily differs and `scad_snapshot.py`
-would report DIFF by construction — the case `verify_sweep_change.py` exists for. It re-ran
-the real sweeps and compared the resulting solids: nose cowl, tail, and non-cowl parts as
-controls, all identical.
-
-### OQ-DES-CW2 — What `cone_angle` measures — RESOLVED 2026-08-09
-
-**`cone_angle` is the overhang angle for printing, measured from the print bed. Both call
-sites are correct, and the apparent inconsistency was an artifact of how this document posed
-the question.**
-
-The two expressions are complementary because they are written against **perpendicular
-reference directions**, and the physical face they produce is the same. Working each through
-to the bed plane:
-
-| Call site | As written | Face relative to the axis | **Face relative to the bed** |
-| --- | --- | --- | --- |
-| `buttress_shape()` | `dζ/dr = tan φ` — angle φ from the *radius* | 55° | **35°** |
-| `nose()` | `r₁ = r₂ + L/tan φ` — half-angle `90° − φ` from the *axis* | 55° | **35°** |
-
-The radius lies in the bed plane and the axis is normal to it (the part prints axially, large
-end down, §7), so "35° from the radius" and "55° from the axis" are two spellings of one
-face. `tan 35° = 0.700`, and a cone whose radius grows by `L/0.700 = 1.428·L` over height `L`
-stands at `atan(1.428) = 55°` from the axis — 35° above the bed. The parameter is used
-against its natural sense at both sites; only the documentation was missing.
-
-**Why 35° and not 45°.** The 45° figure this document measured against is a rule of thumb,
-and a conservative one: modern printers do considerably better than 45° in PLA, and 35° from
-the bed is readily achievable. It is an aggressive value chosen deliberately, not a value
-that drifted past a limit. The earlier reading — "a 55°-from-vertical face, steeper than the
-usual 45° self-supporting limit, so something must be wrong" — inverted the conclusion: 55°
-from vertical *is* the achievable direction, and the design is spending the margin the rule
-of thumb leaves on the table. **Other materials may not hold 35°**, which makes this a
-material-dependent process limit rather than a shape parameter.
-
-**Consequences for the port.**
-
-- **Do not split it.** Alternative 2 of the original question is wrong: the two sites are one
-  quantity, and forcing them apart would let them drift out of step for no reason. Nothing
-  needs correcting under alternative 3 either — there is no disagreeing call site.
-- **The name states a shape and hides a constraint.** `cone_angle` describes what the geometry
-  looks like at one of the two sites and nothing at all at the other; what it *is* is a
-  minimum printable angle. `overhang_angle_from_bed` names both the quantity and the reference
-  the ambiguity turned on — and the reference is exactly what OQ-DES-CW1 argues belongs in the
-  name. Note that it is a **floor, not a target**: shallower fails, steeper is free.
-- **It is a printer setting, not a cowl setting.** It is already in `NOSE_UNSCALED` and does
-  not scale, correctly — but it sits in the cowl JSON, where it reads as a property of the
-  shape. Being material-dependent, it belongs in `PrinterSettings` with `extrusion_width`,
-  `layer_height` and the `n_perimeters` that OQ-DES-CW6 needs (IP-FC-42): the four together
-  are the process, and a cowl designed for one material should not have to be re-authored for
-  another. Recorded as IP-FC-28.
-- **It is the only printability constraint expressed anywhere in this project's geometry**,
-  but that does not make it a single project-wide number. Every other self-supporting
-  decision — the greeble chamfers, the bulkhead flange chamfer, the corner's snap groove
-  cones — is a literal angle chosen to be printable, with nothing recording that printability
-  is what set it. The tempting fix is to derive them all from one value; it is the wrong fix,
-  because **the achievable angle depends on what is overhanging**:
-
-  | What varies | Why it changes the achievable angle |
-  | --- | --- |
-  | Span | A 2 mm chamfer sags negligibly at an angle that would ruin a 40 mm one. Droop accumulates over the unsupported run, not per layer |
-  | Surface type | A cone is self-supporting in a way a flat ceiling is not — each layer is a closed loop laid on the one below, with no free end |
-  | Function | A cosmetic face tolerates droop; a mating surface — the plate relief, the snap groove — does not, and wants margin the cowl's exterior does not need |
-  | Cooling and orientation | The same face on the same printer behaves differently depending on what is around it |
-
-  So the process value is a **baseline**, and individual features are entitled to be more
-  conservative where the span is long or the surface mates, or more aggressive where the span
-  is short. What is worth capturing is not one angle but the *fact* that a given chamfer is
-  set by printability and against which reference — so that changing material prompts a
-  review of each rather than a silent global substitution. Whether the baseline should
-  additionally carry per-feature overrides, and on what rule, is left open here; the cowl
-  needs one value and this question is about the cowl.
-
-### OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance? — RESOLVED 2026-08-09
-
-**Neither, and the question was posed on a false dichotomy.** `buttress.thickness` is the
-thickness of **the cut into the OML that produces the buttress through slicing**. It is not
-a clearance around some other feature, and it is not the rib's thickness — it is the notch
-whose walls, once the slicer has laid perimeters down both faces of it, *are* the rib.
-
-The thickness of the buttress measured on the interior of the cowl is therefore
-
-$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}} + t_{\text{cut}}$$
-
-These cowls print in **spiral vase mode** ([OQ-DES-CW6](#open-questions)), so `n_perimeters`
-is **1**: a 0.05 mm parameter yields a **0.85 mm** rib at `extrusion_width = 0.4`, 1.25 mm at
-the sweep's 0.6. The value looked implausible because it was being read as the whole rib when
-it is the smallest of the three terms that make it — and because a single-wall print was not
-in view, which is the case where a 0.85 mm rib is a substantial fraction of the structure.
-
-**This settles the scaling question too, and the current treatment is right.**
-`buttress.thickness` **is a slicer tolerance, not a part geometry parameter**, and a slicer
-tolerance has no business tracking the airframe — so it does not scale, and `thickness`
-belongs in `NOSE_UNSCALED` exactly where it is. Alternative 3 of the original question is
-answered: it should not scale. The consequence follows and is intended
-([OQ-DES-CW4](#open-questions)): the buttress *pattern* — angles, offsets, extents — scales
-with the cowl, while the rib's thickness does not, because the first is design and the second
-is process.
-
-**What the name should be.** `thickness` is defensible now that its referent is known, but it
-reads as the rib's thickness at every call site, and a reader sizing a rib would take it and
-be wrong by a factor of thirty. `buttress_cut_thickness` states which of the two thicknesses
-it is. That is a rename across the JSON schema, `ButtressSet` and eight SCAD signatures, so
-it is deferred to the port rather than done twice — recorded as IP-FC-29.
-
-**One discrepancy to settle, flagged rather than fixed.** Every call site extrudes the cutting
-prism as
-
-```openscad
-linear_extrude(height=2*buttress_thickness, center=true, ...)
-```
-
-so the cut actually taken out of the blank is **0.1 mm, twice the parameter**, and the rib
-built on it is `2·w·n + 2·t`. Under the definition above the factor of two is either a
-half-thickness-per-side convention that the parameter name does not state, or an error. It
-is not resolvable by measurement — the two readings differ by 0.05 mm of rib thickness,
-whatever the extrusion width — so it is a question of intent for whoever set the value.
-*Split out as its own question and settled 2026-08-18 — see [OQ-DES-CW8](#open-questions).
-The doubling is kept and folded into the value: the parameter becomes
-`buttress_cut_thickness = 0.1` and the `2*` comes out of the four extrudes, so the cut stays
-0.1 mm and no geometry moves. `t` in the rib formula is therefore the stored number, and the
-printed parts remain reproducible from the files.*
-
-**The perimeter count is not a parameter anywhere in this project.** `PrinterSettings` carries
-`extrusion_width` and `layer_height` and nothing else; `n_perimeters` lives only in the slicer
-profile, which is not in the repository. The formula above therefore cannot be evaluated by
-the generator as it stands. That matters directly to OQ-DES-CW6 — a nominal rib cannot be
-modeled without it — and it is the same class of gap as the OML/`.vsp3` link that OQ-DES-CW7
-closed: a value the geometry depends on, held outside the system that depends on it.
-
-### OQ-DES-CW4 — Should buttress placement become parametric? — RESOLVED 2026-08-09
-
-**Problem.** `tail_cowl_half()` hard-codes every buttress angle and offset as a literal:
-side buttresses at 5°, 12.5° and 20°, top and bottom at 15° and 0°, diagonals at ±30°, with
-offsets written as fractions of `unit_width` inline.
-
-Meanwhile the cowl JSON carries `angle`, `y_offset`, `z_start` and `depth` fields for each
-buttress group, `derived_cowl_parameters()` faithfully scales them into the parameter tree,
-and the geometry **ignores all of them for placement**. This is the same defect class as
-OQ-DES-B6 and OQ-DES-C3: a parameter threaded through the whole pipeline and discarded at
-the point of use.
-
-The practical consequence is that a new cowl shape cannot be given a different buttress
-pattern without editing SCAD, which defeats the purpose of the JSON parameter files.
-
-**Alternatives**
-
-1. **Make placement parametric** — drive the angles and offsets from the fields that
-   already exist.
-   *Benefits:* the JSON becomes a complete description of a cowl; new cowl types stop
-   requiring code changes; the dead fields become live.
-   *Drawbacks:* the buttress *count* is also hard-coded (three side, two top, two bottom,
-   two diagonal pairs), so a full solution needs a list rather than a fixed group set;
-   larger change than it first appears.
-   *Prerequisites:* deciding whether count is parametric too, or only placement.
-
-2. **Delete the unused fields.**
-   *Benefits:* removes the misleading appearance of configurability; smallest change.
-   *Drawbacks:* gives up the capability; the next cowl shape re-raises the question.
-   *Prerequisites:* none.
-
-3. **Defer to the port**, and design the buttress set as a list of placements in the
-   FreeCAD generator.
-   *Benefits:* the port is rewriting this layer anyway; a list is natural in Python and
-   awkward in OpenSCAD.
-   *Drawbacks:* the dead fields persist until then, and any cowl designed meanwhile is
-   hard-coded.
-   *Prerequisites:* none.
-
-**Recommendation: alternative 3, with alternative 2's honesty in the interim** — mark the
-unused fields as unused in the JSON schema documentation so nobody sets them expecting an
-effect. The full fix wants a list of buttress placements rather than a fixed set of named
-groups, and that is a natural thing to build in the port and an unnatural one to retrofit
-into the current SCAD.
-
-**Resolved 2026-08-09 — with the question split in two, because it was conflating them.**
-
-**Scaling: intended, and already correct.** The existing buttress design is meant to scale
-with the cowl, and it does — every hard-coded placement in §4.3 is either an angle
-(dimensionless) or a fraction of `unit_width`, and the `z` stations are taken from `tail_len`,
-which scales. Nothing here needs changing and **the port must preserve it**: a placement
-re-expressed in absolute millimeters would reproduce U = 1 exactly and be wrong everywhere
-else, which is the failure mode this project has hit before and the reason the sweep is
-checked at four values of U rather than one.
-
-The single exception is `buttress.cut_thickness`, which is scale-independent **because it is a
-slicer tolerance rather than a part geometry parameter** — the same reasoning that resolved
-[OQ-DES-CW3](#open-questions). That also settles
-the question CW3 left hanging: the rib's thickness being constant across airframe sizes while
-its placement and extent scale is *deliberate*, not an oversight. A slicer tolerance has no
-business tracking the airframe.
-
-**Parametric placement: alternative 2 is rejected outright, alternative 3 stands, and its
-scope shrinks.** The unused fields stay — they are wanted, not dead. But note what the port
-is and is not being asked to do:
-
-- **In scope: making today's chosen placements data.** The angles and offsets of the existing
-  pattern move from SCAD literals into the buttress list, each entry scaled by `unit_width`
-  exactly as the literals are now. This is a transcription, verifiable against the current
-  geometry, and it makes the existing JSON fields live.
-- **Out of scope: choosing placements for a new OML.** There is no generalized algorithm for
-  siting buttresses on an arbitrary nose or tail, and none is claimed. That is a design
-  problem worth exploring later, and it is not a prerequisite for the port — a list of
-  placements is exactly the representation such an algorithm would eventually *write into*,
-  so building the list now is a step towards it rather than a detour around it.
-
-### OQ-DES-CW5 — Elliptical or rounded-rectangle sections? — RESOLVED 2026-08-07
-
-**Rounded rectangles**, on 10 of the 16 stations — including every station where a cowl
-meets structure. The question was posed on a misreading of the `.vsp3` (see §1.1), and the
-answer is better than the question: the OML is not an ellipse being reconciled to a square
-fuselage, it is **square by construction**, 0.1 × 0.1 m, exactly `unit_width` at U = 1.
-
-That carries into the port. The cowl's section and the cowling bulkhead's outer profile are
-the same shape derived from the same number, so they cannot drift — the same class of
-guarantee the greeble gets from being cut with `corner_end()`. A port that re-derives the
-cowl section independently of `unit_width` would silently break it.
-
-### OQ-DES-CW6 — Representing the slicer-generated rib in a solid model — RESOLVED 2026-08-09
-
-**Problem.** The cowl's stiffening ribs do not exist in the CAD model. §4 establishes the
-mechanism: a buttress cuts a groove into the **outer** surface, and the slicer — walking a
-fixed perimeter count with zero infill — follows that notch inward and back out, laying
-down a **double wall projecting into the interior**. The rib is an emergent property of
-slicing a notched contour, not modeled geometry.
-
-Every solid-model use case therefore has a problem. An interior surface generated by
-offsetting the outer surface inward (§6.2) reproduces the notch but *not* the double wall
-that fills it. The resulting solid understates both the part's stiffness and its mass, and
-a structural analysis meshed from it would miss the entire stiffening structure — which is
-the reason the buttresses exist.
-
-Affects UC-4 (assemblies), UC-8 (analysis) and any mass estimate. Does **not** affect UC-1,
-because the printed part is produced from the outer surface and is correct as it stands.
-
-**OQ-DES-CW3's resolution supplies the number this question was missing.** The rib's
-thickness is `2·w·n_perimeters + t_cut`, which is a closed form in two printer settings and
-one existing parameter — so alternative 2's "nominal thickness" no longer has to be invented,
-and alternative 1's slicer-specific geometry is a much smaller step than it looked. Its
-*depth* into the interior is still open: that is set by how far the slicer's contour walks
-into the notch before turning back, and it does not follow from the cut width alone.
-
-The catch is that `n_perimeters` **is not a parameter in this project** — `PrinterSettings`
-has only `extrusion_width` and `layer_height`, and the perimeter count lives in a slicer
-profile that is not in the repository. Modeling any rib at all therefore requires adopting
-it as a parameter first, which is the honest version of alternative 1's "the CAD would encode
-a process-specific result": the process value has to enter the model *somewhere*, and the
-choice is whether it does so explicitly or by a number written into the geometry code.
-
-**Alternatives**
-
-1. **Model the rib explicitly** — generate the double wall as geometry where the notch is.
-   *Benefits:* the solid matches the printed part; analysis and mass properties are
-   correct; assemblies show real interior clearance.
-   *Drawbacks:* the rib's exact form depends on slicer settings — perimeter count,
-   extrusion width, the slicer's own corner handling — so the CAD would encode a
-   process-specific result; changing slicer profile invalidates the model.
-   *Prerequisites:* the interior-surface algorithm (IP-FC-16) must exist first.
-
-2. **Model a nominal rib** of stated thickness, not tied to a specific slicer.
-   *Benefits:* captures the structure for analysis without pretending to slicer fidelity;
-   robust to profile changes.
-   *Drawbacks:* the model is then neither the CAD intent nor the printed reality; the
-   discrepancy has to be stated wherever the model is used.
-   *Prerequisites:* a decision on what nominal thickness represents — supplied by
-   OQ-DES-CW3: `2·w·n_perimeters + t_cut`. Still needs `n_perimeters` adopted as a parameter,
-   and a rule for the rib's depth.
-
-3. **Model the interior without ribs and record the omission.**
-   *Benefits:* simplest; the outer surface stays authoritative.
-   *Drawbacks:* analysis is conservative in stiffness by an unknown margin, which is not
-   the same as safe — a conservative stiffness can be unconservative for buckling and for
-   resonance.
-   *Prerequisites:* none.
-
-4. **Stop generating ribs by notching, and model them directly** — change the design so the
-   rib is real geometry and the slicer is not doing structural work.
-   *Benefits:* removes the CAD/print divergence at its source; the model becomes the truth.
-   *Drawbacks:* discards a mechanism that gets ribs for free with no support material;
-   likely heavier; a substantial redesign of a working part.
-   *Prerequisites:* evidence that the divergence actually costs something.
-
-**Recommendation: alternative 2, and treat alternative 4 as out of scope unless analysis
-shows the current design is marginal.** The notching mechanism is elegant and works; the
-problem is representational, not structural. A nominal rib gives UC-8 something to analyze
-and UC-4 something to assemble, and the honest thing is to state in the model where it
-diverges from the print. Alternative 1's slicer-specific fidelity is more precision than
-the rest of the analysis chain can use.
-
-*Amended 2026-08-09.* With OQ-DES-CW3 resolved, alternatives 1 and 2 have largely converged
-on the thickness axis — the "nominal" thickness and the slicer-faithful one are the same
-formula, and both need `n_perimeters` in the model. What still separates them is the rib's
-**depth** and its end conditions, where alternative 1 would have to model what the slicer's
-contour actually does at the ends of a notch and alternative 2 would state a depth and move
-on. The recommendation stands, on the narrower grounds that depth is where slicer fidelity
-gets expensive and stiffness is least sensitive to it.
-
----
-
-**RESOLVED 2026-08-09 — alternative 2, and alternative 4 is ruled out on a ground the
-question did not know about.**
-
-**The notched rib implementation is to be kept, because it is what makes cowls printable in
-spiral vase mode.** That is the fact this question was missing, and it inverts the framing.
-Vase mode spirals a single continuous contour up the part: one wall per layer, no infill, no
-top or bottom, and **no interior geometry permitted at all**. Under that constraint a
-modeled rib is not merely unnecessary, it is *impossible* — any interior feature makes the
-part un-vase-printable. Notching the exterior is therefore not a workaround for the model
-lacking ribs. It is **the only mechanism that can put a rib inside a single-wall print**, and
-the design gets its stiffening for free, with no support material, no second wall, and no
-loss of the fastest and strongest-per-gram mode the printer has.
-
-So:
-
-- **Alternative 4 is rejected, not deferred.** "Stop generating ribs by notching and model
-  them directly" would trade the vase-mode capability for representational tidiness. The
-  drawback listed against it — "discards a mechanism that gets ribs for free" — turns out to
-  understate the cost by a long way, because what is discarded is a whole printing mode.
-- **Alternative 3 is rejected.** Recording the omission is not enough now that the rib's
-  thickness has a closed form (OQ-DES-CW3) and the rib is known to be the primary stiffening
-  structure of a single-wall part.
-- **Alternative 2 is adopted**, with alternative 1 available where fidelity is later shown to
-  matter. The rib is modeled at `2·w·n_perimeters + t_cut`, with `n_perimeters = 1` in vase
-  mode — refined 2026-09-04 by [OQ-DES-CW19](#open-questions) to `2·w·n_perimeters + t_cut / sin θ`,
-  measured in the layer plane, θ being the cut's angle to it and 90° for every vertical cut — which is the case that matters, and conveniently the case where the formula is least
-  ambiguous.
-- **The representational split is now a stated invariant, not a compromise.** §6.4 records it:
-  the print export stays the un-shelled notched blank, and the shelled-and-ribbed solid is a
-  downstream product for the other use cases. Two representations, one parametric source.
-
-**This unblocks IP-FC-17 and IP-FC-23**, with a constraint attached that neither had: the
-interior-surface work must be additive to the existing blank rather than a replacement for
-it, and the sweep's printing output must be verifiable as unchanged by it.
-
-**What is still open, and it is small.** `n_perimeters` is not a parameter anywhere in the
-project (IP-FC-42), and the rib's *depth* into the interior — how far the contour walks into
-a notch before turning back — does not follow from the cut width. Neither blocks the port;
-both want one sliced cowl inspected in the slicer's preview to settle by observation.
-
-### OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step — RESOLVED 2026-08-08
-
-**Problem.** The cowl's outer surface is defined in
-[`cad/modular_sUAS_nose_tail.vsp3`](../../src/Fuselage/cad/modular_sUAS_nose_tail.vsp3) and
-consumed as `oml/vsp_nose.stl` (12 MB) and `oml/vsp_tail.stl` (24 MB). **Nothing connects
-them.** No check asserts that the committed meshes were exported from the committed model,
-no process re-exports when either changes, and the export is performed by hand in the GUI.
-
-The committed `.vsp3` is dated 2025-07-13 and the meshes 2025-07-12 and -13. Whether the
-model has been edited since is not determinable from the repository.
-
-The failure mode is silent and was nearly demonstrated during this document's own writing:
-a design document derived from the committed model can disagree with the designer's actual
-design, and there is no signal distinguishing "the document is wrong" from "the committed
-model is stale". Affects IP-FC-4 directly — exporting a STEP surface from a stale model
-would propagate the staleness into every downstream use case.
-
-**Alternatives**
-
-1. **Automate the export** — drive OpenVSP headlessly to regenerate the OML from the
-   committed `.vsp3` as part of the build.
-   *Benefits:* the two cannot drift; the OML stops being a committed artifact and becomes a
-   derived one; this is UC-9's first half, needed anyway.
-   *Drawbacks:* adds OpenVSP as a build-time dependency; export settings become code that
-   must itself be right.
-   *Prerequisites:* OpenVSP Python API access, resolved as license-clean in OQ-ARCH-9.
-
-2. **Check rather than automate** — store a hash of the `.vsp3` alongside the exported OML
-   and fail a verification run when they disagree.
-   *Benefits:* much smaller; catches drift without owning the export; works with the
-   existing manual workflow.
-   *Drawbacks:* detects the problem rather than preventing it; requires discipline to
-   regenerate the hash for the right reason.
-   *Prerequisites:* none.
-
-3. **Stop committing the meshes**, and treat the `.vsp3` as the only source.
-   *Benefits:* removes 36 MB and the possibility of disagreement by construction.
-   *Drawbacks:* nobody can build a cowl without OpenVSP installed; breaks the current
-   workflow for anyone who only has the CAD toolchain.
-   *Prerequisites:* alternative 1.
-
-**Recommendation was alternative 2 now, alternative 1 with IP-FC-4.** The hash check is
-small enough to do immediately and converts a silent failure into a loud one; automating
-the export is the real fix.
-
----
-
-**RESOLVED 2026-08-08 — both delivered, in [`oml_export.py`](../../src/Fuselage/tools/oml_export.py).**
-
-- **Alternative 1, automation:** the tool drives the committed `.vsp3` headlessly through
-  the OpenVSP Python API. The OML is now *derived* from the model rather than hand-exported
-  from a GUI session, so the two cannot silently diverge in the first place.
-- **Alternative 2, detection:** `--check` compares a SHA-256 of the committed `.vsp3`
-  against the hash recorded in `oml/oml_provenance.json` at export time, and exits
-  non-zero when they disagree.
-
-Two properties of the check worth keeping:
-
-- **It does not import the OpenVSP API.** A provenance check has to be runnable in CI, or
-  by anyone, without OpenVSP installed — otherwise only the people who could already
-  regenerate the file are able to detect that it is stale.
-- **It was tested in both directions and on its exit code.** Current → `OK`, exit 0;
-  perturbed hash → `STALE` naming both hashes, exit 1. The first attempt reported the
-  failure but exited 0, because a `grep` in the test pipeline masked the status — a check
-  that prints a failure and exits clean is useless to CI.
-
-**One thing this does not yet close.** The 36 MB of `.stl` remains, because OpenSCAD cannot
-import STEP and the OpenSCAD path still consumes it. The meshes disappear at IP-FC-34, when
-that path is retired — not before.
-
-### OQ-DES-CW8 — The factor of two in the buttress extrude — RESOLVED 2026-08-18
-
-*Raised and resolved 2026-08-18, split out of [OQ-DES-CW3](#open-questions), which flagged the
-discrepancy rather than settling it.*
-
-**The problem.** `buttress.thickness` is `0.05` in both parameter files and as the literal
-default in both drivers, but all four modules that build a cutting prism extrude it as
-`linear_extrude(height=2*buttress_thickness, center=true, ...)` — `top_buttress` at
-`scad/cowl_geometry.scad:310`, `top_diag_buttress` at `:324`, `side_buttress` at `:338` and
-`bottom_buttress` at `:354`. No call site omits the doubling. So the groove cut into every
-cowl this repository has produced is **0.1 mm wide, twice what the parameter says**, and the
-rib the slicer builds on it is $2wn + 2t$ rather than $2wn + t$ — a difference of exactly
-0.05 mm of rib thickness, independent of extrusion width and perimeter count, because the cut
-and the perimeters are additive terms rather than factors. All lengths here are millimeters:
-the cowl generator is the OpenSCAD path, to which the project's SI convention does not apply.
-
-**Resolved: fold the doubling into the value.** The parameter becomes `0.1` and the four
-extrudes become `height=buttress_cut_thickness`. The extruded height is unchanged at 0.1 mm,
-so **no geometry moves** — every cowl the repository has ever produced still comes out
-identical, and the parts that were flown remain reproducible from the files.
-
-**Why this rather than keeping `0.05` with a `2*` and a `_half_thickness` name.** That
-alternative is equally geometry-preserving and equally honest about what the parameter denotes,
-so the choice does not turn on either. It turns on two narrower points. First, the rib formula
-is $t_{\text{rib}} = 2 w_{\text{extrusion}} n_{\text{perimeters}} + t_{\text{cut}}$, and
-`buttress_cut_thickness` at `0.1` **is** $t_{\text{cut}}$ — the formula can be evaluated
-straight from the parameter file, where a half-thickness cannot without knowing to double
-first. Second, it removes the factor of two from the code entirely rather than leaving it
-alive at four sites that must stay in step. The cost accepted in exchange is that the stored
-number changes, so any external note or slicer profile recording "0.05" as the buttress
-setting no longer matches the file.
-
-**What this does not decide.** It does not recover what the person who wrote `0.05` intended,
-and it does not claim the 0.1 mm cut is the *right* cut. It records what the tool has always
-cut, which is the one part that was never in doubt. Whether 0.1 mm is the correct groove width
-is a separate question, answerable only by printing a cowl each way and measuring rib
-stiffness, and worth reopening only if the rib turns out to govern a structural margin — which
-would also require `n_perimeters` to become a real parameter, since it currently lives only in
-the slicer profile, outside the repository.
-
-**Implementation.** Folded into **IP-FC-29**, which is already renaming `buttress.thickness` to
-`buttress_cut_thickness` across the JSON schema, `ButtressSet` and the SCAD signatures; the
-rename and this change are one edit to the same call sites. **Done 2026-08-18.**
-
-*A textual check cannot verify this, and the reason is worth recording.* `scad_snapshot.py`
-compares generated `.scad` text, which names the library by path and contains none of its
-text — so the removal of the `2*` inside `cowl_geometry.scad` is invisible to it, while the
-rename changes the module signature and makes it report DIFF by construction. It is wrong in
-both directions at once. `verify_scad_change.py` is no better here: it re-renders the
-`.stl.scad` files already in the output tree, and those pin the *old* signature. Only
-`verify_sweep_change.py` reaches this class of change, because it runs the real sweep and
-compares measured geometry, letting signatures and generated text move freely while the solid
-must not. It reported both cowls identical against `variant_output_baseline`, and a control
-run with the change stashed reproduced its output exactly. `verify_drivers.py` covers the
-remaining gap — the hand drivers, which no other tool renders — and passed warning-free, a
-warning being the only signal a missed rename gives, since a bare identifier with no matching
-variable evaluates to `undef` rather than failing.
-
-### OQ-DES-CW9 — Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? — DECIDED 2026-08-18: a per-part `slicing` group
-
-**The problem.** `n_perimeters` sets how many loops a slicer walks around a contour, and this
-project's geometry depends on it in three places. It could not go into `PrinterSettings`, which
-declares itself *"properties of the machine, not of the design"* — a perimeter count is neither.
-Nor is it a property of a part: **spiral vase is a mode these cowls support, not the only way
-they are printed**, so the same cowl is 1 perimeter on one build and 3 on another. And parts are
-sliced independently, so a corner's count has nothing to do with a cowl's.
-
-**It also already had a consumer, unnamed.** The cowling bulkhead's flange radius is written
-
-```openscad
-circle(r = corner_radius - extrusion_width - cowl_flange_tolerance)
-```
-
-in `fuselage_bulkhead_geometry.scad`. That lone `extrusion_width` is the radial room left for
-the cowl's wall so the cowl's outer surface lands on the mold line — so the bulkhead hard-codes
-**the cowl's** count at 1, with the `1` written nowhere. At 0.6 mm extrusion width a cowl
-printed at three perimeters puts an 1.8 mm wall into a 0.6 mm gap: **1.2 mm of interference**,
-six times the `cowl_flange_tolerance` that exists to absorb print variation.
-
-**Decision: a `slicing` group, holding a perimeter count per part.** Not one figure for the
-airframe — that would assert a constraint between independently sliced parts that does not
-exist. The group names a count for each part kind, and the couplings are expressed where they
-actually are and in the direction they actually run.
-
-**`cowl_n_perimeters` has three consumers, and it is the *cowl's* count in all three** — the
-bulkhead's own perimeter count is irrelevant to any of them, because each of these dimensions
-is sized around the wall of the cowl:
-
-1. **The cowl's rib thickness**, $2 w n + t_{\text{cut}}$ (OQ-DES-CW3), for whenever the rib is
-   modeled (IP-FC-17, IP-FC-23). Until a count is fixed the rib has no single thickness: 1.3 mm
-   at one perimeter against 3.7 mm at three, on the only stiffening structure the part has.
-2. **The cowling bulkhead's flange radius**, which becomes
-   `corner_radius - cowl_n_perimeters * extrusion_width - cowl_flange_tolerance`. Named for
-   whose count it is, so nobody later reads it as the bulkhead's own.
-3. **The nose cowl's base offset** — the `offset(r = -nose_flange_inset)` that insets the
-   projected OML outline to form the base flange in `nose()`.
-
-**One sub-choice was left open, and it was the only thing blocking consumer 3. Settled
-2026-08-21, and the geometry did not move.** `nose_flange_inset` is **0.5 mm** and one
-extrusion width in the sweep is **0.6 mm**, so unlike the flange radius — where substituting
-`cowl_n_perimeters = 1` is byte-identical — the base offset had to be shown to be a function
-of the perimeter count before it could be written as one. It is: the nose shape seats on top
-of the cowl's perimeter shell and is bonded there, and the inset is what gives that joint its
-alignment and its bonding surface. The offset is therefore
-`cowl_n_perimeters * extrusion_width + nose_flange_tolerance` with
-**`nose_flange_tolerance = -0.1`**, which at the sweep's 0.6 returns exactly the 0.5 mm every
-nose cowl has been built with. The literal is gone, the parameterization now says what the
-number depends on, and **no face moved** — verified across all 576 variants with no existing
-parameter changing value. `design_constants.json`'s blanket refusal of negative tolerances was
-removed to allow it, on the grounds that the assumption behind the rule had never been checked.
-Recorded in full as [OQ-DES-CW10](#open-questions).
-
-**A wrong turn is recorded here because it was convincing and it was wrong.** This note
-originally argued that `0.5 = 0.4 + 0.1` — one perimeter at the hand drivers'
-`extrusion_width = 0.4`, plus the 0.1 mm `panel_tolerance` uses — and concluded from that
-apparent provenance that the sweep's offset "should" be `1 × 0.6 + 0.1 = 0.7 mm`, leaving the
-flown parts 0.2 mm tight. **The 0.4 is a development test value.** It was never a tuned
-parameterization, so an expression that lands exactly on it carries no information at all, and
-the whole inference was arithmetic dressed as evidence. The sweep's parameterization is the
-correct one and the only one any dimension here should be reasoned about through.
-
-The related temptation, equally wrong, was to reach for `cowl_flange_tolerance = 0.2` on the
-grounds that the cowl-to-bulkhead joint is the same kind of bonded lap. It is the same kind of
-joint and **not the same fit** — which is exactly why the two are separate parameters, and why
-neither one's value may be inferred from the other's.
-
-**What does not change.** The perimeter count for any solid part remains unrecorded and must
-not be invented — there is still no slicer profile in the repository. The `slicing` group gets
-a cowl entry because the cowl's count has consumers; other kinds get entries when theirs do.
-
-*Implementation: IP-FC-42.*
-
-### OQ-DES-CW10 — Is the nose cowl's base offset a function of the nozzle? — RESOLVED 2026-08-21: yes, and the built value is correct
-
-**Answer: yes.** The nose shape seats on top of the cowl's perimeter shell and is bonded
-there — the same kind of lap joint the cowl makes when it slides onto the cowling bulkhead's
-flange. The inset is what gives that joint both its **alignment** and its **bonding surface**,
-so it is a function of the shell it lands on, and therefore of the perimeter count and the
-extrusion width. `cowl_n_perimeters * extrusion_width + nose_flange_tolerance` is the right
-form, which is what IP-FC-42 implemented.
-
-**The value is `nose_flange_tolerance = -0.1`, and the geometry does not move.** At the
-sweep's `extrusion_width = 0.6` and one perimeter that gives 0.5 mm, which is what every nose
-cowl has been built with and what it should be built with. **The sweep's parameterization is
-the correct one**; expressing the offset through it was the whole point, not a step toward
-changing it.
-
-**A negative fit and a bonded joint are not in conflict**, which is where this question went
-wrong. The alignment fit and the bond are not the same surface: the inset locates the parts,
-and the joint is glued on the face it seats against. Reading the sign of the fit as though it
-decided whether the joint could be bonded is the error, and it is recorded here because it is
-easy to make again.
-
-**Two things must not be carried forward from the analysis that produced this question.**
-
-1. **`0.5 = 0.4 + 0.1` is not provenance.** The hand drivers' `extrusion_width = 0.4` is a
-   **development test value**. It was never an official tuning, so a decomposition that lands
-   exactly on it is a coincidence of leftover test numbers. That arithmetic was treated here
-   as the strongest evidence available and it was worth nothing — it is the reason this
-   question twice concluded the sweep's offset should be 0.7 mm, which is wrong. No dimension
-   in this project should be reasoned about through the 0.4 figure.
-2. **`cowl_flange_tolerance` does not set this value.** The cowl-to-bulkhead joint and the
-   nose base joint are both glued, and their **fits are different**. That is precisely why
-   they are two parameters rather than one, and the 0.2 mm on the other joint says nothing
-   about this one.
-
-*Implementation: IP-FC-42, complete — no re-render, no baseline departure.*
-
-### OQ-DES-CW11 — Which group does the overhang angle belong in? — RESOLVED 2026-08-21: `slicing`
-
-**Decision: alternative 2, the `slicing` group.** Choosing an overhang angle is a slicing
-concern. It is not a property of the machine, so `printer` was wrong for it — that group's
-own rule is *"the same airframe printed on a different nozzle wants different numbers here and
-no other change"*, and this number does not move with the nozzle. `slicing` already exists for
-quantities that are neither machine nor design, which is what OQ-DES-CW9 created it for.
-
-**And it is not a free parameter, which matters more than the group does.** Being categorically
-a slicing setting does not make this one safe to re-tune whenever the material or the perimeter
-count changes:
-
-- **It has to agree with where the break line between the nose and the cowl falls.** The angle
-  and the split location are two halves of one decision about how the part comes off the bed.
-- **Changing it means adjusting the buttresses to match**, since `buttress_shape()` builds
-  every leading and trailing ramp from `r_inset * tan(angle)`.
-- **As the nose is currently designed, the angle is baked into the part.**
-
-**Nothing in the code enforces either coupling.** Both are geometry a person would have to
-move by hand, so editing this value alone yields a part that builds, renders, passes every
-check this project has, and is wrong. That is why the constant carries the warning rather than
-just the number — the group tells a reader what kind of thing it is, and only the entry can
-tell them what else has to move with it.
-
-**Two consequences for the schema, both landed.**
-
-1. **`slicing` is no longer one kind of quantity, so the validator is per key.** A perimeter
-   count is a whole number of loops; an overhang angle is continuous. One rule cannot serve
-   both — "positive number" would admit half a perimeter, "whole number" would refuse 35.5° —
-   so `_check_slicing` dispatches on the name, and a name with no rule is **refused** rather
-   than passed through unchecked. The angle is required to lie strictly between 0 and 90:
-   0 is a flat ceiling with no slope to print, the geometry divides by its tangent, and 90 is
-   a vertical wall needing no relief.
-2. **`slicing` is not uniformly per part.** A perimeter count is, because parts are sliced
-   independently. An overhang angle is a limit of the process and applies to whatever is being
-   printed. The group's `_about` says so rather than leaving the CW9 wording to be read as a
-   rule it was never meant to be.
-
-**Renamed, and moved from four places to one.** `cone_angle` said what it happened to build
-rather than what it means; it is now `overhang_angle_from_bed`, which states the reference
-frame OQ-DES-CW2 had to establish. It was written out four times — twice in the cowl parameter
-files and twice in the hand drivers — and is now a single entry in `design_constants.json`.
-
-**Verified geometry-neutral**, as a rename must be: all seven GUI drivers render the same
-131,506 triangles before and after, compared as sorted facet sets rather than bytes, and the
-sampled sweep agrees on every cowl. `audit_call_args.py` reports no positional mismatch across
-the renamed signatures.
-
-*Implementation: IP-FC-28, complete.*
-
-### OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot — RESOLVED 2026-09-09: alternative 1, adopted, with alternative 2 also built
-
-**Both recommended alternatives are in the codebase, not just the recommendation.** Alternative
-1 — tessellated volume in place of `Shape.Volume` — is what every cowl comparison in IP-FC-12
-and IP-FC-13 has run on since 2026-08-31: the nose cowl and tail agreements quoted there
-(**−0.0000%**, **+0.0136%** and the rest) are all tessellated figures, and the 0.02 mm export
-deflection this item measures convergence against is the same value `build_part.py` exports
-the cowls at.
-
-Alternative 2 — comparing surfaces directly rather than volumes — was also built and promoted,
-under IP-FC-33: [`mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) samples the
-mesh against the B-rep surface and reports **max 0.000158 mm, mean 0.000025 mm** over 300
-points on a matching part against 57.310369 mm on a mismatched one — five orders of magnitude
-of separation, and it is now the tier IP-FC-33 records as strongest for exactly the reason this
-item gives: it never tessellates the B-rep side, so FreeCAD's own mesher never enters the
-comparison as a third variable.
-
-Alternative 3 was not adopted, for the reason already given: a tolerance loose enough to
-absorb `Shape.Volume`'s error is loose enough to miss a real defect.
-
-*Implementation: [`freecad/mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) (surface
-distance) and the tessellated-volume checks throughout [IP-FC-12](../implementation/freecad_migration.md), [IP-FC-13](../implementation/freecad_migration.md) and [IP-FC-33](../implementation/freecad_migration.md).*
-
-### OQ-DES-CW13 — Where the tail's folded aft closure gets fixed — RESOLVED: alternative 1, as recommended and already implemented; alternative 2's provoking feature is now identified and confirmed
-
-**Alternative 2 update (2026-09-09).** The provoking feature this alternative's own prerequisite asked for has been found and confirmed causally, not just correlated. `Tail`'s `XSecSurf` has 4 stations: `XS_POINT`, `XS_ROUNDED_RECTANGLE`, `XS_ROUNDED_RECTANGLE`, `XS_POINT` -- the aft closure sits at the last, a point. Surveying every station's skinning-continuity group (OpenVSP container `SkinXSec`, holding `AllSym`/`TBSym`/`RLSym` and the four sides' tangent angle and strength) across **both** `Nose` and `Tail` finds exactly one asymmetric station in either component: **`Tail` station 2**, the rounded-rectangle immediately before the aft point --
-
-    Top(angle=0.0deg, strength=0.75)   Bottom(angle=-30.0deg, strength=1.25)
-    Left(angle=-12.5deg, strength=3.00) Right(angle=-12.5deg, strength=3.00)
-
-Left and Right agree with each other; Top and Bottom do not, by 30 degrees and a factor of 1.67
-in strength. Every other station in both components -- including `Nose`'s own point-terminated
-aft end, the "same kind of feature" that exports clean -- has Top = Bottom = Left = Right
-exactly, angle and strength both.
-
-**A name collision in OpenVSP's own parm set nearly hid this.** `GetXSecParmIDs` returns two
-unrelated parms both named `AllSym` (and `TBSym`, `RLSym`) on every station: the skinning
-group above (container `SkinXSec`) and an always-inert Chevron group (container `Ellipse`,
-`Chevron_Type = 0` on every station checked). A name-keyed dict over the returned parm IDs
-silently keeps whichever comes last, which is the Chevron one -- so a first attempt to test
-this by setting "`AllSym`" to 1 and re-exporting changed nothing, because it was toggling a
-flag with no effect on the geometry. Disambiguating by `GetParmContainer`/`GetContainerName`
-rather than by name alone is what finds the real parm.
-
-**Confirmed causal, not merely correlated.** Two exports of `Tail` alone, otherwise identical:
-setting the real `SkinXSec.AllSym` parm to 1 on station 2 (which propagates Bottom, Left and
-Right to Top's values -- 0.0deg, strength 0.75, all four sides) and re-exporting removes the
-fold entirely.
-
-| export | faces | folded faces | volume |
-| --- | --- | --- | --- |
-| unmodified | 12 | **4** (`[8, 9, 10, 11]`, exactly the closure `repair_closure` already targets) | -17970.614 |
-| station 2 symmetrized | 12 | **0** | -18100.276 |
-
-The volume moves 0.72% -- this is a real model change, not a repair confined to the importer,
-which is exactly alternative 2's own tradeoff as originally stated: it fixes the export at the
-source but changes the airframe definition, invalidating the recorded provenance hash and every
-already-exported artifact.
-
-**This does not change the recommendation, and is not itself an instruction to make the change.**
-Alternative 1 remains adopted and is unaffected -- it is shape-preserving and already shipped.
-What this finding does is remove alternative 2's own prerequisite ("finding the provoking
-feature, which needs an experiment") and its stated blocker ("not yet known what in the model
-provokes it, so the work is open-ended"). The recommendation's original condition for revisiting
-alternative 2 -- "once the port is running, at which point there is a working comparison to
-verify a model change against" -- is now met, since [OQ-DES-CW17](#open-questions) closed with
-the tail correct across the full swept range. Whether to actually flatten station 2's tangent
-asymmetry in the `.vsp3` is a decision about the airframe definition, not a drawing or port
-question, and is not made here.
-
-**Problem.** The tail's outer surface is exported from OpenVSP as twelve freeform patches.
-Four of them — the flat closure across the aft opening — are malformed. All four lie in a
-single plane, as a flat closure should, but the mathematical description **doubles back on
-itself**, covering part of that plane twice, facing opposite ways.
-
-Measured 2026-08-31. On those four patches the surface's facing direction reverses across a
-contiguous band covering a quarter to a third of the patch. The reversals are real rather than
-numerical noise: they occur where the surface is well-conditioned (a well-behaved region
-scores about 0.89 on the relevant measure; the reversed samples score 0.43, and only 9 of
-roughly 120 lie on the patch edge, which is the one place a reversal would be meaningless).
-Every other patch on the tail, and every patch on the nose — **including the nose's own aft
-closure, the same kind of feature** — shows zero reversals.
-
-The consequence is that cutting operations fail near the tail's aft end. Cutting the tail
-blank with a cylinder passing through it returns *nothing* at 9 of 20 tested positions, all in
-the upper half; the general-purpose splitting operation returns 3 pieces where a sound solid
-gives 4; and relaxing the tolerance to 0.001 mm and 0.01 mm changes neither. The tail cowl is
-built by cutting buttress tools out of this blank, so as it stands this blocks the tail cowl.
-
-**No export setting avoids it.** Of the STEP options the model carries, only surface splitting
-changes what `ExportFile` writes — merge-points, representation and tolerance produce a
-byte-identical file, matching the behavior already recorded for `CADLenUnit` in
-`tools/oml_export.py`. Splitting is what creates the closure patches at all: with it off, each
-part exports as a single uncapped surface that cannot be closed into a solid. So there is no
-setting that yields a closed tail without yielding these four patches.
-
-**Alternatives.**
-
-1. **Rebuild the closure when the surface is imported.** Discard the four patches and close
-   the opening with one flat face built from the boundary the remaining eight leave behind.
-   *Benefits:* measured 2026-08-31 to fix the cutting failures completely — 0 of 20 positions
-   fail, against 9 before — and to be shape-preserving: the repaired solid encloses
-   594449.974 mm³, identical to the original. About twenty lines, confined to the import.
-   *Drawbacks:* the repository's surface no longer matches what OpenVSP wrote, so a reader
-   comparing them finds a difference that only the importer explains; and the repair is
-   specific to a *flat* closure, so a future model whose tail closes with a curved surface
-   would need it revisited. *Prerequisites:* none — implemented.
-2. **Fix the closure in the `.vsp3` model.** Change how the tail's aft end is built so the
-   exporter produces a sound closure. *Benefits:* fixes it at the source, so every consumer
-   benefits and no importer carries a special case. *Drawbacks:* it is not yet known what in
-   the model provokes it, so the work is open-ended; it changes the airframe definition, which
-   invalidates the recorded provenance hash and every exported artifact. *Prerequisites:*
-   finding the provoking feature, which needs an experiment the aft closure's construction
-   would have to be varied in.
-3. **Trim the aft end away before use.** The tail cowl is open at both ends (§6.2), so the
-   closure may be cut off by the part's own trimming before any buttress is cut. *Benefits:*
-   no repair code at all, if it holds. *Drawbacks:* it has not been shown to hold — it depends
-   on where `cut_len` falls, and it would silently stop holding if that changed; and it leaves
-   an unusable blank in the repository for every other consumer. *Prerequisites:* confirming
-   the trim always removes the affected region, at every unit size in the sweep.
-4. **Export IGES instead of STEP.** `oml_export.py` already supports it. *Benefits:* a
-   different exporter path might not produce the fold. *Drawbacks:* entirely unknown whether
-   it helps; IGES carries less topology than STEP, so the sewing step could be worse rather
-   than better. *Prerequisites:* one experiment.
-
-**Recommendation.** Alternative 1, and it is what the port uses, because it is measured,
-small, reversible, and provably does not change the shape. Alternative 2 is the durable fix
-and should follow once the port is running, at which point there is a working comparison to
-verify a model change against — which there is not today. Alternative 3 should not be relied
-on even if it happens to be true, because it makes a part's correctness depend on a trim
-length that nothing checks.
-
-### OQ-DES-CW14 — Should the buttress positions be editable values? — WITHDRAWN 2026-08-31
-
-**Withdrawn: already decided, and the framing was wrong.**
-[OQ-DES-CW4](#open-questions) resolved this on 2026-08-09 — *"the full fix wants a list of
-buttress placements rather than a fixed set of named groups"*. Placement becomes data at the
-port. There was nothing left to ask.
-
-Two things were wrong with asking it again. It re-opened a settled decision, which costs a
-reader the work of re-deciding something the document already answers. And by offering "keep
-them in the code" as an alternative and questioning whether the present angles are "deliberate
-or incidental", it put the rib layout itself up for negotiation. **The ribs are designed
-structure.** They are the cowl's only internal load path, and the mechanism that produces them
-under a print mode that admits no other (§4, §6.4). Nothing about the port removes, moves or
-reconsiders them.
-
-*Implementation: the eleven tail placements and the nose's one become sheet rows under
-IP-FC-12, per CW4.*
-
-### OQ-DES-CW15 — How much of a cowl document should survive changing the outer shape? — WITHDRAWN 2026-08-31
-
-**Withdrawn: speculative.** It asked what a cowl document should do if the aircraft's outer
-shape were replaced. No such shape exists or is planned; the question invented a scenario and
-asked for a decision about it, which is design effort spent on something that may never happen
-and a decision made without the case that would inform it.
-
-The nose tip's lip is derived from the outer surface the model actually has, which is what §1
-establishes as the definition. If the airframe is ever reshaped, cowls are regenerated — the
-OML provenance record ([OQ-DES-CW7](#open-questions)) already exists to make that change
-visible, and it is the point at which a real question could be asked with a real case behind
-it.
-
-### OQ-DES-CW16 — Should the cowl construction move off scripted booleans, onto stock objects plus `BooleanFuzzy = 0` (alternative 6), so a `.FCStd` re-solves in stock FreeCAD? — RESOLVED: alternative 7 adopted
-
-**Resolution note (2026-09-21).** Alternative 7 is adopted, in the path-registration form
-described in that alternative's 2026-09-21 revisions below — not a vendored copy of
-`cowl_tree.py`/`cowl_interior.py`, but the project's own checkout registered as a location
-FreeCAD's document-restore permission check recognizes. The rationale: anyone who needs to
-change a shape's parameters and regenerate it already has the checkout (design decision, 2026-09-21),
-and exposing these construction functions from inside the FreeCAD GUI is itself a standing
-roadmap item, not a use case invented to justify this addon — so there is no scenario this
-project needs to serve where the scripts are shipped separately from a document that depends
-on them, and therefore nothing to vendor or keep in version-sync.
-
-The open prerequisite this alternative's write-up flagged — whether FreeCAD's restore check
-recognizes a directory registered by path rather than one holding a physically-placed copy —
-is now confirmed, not assumed. Checked directly 2026-09-21 against `App/PropertyPythonObject.cpp`
-on FreeCAD's `main`: `PropertyPythonObject::isAllowedModule()` resolves an unloaded module with
-`importlib.util.find_spec()` (without importing it) and permits it if that spec's origin path
-falls under any entry of `FreeCAD.__ModDirs__`/`__MacroDirs__` — and `Application.cpp` populates
-`__ModDirs__` from `AdditionalModulePaths`, which is set verbatim from the `-M`/`--module-path`
-command-line option, scanned "flat" (the named directory itself is registered, with no `Init.py`
-or package structure required). Verified empirically the same day on FreeCAD 1.1.3
-(`freecadcmd.exe`): a document with a scripted `Part::FeaturePython` object, whose Proxy class
-lives in a plain module in an arbitrary scratch directory (no `Mod` placement, no symlink, no
-copy), fails to restore with exactly the `blocked import of module` error when opened by a
-fresh `freecadcmd` with no flags, and restores correctly — Proxy attached, `execute()` runs, a
-changed property recomputes a new shape — when the same `freecadcmd` is given
-`-M "<that same directory>"` and nothing else. So a bare, unmodified checkout directory named
-on the command line is sufficient by itself; the "or a stub package that extends `sys.path`"
-and "symlink under a real `Mod` directory" fallbacks that alternative 7's write-up hedged with
-are not needed.
-
-**Not yet done:** this closes the design question — which alternative, and why — not the
-implementation. Wiring `-M`/`AdditionalModulePaths` (or a small addon that sets it, per
-alternative 7's original framing) into the actual toolchain — the sweep, `build_part.py`,
-and whatever mechanism hands a `.FCStd` to someone who is not running the sweep — is
-unstarted follow-up work, not implied by this resolution.
-
-The investigation below is kept in full because it is what the decision rests on; read this
-note only for current status.
-
-**Two things this recommendation does not reach, worth stating plainly rather than
-discovering by surprise if alternative 6 is ever picked up.**
-
-*"Fuzzy" means two unrelated things here, and only one of them is what alternative 6 turns
-off.* `BooleanFuzzy` is a global preference (`Mod/Part/Boolean`), read once at FreeCAD
-startup, that makes *document-object* booleans (`Part::Cut`, `Part::MultiFuse`,
-`PartDesign::Boolean`) silently apply an automatic tolerance scaled to the part's
-bounding-box size — that is the mechanism this whole investigation measures as wrong for
-this part, and alternative 6 sets it to `0` to disable it. `cowl_interior.py`'s
-`RIB_CUT_FUZZ = 1.0e-5` (added this session, fixing the `Diag12Safe` near-tangency sliver in
-`cavity()`'s rib cut) is a different thing entirely: an explicit tolerance this project's own
-code passes as an argument to `Part.Shape.cut((tool,), fuzz)`, the bare geometry API, never
-through a document object. This item's own measurements show why the two do not interact —
-sweeping `Part.Shape.cut`'s fuzzy argument reproduces the document layer's automatic
-behavior, meaning the automatic fuzz is applied *by the document-object feature*, on top of
-an otherwise-unfuzzed shape call, not by `Part.Shape.cut` itself. So `BooleanFuzzy = 0` would
-not touch `RIB_CUT_FUZZ`'s call in either direction: that call never goes through a document
-object's automatic-fuzz code path to begin with.
-
-*Alternative 6 could not reach `_CowlShell` even if adopted in full.* Everything this item
-measures is about `cowl_tree.py`'s outer-solid buttress cuts (`_ShapeBoolean`, building
-`tip` — the print/blank kinds, `nose_cowl` and `tail`). The shelled kinds (`nose_cowl_shell`,
-`tail_shell`) are a separate scripted `Part::FeaturePython` object, `_CowlShell`
-(`cowl_tree.py`), which did not exist when this item was written and calls
-`cowl_interior.shell_solid()` — B-spline surface fitting, structuring-element dilation, and
-sewing, none of which has a stock `Part::` equivalent to convert to. No setting or
-document-object substitution makes that construction stock-restorable; `_CowlShell` would
-stay a scripted, non-re-solving node regardless of what happens to `_ShapeBoolean`. So even a
-fully successful alternative 6 delivers stock-restorable `.FCStd` files for the print/blank
-kinds only, not for the shelled ones — a narrower win than "cowls re-solve in stock FreeCAD"
-suggests on its own.
-
-**Problem, as originally framed** (kept for the investigation it introduces, not because the
-construction is still uncertain). A cowl is made by cutting slots into the aircraft's outer
-surface. The outer surface arrives as a NURBS solid (the tail's is nine faces of degree 5×3 with 139 control
-points along the body). The slots are 0.1 mm wide and do not scale with the aircraft — they
-are fold lines for vase-mode printing, not gaps, and two of the tail's eleven slots cross each
-other inside the solid at ±30°. Cutting a 0.1 mm slot across another 0.1 mm slot in a curved
-NURBS body is the hardest case a solid modeler meets, because the two sides of a slot are
-0.1 mm apart while the curves bounding them are computed by approximation.
-
-A FreeCAD document is made of *document objects* — a `Part::Cut`, a `PartDesign::Pocket` — and
-those are what make a saved file editable: change a number and the objects recompute. FreeCAD
-also exposes the same operations directly on geometry, as `Part.Shape` methods, which are not
-document objects and do not recompute on their own.
-
-**Measured 2026-09-01 on FreeCAD 1.1.1, the two do not agree, and the document objects are the
-ones that are wrong.** With byte-identical inputs — the same half-body, the same cutter:
-
-| route | faces | valid | `Shape.Volume` | tessellated volume |
-|---|---|---|---|---|
-| `Part.Shape.cut` (not a document object) | 39 | yes | 308777.93 | 297004.19 |
-| `Part::Cut` (document object) | 69 | no | 310563.18 | 232547.58 |
-| `PartDesign::Boolean` | 69 | no | — | — |
-| `PartDesign::Pocket`, slots cut in sequence | — | no | — | — |
-
-The document result is not the right solid with a pedantic flag on it. It loses 68 mm³ of
-material that the correct result has, it carries six invalid faces including one whose
-boundary does not close, and it tessellates 22% smaller — so it would print wrong, not merely
-report oddly. All three document routes give the same wrong answer because in FreeCAD 1.1 they
-share one `TopoShape` layer, which emits `TopoShapeExpansion.cpp: hasher mismatch` throughout.
-The same layer inflates tolerances generally: two plain 10 mm boxes fused by `Part::MultiFuse`
-come out at 1.3e-05 where `Shape.fuse` gives 1.5e-07.
-
-**What the document layer is doing is reproducible from the geometry API.** `Part.Shape.cut`
-takes an optional fuzzy tolerance, and sweeping it reproduces the document's answer:
-
-| fuzzy | faces | valid | volume |
-|---|---|---|---|
-| 0, 1e-09, 1e-07 | 39 | yes | 308777.93 |
-| 1e-06 | 68 | yes | 310343.13 |
-| 1e-05 | 68 | yes | 310367.26 |
-| *the document* | 69 | no | 310563.18 |
-
-So the document booleans behave as though a fuzzy value of about 1e-06 or larger were applied,
-where the correct answer needs 1e-07 or tighter. **Nothing exposed changes it**, each of these
-measured 2026-09-01 and each leaving the result at 69 faces and invalid: tightening both
-operands with `fixTolerance` to 1e-07 and 1e-08 (the operands are already 3.8e-07 and 1.5e-07);
-`Document.UseHasher = False`; clearing `_ElementMapVersion`, which the object rewrites;
-`Refine`; a cutter cleaned to 1.5e-07. On 1.1.1 the boolean features' entire property list is
-`Base`, `Tool`, `Refine`, `Placement`; on 1.1.3 `Part::Cut`'s list is unchanged and only
-PartDesign gained a `FuzzyTolerance`. An earlier version of this paragraph also said there was
-no fuzzy or tolerance preference anywhere in the parameter tree. **That was wrong** — there is
-one, `Mod/Part/Boolean/BooleanFuzzy`, and setting it to 0 resolves this outright. See *What
-1.1.3 changed* below, which carries the correction and the measurements.
-
-**Rearranging the model does not avoid it either**, all measured: eleven separate cuts, the six
-connected groups, a single `Part::Compound` tool, chained pairwise `Part::Fuse`, diagonals first
-or last, the crossing pair pre-fused into one tool, `PartDesign::Pocket` per slot,
-`PartDesign::Boolean` with the whole cutter, re-expressing the cut as an intersection with the
-cutter's complement, and building the model 10× and 100× oversize so the 0.1 mm feature sits
-further above OCC's absolute 1e-07 confusion. Cutting the full body before masking rather than
-after — which is free set algebra, `(blank ∩ mask) − cutter` being `(blank − cutter) ∩ mask` —
-returns an *empty* solid. The geometry API gets the right answer in every one of these
-arrangements, including plain sequential cuts.
-
-**What 1.1.3 changed, and what it did not.** Everything above was measured on FreeCAD 1.1.1.
-FreeCAD 1.1.3 (rev 20260725) adds a `FuzzyTolerance` property to `PartDesign::Boolean`, and it
-does exactly what it says — but it reaches one of the cowl's operations and not the other two.
-All of the following measured 2026-09-01 on 1.1.3, against the same tail half and cutter.
-
-*The cut is fixed.* With one clean tool and `FuzzyTolerance = 0`, `PartDesign::Boolean`
-reproduces the reference solid with **zero** symmetric difference:
-
-| route | faces | valid | `Shape.Volume` | symmetric difference |
-|---|---|---|---|---|
-| `Part.Shape.cut` (the reference) | 39 | yes | 308777.9299 | — |
-| `Part::Cut` | 69 | no | 310563.1768 | 6.84e+01 |
-| `PartDesign::Boolean`, `FuzzyTolerance = −1` (auto) | 69 | no | 310563.1768 | 6.84e+01 |
-| `PartDesign::Boolean`, `FuzzyTolerance = 0` | 39 | yes | 308777.9299 | **0** |
-
-`FuzzyTolerance` is an ordinary stored property, so it survives a save. Values of 1e-12, 1e-09
-and 1e-07 give the same exact result; `Part::Cut` still has no such property.
-
-*The fuse and the intersection are not.* A cowl is not one cut. The tail fuses its eleven
-tools into a cutter, and both cowls intersect the blank with masks. Both come out wrong:
-
-* **Fuse.** `PartDesign::Boolean` of type `Fuse` returns a *compound* rather than a union, at
-  every fuzzy value tried (−1, 0, 1e-09, 1e-08, 1e-07, 1e-06). Fusing `Top1` with `Diag11`,
-  which overlap by about 1.1 mm³, returned two solids totaling 2015.7495 — exactly the sum of
-  the two inputs, with none of the overlap removed. Over the six overlapping tools it gives
-  6065.3155 where the correct union is 6061.7611.
-* **Common.** The nose's first mask intersection — a box against the NURBS blank — comes back
-  with 5 faces where the reference has many, +4067.96 mm³, and a tolerance of 19.7 mm. Carried
-  through, a fully stock nose ends as 4 solids with a symmetric difference of 1.84e+05. Retested
-  with the *global* fuzz off as well (below), it is worse, not better: it returns an **empty
-  shape** for the tail's lower mask, which covers the whole blank and should be a no-op.
-
-Both of those were first measured with the global fuzz still at its default, relying on the
-per-feature property alone; they were re-measured at `BooleanFuzzy = 0` and are unchanged for
-`Fuse` (still a two-solid compound, +3.554461 mm³) and worse for `Common`. So these are real
-defects in those operations, not fuzz.
-
-**`PartDesign::Pocket` does work, and an earlier note here saying otherwise was wrong.** The
-1.1.1 table above records it as going invalid at the second diagonal. Re-rigged properly on
-1.1.3 — eleven pockets, each the buttress sketch carried on the slab's placement, `Midplane`
-with `Length = buttress_cut_thickness`, `FuzzyTolerance = 0` — **all eleven succeed and every
-one is a single valid solid.** It is still not the right part: the chain ends at 66 faces and
-+561.60 mm³ against the reference's 39, because a pocket subtracts one profile at a time and
-subtracting the crossing tools in sequence is not the same as subtracting their union. That is
-the same 0.18% error the geometry API gives for sequential cuts, and it is 18× the project's
-0.010% tolerance. The obstacle is the missing union, not PartDesign's ability to cut.
-
-*Why no arrangement of stock `Part::` objects can supply the clean tool the cut needs.* The
-tolerance a stock boolean records is proportional to the size of its operands — measured at
-**7.0e-07 per mm of bounding-box diagonal**, from two independent cases: the six overlapping
-tools (diagonal 170.3 mm) record 1.20e-04, and all eleven (diagonal 371.2 mm) record 2.63e-04.
-The cut's requirement, by contrast, is *absolute*: 1.5e-07 gives the exact answer and 1.0e-06
-already gives 68 faces and +1565 mm³, with nothing working in between. A stock-built tool is
-therefore clean enough only if it fits inside a box about **0.2 mm** across, which no part does.
-
-The geometry is not what is wrong. `Part::MultiFuse` followed by `Part::Cut` reproduces the
-reference cutter to **±0.000000 mm³**. Forcing that stock cutter's tolerance down with
-`fixTolerance` restores a 39-face valid result; forcing the clean cutter's tolerance *up* to
-the stock value reproduces the 69-face invalid one. The recorded tolerance is the entire
-defect — and nothing stock re-records it: `Part::Refine`, `Part::Mirroring` applied twice about
-the same plane, and `Draft::Clone` at scale 1 each return the identical shape at the identical
-2.63e-04.
-
-**But the fuzz is a preference, and turning it off fixes everything.** This corrects an earlier
-claim in this document, which said no such preference existed. It does. From PR #17119's own
-diff, the value is read once at startup in `AppPart.cpp`
-
-    hGrp = ...GetGroup("Mod/Part/Boolean");
-    Part::FuzzyHelper::setBooleanFuzzy(hGrp->GetFloat("BooleanFuzzy", 10.0));
-
-and applied in `FCBRepAlgoAPIHelper::setAutoFuzzy()` as
-
-    op->SetFuzzyValue(getBooleanFuzzy() * sqrt(bounds.SquareExtent()) * Precision::Confusion());
-
-`sqrt(SquareExtent)` is the bounding-box diagonal, so at the default of **10.0** the applied
-fuzz is 1.0e-06 per mm of diagonal — which is the measured 7.0e-07 per mm of *recorded*
-tolerance above, and explains it exactly. Two things had hidden it: the earlier search looked
-only for 7-bit ASCII in the binaries, where a Windows build may hold the string otherwise; and
-the value is read **once at module load**, so setting the parameter from a running session —
-which is how it was first tested — cannot change anything.
-
-Set `BooleanFuzzy = 0` before FreeCAD starts and the stock objects become correct. Measured
-2026-09-01 on 1.1.3, against the same reference:
-
-| | recorded tolerance | result |
-|---|---|---|
-| `Part::MultiFuse`, default fuzz | 2.63e-04 | — |
-| `Part::MultiFuse`, `BooleanFuzzy = 0` | **2.12e-07** | geometry unchanged, ±0.000000 mm³ |
-| `Part::Cut`, default fuzz | — | 69 faces, invalid |
-| `Part::Cut`, `BooleanFuzzy = 0` | — | **39 faces, valid, symmetric difference 0** |
-
-Carried through the whole part, with every boolean a stock `Part::MultiCommon`, `Part::MultiFuse`,
-`Part::Cut` and `Part::Mirroring`, and nothing scripted in the chain:
-
-    tail  stock solids=1 faces=74  valid=True  | scripted faces=74  | symmetric difference 0
-    nose  stock solids=1 faces=64  valid=True  | scripted faces=64  | symmetric difference 0
-
-So the three things that could not previously hold at once — correct geometry, a document that
-re-solves in stock FreeCAD, and nothing of this project's installed — **all hold**, at the cost
-of one preference set on each machine that opens the file. That is alternative 6.
-
-**Stale, checked 2026-09-21: those face counts no longer describe the current construction,
-and this comparison needs re-measuring before alternative 6 is acted on.** `74 faces tail, 64
-nose` was measured against the OML blank as it stood on 2026-09-01 — nine raw faces per
-surface. [OQ-DES-CW17](#open-questions), resolved 2026-09-09, landed
-`oml_blank.condition()` afterward, reparameterizing and subdividing that same blank into 129
-faces (measured directly, `condition()`'s own report: `faces_in=9, faces_out=129`) as part of
-fixing the tail's off-`U`=1 correctness. Building the current `tail_cowl()`/`nose_cowl()` at
-the reference configuration today gives **306 faces (tail), 88 faces (nose)** — both valid,
-single-solid, matching this session's own direct measurement — not 74 and 64. The `Part.Shape`
-vs. stock-object comparison this alternative rests on was never re-run against that
-now-standard 129-face input; it still describes construction from before the fix that made the
-tail correct off `U` = 1. Whether stock objects plus `BooleanFuzzy = 0` still reproduce the
-current construction exactly is unverified, not simply a stale number to correct in place —
-the file count more than quadrupling on the tail is exactly the kind of change that a boolean
-kernel's tolerance handling can be sensitive to, so this needs a fresh measurement against
-today's blank, not an inference from one taken against yesterday's.
-
-*Further arrangements ruled out on 1.1.3*, adding to the list above: cutting by the eleven
-tools separately rather than by their union (69 faces, +1496 mm³, tolerance 0.266); cutting by
-a `BooleanFragments` decomposition of the overlapping group into 32 disjoint pieces, which is
-itself exact and clean (±0.000000 mm³ at tolerance 2.12e-07, via FreeCAD's own `BOPTools`
-scripted features, which take an explicit tolerance) but gives 52 faces and +1149 mm³ when cut
-with; and cutting slot by slot in sequence (70 faces, invalid). One of these does not merely
-return the wrong solid — `PartDesign::Boolean` handed all eleven tools at the stock tolerance
-of 1.4e-04 ran for 24 minutes and then died of `Not enough memory available`, the same
-pathology as the 4.4 GB build recorded in IP-FC-12. A tool at stock tolerance is not a
-degraded input to these operations; it is one they cannot complete.
-
-*One thing worth keeping from this.* Only **one** fuse in the tail is load-bearing. The eleven
-tools form six disjoint solids, and only one group of six actually overlaps — `Top1`, `Top2`
-and the four diagonals. Cutting by that group's union and then by the five remaining slabs
-separately reproduces the reference exactly. So the scripted surface could in principle shrink
-from seven nodes to one. It is not worth doing on its own: a single blocked module import
-stops a document restoring just as completely as seven do, so it buys no deployment and costs
-a construction the two cowls would no longer share.
-
-The port therefore builds the cowls through a small scripted document object (`_ShapeBoolean`
-in `cowl_tree.py`) that performs the operation with `Part.Shape` and stores the result. It is a
-real document object — it links its operands, recomputes when the spreadsheet changes, and is
-saved and reloaded — and with it both cowls come out geometrically identical to the reference
-implementation, exactly zero difference in both directions.
-
-**The cost is deployment.** FreeCAD 1.1 refuses to restore a scripted object whose defining
-module is not FreeCAD's own or an installed addon:
-
-    PropertyPythonObject::Restore: blocked import of module 'cowl_tree' during document
-    restore. Only modules from FreeCAD or installed addons are permitted.
-
-There is no preference anywhere in FreeCAD's parameter tree that grants trust; the decision is
-made purely from where the module sits on disk. So opening `tail_U1.FCStd` on a machine that
-has only FreeCAD gives a document that *displays the correct part* — the geometry is saved, and
-the spreadsheet, sketches, extrusions, wedge and datum placements all restore — but the seven
-boolean nodes come back inert, so changing a parameter rebuilds nothing. The document is
-correct and readable; it is not re-solvable.
-
-This affects nobody in the project's own toolchain: the sweep and `build_part.py` import
-`cowl_tree` before opening anything, so they rebuild normally. It affects a person handed a
-`.FCStd`.
-
-**Alternatives.**
-
-1. **Keep the scripted object; ship documents that display but do not re-solve.** The geometry
-   is right, the parameter sheet and the whole feature tree are visible and inspectable, and
-   anyone regenerating a variant does it through the sweep, which works. *Benefits:* nothing to
-   install, no geometry compromise, no further work. *Drawbacks:* a recipient cannot change
-   `U` in the GUI and get a new part; the boolean nodes show as errors on open, which looks
-   like breakage even though the part is correct. *Prerequisites:* none.
-
-2. **Ship the cowl modules as a FreeCAD addon.** Place them under a FreeCAD `Mod` path so the
-   restore is permitted. *Benefits:* fully live documents — open, change `U`, recompute.
-   *Drawbacks:* makes the project a FreeCAD extension, which is a deployment posture the
-   project has not chosen; every recipient needs the install, and it must be kept in step with
-   the repository. *Prerequisites:* deciding where the addon lives and how it is versioned
-   against the source tree.
-
-3. **Widen the slots until the document booleans cope.** The failure is specific to 0.1 mm
-   features; a wider slot may be within what `Part::Cut` handles. *Benefits:* a fully stock
-   document with no scripted objects at all. *Drawbacks:* changes the printed part. The slot
-   width is not free — it is a vase-mode fold line, deliberately unscaled (§6.3), and widening
-   it turns a fold into a gap. *Prerequisites:* measuring the width at which the document
-   boolean becomes correct, then deciding whether the resulting part is still the design. This
-   has not been measured.
-
-4. **Build against a FreeCAD that does not apply automatic fuzz.** **This is a known upstream
-   regression, identified 2026-09-01.** FreeCAD [PR #17119](https://github.com/FreeCAD/FreeCAD/pull/17119),
-   merged October 2024 and shipped in 1.1, made every boolean in every core workbench apply an
-   automatic fuzzy value computed as `BooleanFuzzy × Precision::Confusion() × size of the part
-   in mm`. For this half — bounding box 100.08 × 50 × 100, diagonal 150.06 mm — that is about
-   1.5e-05, and the table above shows the correct answer needs 1e-07 or tighter. It explains
-   every observation: why `Part::Cut`, `PartDesign::Pocket` and `PartDesign::Boolean` agree with
-   each other and not with `Part.Shape.cut`, and why no rearrangement helps. Upstream states the
-   change "is also known to cause several regressions".
-
-   [PR #31249](https://github.com/FreeCAD/FreeCAD/pull/31249), in **1.1.3**, adds a
-   `FuzzyTolerance` property so a feature can ask for pre-1.1 non-fuzzy behavior. Two limits:
-   the changelog entry is *"PD: Add FuzzyTolerance property"* — PartDesign, not `Part::` — and
-   1.1.x deliberately **keeps auto-fuzz as the default**. **1.1.3 was installed and tested on
-   2026-09-01, and it does not resolve this.** It fixes the cut exactly — `PartDesign::Boolean`
-   at `FuzzyTolerance = 0` reproduces the reference solid with zero symmetric difference — but
-   PartDesign's `Fuse` returns compounds instead of unions and its `Common` collapses the NURBS
-   intersection, so the cowl's other booleans are worse off than before, and no stock `Part::`
-   object can supply the clean tool the fixed cut needs (all measured, *What 1.1.3 changed*
-   above). An earlier version of this alternative said **26.3 reverts to pre-1.1 behavior, no
-   fuzziness by default**, citing `FeaturePartBoolean.cpp` on `main` as carrying no fuzzy
-   property. **Both halves of that are withdrawn (2026-09-01).** The file check was of the wrong
-   file — the fuzz has never lived there; it is applied in `FCBRepAlgoAPIHelper::setAutoFuzzy()`
-   in `FCBRepAlgoAPI_BooleanOperation.cpp` and configured from `AppPart.cpp`. And the 26.3
-   release notes say only that *"a Fuzzy Tolerance property was added to override the default
-   fuzziness/tolerance for boolean operations determined from the size of the input shapes"* —
-   a knob, not a revert — with the release date still a placeholder.
-
-   **Checked directly against `main`, and this alternative is ruled out** (2026-09-01). On the
-   branch 26.3 comes from: `FCBRepAlgoAPI_BooleanOperation`'s constructor still calls
-   `setAutoFuzzy()` *unconditionally*; `AppPart.cpp` still reads `BooleanFuzzy` with the same
-   default of **10.0**; and `Part::Boolean`'s property list is still just `Base`, `Tool`,
-   `History`, `Refine`, with no per-feature `FuzzyTolerance`. So 26.3 neither disables the fuzz
-   by default nor lets a `Part::` boolean override it per feature. The `FuzzyTolerance` the
-   release notes describe is a PartDesign property, it is already present in 1.1.3, and
-   PartDesign cannot build this part for reasons unrelated to fuzz. Waiting for 26.3 would
-   change nothing; alternative 6 is the route, and the same preference exists on `main`, so it
-   keeps working across the upgrade.
-
-   *Benefits:* the only alternative that gives up nothing — correct geometry, a document that
-   re-solves in stock FreeCAD, no addon, no design change, and nothing of this project's placed
-   inside FreeCAD. On such a build the scripted objects come out and this question closes.
-   *Drawbacks:* 26.3 is not released — it is planned for Q4 2026 under the new CalVer scheme and
-   its release-notes page still carries a placeholder date — so this is a wait unless a weekly
-   development build is used; and pinning a version is itself a constraint on whoever opens the
-   files. 1.1.3 is now ruled out, so the wait is for 26.3 specifically rather than for the next
-   1.1.x. *Prerequisites:* running the reproduction above against a build of `main`. Weekly
-   development builds are published and would answer it now. Note this is not alternative 2:
-   changing which FreeCAD is used adds nothing of this project's to FreeCAD.
-
-5. **Flatten the boolean nodes when the document is saved**, replacing each with a plain
-   `Part::Feature` holding its computed shape, and keep the sketches, spreadsheet and
-   expressions. *Benefits:* opens anywhere with no errors and no install. *Drawbacks:* gives up
-   re-solving deliberately rather than accidentally — the same capability as alternative 1,
-   presented honestly instead of as a broken node. *Prerequisites:* none.
-
-6. **Build the cowls from stock objects, and set `BooleanFuzzy = 0`.** Add the key
-   `BooleanFuzzy` with value `0` under `BaseApp/Preferences/Mod/Part/Boolean` — in the GUI,
-   Preferences → Part → Boolean — which restores pre-1.1 boolean behavior for that FreeCAD
-   install. Every boolean in both cowls then becomes an ordinary `Part::MultiCommon`,
-   `Part::MultiFuse`, `Part::Cut` or `Part::Mirroring`, and the blank's scaler an ordinary
-   `Draft::Clone`, so nothing scripted remains and the document restores and re-solves
-   anywhere. **Measured 2026-09-01 on 1.1.3:** both cowls come out at exactly zero symmetric
-   difference against the current build, with matching face counts (74 tail, 64 nose), and the
-   `Draft::Clone` blank matches `_ScaledSurface` at zero difference and still tracks `U`
-   (200.000 mm at `U` = 2). *Benefits:* correct geometry, a fully live document in stock
-   FreeCAD, no addon, no design change, and it works on the FreeCAD already installed rather
-   than on a version that does not exist yet. *Drawbacks:* it is a per-install setting, so a
-   recipient must apply it too, and a document that silently depends on a preference is a trap
-   if it travels without that instruction — the failure would be a wrong part rather than an
-   error. It also changes boolean behavior for everything else in that install, and upstream
-   introduced the automatic fuzz to fix real failures for other users (PR #17119 lists eight
-   issues), so turning it off may reintroduce those elsewhere. *Prerequisites:* deciding how the
-   setting travels with the file, and — since the value is read once at startup — making the
-   sweep and `build_part.py` set it before FreeCAD loads rather than after.
-
-7. **Added 2026-09-21, raised in conversation. Ship a small, purpose-built addon that supplies
-   only the scripted Proxy classes needed to recompute, not the project's build pipeline.**
-   FreeCAD's restore restriction is on which *module* a scripted object's class comes from, not
-   how much code that module contains — so instead of placing `cowl_tree.py` and its sweep/CSV/
-   parameter machinery under a `Mod` path (alternative 2's actual drawback), package only what
-   `execute()` needs to recompute: `_ShapeBoolean`, and everything `_CowlShell.execute()` calls.
-
-   The two classes are not equally cheap. `_ShapeBoolean` is about thirty lines, has not changed
-   in this whole engagement, and depends on nothing but `Part.Shape.cut`/`fuse`/`common` — no
-   cowl-specific logic at all, and it has not needed one either. Extracting it into its own
-   tiny, generic addon module is close to free, and it reaches everything alternative 6 does
-   (the print/blank kinds) without alternative 6's silent-wrong-part failure mode: a missing
-   addon shows the same visible "blocked import" error alternative 1 already accepts, not a
-   quietly wrong solid, and it needs no global preference that changes boolean behavior for
-   everything else on that install.
-
-   `_CowlShell` is the harder case, but not for the reason alternative 2 was rejected.
-   `execute()` calls `cowl_interior.shell_solid()`, which is 2082 lines — but checked directly,
-   that module imports nothing from this project (`math`, `os`, `sys`, `time`, `numpy`,
-   `FreeCAD`, `Part` only), so it can be vendored into the addon standalone, without dragging in
-   `cowl_tree.py`, `corner_common.py`, `build_part.py`, the CSVs, or the sweep. That is a real,
-   substantial reduction in scope from "the whole repository as an addon" — but the module
-   itself is not small, and it is the most actively developed file in the project: this single
-   engagement rewrote large parts of it repeatedly (IP-FC-137/139/140/141, this session's own
-   `RIB_CUT_FUZZ`). Vendoring it means a disciplined release step — cut a version, copy it into
-   the addon, tag which commit it came from — every time it changes, or the addon silently
-   recomputes an old algorithm against a new document. That is alternative 2's real drawback,
-   inherited in full for this one file, even though the rest of the repository is no longer
-   part of it.
-
-   *Benefits:* reaches **both** representations — unlike alternative 6, a `tail_shell.FCStd`
-   becomes fully re-solvable too — with no design change, no global preference, and a visible
-   rather than silent failure mode when the addon is missing or stale. *Drawbacks:* still an
-   addon a recipient must install (alternative 2's core cost, just narrower); `_CowlShell`'s
-   half needs an actual release discipline for `cowl_interior.py`, not a one-time packaging
-   step, given how often that module has changed; and a version mismatch between the addon and
-   the document that produced it is a new failure mode to design for (does the addon check
-   a stamped version and refuse to recompute rather than recompute wrongly?). *Prerequisites:*
-   deciding whether that release discipline is worth taking on now, versus deferring it until
-   `cowl_interior.py`'s own churn has settled.
-
-   **Revised 2026-09-21, in conversation: the release-discipline cost above assumed a
-   deployment scenario that does not hold in practice.** The scenario that made vendoring a
-   real cost was a `.FCStd` reaching someone who has FreeCAD but not the project checkout —
-   for that person, the addon's copy of `cowl_interior.py` and the project's own copy can drift
-   apart. But the actual case this project needs to serve is narrower: anyone who changes a
-   shape's parameters and regenerates it already has the project checkout, because that is
-   where the parameters live. The addon is not a bridge to people without the scripts; its
-   purpose is letting FreeCAD's own restore permission recognize scripts that are already
-   there — and the reason to have it at all is a standing item on the development roadmap
-   (stated 2026-09-21, not previously written down here): making these construction functions
-   usable from inside the FreeCAD GUI, which needs the modules present and importable on that
-   same machine regardless of this question.
-
-   That removes the reason to distinguish "package only the Proxy classes" from "package the
-   whole pipeline": there is no second copy to keep in sync in either case, because nothing
-   needs to be vendored. The addon only needs to make the project's own
-   `src/Fuselage/freecad` directory resolve as an installed location — a `Mod`-registered path,
-   or a stub package that extends `sys.path` to the checkout in place — not a duplicated copy.
-   `cowl_tree.py`, `cowl_interior.py` and everything else stay exactly where they are and
-   change exactly as often as they already do; there is only ever one copy of the code, so
-   there is nothing to fall out of step.
-
-   *Unverified, and the actual prerequisite now:* whether FreeCAD's restore check ("Only
-   modules from FreeCAD or installed addons are permitted") passes a module by where it
-   resolves from — a `Mod`-registered path pointing at the existing checkout, which this would
-   satisfy — or requires the file to be physically placed under a `Mod` directory, in which
-   case a symlink there would still avoid copying, but a bare `sys.path` addition from a stub
-   addon might not. This has not been tested in this investigation; it is the concrete next
-   step before treating either class as settled, and it is a narrower, cheaper check than
-   anything alternative 6's `BooleanFuzzy` measurement required.
-
-   If it works as hoped, this also folds away most of alternative 2's drawback: alternative 2
-   was rejected partly because its addon copy would need to be "kept in step with the
-   repository," but registering the checkout itself has nothing to keep in step, since it *is*
-   the repository. What alternative 2 still costs that this does not resolve is the standing
-   choice of deployment posture — the project becoming a FreeCAD extension — which the stated
-   roadmap intent to expose these functions in the FreeCAD GUI suggests is a direction already
-   intended, not one incurred solely to close this question.
-
-**Recommendation (revised 2026-09-21, withdrawing the 2026-09-01 choice of alternative 6 —
-not just re-measuring it; revised again the same day once script access was clarified).**
-**Alternative 7, in its path-registration form, for both representations — pending the one
-prerequisite above.** The split first drafted the same day (alternative 7 for the outer solid,
-alternative 1 for the interior shell until `cowl_interior.py` stabilizes) rested on a vendoring
-cost that assumed a deployment scenario — a document reaching someone without the project
-checkout — that does not describe how this project is actually used. Once the addon is
-understood as registering the existing checkout rather than shipping a second copy of it,
-there is no asymmetry left between the two Proxy classes to justify treating them differently:
-neither needs vendoring, so neither needs release discipline. The one open item is the
-`Mod`-path-vs-`sys.path` prerequisite above; if that check comes back unfavorable for a bare
-path addition, the fallback is a symlink under a real `Mod` directory pointing at the checkout,
-which is still not a copy and carries none of alternative 2's synchronization cost.
-
-Alternative 6 is withdrawn, for three independent reasons, each sufficient alone. Its own
-comparison ("matching this construction exactly, 74 faces tail, 64 nose") was measured
-against the OML blank as it stood on 2026-09-01; [OQ-DES-CW17](#open-questions), resolved
-2026-09-09, subdivided that same blank to 129 faces as part of fixing the tail's off-`U`=1
-correctness, and the current reference build measures 306 faces tail, 88 nose — the
-comparison has not been re-run against the construction that actually ships. Independent of
-that: `_CowlShell` did not exist on 2026-09-01, and both `tail_shell()` and
-`nose_cowl_shell()` build it *on top of* the full `_ShapeBoolean` outer-solid tree, so
-alternative 6 — even re-verified and fully implemented — can only ever make the print/blank
-kinds (`tail`, `nose_cowl`, serving mainly UC-1 export, normally regenerated from the sweep
-rather than hand-edited) stock-restorable. `tail_shell.FCStd`/`nose_cowl_shell.FCStd` — the
-kinds UC-2, UC-3, UC-4, UC-7 and UC-8 actually use (§6.4's table) — stay exactly as scripted
-as they are today regardless, because `_CowlShell` has no stock equivalent to convert to
-(B-spline surface fitting through eroded contour rows, structuring-element dilation, sewing).
-And it would leave the outer solid and the interior shell, built into the same document
-seconds apart, correct by two different mechanisms — stock objects plus a global preference
-for one, the `Part.Shape` API directly for the other — which is the special-casing this
-project avoids elsewhere on principle (one mechanism for both cowls, one construction path
-for both representations, §6.4). None of this is new evidence against `Part.Shape` as the
-correct-geometry mechanism; it is evidence that *stock objects*, alternative 6's specific
-proposal, buy less than believed and cost a silent-wrong-part failure mode alternative 1
-never had.
-
-**Alternative 7 supersedes it for both representations.** FreeCAD's restore restriction is on
-which *module* a scripted object's class comes from, not how much code that module contains —
-and, per the 2026-09-21 clarification above, the module does not need to be a second, vendored
-copy either; it can be the project's own `cowl_tree.py`/`cowl_interior.py`, made visible to
-FreeCAD's restore check by registering the checkout itself as an installed location.
-`_ShapeBoolean` is about thirty lines, unchanged this entire engagement, and depends on
-nothing but `Part.Shape.cut`/`fuse`/`common`; `cowl_interior.py`, which `_CowlShell.execute()`
-calls, is 2082 lines and the single most actively rewritten file in this engagement
-(IP-FC-137/139/140/141, this session's own `RIB_CUT_FUZZ`) — but that churn is a reason a
-*vendored copy* would need release discipline, not a reason the *original file*, registered in
-place, would drift from itself. With no copy involved, both classes reach the same outcome the
-same way: a missing or unregistered addon fails *visibly* (a missing-module error, like
-alternative 1 already accepts) rather than silently producing a wrong solid, and there is no
-version to fall out of step because there is only the one file, wherever it is imported from.
-
-**Confirming this isn't a case the interior-shell work's own newer techniques already solve
-differently.** Neither of the two fixes those newer investigations found bears on this item's
-crossing-slot problem. `RIB_CUT_FUZZ` (`cowl_interior.py`) adds a small *positive* tolerance
-for a genuine near-zero-volume sliver at one tool's own near-tangency — a real geometric
-degeneracy a fuzz-free cut can legitimately stumble on. This item's cut has no such
-degeneracy: `Part.Shape.cut` with *no* fuzz argument already returns the exact, 39-face valid
-answer (what `_ShapeBoolean` runs today); the defect here is the opposite shape, a
-*document-object* layer applying unwanted automatic fuzz on top of an operation that needed
-none. And "sew the open shells instead of fusing" (`mirror_across_cell`/`_strip_seam`) fixes
-two mirror-image solids meeting at exactly one shared face, a different topology from eleven
-buttress slabs genuinely overlapping in 3-D — a volumetric union to compute, not a seam to
-zip. Both confirm rather than reopen this item's own finding that the `Part.Shape` API is
-what gets this part's geometry right.
-
-**Ranking kept for the case alternative 7 does not pan out either**, unchanged from the
-2026-09-01 analysis except that alternative 6 no longer sits above it: pursue
-alternative 4 first if revisited (an unfuzzed FreeCAD build) — it is the only remaining
-alternative that gives up nothing — but it is already closed as of 2026-09-01: 1.1.3 does not
-compute this correctly, and FreeCAD `main` (the future 26.3) was checked at source and keeps
-the automatic fuzz with no override for `Part::` booleans, so waiting for a release changes
-nothing. Failing that, alternative 1 or 5 (keep the part right, give up live re-solving) rank
-above alternative 2 (ship the whole build pipeline as an addon, only worth it if editable
-files turn out to be a hard requirement), and alternative 3 (widen the slots) ranks last —
-adopting it on convenience grounds trades a correct part for a convenient toolchain, the
-wrong way round, and the measurements throughout this item show the failure is not simply a
-matter of the slot being too narrow.
-
-### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1 — RESOLVED: alternatives 3, 6 and 7 adopted together, as recommended
-
-**Resolution note (2026-09-09).** The measured cure below — the blank reparameterized to C1,
-subdivided at every third knot into 129 faces, and the eleven tail tools cut individually
-rather than fused — is not just recommended, it is in the shipped code:
-[`oml_blank.condition()`](../../src/Fuselage/freecad/oml_blank.py) carries the reparameterization
-and the subdivision and is called from `surface()`, and
-[`cowl_tree.tail_cowl()`](../../src/Fuselage/freecad/cowl_tree.py) builds one `Safe` cut per
-tool rather than cutting by a fused group. The domain check in alternative 1 was never added as
-a separate guard and is not needed — it was a stopgap for before the cure landed, superseded by
-alternatives 3, 6 and 7 actually fixing the whole swept range rather than merely fencing off the
-broken part of it. The investigation below is kept in full because it is what the fix rests on;
-read the header only for current status.
-
-**Problem.** `U` is the airframe's size multiplier: every dimension of the aircraft is written
-as a multiple of it, and the project sweeps `U` from 0.5 to 4.0. The tail cowl is made by
-cutting eleven slots into the aircraft's outer surface, a NURBS solid. Those slots are 0.1 mm
-wide and **do not scale with `U`** — they are fold lines for vase-mode printing, not gaps, and
-that is deliberate (§6.3). So as `U` grows the body grows and the slots do not, and the slot
-becomes ever finer relative to the part.
+Recorded while deciding [OQ-DES-CW17](#open-questions).
 
 **Measured 2026-09-01 on FreeCAD 1.1.3, the tail is correct only at `U` = 1.** Everything
 feeding the cut scales exactly: `Half` tracks `U`³ to four decimals, and the cutter's volume
@@ -2522,97 +1079,1668 @@ Neither fix alone suffices: without subdivision the cut fails at scale whatever 
 continuity, and without unfusing, `U` = 1 silently loses 91.491 mm³ — the fused tree removes
 213.044 where 304.564 is right.
 
-**Alternatives.**
+## 9. Restoring the cowl documents in stock FreeCAD
+
+Recorded while deciding [OQ-DES-CW16](#open-questions).
+
+A FreeCAD document is made of *document objects* — a `Part::Cut`, a `PartDesign::Pocket` — and
+those are what make a saved file editable: change a number and the objects recompute. FreeCAD
+also exposes the same operations directly on geometry, as `Part.Shape` methods, which are not
+document objects and do not recompute on their own.
+
+**Measured 2026-09-01 on FreeCAD 1.1.1, the two do not agree, and the document objects are the
+ones that are wrong.** With byte-identical inputs — the same half-body, the same cutter:
+
+| route | faces | valid | `Shape.Volume` | tessellated volume |
+|---|---|---|---|---|
+| `Part.Shape.cut` (not a document object) | 39 | yes | 308777.93 | 297004.19 |
+| `Part::Cut` (document object) | 69 | no | 310563.18 | 232547.58 |
+| `PartDesign::Boolean` | 69 | no | — | — |
+| `PartDesign::Pocket`, slots cut in sequence | — | no | — | — |
+
+The document result is not the right solid with a pedantic flag on it. It loses 68 mm³ of
+material that the correct result has, it carries six invalid faces including one whose
+boundary does not close, and it tessellates 22% smaller — so it would print wrong, not merely
+report oddly. All three document routes give the same wrong answer because in FreeCAD 1.1 they
+share one `TopoShape` layer, which emits `TopoShapeExpansion.cpp: hasher mismatch` throughout.
+The same layer inflates tolerances generally: two plain 10 mm boxes fused by `Part::MultiFuse`
+come out at 1.3e-05 where `Shape.fuse` gives 1.5e-07.
+
+**What the document layer is doing is reproducible from the geometry API.** `Part.Shape.cut`
+takes an optional fuzzy tolerance, and sweeping it reproduces the document's answer:
+
+| fuzzy | faces | valid | volume |
+|---|---|---|---|
+| 0, 1e-09, 1e-07 | 39 | yes | 308777.93 |
+| 1e-06 | 68 | yes | 310343.13 |
+| 1e-05 | 68 | yes | 310367.26 |
+| *the document* | 69 | no | 310563.18 |
+
+So the document booleans behave as though a fuzzy value of about 1e-06 or larger were applied,
+where the correct answer needs 1e-07 or tighter. **Nothing exposed changes it**, each of these
+measured 2026-09-01 and each leaving the result at 69 faces and invalid: tightening both
+operands with `fixTolerance` to 1e-07 and 1e-08 (the operands are already 3.8e-07 and 1.5e-07);
+`Document.UseHasher = False`; clearing `_ElementMapVersion`, which the object rewrites;
+`Refine`; a cutter cleaned to 1.5e-07. On 1.1.1 the boolean features' entire property list is
+`Base`, `Tool`, `Refine`, `Placement`; on 1.1.3 `Part::Cut`'s list is unchanged and only
+PartDesign gained a `FuzzyTolerance`. An earlier version of this paragraph also said there was
+no fuzzy or tolerance preference anywhere in the parameter tree. **That was wrong** — there is
+one, `Mod/Part/Boolean/BooleanFuzzy`, and setting it to 0 resolves this outright. See *What
+1.1.3 changed* below, which carries the correction and the measurements.
+
+**Rearranging the model does not avoid it either**, all measured: eleven separate cuts, the six
+connected groups, a single `Part::Compound` tool, chained pairwise `Part::Fuse`, diagonals first
+or last, the crossing pair pre-fused into one tool, `PartDesign::Pocket` per slot,
+`PartDesign::Boolean` with the whole cutter, re-expressing the cut as an intersection with the
+cutter's complement, and building the model 10× and 100× oversize so the 0.1 mm feature sits
+further above OCC's absolute 1e-07 confusion. Cutting the full body before masking rather than
+after — which is free set algebra, `(blank ∩ mask) − cutter` being `(blank − cutter) ∩ mask` —
+returns an *empty* solid. The geometry API gets the right answer in every one of these
+arrangements, including plain sequential cuts.
+
+**What 1.1.3 changed, and what it did not.** Everything above was measured on FreeCAD 1.1.1.
+FreeCAD 1.1.3 (rev 20260725) adds a `FuzzyTolerance` property to `PartDesign::Boolean`, and it
+does exactly what it says — but it reaches one of the cowl's operations and not the other two.
+All of the following measured 2026-09-01 on 1.1.3, against the same tail half and cutter.
+
+*The cut is fixed.* With one clean tool and `FuzzyTolerance = 0`, `PartDesign::Boolean`
+reproduces the reference solid with **zero** symmetric difference:
+
+| route | faces | valid | `Shape.Volume` | symmetric difference |
+|---|---|---|---|---|
+| `Part.Shape.cut` (the reference) | 39 | yes | 308777.9299 | — |
+| `Part::Cut` | 69 | no | 310563.1768 | 6.84e+01 |
+| `PartDesign::Boolean`, `FuzzyTolerance = −1` (auto) | 69 | no | 310563.1768 | 6.84e+01 |
+| `PartDesign::Boolean`, `FuzzyTolerance = 0` | 39 | yes | 308777.9299 | **0** |
+
+`FuzzyTolerance` is an ordinary stored property, so it survives a save. Values of 1e-12, 1e-09
+and 1e-07 give the same exact result; `Part::Cut` still has no such property.
+
+*The fuse and the intersection are not.* A cowl is not one cut. The tail fuses its eleven
+tools into a cutter, and both cowls intersect the blank with masks. Both come out wrong:
+
+* **Fuse.** `PartDesign::Boolean` of type `Fuse` returns a *compound* rather than a union, at
+  every fuzzy value tried (−1, 0, 1e-09, 1e-08, 1e-07, 1e-06). Fusing `Top1` with `Diag11`,
+  which overlap by about 1.1 mm³, returned two solids totaling 2015.7495 — exactly the sum of
+  the two inputs, with none of the overlap removed. Over the six overlapping tools it gives
+  6065.3155 where the correct union is 6061.7611.
+* **Common.** The nose's first mask intersection — a box against the NURBS blank — comes back
+  with 5 faces where the reference has many, +4067.96 mm³, and a tolerance of 19.7 mm. Carried
+  through, a fully stock nose ends as 4 solids with a symmetric difference of 1.84e+05. Retested
+  with the *global* fuzz off as well (below), it is worse, not better: it returns an **empty
+  shape** for the tail's lower mask, which covers the whole blank and should be a no-op.
+
+Both of those were first measured with the global fuzz still at its default, relying on the
+per-feature property alone; they were re-measured at `BooleanFuzzy = 0` and are unchanged for
+`Fuse` (still a two-solid compound, +3.554461 mm³) and worse for `Common`. So these are real
+defects in those operations, not fuzz.
+
+**`PartDesign::Pocket` does work, and an earlier note here saying otherwise was wrong.** The
+1.1.1 table above records it as going invalid at the second diagonal. Re-rigged properly on
+1.1.3 — eleven pockets, each the buttress sketch carried on the slab's placement, `Midplane`
+with `Length = buttress_cut_thickness`, `FuzzyTolerance = 0` — **all eleven succeed and every
+one is a single valid solid.** It is still not the right part: the chain ends at 66 faces and
++561.60 mm³ against the reference's 39, because a pocket subtracts one profile at a time and
+subtracting the crossing tools in sequence is not the same as subtracting their union. That is
+the same 0.18% error the geometry API gives for sequential cuts, and it is 18× the project's
+0.010% tolerance. The obstacle is the missing union, not PartDesign's ability to cut.
+
+*Why no arrangement of stock `Part::` objects can supply the clean tool the cut needs.* The
+tolerance a stock boolean records is proportional to the size of its operands — measured at
+**7.0e-07 per mm of bounding-box diagonal**, from two independent cases: the six overlapping
+tools (diagonal 170.3 mm) record 1.20e-04, and all eleven (diagonal 371.2 mm) record 2.63e-04.
+The cut's requirement, by contrast, is *absolute*: 1.5e-07 gives the exact answer and 1.0e-06
+already gives 68 faces and +1565 mm³, with nothing working in between. A stock-built tool is
+therefore clean enough only if it fits inside a box about **0.2 mm** across, which no part does.
+
+The geometry is not what is wrong. `Part::MultiFuse` followed by `Part::Cut` reproduces the
+reference cutter to **±0.000000 mm³**. Forcing that stock cutter's tolerance down with
+`fixTolerance` restores a 39-face valid result; forcing the clean cutter's tolerance *up* to
+the stock value reproduces the 69-face invalid one. The recorded tolerance is the entire
+defect — and nothing stock re-records it: `Part::Refine`, `Part::Mirroring` applied twice about
+the same plane, and `Draft::Clone` at scale 1 each return the identical shape at the identical
+2.63e-04.
+
+**But the fuzz is a preference, and turning it off fixes everything.** This corrects an earlier
+claim in this document, which said no such preference existed. It does. From PR #17119's own
+diff, the value is read once at startup in `AppPart.cpp`
+
+    hGrp = ...GetGroup("Mod/Part/Boolean");
+    Part::FuzzyHelper::setBooleanFuzzy(hGrp->GetFloat("BooleanFuzzy", 10.0));
+
+and applied in `FCBRepAlgoAPIHelper::setAutoFuzzy()` as
+
+    op->SetFuzzyValue(getBooleanFuzzy() * sqrt(bounds.SquareExtent()) * Precision::Confusion());
+
+`sqrt(SquareExtent)` is the bounding-box diagonal, so at the default of **10.0** the applied
+fuzz is 1.0e-06 per mm of diagonal — which is the measured 7.0e-07 per mm of *recorded*
+tolerance above, and explains it exactly. Two things had hidden it: the earlier search looked
+only for 7-bit ASCII in the binaries, where a Windows build may hold the string otherwise; and
+the value is read **once at module load**, so setting the parameter from a running session —
+which is how it was first tested — cannot change anything.
+
+Set `BooleanFuzzy = 0` before FreeCAD starts and the stock objects become correct. Measured
+2026-09-01 on 1.1.3, against the same reference:
+
+| | recorded tolerance | result |
+|---|---|---|
+| `Part::MultiFuse`, default fuzz | 2.63e-04 | — |
+| `Part::MultiFuse`, `BooleanFuzzy = 0` | **2.12e-07** | geometry unchanged, ±0.000000 mm³ |
+| `Part::Cut`, default fuzz | — | 69 faces, invalid |
+| `Part::Cut`, `BooleanFuzzy = 0` | — | **39 faces, valid, symmetric difference 0** |
+
+Carried through the whole part, with every boolean a stock `Part::MultiCommon`, `Part::MultiFuse`,
+`Part::Cut` and `Part::Mirroring`, and nothing scripted in the chain:
+
+    tail  stock solids=1 faces=74  valid=True  | scripted faces=74  | symmetric difference 0
+    nose  stock solids=1 faces=64  valid=True  | scripted faces=64  | symmetric difference 0
+
+So the three things that could not previously hold at once — correct geometry, a document that
+re-solves in stock FreeCAD, and nothing of this project's installed — **all hold**, at the cost
+of one preference set on each machine that opens the file. That is alternative 6.
+
+**Stale, checked 2026-09-21: those face counts no longer describe the current construction,
+and this comparison needs re-measuring before alternative 6 is acted on.** `74 faces tail, 64
+nose` was measured against the OML blank as it stood on 2026-09-01 — nine raw faces per
+surface. [OQ-DES-CW17](#open-questions), resolved 2026-09-09, landed
+`oml_blank.condition()` afterward, reparameterizing and subdividing that same blank into 129
+faces (measured directly, `condition()`'s own report: `faces_in=9, faces_out=129`) as part of
+fixing the tail's off-`U`=1 correctness. Building the current `tail_cowl()`/`nose_cowl()` at
+the reference configuration today gives **306 faces (tail), 88 faces (nose)** — both valid,
+single-solid, matching this session's own direct measurement — not 74 and 64. The `Part.Shape`
+vs. stock-object comparison this alternative rests on was never re-run against that
+now-standard 129-face input; it still describes construction from before the fix that made the
+tail correct off `U` = 1. Whether stock objects plus `BooleanFuzzy = 0` still reproduce the
+current construction exactly is unverified, not simply a stale number to correct in place —
+the file count more than quadrupling on the tail is exactly the kind of change that a boolean
+kernel's tolerance handling can be sensitive to, so this needs a fresh measurement against
+today's blank, not an inference from one taken against yesterday's.
+
+*Further arrangements ruled out on 1.1.3*, adding to the list above: cutting by the eleven
+tools separately rather than by their union (69 faces, +1496 mm³, tolerance 0.266); cutting by
+a `BooleanFragments` decomposition of the overlapping group into 32 disjoint pieces, which is
+itself exact and clean (±0.000000 mm³ at tolerance 2.12e-07, via FreeCAD's own `BOPTools`
+scripted features, which take an explicit tolerance) but gives 52 faces and +1149 mm³ when cut
+with; and cutting slot by slot in sequence (70 faces, invalid). One of these does not merely
+return the wrong solid — `PartDesign::Boolean` handed all eleven tools at the stock tolerance
+of 1.4e-04 ran for 24 minutes and then died of `Not enough memory available`, the same
+pathology as the 4.4 GB build recorded in IP-FC-12. A tool at stock tolerance is not a
+degraded input to these operations; it is one they cannot complete.
+
+*One thing worth keeping from this.* Only **one** fuse in the tail is load-bearing. The eleven
+tools form six disjoint solids, and only one group of six actually overlaps — `Top1`, `Top2`
+and the four diagonals. Cutting by that group's union and then by the five remaining slabs
+separately reproduces the reference exactly. So the scripted surface could in principle shrink
+from seven nodes to one. It is not worth doing on its own: a single blocked module import
+stops a document restoring just as completely as seven do, so it buys no deployment and costs
+a construction the two cowls would no longer share.
+
+The port therefore builds the cowls through a small scripted document object (`_ShapeBoolean`
+in `cowl_tree.py`) that performs the operation with `Part.Shape` and stores the result. It is a
+real document object — it links its operands, recomputes when the spreadsheet changes, and is
+saved and reloaded — and with it both cowls come out geometrically identical to the reference
+implementation, exactly zero difference in both directions.
+
+**The cost is deployment.** FreeCAD 1.1 refuses to restore a scripted object whose defining
+module is not FreeCAD's own or an installed addon:
+
+    PropertyPythonObject::Restore: blocked import of module 'cowl_tree' during document
+    restore. Only modules from FreeCAD or installed addons are permitted.
+
+There is no preference anywhere in FreeCAD's parameter tree that grants trust; the decision is
+made purely from where the module sits on disk. So opening `tail_U1.FCStd` on a machine that
+has only FreeCAD gives a document that *displays the correct part* — the geometry is saved, and
+the spreadsheet, sketches, extrusions, wedge and datum placements all restore — but the seven
+boolean nodes come back inert, so changing a parameter rebuilds nothing. The document is
+correct and readable; it is not re-solvable.
+
+This affects nobody in the project's own toolchain: the sweep and `build_part.py` import
+`cowl_tree` before opening anything, so they rebuild normally. It affects a person handed a
+`.FCStd`.
+
+## Open questions
+
+| ID | Summary | Blocking |
+| --- | --- | --- |
+| OQ-DES-CW27 | A shape's triangulation is cached, so a repeated convergence run converges on nothing. | Blocking IP-GB-23 |
+| OQ-DES-CW28 | The fit converges to five times looser than the tolerance the wall must meet. | Blocking IP-WTM-39 |
+| OQ-DES-CW29 | Two wall-thickness measures now disagree about whether a nose cowl complies; which one gates? | Blocking IP-WTM-42, IP-WTM-52 |
+| OQ-DES-CW30 | The cavity's shell is open at one edge and every validity check passes it. | Blocking IP-WTM-43 |
+| OQ-DES-CW31 | The fit's axial seed is a fixed count, and it is why a large nose cowl fails its wall tolerance. | Blocking IP-WTM-46 |
+| OQ-DES-CW33 | Every measure the gate has is in-plane, and the wall is inclined to the layer plane. | Blocking IP-WTM-48, IP-WTM-52 |
+| OQ-DES-CW35 | Should the interior-surface construction carry a test-only seam at all? | Blocking IP-FC-156 |
+| OQ-DES-CW37 | The refit's sample density is a floor, and the one density measured below it was the only one that never failed. | Not blocking |
+| OQ-DES-CW38 | A tail wall's volume moves while every operand the instrument can see is identical. | Not blocking |
+
+### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
+
+**Problem**
+
+The cowl geometry imports an outer-mould-line mesh produced by OpenVSP. Three
+parameters control that import: `oml_scale_m_per_mm`, `oml_length_m` and `oml_offset_x_m`. All three are
+expressed in **meters**, while every other length in the OpenSCAD generator is in
+**millimeters**, and none of the three carries a unit suffix.
+
+Two of them are actively misleading. `oml_scale_m_per_mm = 1e-3` is used as a *divisor* —
+`scale = U/oml_scale_m_per_mm` — so it multiplies by 1000 while looking like it divides. And
+`oml_offset_x_m` is applied *before* the scale, so the tail's `-0.25` means −0.25 m (−250 mm
+at U = 1), not −0.25 mm; reading it as millimeters understates it a thousandfold, and the
+part still renders.
+
+The project guideline is to encode units in a name when they are not obvious from context.
+Here the context points the wrong way. This affects anyone editing a cowl parameter file
+and, more seriously, the FreeCAD port (IP-FC-12), which will read these values and
+reproduce whatever convention it infers.
+
+**Alternatives**
+
+1. **Rename with unit suffixes** — `oml_scale_m_per_mm_m_per_unit`, `oml_length_m_m`,
+   `oml_offset_x_m_m`. Benefit: the trap disappears at the point of reading. Drawback: touches the
+   SCAD modules, both cowl JSON files, and `derived_cowl_parameters()`.
+2. **Rename only on the Python side, leave the SCAD and JSON alone.** Benefit: the surviving layer
+   is correct. Drawback: the JSON files — which a human edits — keep the misleading names, and they
+   are the most likely place for the error.
+3. **Leave the names, document the convention here, and fix it at the port.** Benefit: no churn in
+   retiring code. Drawback: the port is exactly when the misreading is most costly, and documentation
+   is a weaker guard than a name.
+
+**Recommendation**
+
+**Alternative 1.** This is the same argument that justified renaming `nozzle_diameter` to
+`extrusion_width` in IP-GEO-24 and it applies more strongly here, because the failure mode is a
+factor of 1000 rather than 20 %. The "do not rename retiring code" rule exists to avoid churn for
+cosmetic gain; a name that states the wrong unit is not cosmetic.
+
+**Decision**
+
+**RESOLVED 2026-08-09 — alternative 1, done.**
+
+| Was | Now | Why the suffix reads that way |
+| --- | --- | --- |
+| `oml_length` | `oml_length_m` | Meters, in a codebase whose every other length is millimeters |
+| `oml_offset_x` | `oml_offset_x_m` | Meters, and applied *before* the scale, so it is meters in the mesh's own frame — the tail's −0.25 is −250 mm at U = 1 |
+| `oml_scale` | `oml_scale_m_per_mm` | A **divisor**: `scale = U/oml_scale_m_per_mm`. At 1e-3 it multiplies by 1000 while the bare name suggests it divides. The suffix names the ratio in the order the division takes it |
+
+Renamed in all four places the value passes through: the SCAD module signatures
+(`cowl_geometry.scad`, `nose_cowl.scad`, `tail_cowl.scad`), the `OmlParameters` dataclass,
+and — because `derived_cowl_parameters()` copies OML fields by `fields()`, so the dataclass
+field names *are* the schema — the JSON keys in both cowl parameter files.
+
+**Rationale**
+
+**`_m_per_mm` rather than the `_m_per_unit` originally proposed.** "Unit" is the most
+overloaded word in this project — `U`, `unit_width`, `unit_length` — and spending it here on
+"model unit" would have planted a fresh ambiguity in the middle of a rename whose whole
+purpose was removing one. `_m_per_mm` names both ends of the ratio and borrows nothing.
+
+**Verified geometry-identical**, which was the stated requirement. This change alters SCAD
+module signatures, so the generated `.scad` text necessarily differs and `scad_snapshot.py`
+would report DIFF by construction — the case `verify_sweep_change.py` exists for. It re-ran
+the real sweeps and compared the resulting solids: nose cowl, tail, and non-cowl parts as
+controls, all identical.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+The table under the decision lists each renamed field.
+
+### OQ-DES-CW2 — What `cone_angle` measures — RESOLVED 2026-08-09
+
+**Problem**
+
+**Problem.** `cone_angle` is a single parameter, set to 35° in both committed cowl files, used at
+two places that measure it against **different axes**.
+
+**Alternatives**
+
+1. **Measure a rendered part and infer the intent.** Benefit: cheap. Drawback: tells you what the
+   code does, not what was intended — if the two differ, you still have a decision.
+2. **Split into two parameters** — a `buttress_chamfer_angle` and a `plate_cone_angle` — each
+   documented against a stated axis. Benefit: removes the ambiguity permanently. Drawback: two numbers
+   to keep in step if they *are* meant to be equal.
+3. **Keep one parameter, define its axis once, and correct whichever call site disagrees.**
+   Benefit: one number. Drawback: changes geometry at one of the two sites, so it is not
+   behavior-preserving and needs a print to confirm the change is an improvement.
+
+**Recommendation**
+
+**Alternative 1 first — this question cannot be answered from the code alone.** Measure the
+as-built chamfer against the bed and establish whether the upper buttress chamfer is
+self-supporting in practice. If it is, the parameter is being used correctly at both sites and only
+the documentation is missing; if it is not, prefer alternative 3.
+
+**Decision**
+
+**`cone_angle` is the overhang angle for printing, measured from the print bed. Both call
+sites are correct, and the apparent inconsistency was an artifact of how this document posed
+the question.**
+
+**Rationale**
+
+The two expressions are complementary because they are written against **perpendicular
+reference directions**, and the physical face they produce is the same. Working each through
+to the bed plane:
+
+| Call site | As written | Face relative to the axis | **Face relative to the bed** |
+| --- | --- | --- | --- |
+| `buttress_shape()` | `dζ/dr = tan φ` — angle φ from the *radius* | 55° | **35°** |
+| `nose()` | `r₁ = r₂ + L/tan φ` — half-angle `90° − φ` from the *axis* | 55° | **35°** |
+
+The radius lies in the bed plane and the axis is normal to it (the part prints axially, large
+end down, §7), so "35° from the radius" and "55° from the axis" are two spellings of one
+face. `tan 35° = 0.700`, and a cone whose radius grows by `L/0.700 = 1.428·L` over height `L`
+stands at `atan(1.428) = 55°` from the axis — 35° above the bed. The parameter is used
+against its natural sense at both sites; only the documentation was missing.
+
+**Why 35° and not 45°.** The 45° figure this document measured against is a rule of thumb,
+and a conservative one: modern printers do considerably better than 45° in PLA, and 35° from
+the bed is readily achievable. It is an aggressive value chosen deliberately, not a value
+that drifted past a limit. The earlier reading — "a 55°-from-vertical face, steeper than the
+usual 45° self-supporting limit, so something must be wrong" — inverted the conclusion: 55°
+from vertical *is* the achievable direction, and the design is spending the margin the rule
+of thumb leaves on the table. **Other materials may not hold 35°**, which makes this a
+material-dependent process limit rather than a shape parameter.
+
+**Caveats**
+
+**Consequences for the port.**
+
+- **Do not split it.** Alternative 2 of the original question is wrong: the two sites are one
+  quantity, and forcing them apart would let them drift out of step for no reason. Nothing
+  needs correcting under alternative 3 either — there is no disagreeing call site.
+- **The name states a shape and hides a constraint.** `cone_angle` describes what the geometry
+  looks like at one of the two sites and nothing at all at the other; what it *is* is a
+  minimum printable angle. `overhang_angle_from_bed` names both the quantity and the reference
+  the ambiguity turned on — and the reference is exactly what OQ-DES-CW1 argues belongs in the
+  name. Note that it is a **floor, not a target**: shallower fails, steeper is free.
+- **It is a printer setting, not a cowl setting.** It is already in `NOSE_UNSCALED` and does
+  not scale, correctly — but it sits in the cowl JSON, where it reads as a property of the
+  shape. Being material-dependent, it belongs in `PrinterSettings` with `extrusion_width`,
+  `layer_height` and the `n_perimeters` that OQ-DES-CW6 needs (IP-FC-42): the four together
+  are the process, and a cowl designed for one material should not have to be re-authored for
+  another. Recorded as IP-FC-28.
+- **It is the only printability constraint expressed anywhere in this project's geometry**,
+  but that does not make it a single project-wide number. Every other self-supporting
+  decision — the greeble chamfers, the bulkhead flange chamfer, the corner's snap groove
+  cones — is a literal angle chosen to be printable, with nothing recording that printability
+  is what set it. The tempting fix is to derive them all from one value; it is the wrong fix,
+  because **the achievable angle depends on what is overhanging**:
+
+  | What varies | Why it changes the achievable angle |
+  | --- | --- |
+  | Span | A 2 mm chamfer sags negligibly at an angle that would ruin a 40 mm one. Droop accumulates over the unsupported run, not per layer |
+  | Surface type | A cone is self-supporting in a way a flat ceiling is not — each layer is a closed loop laid on the one below, with no free end |
+  | Function | A cosmetic face tolerates droop; a mating surface — the plate relief, the snap groove — does not, and wants margin the cowl's exterior does not need |
+  | Cooling and orientation | The same face on the same printer behaves differently depending on what is around it |
+
+  So the process value is a **baseline**, and individual features are entitled to be more
+  conservative where the span is long or the surface mates, or more aggressive where the span
+  is short. What is worth capturing is not one angle but the *fact* that a given chamfer is
+  set by printability and against which reference — so that changing material prompts a
+  review of each rather than a silent global substitution. Whether the baseline should
+  additionally carry per-feature overrides, and on what rule, is left open here; the cowl
+  needs one value and this question is about the cowl.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW3 — Is `buttress.thickness` a wall or a cut clearance? — RESOLVED 2026-08-09
+
+**Problem**
+
+**Problem.** `buttress.thickness` is `0.05` in both cowl parameter files. It is in `NOSE_UNSCALED`,
+so it is **not** multiplied by `unit_width` — it is an absolute 0.05 mm at every airframe size.
+
+**Alternatives**
+
+1. **Rename to reflect that it is a cut dimension** — `buttress_cut_width` or similar. Benefit: the
+   name states what the value does. Drawback: touches the JSON schema and the SCAD signatures.
+2. **Leave it, and document the meaning here.** Benefit: zero churn. Drawback: the misleading name
+   survives into the port.
+3. **Reconsider whether it should scale.** If it is a kerf it is process-driven and correctly
+   unscaled. Benefit: settles the scaling question at the same time. Drawback: changes geometry at
+   every size but U = 1 if the answer is "should scale".
+
+**Recommendation**
+
+**Establish which it is, then alternative 1.** The evidence strongly favors "cut clearance" — 0.05
+mm is unprintable as a wall, and it is applied to a subtracted prism — but that inference has not
+been confirmed by whoever chose the value. If it is a clearance, the unscaled treatment is already
+correct and only the name needs fixing.
+
+**Decision**
+
+**Neither, and the question was posed on a false dichotomy.** `buttress.thickness` is the
+thickness of **the cut into the OML that produces the buttress through slicing**. It is not
+a clearance around some other feature, and it is not the rib's thickness — it is the notch
+whose walls, once the slicer has laid perimeters down both faces of it, *are* the rib.
+
+The thickness of the buttress measured on the interior of the cowl is therefore
+
+$$t_{\text{rib}} = 2 \cdot w_{\text{extrusion}} \cdot n_{\text{perimeters}} + t_{\text{cut}}$$
+
+These cowls print in **spiral vase mode** ([OQ-DES-CW6](#open-questions)), so `n_perimeters`
+is **1**: a 0.05 mm parameter yields a **0.85 mm** rib at `extrusion_width = 0.4`, 1.25 mm at
+the sweep's 0.6. The value looked implausible because it was being read as the whole rib when
+it is the smallest of the three terms that make it — and because a single-wall print was not
+in view, which is the case where a 0.85 mm rib is a substantial fraction of the structure.
+
+**What the name should be.** `thickness` is defensible now that its referent is known, but it
+reads as the rib's thickness at every call site, and a reader sizing a rib would take it and
+be wrong by a factor of thirty. `buttress_cut_thickness` states which of the two thicknesses
+it is. That is a rename across the JSON schema, `ButtressSet` and eight SCAD signatures, so
+it is deferred to the port rather than done twice — recorded as IP-FC-29.
+
+**Rationale**
+
+**This settles the scaling question too, and the current treatment is right.**
+`buttress.thickness` **is a slicer tolerance, not a part geometry parameter**, and a slicer
+tolerance has no business tracking the airframe — so it does not scale, and `thickness`
+belongs in `NOSE_UNSCALED` exactly where it is. Alternative 3 of the original question is
+answered: it should not scale. The consequence follows and is intended
+([OQ-DES-CW4](#open-questions)): the buttress *pattern* — angles, offsets, extents — scales
+with the cowl, while the rib's thickness does not, because the first is design and the second
+is process.
+
+**Caveats**
+
+**One discrepancy to settle, flagged rather than fixed.** Every call site extrudes the cutting
+prism as
+
+```openscad
+linear_extrude(height=2*buttress_thickness, center=true, ...)
+```
+
+so the cut actually taken out of the blank is **0.1 mm, twice the parameter**, and the rib
+built on it is `2·w·n + 2·t`. Under the definition above the factor of two is either a
+half-thickness-per-side convention that the parameter name does not state, or an error. It
+is not resolvable by measurement — the two readings differ by 0.05 mm of rib thickness,
+whatever the extrusion width — so it is a question of intent for whoever set the value.
+*Split out as its own question and settled 2026-08-18 — see [OQ-DES-CW8](#open-questions).
+The doubling is kept and folded into the value: the parameter becomes
+`buttress_cut_thickness = 0.1` and the `2*` comes out of the four extrudes, so the cut stays
+0.1 mm and no geometry moves. `t` in the rib formula is therefore the stored number, and the
+printed parts remain reproducible from the files.*
+
+**The perimeter count is not a parameter anywhere in this project.** `PrinterSettings` carries
+`extrusion_width` and `layer_height` and nothing else; `n_perimeters` lives only in the slicer
+profile, which is not in the repository. The formula above therefore cannot be evaluated by
+the generator as it stands. That matters directly to OQ-DES-CW6 — a nominal rib cannot be
+modeled without it — and it is the same class of gap as the OML/`.vsp3` link that OQ-DES-CW7
+closed: a value the geometry depends on, held outside the system that depends on it.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW4 — Should buttress placement become parametric? — RESOLVED 2026-08-09
+
+**Problem**
+
+`tail_cowl_half()` hard-codes every buttress angle and offset as a literal:
+side buttresses at 5°, 12.5° and 20°, top and bottom at 15° and 0°, diagonals at ±30°, with
+offsets written as fractions of `unit_width` inline.
+
+Meanwhile the cowl JSON carries `angle`, `y_offset`, `z_start` and `depth` fields for each
+buttress group, `derived_cowl_parameters()` faithfully scales them into the parameter tree,
+and the geometry **ignores all of them for placement**. This is the same defect class as
+OQ-DES-B6 and OQ-DES-C3: a parameter threaded through the whole pipeline and discarded at
+the point of use.
+
+The practical consequence is that a new cowl shape cannot be given a different buttress
+pattern without editing SCAD, which defeats the purpose of the JSON parameter files.
+
+**Alternatives**
+
+1. **Make placement parametric** — drive the angles and offsets from the fields that already exist.
+   Benefit: the JSON becomes a complete description of a cowl. Drawback: the buttress *count* is also
+   hard-coded (three side, two top, two bottom, two diagonal pairs), so a full solution needs a list
+   rather than a fixed group set.
+2. **Delete the unused fields.** Benefit: removes the misleading appearance of configurability.
+   Drawback: gives up the capability.
+3. **Defer to the port** , and design the buttress set as a list of placements in the FreeCAD
+   generator. Benefit: the port is rewriting this layer anyway. Drawback: the dead fields persist
+   until then, and any cowl designed meanwhile is hard-coded.
+
+**Recommendation**
+
+**Alternative 3, with alternative 2's honesty in the interim** — mark the unused fields as unused
+in the JSON schema documentation so nobody sets them expecting an effect. The full fix wants a list
+of buttress placements rather than a fixed set of named groups, and that is a natural thing to
+build in the port and an unnatural one to retrofit into the current SCAD.
+
+**Decision**
+
+**Resolved 2026-08-09 — with the question split in two, because it was conflating them.**
+
+**Scaling: intended, and already correct.** The existing buttress design is meant to scale
+with the cowl, and it does — every hard-coded placement in §4.3 is either an angle
+(dimensionless) or a fraction of `unit_width`, and the `z` stations are taken from `tail_len`,
+which scales. Nothing here needs changing and **the port must preserve it**: a placement
+re-expressed in absolute millimeters would reproduce U = 1 exactly and be wrong everywhere
+else, which is the failure mode this project has hit before and the reason the sweep is
+checked at four values of U rather than one.
+
+The single exception is `buttress.cut_thickness`, which is scale-independent **because it is a
+slicer tolerance rather than a part geometry parameter** — the same reasoning that resolved
+[OQ-DES-CW3](#open-questions). That also settles
+the question CW3 left hanging: the rib's thickness being constant across airframe sizes while
+its placement and extent scale is *deliberate*, not an oversight. A slicer tolerance has no
+business tracking the airframe.
+
+**Parametric placement: alternative 2 is rejected outright, alternative 3 stands, and its
+scope shrinks.** The unused fields stay — they are wanted, not dead. But note what the port
+is and is not being asked to do:
+
+- **In scope: making today's chosen placements data.** The angles and offsets of the existing
+  pattern move from SCAD literals into the buttress list, each entry scaled by `unit_width`
+  exactly as the literals are now. This is a transcription, verifiable against the current
+  geometry, and it makes the existing JSON fields live.
+- **Out of scope: choosing placements for a new OML.** There is no generalized algorithm for
+  siting buttresses on an arbitrary nose or tail, and none is claimed. That is a design
+  problem worth exploring later, and it is not a prerequisite for the port — a list of
+  placements is exactly the representation such an algorithm would eventually *write into*,
+  so building the list now is a step towards it rather than a detour around it.
+
+**Rationale**
+
+Given with the decision.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW5 — Elliptical or rounded-rectangle sections? — RESOLVED 2026-08-07
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+**Rounded rectangles**, on 10 of the 16 stations — including every station where a cowl
+meets structure. The question was posed on a misreading of the `.vsp3` (see §1.1), and the
+answer is better than the question: the OML is not an ellipse being reconciled to a square
+fuselage, it is **square by construction**, 0.1 × 0.1 m, exactly `unit_width` at U = 1.
+
+**Rationale**
+
+That carries into the port. The cowl's section and the cowling bulkhead's outer profile are
+the same shape derived from the same number, so they cannot drift — the same class of
+guarantee the greeble gets from being cut with `corner_end()`. A port that re-derives the
+cowl section independently of `unit_width` would silently break it.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW6 — Representing the slicer-generated rib in a solid model — RESOLVED 2026-08-09
+
+**Problem**
+
+The cowl's stiffening ribs do not exist in the CAD model. §4 establishes the
+mechanism: a buttress cuts a groove into the **outer** surface, and the slicer — walking a
+fixed perimeter count with zero infill — follows that notch inward and back out, laying
+down a **double wall projecting into the interior**. The rib is an emergent property of
+slicing a notched contour, not modeled geometry.
+
+Every solid-model use case therefore has a problem. An interior surface generated by
+offsetting the outer surface inward (§6.2) reproduces the notch but *not* the double wall
+that fills it. The resulting solid understates both the part's stiffness and its mass, and
+a structural analysis meshed from it would miss the entire stiffening structure — which is
+the reason the buttresses exist.
+
+Affects UC-4 (assemblies), UC-8 (analysis) and any mass estimate. Does **not** affect UC-1,
+because the printed part is produced from the outer surface and is correct as it stands.
+
+**Alternatives**
+
+1. **Model the rib explicitly** — generate the double wall as geometry where the notch is. Benefit:
+   the solid matches the printed part. Drawback: the rib's exact form depends on slicer settings —
+   perimeter count, extrusion width, the slicer's own corner handling — so the CAD would encode a
+   process-specific result.
+2. **Model a nominal rib** of stated thickness, not tied to a specific slicer. Benefit: captures
+   the structure for analysis without pretending to slicer fidelity. Drawback: the model is then
+   neither the CAD intent nor the printed reality.
+3. **Model the interior without ribs and record the omission.** Benefit: simplest. Drawback:
+   analysis is conservative in stiffness by an unknown margin, which is not the same as safe — a
+   conservative stiffness can be unconservative for buckling and for resonance.
+4. **Stop generating ribs by notching, and model them directly** — change the design so the rib is
+   real geometry and the slicer is not doing structural work. Benefit: removes the CAD/print
+   divergence at its source. Drawback: discards a mechanism that gets ribs for free with no support
+   material.
+
+**Recommendation**
+
+**Alternative 2, and treat alternative 4 as out of scope unless analysis shows the current design
+is marginal.** The notching mechanism is elegant and works; the problem is representational, not
+structural. A nominal rib gives UC-8 something to analyze and UC-4 something to assemble, and the
+honest thing is to state in the model where it diverges from the print.
+
+**Decision**
+
+**RESOLVED 2026-08-09 — alternative 2, and alternative 4 is ruled out on a ground the
+question did not know about.**
+
+**The notched rib implementation is to be kept, because it is what makes cowls printable in
+spiral vase mode.** That is the fact this question was missing, and it inverts the framing.
+Vase mode spirals a single continuous contour up the part: one wall per layer, no infill, no
+top or bottom, and **no interior geometry permitted at all**. Under that constraint a
+modeled rib is not merely unnecessary, it is *impossible* — any interior feature makes the
+part un-vase-printable. Notching the exterior is therefore not a workaround for the model
+lacking ribs. It is **the only mechanism that can put a rib inside a single-wall print**, and
+the design gets its stiffening for free, with no support material, no second wall, and no
+loss of the fastest and strongest-per-gram mode the printer has.
+
+So:
+
+- **Alternative 4 is rejected, not deferred.** "Stop generating ribs by notching and model
+  them directly" would trade the vase-mode capability for representational tidiness. The
+  drawback listed against it — "discards a mechanism that gets ribs for free" — turns out to
+  understate the cost by a long way, because what is discarded is a whole printing mode.
+- **Alternative 3 is rejected.** Recording the omission is not enough now that the rib's
+  thickness has a closed form (OQ-DES-CW3) and the rib is known to be the primary stiffening
+  structure of a single-wall part.
+- **Alternative 2 is adopted**, with alternative 1 available where fidelity is later shown to
+  matter. The rib is modeled at `2·w·n_perimeters + t_cut`, with `n_perimeters = 1` in vase
+  mode — refined 2026-09-04 by [OQ-DES-CW19](#open-questions) to `2·w·n_perimeters + t_cut / sin θ`,
+  measured in the layer plane, θ being the cut's angle to it and 90° for every vertical cut — which is the case that matters, and conveniently the case where the formula is least
+  ambiguous.
+- **The representational split is now a stated invariant, not a compromise.** §6.4 records it:
+  the print export stays the un-shelled notched blank, and the shelled-and-ribbed solid is a
+  downstream product for the other use cases. Two representations, one parametric source.
+
+**Rationale**
+
+**OQ-DES-CW3's resolution supplies the number this question was missing.** The rib's
+thickness is `2·w·n_perimeters + t_cut`, which is a closed form in two printer settings and
+one existing parameter — so alternative 2's "nominal thickness" no longer has to be invented,
+and alternative 1's slicer-specific geometry is a much smaller step than it looked. Its
+*depth* into the interior is still open: that is set by how far the slicer's contour walks
+into the notch before turning back, and it does not follow from the cut width alone.
+
+The catch is that `n_perimeters` **is not a parameter in this project** — `PrinterSettings`
+has only `extrusion_width` and `layer_height`, and the perimeter count lives in a slicer
+profile that is not in the repository. Modeling any rib at all therefore requires adopting
+it as a parameter first, which is the honest version of alternative 1's "the CAD would encode
+a process-specific result": the process value has to enter the model *somewhere*, and the
+choice is whether it does so explicitly or by a number written into the geometry code.
+
+*Amended 2026-08-09.* With OQ-DES-CW3 resolved, alternatives 1 and 2 have largely converged
+on the thickness axis — the "nominal" thickness and the slicer-faithful one are the same
+formula, and both need `n_perimeters` in the model. What still separates them is the rib's
+**depth** and its end conditions, where alternative 1 would have to model what the slicer's
+contour actually does at the ends of a notch and alternative 2 would state a depth and move
+on. The recommendation stands, on the narrower grounds that depth is where slicer fidelity
+gets expensive and stiffness is least sensitive to it.
+
+**Caveats**
+
+**This unblocks IP-FC-17 and IP-FC-23**, with a constraint attached that neither had: the
+interior-surface work must be additive to the existing blank rather than a replacement for
+it, and the sweep's printing output must be verifiable as unchanged by it.
+
+**What is still open, and it is small.** `n_perimeters` is not a parameter anywhere in the
+project (IP-FC-42), and the rib's *depth* into the interior — how far the contour walks into
+a notch before turning back — does not follow from the cut width. Neither blocks the port;
+both want one sliced cowl inspected in the slicer's preview to settle by observation.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW7 — Keeping the `.vsp3` and the exported OML in step — RESOLVED 2026-08-08
+
+**Problem**
+
+The cowl's outer surface is defined in
+[`cad/modular_sUAS_nose_tail.vsp3`](../../src/Fuselage/cad/modular_sUAS_nose_tail.vsp3) and
+consumed as `oml/vsp_nose.stl` (12 MB) and `oml/vsp_tail.stl` (24 MB). **Nothing connects
+them.** No check asserts that the committed meshes were exported from the committed model,
+no process re-exports when either changes, and the export is performed by hand in the GUI.
+
+The committed `.vsp3` is dated 2025-07-13 and the meshes 2025-07-12 and -13. Whether the
+model has been edited since is not determinable from the repository.
+
+The failure mode is silent and was nearly demonstrated during this document's own writing:
+a design document derived from the committed model can disagree with the designer's actual
+design, and there is no signal distinguishing "the document is wrong" from "the committed
+model is stale". Affects IP-FC-4 directly — exporting a STEP surface from a stale model
+would propagate the staleness into every downstream use case.
+
+**Alternatives**
+
+1. **Automate the export** — drive OpenVSP headlessly to regenerate the OML from the committed
+   `.vsp3` as part of the build. Benefit: the two cannot drift. Drawback: adds OpenVSP as a build-time
+   dependency.
+2. **Check rather than automate** — store a hash of the `.vsp3` alongside the exported OML and fail
+   a verification run when they disagree. Benefit: much smaller. Drawback: detects the problem rather
+   than preventing it.
+3. **Stop committing the meshes** , and treat the `.vsp3` as the only source. Benefit: removes 36
+   MB and the possibility of disagreement by construction. Drawback: nobody can build a cowl without
+   OpenVSP installed.
+
+**Recommendation**
+
+**Alternative 2 now, alternative 1 with IP-FC-4.** The hash check is small enough to do immediately
+and converts a silent failure into a loud one; automating the export is the real fix.
+
+**Decision**
+
+**RESOLVED 2026-08-08 — both delivered, in [`oml_export.py`](../../src/Fuselage/tools/oml_export.py).**
+
+- **Alternative 1, automation:** the tool drives the committed `.vsp3` headlessly through
+  the OpenVSP Python API. The OML is now *derived* from the model rather than hand-exported
+  from a GUI session, so the two cannot silently diverge in the first place.
+- **Alternative 2, detection:** `--check` compares a SHA-256 of the committed `.vsp3`
+  against the hash recorded in `oml/oml_provenance.json` at export time, and exits
+  non-zero when they disagree.
+
+**Rationale**
+
+Two properties of the check worth keeping:
+
+- **It does not import the OpenVSP API.** A provenance check has to be runnable in CI, or
+  by anyone, without OpenVSP installed — otherwise only the people who could already
+  regenerate the file are able to detect that it is stale.
+- **It was tested in both directions and on its exit code.** Current → `OK`, exit 0;
+  perturbed hash → `STALE` naming both hashes, exit 1. The first attempt reported the
+  failure but exited 0, because a `grep` in the test pipeline masked the status — a check
+  that prints a failure and exits clean is useless to CI.
+
+**Caveats**
+
+**One thing this does not yet close.** The 36 MB of `.stl` remains, because OpenSCAD cannot
+import STEP and the OpenSCAD path still consumes it. The meshes disappear at IP-FC-34, when
+that path is retired — not before.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW8 — The factor of two in the buttress extrude — RESOLVED 2026-08-18
+
+**Problem**
+
+*Raised and resolved 2026-08-18, split out of [OQ-DES-CW3](#open-questions), which flagged the
+discrepancy rather than settling it.*
+
+`buttress.thickness` is `0.05` in both parameter files and as the literal
+default in both drivers, but all four modules that build a cutting prism extrude it as
+`linear_extrude(height=2*buttress_thickness, center=true, ...)` — `top_buttress` at
+`scad/cowl_geometry.scad:310`, `top_diag_buttress` at `:324`, `side_buttress` at `:338` and
+`bottom_buttress` at `:354`. No call site omits the doubling. So the groove cut into every
+cowl this repository has produced is **0.1 mm wide, twice what the parameter says**, and the
+rib the slicer builds on it is $2wn + 2t$ rather than $2wn + t$ — a difference of exactly
+0.05 mm of rib thickness, independent of extrusion width and perimeter count, because the cut
+and the perimeters are additive terms rather than factors. All lengths here are millimeters:
+the cowl generator is the OpenSCAD path, to which the project's SI convention does not apply.
+
+**Alternatives**
+
+1. **Declare the doubling intentional and fold it into the value.** Set the parameter to `0.1` and
+   change the four extrudes to `height=buttress_cut_thickness`. Benefit: geometry is bit-identical to
+   what is printed today, so no existing part is invalidated and the port's OpenSCAD-versus-FreeCAD
+   equivalence checks stay green. Drawback: the stored value changes, so any external note or slicer
+   profile that records "0.05" as the buttress setting no longer matches the file.
+2. **Declare the doubling intentional and name the parameter for what it is.** Keep the value at
+   `0.05` and the `2*` in the extrudes, and rename to `buttress_cut_half_thickness`. Benefit: geometry
+   bit-identical. Drawback: keeps a bare factor of two in four places, which is the thing that made
+   this hard to read in the first place.
+3. **Declare it an error and remove it.** Change the four extrudes to
+   `height=buttress_cut_thickness`, leaving the value at `0.05`. Benefit: the parameter and the
+   geometry agree at the value that was actually written, which is the reading a fresh eye takes.
+   Drawback: changes the geometry of every cowl.
+4. **Carry both readings through the port behind a switch, and decide from parts.** Reproduce the
+   doubling by default, expose the alternative, print a cowl each way and compare rib thickness and
+   stiffness. Benefit: replaces an argument about intent with a measurement of consequence, which is
+   the only way the *right* value — as opposed to the *original* value — gets established. Drawback:
+   the most work by a wide margin, for a 0.05 mm difference that is under half a single 0.4 mm
+   extrusion bead.
+
+**Recommendation**
+
+**Alternative 1.** It is the only option that changes no geometry while removing the actual defect,
+which is that a parameter's name and its effect disagree by a factor of two. It does not require
+the original intent to be recovered, because it does not claim to know whether `0.05` or `0.1` was
+meant — it records what the tool has always cut, which is the one thing that is not in doubt.
+
+**Decision**
+
+**Resolved: fold the doubling into the value.** The parameter becomes `0.1` and the four
+extrudes become `height=buttress_cut_thickness`. The extruded height is unchanged at 0.1 mm,
+so **no geometry moves** — every cowl the repository has ever produced still comes out
+identical, and the parts that were flown remain reproducible from the files.
+
+**Rationale**
+
+**Why this rather than keeping `0.05` with a `2*` and a `_half_thickness` name.** That
+alternative is equally geometry-preserving and equally honest about what the parameter denotes,
+so the choice does not turn on either. It turns on two narrower points. First, the rib formula
+is $t_{\text{rib}} = 2 w_{\text{extrusion}} n_{\text{perimeters}} + t_{\text{cut}}$, and
+`buttress_cut_thickness` at `0.1` **is** $t_{\text{cut}}$ — the formula can be evaluated
+straight from the parameter file, where a half-thickness cannot without knowing to double
+first. Second, it removes the factor of two from the code entirely rather than leaving it
+alive at four sites that must stay in step. The cost accepted in exchange is that the stored
+number changes, so any external note or slicer profile recording "0.05" as the buttress
+setting no longer matches the file.
+
+**Caveats**
+
+**What this does not decide.** It does not recover what the person who wrote `0.05` intended,
+and it does not claim the 0.1 mm cut is the *right* cut. It records what the tool has always
+cut, which is the one part that was never in doubt. Whether 0.1 mm is the correct groove width
+is a separate question, answerable only by printing a cowl each way and measuring rib
+stiffness, and worth reopening only if the rib turns out to govern a structural margin — which
+would also require `n_perimeters` to become a real parameter, since it currently lives only in
+the slicer profile, outside the repository.
+
+*A textual check cannot verify this, and the reason is worth recording.* `scad_snapshot.py`
+compares generated `.scad` text, which names the library by path and contains none of its
+text — so the removal of the `2*` inside `cowl_geometry.scad` is invisible to it, while the
+rename changes the module signature and makes it report DIFF by construction. It is wrong in
+both directions at once. `verify_scad_change.py` is no better here: it re-renders the
+`.stl.scad` files already in the output tree, and those pin the *old* signature. Only
+`verify_sweep_change.py` reaches this class of change, because it runs the real sweep and
+compares measured geometry, letting signatures and generated text move freely while the solid
+must not. It reported both cowls identical against `variant_output_baseline`, and a control
+run with the change stashed reproduced its output exactly. `verify_drivers.py` covers the
+remaining gap — the hand drivers, which no other tool renders — and passed warning-free, a
+warning being the only signal a missed rename gives, since a bare identifier with no matching
+variable evaluates to `undef` rather than failing.
+
+**Where it is recorded**
+
+**Implementation.** Folded into **IP-FC-29**, which is already renaming `buttress.thickness` to
+`buttress_cut_thickness` across the JSON schema, `ButtressSet` and the SCAD signatures; the
+rename and this change are one edit to the same call sites. **Done 2026-08-18.**
+
+### OQ-DES-CW9 — Where does `n_perimeters` belong, and what is it for a part that is not vase-printed? — RESOLVED 2026-08-18
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+**Decision: a `slicing` group, holding a perimeter count per part.** Not one figure for the
+airframe — that would assert a constraint between independently sliced parts that does not
+exist. The group names a count for each part kind, and the couplings are expressed where they
+actually are and in the direction they actually run.
+
+**`cowl_n_perimeters` has three consumers, and it is the *cowl's* count in all three** — the
+bulkhead's own perimeter count is irrelevant to any of them, because each of these dimensions
+is sized around the wall of the cowl:
+
+1. **The cowl's rib thickness**, $2 w n + t_{\text{cut}}$ (OQ-DES-CW3), for whenever the rib is
+   modeled (IP-FC-17, IP-FC-23). Until a count is fixed the rib has no single thickness: 1.3 mm
+   at one perimeter against 3.7 mm at three, on the only stiffening structure the part has.
+2. **The cowling bulkhead's flange radius**, which becomes
+   `corner_radius - cowl_n_perimeters * extrusion_width - cowl_flange_tolerance`. Named for
+   whose count it is, so nobody later reads it as the bulkhead's own.
+3. **The nose cowl's base offset** — the `offset(r = -nose_flange_inset)` that insets the
+   projected OML outline to form the base flange in `nose()`.
+
+**One sub-choice was left open, and it was the only thing blocking consumer 3. Settled
+2026-08-21, and the geometry did not move.** `nose_flange_inset` is **0.5 mm** and one
+extrusion width in the sweep is **0.6 mm**, so unlike the flange radius — where substituting
+`cowl_n_perimeters = 1` is byte-identical — the base offset had to be shown to be a function
+of the perimeter count before it could be written as one. It is: the nose shape seats on top
+of the cowl's perimeter shell and is bonded there, and the inset is what gives that joint its
+alignment and its bonding surface. The offset is therefore
+`cowl_n_perimeters * extrusion_width + nose_flange_tolerance` with
+**`nose_flange_tolerance = -0.1`**, which at the sweep's 0.6 returns exactly the 0.5 mm every
+nose cowl has been built with. The literal is gone, the parameterization now says what the
+number depends on, and **no face moved** — verified across all 576 variants with no existing
+parameter changing value. `design_constants.json`'s blanket refusal of negative tolerances was
+removed to allow it, on the grounds that the assumption behind the rule had never been checked.
+Recorded in full as [OQ-DES-CW10](#open-questions).
+
+**Rationale**
+
+**The problem.** `n_perimeters` sets how many loops a slicer walks around a contour, and this
+project's geometry depends on it in three places. It could not go into `PrinterSettings`, which
+declares itself *"properties of the machine, not of the design"* — a perimeter count is neither.
+Nor is it a property of a part: **spiral vase is a mode these cowls support, not the only way
+they are printed**, so the same cowl is 1 perimeter on one build and 3 on another. And parts are
+sliced independently, so a corner's count has nothing to do with a cowl's.
+
+**It also already had a consumer, unnamed.** The cowling bulkhead's flange radius is written
+
+```openscad
+circle(r = corner_radius - extrusion_width - cowl_flange_tolerance)
+```
+
+in `fuselage_bulkhead_geometry.scad`. That lone `extrusion_width` is the radial room left for
+the cowl's wall so the cowl's outer surface lands on the mold line — so the bulkhead hard-codes
+**the cowl's** count at 1, with the `1` written nowhere. At 0.6 mm extrusion width a cowl
+printed at three perimeters puts an 1.8 mm wall into a 0.6 mm gap: **1.2 mm of interference**,
+six times the `cowl_flange_tolerance` that exists to absorb print variation.
+
+**A wrong turn is recorded here because it was convincing and it was wrong.** This note
+originally argued that `0.5 = 0.4 + 0.1` — one perimeter at the hand drivers'
+`extrusion_width = 0.4`, plus the 0.1 mm `panel_tolerance` uses — and concluded from that
+apparent provenance that the sweep's offset "should" be `1 × 0.6 + 0.1 = 0.7 mm`, leaving the
+flown parts 0.2 mm tight. **The 0.4 is a development test value.** It was never a tuned
+parameterization, so an expression that lands exactly on it carries no information at all, and
+the whole inference was arithmetic dressed as evidence. The sweep's parameterization is the
+correct one and the only one any dimension here should be reasoned about through.
+
+The related temptation, equally wrong, was to reach for `cowl_flange_tolerance = 0.2` on the
+grounds that the cowl-to-bulkhead joint is the same kind of bonded lap. It is the same kind of
+joint and **not the same fit** — which is exactly why the two are separate parameters, and why
+neither one's value may be inferred from the other's.
+
+**Caveats**
+
+**What does not change.** The perimeter count for any solid part remains unrecorded and must
+not be invented — there is still no slicer profile in the repository. The `slicing` group gets
+a cowl entry because the cowl's count has consumers; other kinds get entries when theirs do.
+
+**Where it is recorded**
+
+*Implementation: IP-FC-42.*
+
+### OQ-DES-CW10 — Is the nose cowl's base offset a function of the nozzle? — RESOLVED 2026-08-21
+
+**Problem**
+
+**Problem.** The nose cowl is a thin shell that caps the front of the fuselage. Its aft end
+finishes in a **base flange**: the outer-mould-line outline at that station is projected flat and
+then inset by a fixed distance, and that inset ring is extruded to make a lip that seats inside the
+mating cowling bulkhead. The inset distance is `nose_flange_inset`, applied as `offset(r =
+-nose_flange_inset)` in `nose()` in `cowl_geometry.scad`.
+
+**Alternatives**
+
+1. **Keep the interference reading — tolerance = −0.1, offset stays 0.5.** *(Implemented.)* Every
+   part keeps the geometry it has flown with, and the value is at least now written as a function of
+   the things it depends on rather than as a bare literal. Drawback: * it asserts, in
+   `design_constants.json`, that this joint is a deliberate interference fit, and nobody has
+   established that — it was chosen because it reproduced the existing number, which is the same
+   reasoning that produced the un-provenanced literal in the first place.
+2. **Adopt the clearance reading — tolerance = +0.1, sweep offset becomes 0.7.** Matches the 0.4 +
+   0.1 provenance, reproduces the hand drivers' 0.5 at their own nozzle by construction rather than by
+   coincidence, and puts the joint on the same 0.1 mm clearance every other printed fit in the project
+   uses. Drawback: * it moves a face by 0.2 mm on a part that has flown, so every nose cowl must be
+   re-rendered and the departure recorded in the baseline ledger.
+3. **Decouple it — keep 0.5 as an independent fit dimension.** The third reading from OQ-DES-CW9,
+   never excluded: the base flange seats against a bulkhead face, and how far it is inset may have
+   nothing to do with how thick the cowl wall is. Drawback: * it returns the number to having no
+   derivation at all, which is the exact failure OQ-DES-CW8 cost a bisect and a measurement to undo.
+4. **Measure it.** Print a nose cowl and its mating cowling bulkhead and check the fit at both 0.5
+   and 0.7 mm. Benefit: * the only alternative that produces evidence instead of rereading the same
+   arithmetic. Drawback: * needs machine time and a mating bulkhead, and the nose cowl is a large slow
+   print.
+
+**Recommendation**
+
+**Alternative 1 stands as the interim** — it is implemented, it is the only option that does not
+move a flown face, and reversing it later costs a re-render rather than a redesign. But it should
+be understood as *deferring* the question, not answering it: the `why` text in
+`design_constants.json` currently states the interference reading as settled fact, and that
+overstates what is known.
+
+**Decision**
+
+**Answer: yes.** The nose shape seats on top of the cowl's perimeter shell and is bonded
+there — the same kind of lap joint the cowl makes when it slides onto the cowling bulkhead's
+flange. The inset is what gives that joint both its **alignment** and its **bonding surface**,
+so it is a function of the shell it lands on, and therefore of the perimeter count and the
+extrusion width. `cowl_n_perimeters * extrusion_width + nose_flange_tolerance` is the right
+form, which is what IP-FC-42 implemented.
+
+**The value is `nose_flange_tolerance = -0.1`, and the geometry does not move.** At the
+sweep's `extrusion_width = 0.6` and one perimeter that gives 0.5 mm, which is what every nose
+cowl has been built with and what it should be built with. **The sweep's parameterization is
+the correct one**; expressing the offset through it was the whole point, not a step toward
+changing it.
+
+**Rationale**
+
+**A negative fit and a bonded joint are not in conflict**, which is where this question went
+wrong. The alignment fit and the bond are not the same surface: the inset locates the parts,
+and the joint is glued on the face it seats against. Reading the sign of the fit as though it
+decided whether the joint could be bonded is the error, and it is recorded here because it is
+easy to make again.
+
+**Caveats**
+
+**Two things must not be carried forward from the analysis that produced this question.**
+
+1. **`0.5 = 0.4 + 0.1` is not provenance.** The hand drivers' `extrusion_width = 0.4` is a
+   **development test value**. It was never an official tuning, so a decomposition that lands
+   exactly on it is a coincidence of leftover test numbers. That arithmetic was treated here
+   as the strongest evidence available and it was worth nothing — it is the reason this
+   question twice concluded the sweep's offset should be 0.7 mm, which is wrong. No dimension
+   in this project should be reasoned about through the 0.4 figure.
+2. **`cowl_flange_tolerance` does not set this value.** The cowl-to-bulkhead joint and the
+   nose base joint are both glued, and their **fits are different**. That is precisely why
+   they are two parameters rather than one, and the 0.2 mm on the other joint says nothing
+   about this one.
+
+**Where it is recorded**
+
+*Implementation: IP-FC-42, complete — no re-render, no baseline departure.*
+
+### OQ-DES-CW11 — Which group does the overhang angle belong in? — RESOLVED 2026-08-21
+
+**Problem**
+
+**Problem.** `cone_angle` is **35**, in degrees.
+[OQ-DES-CW2](#open-questions) resolved what it measures: the **overhang angle
+from the print bed** — the shallowest a face may lean and still print without support. It shapes
+three things in `cowl_geometry.scad`, and all three are the same instruction to the slicer:
+
+**Alternatives**
+
+1. **`printer`, as IP-FC-28 states.** It is the existing plan of record and no schema work is
+   needed beyond the move. Drawback: * it contradicts the group's own stated membership rule, which
+   then has to be either rewritten or quietly broken — and rewriting it to admit process would give up
+   the distinction that makes `printer` useful, since `extrusion_width` and `layer_height` really are
+   nozzle-and-machine facts.
+2. **`slicing`, beside `cowl_n_perimeters`.** It is honestly process rather than machine, and the
+   group was created for exactly that gap. Drawback: * `slicing._about` says *"How a part is SLICED...
+3. **A new group — `process`, or `material`.** Follows OQ-DES-CW9's precedent exactly: a quantity
+   that is neither machine nor design nor per-part slicing gets named for what it is. Drawback: * a
+   third group for one value, and the boundary between "process" and "slicing" will need stating
+   clearly enough that the next parameter does not have to ask this question again.
+4. **Leave it in the two cowl parameter files.** No work, and no risk of putting it in the wrong
+   group. Drawback: * it stays written twice with nothing tying the copies together, which is the
+   defect the constants file exists to remove — and it fails the membership test the file states, so
+   the file stops being trustworthy about its own contents.
+
+**Recommendation**
+
+**Alternative 3, a new group named for the process.** `printer` excludes it by its own words, and
+alternative 1 can only be taken by weakening the one rule that makes that group meaningful.
+`slicing` is closer but its stated scope is per-part slicer choices and its validator is built for
+counts, so alternative 2 costs a schema exception on the first key that follows the precedent it
+would be bending.
+
+**Decision**
+
+**Decision: alternative 2, the `slicing` group.** Choosing an overhang angle is a slicing
+concern. It is not a property of the machine, so `printer` was wrong for it — that group's
+own rule is *"the same airframe printed on a different nozzle wants different numbers here and
+no other change"*, and this number does not move with the nozzle. `slicing` already exists for
+quantities that are neither machine nor design, which is what OQ-DES-CW9 created it for.
+
+**Two consequences for the schema, both landed.**
+
+1. **`slicing` is no longer one kind of quantity, so the validator is per key.** A perimeter
+   count is a whole number of loops; an overhang angle is continuous. One rule cannot serve
+   both — "positive number" would admit half a perimeter, "whole number" would refuse 35.5° —
+   so `_check_slicing` dispatches on the name, and a name with no rule is **refused** rather
+   than passed through unchecked. The angle is required to lie strictly between 0 and 90:
+   0 is a flat ceiling with no slope to print, the geometry divides by its tangent, and 90 is
+   a vertical wall needing no relief.
+2. **`slicing` is not uniformly per part.** A perimeter count is, because parts are sliced
+   independently. An overhang angle is a limit of the process and applies to whatever is being
+   printed. The group's `_about` says so rather than leaving the CW9 wording to be read as a
+   rule it was never meant to be.
+
+**Rationale**
+
+**And it is not a free parameter, which matters more than the group does.** Being categorically
+a slicing setting does not make this one safe to re-tune whenever the material or the perimeter
+count changes:
+
+- **It has to agree with where the break line between the nose and the cowl falls.** The angle
+  and the split location are two halves of one decision about how the part comes off the bed.
+- **Changing it means adjusting the buttresses to match**, since `buttress_shape()` builds
+  every leading and trailing ramp from `r_inset * tan(angle)`.
+- **As the nose is currently designed, the angle is baked into the part.**
+
+**Nothing in the code enforces either coupling.** Both are geometry a person would have to
+move by hand, so editing this value alone yields a part that builds, renders, passes every
+check this project has, and is wrong. That is why the constant carries the warning rather than
+just the number — the group tells a reader what kind of thing it is, and only the entry can
+tell them what else has to move with it.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+**Renamed, and moved from four places to one.** `cone_angle` said what it happened to build
+rather than what it means; it is now `overhang_angle_from_bed`, which states the reference
+frame OQ-DES-CW2 had to establish. It was written out four times — twice in the cowl parameter
+files and twice in the hand drivers — and is now a single entry in `design_constants.json`.
+
+**Verified geometry-neutral**, as a rename must be: all seven GUI drivers render the same
+131,506 triangles before and after, compared as sorted facet sets rather than bytes, and the
+sampled sweep agrees on every cowl. `audit_call_args.py` reports no positional mismatch across
+the renamed signatures.
+
+*Implementation: IP-FC-28, complete.*
+
+### OQ-DES-CW12 — What measures whether a ported part is correct, now that volume cannot — RESOLVED 2026-09-09
+
+**Problem**
+
+**Problem.** The FreeCAD port checks each part it builds by comparing the volume of material it
+encloses against the volume of the same part built by the existing OpenSCAD generator, and accepts
+the part when the two agree to within 0.010%. IP-FC-12 records the boom bulkhead passing at
+0.00110%.
+
+**Alternatives**
+
+1. **Measure the volume enclosed by the triangles instead.** Convert the finished solid to a
+   triangle mesh at the tessellation setting the export already uses, and sum the volume those
+   triangles enclose. Benefit: it is the same quantity the OpenSCAD side reports, since that side is
+   triangles all the way down, so the comparison becomes like-for-like rather than
+   surface-against-triangles. Drawback: the answer depends on the tessellation setting, so the
+   tolerance has to be stated against a fixed one.
+2. **Compare the surfaces directly, with `tools/surface_distance.py`.** Ask how far the ported
+   surface lies from the reference surface at its worst point. Benefit: it answers the question the
+   tolerance is really asking — has the shape moved — in millimeters, which is inspectable against a
+   print tolerance. Drawback: it needs a reference mesh for every part, which only the cowls currently
+   have.
+3. **Keep `Shape.Volume` but loosen the tolerance for freeform parts.** Benefit: no new code.
+   Drawback: the loosened tolerance would have to be about 10%, which is wide enough to admit a badly
+   wrong part.
+4. **Compare cross-sectional areas at stations along the part.** Benefit: localizes a disagreement
+   instead of reporting one number, which would have shortened this investigation considerably.
+   Drawback: substantially more code.
+
+**Recommendation**
+
+Alternative 1, because it makes the two sides of the comparison the same kind of measurement, and
+it is the smallest change. Alternative 2 is worth adding afterwards for the cowls specifically,
+since a cowl is a shape rather than an assembly of features and "the surface has not moved by more
+than *x* mm" is the statement that actually matters for one.
+
+**Decision**
+
+**Both recommended alternatives are in the codebase, not just the recommendation.** Alternative
+1 — tessellated volume in place of `Shape.Volume` — is what every cowl comparison in IP-FC-12
+and IP-FC-13 has run on since 2026-08-31: the nose cowl and tail agreements quoted there
+(**−0.0000%**, **+0.0136%** and the rest) are all tessellated figures, and the 0.02 mm export
+deflection this item measures convergence against is the same value `build_part.py` exports
+the cowls at.
+
+**Rationale**
+
+Alternative 2 — comparing surfaces directly rather than volumes — was also built and promoted,
+under IP-FC-33: [`mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) samples the
+mesh against the B-rep surface and reports **max 0.000158 mm, mean 0.000025 mm** over 300
+points on a matching part against 57.310369 mm on a mismatched one — five orders of magnitude
+of separation, and it is now the tier IP-FC-33 records as strongest for exactly the reason this
+item gives: it never tessellates the B-rep side, so FreeCAD's own mesher never enters the
+comparison as a third variable.
+
+Alternative 3 was not adopted, for the reason already given: a tolerance loose enough to
+absorb `Shape.Volume`'s error is loose enough to miss a real defect.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+*Implementation: [`freecad/mesh_to_brep.py`](../../src/Fuselage/freecad/mesh_to_brep.py) (surface
+distance) and the tessellated-volume checks throughout [IP-FC-12](../implementation/freecad_migration.md), [IP-FC-13](../implementation/freecad_migration.md) and [IP-FC-33](../implementation/freecad_migration.md).*
+
+### OQ-DES-CW13 — Where the tail's folded aft closure gets fixed — RESOLVED 2026-09-10
+
+**Problem**
+
+**Problem.** The tail's outer surface is exported from OpenVSP as twelve freeform patches.
+Four of them — the flat closure across the aft opening — are malformed. All four lie in a
+single plane, as a flat closure should, but the mathematical description **doubles back on
+itself**, covering part of that plane twice, facing opposite ways.
+
+Measured 2026-08-31. On those four patches the surface's facing direction reverses across a
+contiguous band covering a quarter to a third of the patch. The reversals are real rather than
+numerical noise: they occur where the surface is well-conditioned (a well-behaved region
+scores about 0.89 on the relevant measure; the reversed samples score 0.43, and only 9 of
+roughly 120 lie on the patch edge, which is the one place a reversal would be meaningless).
+Every other patch on the tail, and every patch on the nose — **including the nose's own aft
+closure, the same kind of feature** — shows zero reversals.
+
+The consequence is that cutting operations fail near the tail's aft end. Cutting the tail
+blank with a cylinder passing through it returns *nothing* at 9 of 20 tested positions, all in
+the upper half; the general-purpose splitting operation returns 3 pieces where a sound solid
+gives 4; and relaxing the tolerance to 0.001 mm and 0.01 mm changes neither. The tail cowl is
+built by cutting buttress tools out of this blank, so as it stands this blocks the tail cowl.
+
+**No export setting avoids it.** Of the STEP options the model carries, only surface splitting
+changes what `ExportFile` writes — merge-points, representation and tolerance produce a
+byte-identical file, matching the behavior already recorded for `CADLenUnit` in
+`tools/oml_export.py`. Splitting is what creates the closure patches at all: with it off, each
+part exports as a single uncapped surface that cannot be closed into a solid. So there is no
+setting that yields a closed tail without yielding these four patches.
+
+**Alternatives**
+
+1. **Rebuild the closure when the surface is imported.** Discard the four patches and close the
+   opening with one flat face built from the boundary the remaining eight leave behind. Benefit:
+   measured 2026-08-31 to fix the cutting failures completely — 0 of 20 positions fail, against 9
+   before — and to be shape-preserving: the repaired solid encloses 594449.974 mm³, identical to the
+   original. Drawback: the repository's surface no longer matches what OpenVSP wrote, so a reader
+   comparing them finds a difference that only the importer explains.
+2. **Fix the closure in the `.vsp3` model.** Change how the tail's aft end is built so the exporter
+   produces a sound closure. Benefit: fixes it at the source, so every consumer benefits and no
+   importer carries a special case. Drawback: it is not yet known what in the model provokes it, so
+   the work is open-ended.
+3. **Trim the aft end away before use.** The tail cowl is open at both ends (§6.2), so the closure
+   may be cut off by the part's own trimming before any buttress is cut. Benefit: no repair code at
+   all, if it holds. Drawback: it has not been shown to hold — it depends on where `cut_len` falls,
+   and it would silently stop holding if that changed.
+4. **Export IGES instead of STEP.** `oml_export.py` already supports it. Benefit: a different
+   exporter path might not produce the fold. Drawback: entirely unknown whether it helps.
+
+**Recommendation**
+
+Alternative 1, and it is what the port uses, because it is measured, small, reversible, and
+provably does not change the shape. Alternative 2 is the durable fix and should follow once the
+port is running, at which point there is a working comparison to verify a model change against —
+which there is not today.
+
+**Decision**
+
+Alternative 1, as recommended and already implemented.
+
+**Rationale**
+
+Given with the recommendation.
+
+**Caveats**
+
+**Alternative 2 update (2026-09-09).** The provoking feature this alternative's own prerequisite asked for has been found and confirmed causally, not just correlated. `Tail`'s `XSecSurf` has 4 stations: `XS_POINT`, `XS_ROUNDED_RECTANGLE`, `XS_ROUNDED_RECTANGLE`, `XS_POINT` -- the aft closure sits at the last, a point. Surveying every station's skinning-continuity group (OpenVSP container `SkinXSec`, holding `AllSym`/`TBSym`/`RLSym` and the four sides' tangent angle and strength) across **both** `Nose` and `Tail` finds exactly one asymmetric station in either component: **`Tail` station 2**, the rounded-rectangle immediately before the aft point --
+
+    Top(angle=0.0deg, strength=0.75)   Bottom(angle=-30.0deg, strength=1.25)
+    Left(angle=-12.5deg, strength=3.00) Right(angle=-12.5deg, strength=3.00)
+
+Left and Right agree with each other; Top and Bottom do not, by 30 degrees and a factor of 1.67
+in strength. Every other station in both components -- including `Nose`'s own point-terminated
+aft end, the "same kind of feature" that exports clean -- has Top = Bottom = Left = Right
+exactly, angle and strength both.
+
+**A name collision in OpenVSP's own parm set nearly hid this.** `GetXSecParmIDs` returns two
+unrelated parms both named `AllSym` (and `TBSym`, `RLSym`) on every station: the skinning
+group above (container `SkinXSec`) and an always-inert Chevron group (container `Ellipse`,
+`Chevron_Type = 0` on every station checked). A name-keyed dict over the returned parm IDs
+silently keeps whichever comes last, which is the Chevron one -- so a first attempt to test
+this by setting "`AllSym`" to 1 and re-exporting changed nothing, because it was toggling a
+flag with no effect on the geometry. Disambiguating by `GetParmContainer`/`GetContainerName`
+rather than by name alone is what finds the real parm.
+
+**Confirmed causal, not merely correlated.** Two exports of `Tail` alone, otherwise identical:
+setting the real `SkinXSec.AllSym` parm to 1 on station 2 (which propagates Bottom, Left and
+Right to Top's values -- 0.0deg, strength 0.75, all four sides) and re-exporting removes the
+fold entirely.
+
+| export | faces | folded faces | volume |
+| --- | --- | --- | --- |
+| unmodified | 12 | **4** (`[8, 9, 10, 11]`, exactly the closure `repair_closure` already targets) | -17970.614 |
+| station 2 symmetrized | 12 | **0** | -18100.276 |
+
+The volume moves 0.72% -- this is a real model change, not a repair confined to the importer,
+which is exactly alternative 2's own tradeoff as originally stated: it fixes the export at the
+source but changes the airframe definition, invalidating the recorded provenance hash and every
+already-exported artifact.
+
+**This does not change the recommendation, and is not itself an instruction to make the change.**
+Alternative 1 remains adopted and is unaffected -- it is shape-preserving and already shipped.
+What this finding does is remove alternative 2's own prerequisite ("finding the provoking
+feature, which needs an experiment") and its stated blocker ("not yet known what in the model
+provokes it, so the work is open-ended"). The recommendation's original condition for revisiting
+alternative 2 -- "once the port is running, at which point there is a working comparison to
+verify a model change against" -- is now met, since [OQ-DES-CW17](#open-questions) closed with
+the tail correct across the full swept range. Whether to actually flatten station 2's tangent
+asymmetry in the `.vsp3` is a decision about the airframe definition, not a drawing or port
+question, and is not made here.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW14 — Should the buttress positions be editable values? — WITHDRAWN 2026-08-31
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Why withdrawn**
+
+**Withdrawn: already decided, and the framing was wrong.**
+[OQ-DES-CW4](#open-questions) resolved this on 2026-08-09 — *"the full fix wants a list of
+buttress placements rather than a fixed set of named groups"*. Placement becomes data at the
+port. There was nothing left to ask.
+
+Two things were wrong with asking it again. It re-opened a settled decision, which costs a
+reader the work of re-deciding something the document already answers. And by offering "keep
+them in the code" as an alternative and questioning whether the present angles are "deliberate
+or incidental", it put the rib layout itself up for negotiation. **The ribs are designed
+structure.** They are the cowl's only internal load path, and the mechanism that produces them
+under a print mode that admits no other (§4, §6.4). Nothing about the port removes, moves or
+reconsiders them.
+
+**Where it is recorded**
+
+*Implementation: the eleven tail placements and the nose's one become sheet rows under
+IP-FC-12, per CW4.*
+
+### OQ-DES-CW15 — How much of a cowl document should survive changing the outer shape? — WITHDRAWN 2026-08-31
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Why withdrawn**
+
+**Withdrawn: speculative.** It asked what a cowl document should do if the aircraft's outer
+shape were replaced. No such shape exists or is planned; the question invented a scenario and
+asked for a decision about it, which is design effort spent on something that may never happen
+and a decision made without the case that would inform it.
+
+The nose tip's lip is derived from the outer surface the model actually has, which is what §1
+establishes as the definition. If the airframe is ever reshaped, cowls are regenerated — the
+OML provenance record ([OQ-DES-CW7](#open-questions)) already exists to make that change
+visible, and it is the point at which a real question could be asked with a real case behind
+it.
+
+### OQ-DES-CW16 — Should the cowl construction move off scripted booleans, onto stock objects plus `BooleanFuzzy = 0` (alternative 6), so a `.FCStd` re-solves in stock FreeCAD? — RESOLVED 2026-09-21
+
+**Problem**
+
+A cowl is made by cutting slots into the aircraft's outer surface. The outer surface arrives as a
+NURBS solid (the tail's is nine faces of degree 5×3 with 139 control points along the body). The
+slots are 0.1 mm wide and do not scale with the aircraft — they are fold lines for vase-mode
+printing, not gaps, and two of the tail's eleven slots cross each other inside the solid at ±30°.
+
+**Alternatives**
+
+1. **Keep the scripted object; ship documents that display but do not re-solve.** The geometry is
+   right, the parameter sheet and the whole feature tree are visible and inspectable, and anyone
+   regenerating a variant does it through the sweep, which works. Benefit: nothing to install, no
+   geometry compromise, no further work. Drawback: a recipient cannot change `U` in the GUI and get a
+   new part.
+2. **Ship the cowl modules as a FreeCAD addon.** Place them under a FreeCAD `Mod` path so the
+   restore is permitted. Benefit: fully live documents — open, change `U`, recompute. Drawback: makes
+   the project a FreeCAD extension, which is a deployment posture the project has not chosen.
+3. **Widen the slots until the document booleans cope.** The failure is specific to 0.1 mm
+   features. Benefit: a fully stock document with no scripted objects at all. Drawback: changes the
+   printed part.
+4. **Build against a FreeCAD that does not apply automatic fuzz.** **This is a known upstream
+   regression, identified 2026-09-01.** FreeCAD [PR
+   #17119](https://github.com/FreeCAD/FreeCAD/pull/17119), merged October 2024 and shipped in 1.1,
+   made every boolean in every core workbench apply an automatic fuzzy value computed as `BooleanFuzzy
+   × Precision::Confusion() × size of the part in mm`. Benefit: the only alternative that gives up
+   nothing — correct geometry, a document that re-solves in stock FreeCAD, no addon, no design change,
+   and nothing of this project's placed inside FreeCAD. Drawback: 26.3 is not released — it is planned
+   for Q4 2026 under the new CalVer scheme and its release-notes page still carries a placeholder date
+   — so this is a wait unless a weekly development build is used.
+5. **Flatten the boolean nodes when the document is saved** , replacing each with a plain
+   `Part::Feature` holding its computed shape, and keep the sketches, spreadsheet and expressions.
+   Benefit: opens anywhere with no errors and no install. Drawback: gives up re-solving deliberately
+   rather than accidentally — the same capability as alternative 1, presented honestly instead of as a
+   broken node.
+6. **Build the cowls from stock objects, and set `BooleanFuzzy = 0`.** Add the key `BooleanFuzzy`
+   with value `0` under `BaseApp/Preferences/Mod/Part/Boolean` — in the GUI, Preferences → Part →
+   Boolean — which restores pre-1.1 boolean behavior for that FreeCAD install. Benefit: correct
+   geometry, a fully live document in stock FreeCAD, no addon, no design change, and it works on the
+   FreeCAD already installed rather than on a version that does not exist yet. Drawback: it is a
+   per-install setting, so a recipient must apply it too, and a document that silently depends on a
+   preference is a trap if it travels without that instruction — the failure would be a wrong part
+   rather than an error.
+7. **Added 2026-09-21, raised in conversation. Ship a small, purpose-built addon that supplies only
+   the scripted Proxy classes needed to recompute, not the project's build pipeline.** FreeCAD's
+   restore restriction is on which *module* a scripted object's class comes from, not how much code
+   that module contains — so instead of placing `cowl_tree.py` and its sweep/CSV/ parameter machinery
+   under a `Mod` path (alternative 2's actual drawback), package only what `execute()` needs to
+   recompute: `_ShapeBoolean`, and everything `_CowlShell.execute()` calls. Benefit: reaches **both**
+   representations — unlike alternative 6, a `tail_shell.FCStd` becomes fully re-solvable too — with
+   no design change, no global preference, and a visible rather than silent failure mode when the
+   addon is missing or stale. Drawback: still an addon a recipient must install (alternative 2's core
+   cost, just narrower).
+
+**Recommendation**
+
+**(revised 2026-09-21, withdrawing the 2026-09-01 choice of alternative 6 — not just re-measuring
+it; revised again the same day once script access was clarified).** **Alternative 7, in its
+path-registration form, for both representations — pending the one prerequisite above.** The split
+first drafted the same day (alternative 7 for the outer solid, alternative 1 for the interior shell
+until `cowl_interior.py` stabilizes) rested on a vendoring cost that assumed a deployment scenario
+— a document reaching someone without the project checkout — that does not describe how this
+project is actually used. Once the addon is understood as registering the existing checkout rather
+than shipping a second copy of it, there is no asymmetry left between the two Proxy classes to
+justify treating them differently: neither needs vendoring, so neither needs release discipline.
+
+**Decision**
+
+**Resolution note (2026-09-21).** Alternative 7 is adopted, in the path-registration form
+described in that alternative's 2026-09-21 revisions below — not a vendored copy of
+`cowl_tree.py`/`cowl_interior.py`, but the project's own checkout registered as a location
+FreeCAD's document-restore permission check recognizes. The rationale: anyone who needs to
+change a shape's parameters and regenerate it already has the checkout (design decision, 2026-09-21),
+and exposing these construction functions from inside the FreeCAD GUI is itself a standing
+roadmap item, not a use case invented to justify this addon — so there is no scenario this
+project needs to serve where the scripts are shipped separately from a document that depends
+on them, and therefore nothing to vendor or keep in version-sync.
+
+The open prerequisite this alternative's write-up flagged — whether FreeCAD's restore check
+recognizes a directory registered by path rather than one holding a physically-placed copy —
+is now confirmed, not assumed. Checked directly 2026-09-21 against `App/PropertyPythonObject.cpp`
+on FreeCAD's `main`: `PropertyPythonObject::isAllowedModule()` resolves an unloaded module with
+`importlib.util.find_spec()` (without importing it) and permits it if that spec's origin path
+falls under any entry of `FreeCAD.__ModDirs__`/`__MacroDirs__` — and `Application.cpp` populates
+`__ModDirs__` from `AdditionalModulePaths`, which is set verbatim from the `-M`/`--module-path`
+command-line option, scanned "flat" (the named directory itself is registered, with no `Init.py`
+or package structure required). Verified empirically the same day on FreeCAD 1.1.3
+(`freecadcmd.exe`): a document with a scripted `Part::FeaturePython` object, whose Proxy class
+lives in a plain module in an arbitrary scratch directory (no `Mod` placement, no symlink, no
+copy), fails to restore with exactly the `blocked import of module` error when opened by a
+fresh `freecadcmd` with no flags, and restores correctly — Proxy attached, `execute()` runs, a
+changed property recomputes a new shape — when the same `freecadcmd` is given
+`-M "<that same directory>"` and nothing else. So a bare, unmodified checkout directory named
+on the command line is sufficient by itself; the "or a stub package that extends `sys.path`"
+and "symlink under a real `Mod` directory" fallbacks that alternative 7's write-up hedged with
+are not needed.
+
+**Rationale**
+
+Alternative 6 is withdrawn, for three independent reasons, each sufficient alone. Its own
+comparison ("matching this construction exactly, 74 faces tail, 64 nose") was measured
+against the OML blank as it stood on 2026-09-01; [OQ-DES-CW17](#open-questions), resolved
+2026-09-09, subdivided that same blank to 129 faces as part of fixing the tail's off-`U`=1
+correctness, and the current reference build measures 306 faces tail, 88 nose — the
+comparison has not been re-run against the construction that actually ships. Independent of
+that: `_CowlShell` did not exist on 2026-09-01, and both `tail_shell()` and
+`nose_cowl_shell()` build it *on top of* the full `_ShapeBoolean` outer-solid tree, so
+alternative 6 — even re-verified and fully implemented — can only ever make the print/blank
+kinds (`tail`, `nose_cowl`, serving mainly UC-1 export, normally regenerated from the sweep
+rather than hand-edited) stock-restorable. `tail_shell.FCStd`/`nose_cowl_shell.FCStd` — the
+kinds UC-2, UC-3, UC-4, UC-7 and UC-8 actually use (§6.4's table) — stay exactly as scripted
+as they are today regardless, because `_CowlShell` has no stock equivalent to convert to
+(B-spline surface fitting through eroded contour rows, structuring-element dilation, sewing).
+And it would leave the outer solid and the interior shell, built into the same document
+seconds apart, correct by two different mechanisms — stock objects plus a global preference
+for one, the `Part.Shape` API directly for the other — which is the special-casing this
+project avoids elsewhere on principle (one mechanism for both cowls, one construction path
+for both representations, §6.4). None of this is new evidence against `Part.Shape` as the
+correct-geometry mechanism; it is evidence that *stock objects*, alternative 6's specific
+proposal, buy less than believed and cost a silent-wrong-part failure mode alternative 1
+never had.
+
+**Alternative 7 supersedes it for both representations.** FreeCAD's restore restriction is on
+which *module* a scripted object's class comes from, not how much code that module contains —
+and, per the 2026-09-21 clarification above, the module does not need to be a second, vendored
+copy either; it can be the project's own `cowl_tree.py`/`cowl_interior.py`, made visible to
+FreeCAD's restore check by registering the checkout itself as an installed location.
+`_ShapeBoolean` is about thirty lines, unchanged this entire engagement, and depends on
+nothing but `Part.Shape.cut`/`fuse`/`common`; `cowl_interior.py`, which `_CowlShell.execute()`
+calls, is 2082 lines and the single most actively rewritten file in this engagement
+(IP-FC-137/139/140/141, this session's own `RIB_CUT_FUZZ`) — but that churn is a reason a
+*vendored copy* would need release discipline, not a reason the *original file*, registered in
+place, would drift from itself. With no copy involved, both classes reach the same outcome the
+same way: a missing or unregistered addon fails *visibly* (a missing-module error, like
+alternative 1 already accepts) rather than silently producing a wrong solid, and there is no
+version to fall out of step because there is only the one file, wherever it is imported from.
+
+**Confirming this isn't a case the interior-shell work's own newer techniques already solve
+differently.** Neither of the two fixes those newer investigations found bears on this item's
+crossing-slot problem. `RIB_CUT_FUZZ` (`cowl_interior.py`) adds a small *positive* tolerance
+for a genuine near-zero-volume sliver at one tool's own near-tangency — a real geometric
+degeneracy a fuzz-free cut can legitimately stumble on. This item's cut has no such
+degeneracy: `Part.Shape.cut` with *no* fuzz argument already returns the exact, 39-face valid
+answer (what `_ShapeBoolean` runs today); the defect here is the opposite shape, a
+*document-object* layer applying unwanted automatic fuzz on top of an operation that needed
+none. And "sew the open shells instead of fusing" (`mirror_across_cell`/`_strip_seam`) fixes
+two mirror-image solids meeting at exactly one shared face, a different topology from eleven
+buttress slabs genuinely overlapping in 3-D — a volumetric union to compute, not a seam to
+zip. Both confirm rather than reopen this item's own finding that the `Part.Shape` API is
+what gets this part's geometry right.
+
+**Ranking kept for the case alternative 7 does not pan out either**, unchanged from the
+2026-09-01 analysis except that alternative 6 no longer sits above it: pursue
+alternative 4 first if revisited (an unfuzzed FreeCAD build) — it is the only remaining
+alternative that gives up nothing — but it is already closed as of 2026-09-01: 1.1.3 does not
+compute this correctly, and FreeCAD `main` (the future 26.3) was checked at source and keeps
+the automatic fuzz with no override for `Part::` booleans, so waiting for a release changes
+nothing. Failing that, alternative 1 or 5 (keep the part right, give up live re-solving) rank
+above alternative 2 (ship the whole build pipeline as an addon, only worth it if editable
+files turn out to be a hard requirement), and alternative 3 (widen the slots) ranks last —
+adopting it on convenience grounds trades a correct part for a convenient toolchain, the
+wrong way round, and the measurements throughout this item show the failure is not simply a
+matter of the slot being too narrow.
+
+**Caveats**
+
+**Not yet done:** this closes the design question — which alternative, and why — not the
+implementation. Wiring `-M`/`AdditionalModulePaths` (or a small addon that sets it, per
+alternative 7's original framing) into the actual toolchain — the sweep, `build_part.py`,
+and whatever mechanism hands a `.FCStd` to someone who is not running the sweep — is
+unstarted follow-up work, not implied by this resolution.
+
+**Two things this recommendation does not reach, worth stating plainly rather than
+discovering by surprise if alternative 6 is ever picked up.**
+
+*"Fuzzy" means two unrelated things here, and only one of them is what alternative 6 turns
+off.* `BooleanFuzzy` is a global preference (`Mod/Part/Boolean`), read once at FreeCAD
+startup, that makes *document-object* booleans (`Part::Cut`, `Part::MultiFuse`,
+`PartDesign::Boolean`) silently apply an automatic tolerance scaled to the part's
+bounding-box size — that is the mechanism this whole investigation measures as wrong for
+this part, and alternative 6 sets it to `0` to disable it. `cowl_interior.py`'s
+`RIB_CUT_FUZZ = 1.0e-5` (added this session, fixing the `Diag12Safe` near-tangency sliver in
+`cavity()`'s rib cut) is a different thing entirely: an explicit tolerance this project's own
+code passes as an argument to `Part.Shape.cut((tool,), fuzz)`, the bare geometry API, never
+through a document object. This item's own measurements show why the two do not interact —
+sweeping `Part.Shape.cut`'s fuzzy argument reproduces the document layer's automatic
+behavior, meaning the automatic fuzz is applied *by the document-object feature*, on top of
+an otherwise-unfuzzed shape call, not by `Part.Shape.cut` itself. So `BooleanFuzzy = 0` would
+not touch `RIB_CUT_FUZZ`'s call in either direction: that call never goes through a document
+object's automatic-fuzz code path to begin with.
+
+*Alternative 6 could not reach `_CowlShell` even if adopted in full.* Everything this item
+measures is about `cowl_tree.py`'s outer-solid buttress cuts (`_ShapeBoolean`, building
+`tip` — the print/blank kinds, `nose_cowl` and `tail`). The shelled kinds (`nose_cowl_shell`,
+`tail_shell`) are a separate scripted `Part::FeaturePython` object, `_CowlShell`
+(`cowl_tree.py`), which did not exist when this item was written and calls
+`cowl_interior.shell_solid()` — B-spline surface fitting, structuring-element dilation, and
+sewing, none of which has a stock `Part::` equivalent to convert to. No setting or
+document-object substitution makes that construction stock-restorable; `_CowlShell` would
+stay a scripted, non-re-solving node regardless of what happens to `_ShapeBoolean`. So even a
+fully successful alternative 6 delivers stock-restorable `.FCStd` files for the print/blank
+kinds only, not for the shelled ones — a narrower win than "cowls re-solve in stock FreeCAD"
+suggests on its own.
+
+**Where it is recorded**
+
+[§9](#9-restoring-the-cowl-documents-in-stock-freecad) holds the investigation this decision rests on.
+
+### OQ-DES-CW17 — The tail cowl only builds correctly near `U` = 1 — RESOLVED 2026-09-09
+
+**Problem**
+
+`U` is the airframe's size multiplier: every dimension of the aircraft is written
+as a multiple of it, and the project sweeps `U` from 0.5 to 4.0. The tail cowl is made by
+cutting eleven slots into the aircraft's outer surface, a NURBS solid. Those slots are 0.1 mm
+wide and **do not scale with `U`** — they are fold lines for vase-mode printing, not gaps, and
+that is deliberate (§6.3). So as `U` grows the body grows and the slots do not, and the slot
+becomes ever finer relative to the part.
+
+**Alternatives**
 
 1. **Declare the FreeCAD backend's tail valid only for `U` ≤ 1.2 and enforce it.** Add a domain
-   check that refuses to build outside the range, the way `boom_key_validity_check()` does for
-   the boom key. *Benefits:* honest, immediate, and converts a silent wrong answer into a loud
-   refusal, which is the single most valuable change available. *Drawbacks:* leaves the tail
-   unported over most of the swept range, so `compare_backends.py` cannot cover it there.
-   *Prerequisites:* establishing the safe bound properly — the measurements above sample `U` at
-   0.5, 0.75, 1.0, 1.1, 1.2, 1.25, 1.3, 1.5, 1.6, 1.75, 2.0 and 3.0, and `U` = 1.1 already
-   removes 21% of the part, so the honest bound today is `U` = 1 exactly, not 1.2.
-
+   check that refuses to build outside the range, the way `boom_key_validity_check()` does for the
+   boom key. Benefit: honest, immediate, and converts a silent wrong answer into a loud refusal, which
+   is the single most valuable change available. Drawback: leaves the tail unported over most of the
+   swept range, so `compare_backends.py` cannot cover it there.
 2. **Keep OpenSCAD as the production path for the tail cowl** and treat the FreeCAD tail as a
-   single-point reference. *Benefits:* the swept range keeps working today, and nothing has to
-   be solved. *Drawbacks:* abandons the port's purpose for this one part, and the migration's
-   value comes from covering the whole space. *Prerequisites:* none.
-
+   single-point reference. Benefit: the swept range keeps working today, and nothing has to be solved.
+   Drawback: abandons the port's purpose for this one part, and the migration's value comes from
+   covering the whole space.
 3. **Convert the blank to C1 after import.** Reparameterize the V knot intervals so the Bézier
-   segments join at matching parametric speed, then reduce interior multiplicity 3 → 2. Both
-   steps are exact — no control point moves — and the whole conversion runs in **0.5 s** at a
-   measured deviation of **5.8e-10 mm**. *Benefits:* it does not fix the cut on its own, but it
-   **doubles the subdivision margin**: with it, `k` = 6 works where plain `k` = 6 fails at
-   −9.57×, moving the cliff from between `k` = 3 and 6 to between 6 and 12. Paired with
-   alternative 6 at `k` = 3 it also tightens `U`² tracking from 0.14% to 0.05% and is slightly
-   *faster* to recompute, so it costs nothing to keep. Multiplicity 2 at degree 3 is exactly
-   C1, which is the continuity the rounded-rectangle section actually has, so the ten corner
-   curvature breaks survive untouched. *Drawbacks:* it depends on a property of this export —
-   the speed ratio at each V joint is u-independent to 3.5e-07, with the ratios exact powers of
-   two — which holds for OpenVSP's dyadic subdivision but is not guaranteed for a surface from
-   another source, so the conversion needs to verify its own precondition rather than assume it.
-   *Prerequisites:* none; measured and verified.
-
-   **Alone it is not a fix.** A C1 9-face blank on which `check(True)` is CLEAN still returns
-   −3573.933 mm³ at `U` = 4. The **refit** route once carried under this heading stays closed:
-   the section is C1-but-not-C2 by design, and a C1 smoothing approximation flattened all ten of
-   its curvature breaks.
-
-4. **Cut the slots by splitting the surface rather than by a solid boolean**, building the cowl
-   from the split surface. *Benefits:* avoids the solid-solid intersection that is failing.
-   *Drawbacks:* a substantial rewrite of both cowls, and it must still produce a solid for
-   vase-mode slicing, so the closure problem returns. *Prerequisites:* a spike showing a surface
-   split survives at `U` = 2 where the boolean does not.
-
-5. **Scale the slot width with `U` after all.** *Benefits:* removes the problem completely; the
-   ratio stays at 0.001 everywhere. *Drawbacks:* changes the printed part at every `U` except 1,
-   turning a fold line into a gap, which §6.3 and the source both reject. *Prerequisites:* none,
-   but it is a design change and not a port fix.
-
-6. **Subdivide the blank's faces on import**, at every third knot line — 129 faces for the
-   blank. It belongs in `oml_blank.surface()`, which is the one place every consumer of the OML
-   already passes through, and it pairs with alternative 3 in the same function. *Benefits:* it
-   changes the geometry by **nothing** — a trimmed view on the original surface, no
-   approximation, no tolerance budget, no argument about whether a deviation is small enough
-   against the bulkhead fit — and it is what actually fixes the cut, across the whole swept
-   range. *Drawbacks:* the blank goes from 9 faces to 129, and it affects every other consumer
-   of the OML, not just the cowls. The recompute cost is **not** a drawback: 10.2–12.3 s with
-   alternative 3, against about 12 s for the 9-face blank. **Necessary but not sufficient on its
-   own** — it must be paired with alternative 7, or `U` = 1 still silently omits 91.5 mm³.
-   *Prerequisites:* none; measured and verified at `U` = 0.5, 1.0, 1.5, 2.0, 3.0 and 4.0. On
-   depth: with alternative 3, `k` = 6 already works and `k` = 3 is the belt-and-braces choice at
-   no extra cost; without it, `k` = 3 is the minimum and `k` = 6 returns a negative volume.
-   `k` = 1 (369 faces) buys nothing and costs 75 s per recompute.
-
+   segments join at matching parametric speed, then reduce interior multiplicity 3 → 2. Benefit: it
+   does not fix the cut on its own, but it **doubles the subdivision margin**: with it, `k` = 6 works
+   where plain `k` = 6 fails at −9.57×, moving the cliff from between `k` = 3 and 6 to between 6 and
+   12. Drawback: it depends on a property of this export — the speed ratio at each V joint is
+   u-independent to 3.5e-07, with the ratios exact powers of two — which holds for OpenVSP's dyadic
+   subdivision but is not guaranteed for a surface from another source, so the conversion needs to
+   verify its own precondition rather than assume it.
+4. **Cut the slots by splitting the surface rather than by a solid boolean** , building the cowl
+   from the split surface. Benefit: avoids the solid-solid intersection that is failing. Drawback: a
+   substantial rewrite of both cowls, and it must still produce a solid for vase-mode slicing, so the
+   closure problem returns.
+5. **Scale the slot width with `U` after all.** Benefit: removes the problem completely. Drawback:
+   changes the printed part at every `U` except 1, turning a fold line into a gap, which §6.3 and the
+   source both reject.
+6. **Subdivide the blank's faces on import** , at every third knot line — 129 faces for the blank.
+   Benefit: it changes the geometry by **nothing** — a trimmed view on the original surface, no
+   approximation, no tolerance budget, no argument about whether a deviation is small enough against
+   the bulkhead fit — and it is what actually fixes the cut, across the whole swept range. Drawback:
+   the blank goes from 9 faces to 129, and it affects every other consumer of the OML, not just the
+   cowls.
 7. **Cut with the eleven tools individually instead of fusing the overlapping group.** The six
-   tools that overlap are fused into one solid before cutting, and that solid removes nothing at
-   `U` = 1 (see *Cause* above). *Benefits:* with alternative 6 it makes the tail correct across
-   the sweep — +0.0037% at `U` = 1 and +0.0034% at `U` = 4 against the OpenSCAD reference, the
-   same offset at both, with removal tracking `U`² to 0.15%. It also removes a construction step
-   rather than adding one. *Drawbacks:* eleven cuts instead of one, so more boolean calls per
-   rebuild, and the scripted-boolean node count rises — which cuts against the direction
-   OQ-DES-CW16 wants for restorability. *Prerequisites:* none; measured and verified. Note this
-   **reverses** a finding recorded in IP-FC-12, that cutting by the group's union reproduces the
-   reference exactly — the reference it was checked against was the baked FreeCAD document,
-   which carries the same omission.
+   tools that overlap are fused into one solid before cutting, and that solid removes nothing at `U` =
+   1 (see *Cause* above). Benefit: with alternative 6 it makes the tail correct across the sweep —
+   +0.0037% at `U` = 1 and +0.0034% at `U` = 4 against the OpenSCAD reference, the same offset at
+   both, with removal tracking `U`² to 0.15%. Drawback: eleven cuts instead of one, so more boolean
+   calls per rebuild, and the scripted-boolean node count rises — which cuts against the direction
+   OQ-DES-CW16 wants for restorability.
 
-**Recommendation.** Note first that alternative 1 bounds the damage without curing it: the
-`U` = 1 configuration is itself only marginally stable, since resetting a tolerance that cannot
-change the geometry moves its removed volume by a factor of two. A domain check makes the
-failure loud; it does not make the surviving point trustworthy.
+**Recommendation**
 
 Alternative 1 immediately and unconditionally, because the current state ships a *silent* wrong
 answer — a negative-volume solid that passes `isValid()` — and that must stop regardless of what
-else is decided. Set the bound at `U` = 1 on today's evidence and widen it only if measurement
-supports it. A domain check is also the right shape of fix now that the cause is known: the
-condition it should test is not a value of `U` at all but whether `check(True)` passes on the
-blank, which is a direct question with a direct answer.
+else is decided. Then **alternatives 3, 6 and 7 together**, which are the cure, are measured rather
+than proposed, and cost nothing.
 
-Then **alternatives 3, 6 and 7 together**, which are the cure, are measured rather than
-proposed, and cost nothing. Together they hold the tail within **+0.0035% to +0.0040%** of the
-OpenSCAD reference at every swept `U` from 0.5 to 4.0 — flat across 512× in volume, so no scale
-term survives — with removal tracking `U`² to 0.05%, 154 faces at every scale, and recompute at
-10–12 s against about 12 s today.
+**Decision**
+
+**Resolution note (2026-09-09).** The measured cure below — the blank reparameterized to C1,
+subdivided at every third knot into 129 faces, and the eleven tail tools cut individually
+rather than fused — is not just recommended, it is in the shipped code:
+[`oml_blank.condition()`](../../src/Fuselage/freecad/oml_blank.py) carries the reparameterization
+and the subdivision and is called from `surface()`, and
+[`cowl_tree.tail_cowl()`](../../src/Fuselage/freecad/cowl_tree.py) builds one `Safe` cut per
+tool rather than cutting by a fused group. The domain check in alternative 1 was never added as
+a separate guard and is not needed — it was a stopgap for before the cure landed, superseded by
+alternatives 3, 6 and 7 actually fixing the whole swept range rather than merely fencing off the
+broken part of it. The investigation below is kept in full because it is what the fix rests on;
+read the header only for current status.
+
+**Rationale**
 
 **6 and 7 are each load-bearing and neither works alone**: 6 without 7 silently omits 91.5 mm³
 at `U` = 1, and 7 without 6 fails at scale. **3 is the one that is optional** — and it should
@@ -2623,6 +2751,8 @@ second at import. Adopt all three as one change.
 The only real cost is eleven booleans in place of one, which raises the scripted-node count and
 so pulls against OQ-DES-CW16's restorability concern — that tension is worth stating, but it is
 a small price against a part that is otherwise wrong by a factor of 20 above `U` = 1.
+
+**Caveats**
 
 Do **not** repoint the alternative-1 domain check at `check(True)`, which an earlier version of
 this recommendation proposed: a blank carrying 256 C0 errors builds the part correctly, so that
@@ -2639,7 +2769,47 @@ default. Alternative 5 should not be adopted: it trades the printed part for a c
 toolchain, which is the wrong way round. The refit route once carried under alternative 3 is
 closed — the section is C1-but-not-C2 by design and no free re-parameterization preserves that.
 
-### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`? — RESOLVED: alternative 2 adopted
+**Where it is recorded**
+
+[§8](#8-building-the-tail-cowl-across-u) holds the investigation this decision rests on.
+
+### OQ-DES-CW18 — Should the plate and flange thicknesses scale with `U`? — RESOLVED 2026-09-21
+
+**Problem**
+
+`U` is the airframe's size multiplier: every dimension is written as a multiple of it, and the
+project sweeps `U` from 0.5 to 4.0. Four values in `nose_size_variants.csv` are given a separate
+column per `U` and increase linearly with it:
+
+**Alternatives**
+
+1. **Hold all four fixed at their `U` = 1 values** , as the archive does. Benefit: consistent with
+   §6.3's rule for every other manufacturing dimension, and with the last physically printed
+   configuration. Drawback: a 240 mm plate 0.8 mm thick may be too floppy to handle or to print flat,
+   so the rule that suits a tolerance may not suit a structural member.
+2. **Scale all four with `U`** , as the current derivation does. Benefit: the part stays
+   self-similar, so its stiffness keeps up with its span, and nothing has to change. Drawback: it
+   silently contradicts the reasoning §6.3 gives for `cut_thickness`, and it makes a printed wall a
+   function of the airframe rather than of the printer.
+3. **Split them by what they are.** Scale `plate_thickness` because it is structural, and hold the
+   three flange dimensions fixed because they are a joint fit — `flange_inset` is already unscaled by
+   §6.3, so a flange whose inset is absolute and whose height scales is inconsistent. Benefit: answers
+   each on its own merits rather than by category. Drawback: four values with three rules is harder to
+   state and to check.
+4. **Derive the thicknesses from the printer instead of from `U`** — `plate_thickness = n_layers ×
+   layer_height`, the flanges from `extrusion_width`, the way `nose_flange_inset` is already
+   `cowl_n_perimeters × extrusion_width + tolerance`. Benefit: puts a manufacturing dimension under
+   the manufacturing parameters, where the existing precedent already sits, and it stops being a swept
+   axis at all. Drawback: the largest change of the four, and it removes the ability to sweep them.
+
+**Recommendation**
+
+**Alternative 4**, and the reason is that the values are untuned. A derivation removes the need to
+tune them: `plate_thickness = n_layers × layer_height` and the flange section from
+`extrusion_width` are numbers that follow from the printer rather than numbers somebody has to pick
+eight times and keep consistent.
+
+**Decision**
 
 **Resolution note (2026-09-21).** Alternative 2 — all four values stay in the per-`U` table
 and scale with `U`, as the current derivation already does. The reasoning: `plate_thickness`,
@@ -2654,30 +2824,7 @@ four are being decided together, as the same kind of thing. Alternative 4 (deriv
 `n_layers`/`extrusion_width`, removing them from the sweep table entirely) is rejected because
 that is the opposite of what "table values like other sweep parameters" asks for.
 
-**What this does not settle.** The four values already in the table are still the untuned
-linear placeholders this item's own investigation found — generated by plain scaling when the
-sweep was set up in 2026-08, never checked against a print or a load case. Deciding that they
-*should* scale as ordinary table values is not the same as deciding the rate they scale at;
-tuning the actual numbers against a print or a load case is separate, unstarted work.
-
-**Withdrawn 2026-09-21: this did not settle anything that needed settling.** An earlier version
-of this note claimed the committed archive (`variant_output_original/...`, which holds all four
-fixed at their `U` = 1 values) needed regenerating against the scaling table before it could be
-used to check the nose plate or the nose tip at any `U` other than 1. That claim was never
-checked against what actually verifies the port: `compare_backends.py` (IP-FC-13) renders both
-engines fresh, at the same current parameters, every time it runs — measured 2026-09-01, and
-nothing in this codebase reads `variant_output_original` at all. It is a one-time, hand-inspected
-snapshot from 2025-09-22 with no role in any live check, so nothing about this resolution
-requires it to change, and it should not be touched — it also predates the current sweep's
-filename convention entirely (a separate fact, unrelated to this OQ, discovered and reverted
-2026-09-21 after `variant_output_original` was briefly and wrongly modified).
-
-The investigation below is kept in full because it is what the decision rests on; read this
-note only for current status.
-
-**Problem, as originally framed.** `U` is the airframe's size multiplier: every dimension is written as a multiple of
-it, and the project sweeps `U` from 0.5 to 4.0. Four values in `nose_size_variants.csv` are
-given a separate column per `U` and increase linearly with it:
+**Rationale**
 
 | `U` | `plate_thickness` | `plate_flange_width` | `plate_flange_height` | `nose_flange_height` |
 |---|---|---|---|---|
@@ -2728,59 +2875,38 @@ on the `U` = 4 plate to **2.0e-05** — inside `TOL_EXACT` — while building th
 The comparison validates the port; it never validates the parameters. That is why this question
 survived a backend compare and needs answering separately.
 
-**Alternatives.**
+**Caveats**
 
-1. **Hold all four fixed at their `U` = 1 values**, as the archive does. *Benefits:* consistent
-   with §6.3's rule for every other manufacturing dimension, and with the last physically
-   printed configuration; a plate stays four layers whatever the airframe. *Drawbacks:* a
-   240 mm plate 0.8 mm thick may be too floppy to handle or to print flat, so the rule that
-   suits a tolerance may not suit a structural member. *Prerequisites:* a view on whether the
-   plate is structure or skin.
+**What this does not settle.** The four values already in the table are still the untuned
+linear placeholders this item's own investigation found — generated by plain scaling when the
+sweep was set up in 2026-08, never checked against a print or a load case. Deciding that they
+*should* scale as ordinary table values is not the same as deciding the rate they scale at;
+tuning the actual numbers against a print or a load case is separate, unstarted work.
 
-2. **Scale all four with `U`**, as the current derivation does. *Benefits:* the part stays
-   self-similar, so its stiffness keeps up with its span, and nothing has to change.
-   *Drawbacks:* it silently contradicts the reasoning §6.3 gives for `cut_thickness`, and it
-   makes a printed wall a function of the airframe rather than of the printer.
-   *Prerequisites:* none; it is the status quo.
+**Withdrawn 2026-09-21: this did not settle anything that needed settling.** An earlier version
+of this note claimed the committed archive (`variant_output_original/...`, which holds all four
+fixed at their `U` = 1 values) needed regenerating against the scaling table before it could be
+used to check the nose plate or the nose tip at any `U` other than 1. That claim was never
+checked against what actually verifies the port: `compare_backends.py` (IP-FC-13) renders both
+engines fresh, at the same current parameters, every time it runs — measured 2026-09-01, and
+nothing in this codebase reads `variant_output_original` at all. It is a one-time, hand-inspected
+snapshot from 2025-09-22 with no role in any live check, so nothing about this resolution
+requires it to change, and it should not be touched — it also predates the current sweep's
+filename convention entirely (a separate fact, unrelated to this OQ, discovered and reverted
+2026-09-21 after `variant_output_original` was briefly and wrongly modified).
 
-3. **Split them by what they are.** Scale `plate_thickness` because it is structural, and hold
-   the three flange dimensions fixed because they are a joint fit — `flange_inset` is already
-   unscaled by §6.3, so a flange whose inset is absolute and whose height scales is
-   inconsistent. *Benefits:* answers each on its own merits rather than by category.
-   *Drawbacks:* four values with three rules is harder to state and to check.
-   *Prerequisites:* deciding each one.
+**Where it is recorded**
 
-4. **Derive the thicknesses from the printer instead of from `U`** — `plate_thickness =
-   n_layers × layer_height`, the flanges from `extrusion_width`, the way
-   `nose_flange_inset` is already `cowl_n_perimeters × extrusion_width + tolerance`.
-   *Benefits:* puts a manufacturing dimension under the manufacturing parameters, where the
-   existing precedent already sits, and it stops being a swept axis at all. *Drawbacks:* the
-   largest change of the four, and it removes the ability to sweep them.
-   *Prerequisites:* choosing `n_layers`, and confirming the plate's job is printing rather than
-   stiffness.
-
-**Recommendation.** **Alternative 4**, and the reason is that the values are untuned. A
-derivation removes the need to tune them: `plate_thickness = n_layers × layer_height` and the
-flange section from `extrusion_width` are numbers that follow from the printer rather than
-numbers somebody has to pick eight times and keep consistent. It also puts these dimensions
-where the precedent already is — `nose_flange_inset` is already
-`cowl_n_perimeters × extrusion_width + tolerance`, and §6.3 puts `cut_thickness` and
-`tolerance` in the same class — so it makes the rule uniform instead of adding a fourth
-convention.
-
-Alternative 2 is worth choosing on its merits if the plate is structural, but not on the grounds
-that it is what the file already says.
-
-The one thing that would change this recommendation is the plate being **structural**. If it
-carries load rather than closing the nose, its thickness has to follow the span and not the
-nozzle, which is alternative 1's drawback and alternative 2's whole case. That is the question
-to answer first, and it is not answerable from the geometry.
-
-Whichever is chosen, the sweep and the archive must be brought back into agreement, because at
-present the committed reference geometry cannot be used to check the nose plate or the nose tip
-at any `U` except 1.
+No separate record; this subsection holds the decision.
 
 ### OQ-DES-CW19 — The rib at an inclined buttress cut is thicker than the rib everywhere else — RESOLVED 2026-09-04
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
 
 **Alternative 1**, and for a better reason than the one recommended. The recommendation rested
 on the cost of re-rendering the tail. The actual reason is that the two terms are measured in
@@ -2810,13 +2936,12 @@ reason: a horizontal surface leaves no wall, and a horizontal notch leaves no ri
 geometry changes, and nothing was ever wrong with it.** OQ-DES-CW3's `2·w·n + t_cut` is the
 θ = 90° case of this expression, not a rule the diagonals break.
 
+**Rationale**
+
 Alternatives 2, 3 and 4 are all rejected by the first clause: each of them scales the cut's
 thickness by its orientation, which is precisely what a fixed cut thickness means not doing.
 
-**Nothing to implement.** `check_cowl_interior.in_plane_width` already derives the width from
-the cut face's own normal as `t_cut / hypot(n_x, n_y)`, which is this expression and holds for a
-cut at any orientation rather than only for rotation about one axis. The measured 1.3000 mm at
-every axial notch and 1.4000 mm at every diagonal is the design being met, not tolerated.
+**Caveats**
 
 **One thing this does not settle, kept here rather than reopened.** The diagonal rib's thickness
 is a function of `top_diag_angle` — 1.4 mm at 30°, 1.59 mm at 15° — and nothing couples the two.
@@ -2825,7 +2950,48 @@ and a shallower layer plane simply cuts it wider. It does mean a shape parameter
 structural dimension with no note anywhere that it does, which is the same class of unenforced
 coupling [OQ-DES-CW11](#open-questions) records for `overhang_angle_from_bed`.
 
+**Where it is recorded**
+
+**Nothing to implement.** `check_cowl_interior.in_plane_width` already derives the width from
+the cut face's own normal as `t_cut / hypot(n_x, n_y)`, which is this expression and holds for a
+cut at any orientation rather than only for rotation about one axis. The measured 1.3000 mm at
+every axial notch and 1.4000 mm at every diagonal is the design being met, not tolerated.
+
 ### OQ-DES-CW20 — Where should the tail body's bilateral symmetry actually be enforced? — RESOLVED 2026-09-20
+
+**Problem**
+
+**Problem.** `cowl_tree.py`'s `_CowlShell.execute()` builds the tail's 11 buttress-cutting tools
+(the notches that form the interior slicer rib) against the real body surface on one side of the
+part's centerline plane, then obtains the other 11 by calling `Shape.mirror()` on that tool
+geometry directly (`cowl_tree.py:263-267`), rather than re-deriving each cut against the body
+surface on both sides independently. Mirroring a tool this way is only correct if the body it was
+built against is exactly symmetric about that plane — if it is not, the mirrored copy is built
+against a geometrically incorrect stand-in for the real far-side surface.
+
+**Alternatives**
+
+1. **Fix only at the exact source, once IP-FC-138 identifies it.** Apply the half-fused-with-
+   its-own-mirror pattern at that one specific step and nowhere else. Benefit: the smallest possible
+   change. Drawback: depends entirely on IP-FC-138 finding one identifiable step.
+2. **Add a defensive re-symmetrization of `body` itself inside `cowl_tree.py`, immediately before
+   it is used to build the first-side buttress tools, regardless of where upstream asymmetry
+   originates.** Benefit: works even if IP-FC-138 cannot localize a single source. Drawback: an extra
+   half-fused-with-its-own-mirror boolean on every build, cost not yet measured (though the existing
+   `_symmetrize_y()` step is already known to be cheap relative to the interior surface fit).
+3. **Both:** fix the identified source (once IP-FC-138 finds it) and keep a defensive
+   re-symmetrization at the point of use. Benefit: most robust against a second silent source of the
+   same kind — `repair_closure()` was suspected and cleared once already, so a next candidate is
+   plausible. Drawback: does the work of both alternatives 1 and 2.
+
+**Recommendation**
+
+Alternative 3. The first attempt to enforce symmetry by construction here (`_symmetrize_y()`)
+already proved insufficient once, and a boolean-kernel threshold effect — which IP-FC-137's own
+investigation found governs whether this construction's rib cut succeeds at all — is exactly the
+kind of thing that can be tipped by a vanishingly small geometric difference.
+
+**Decision**
 
 **Resolution: every cowl is built as one symmetry cell — the `y >= 0` half for the tail, one
 octant for the nose — with every operation (the mask, the interior surface fit, the notch cuts,
@@ -2836,6 +3002,8 @@ shared mechanism.** See
 [cowl_interior_surface.md §4.5](cowl_interior_surface.md#45-closing-the-solid) for the
 construction itself, including why the finished wall's own mirror step has to sew rather than
 fuse; this note records the decision and why weaker alternatives do not hold.
+
+**Rationale**
 
 Two weaker alternatives were tried first and rejected by measurement, not by argument. Making the
 tail's un-notched body exactly symmetric before fitting anything (`lower_sym`, fused with its own
@@ -2868,6 +3036,12 @@ it uses; it gets the same construction discipline for its interior-shell pass re
 sharing one mechanism between both cowls — never a special case for the tail alone — is itself
 part of this resolution.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 **Implementation status, verification numbers, and the defects found while building this are
 tracked in the implementation plan, not here** — see
 [freecad_migration.md IP-FC-139](../implementation/freecad_migration.md) (the construction itself,
@@ -2879,6 +3053,52 @@ This note records the decision; it is not the place to look for whether a given 
 passes.
 
 ### OQ-DES-CW21 — The finished wall reads thinner than tolerance near the tail's diagonal buttresses at large `U` — RESOLVED 2026-09-25
+
+**Problem**
+
+**Direction chosen, 2026-09-24: alternative 2 — investigate the mechanism directly, then fix the
+construction, per the recommendation's own scoping.** Not yet resolved: choosing this direction
+settles which path to pursue, not the underlying technical question. This entry stays open until
+the investigation actually determines whether the thinning is a genuine, physical consequence of
+the construction method or a fixable artifact, and either fixes it or settles on a fallback (the
+investigation itself is tracked in [IP-FC-143](../implementation/freecad_migration.md), which
+carries the concrete steps and will record what they find).
+
+**Alternatives**
+
+1.  ~~**Bound the affected `U` range per cowl kind, the same way IP-FC-137's now-retired `MIN_U`
+   bounded the tail's low end.**~~ **Rejected, 2026-09-25, on standing project policy**: a `U` range
+   restriction is acceptable only for an actual geometric constraint, and that can only occur at the
+   minimum `U` -- already verified feasible at `U` = 0.5, so no further restriction at the low end is
+   warranted either. A wall thinning that only crosses tolerance at large `U` is a construction
+   failure to fix, not evidence the part's valid domain should shrink; bounding `U` to work around it
+   is not an acceptable substitute for fixing it.
+2. **Investigate the mechanism directly, then fix the construction.** *Investigation done,
+   2026-09-25 -- see the Progress note above.* The "numerical artifact" branch this alternative
+   originally considered (a tolerance or algorithm change to `RIB_CUT_FUZZ`/`RIB_FACETS`) is ruled
+   out: neither constant moves the thinning. Benefit: addresses the actual defect rather than working
+   around its symptom. Drawback: real implementation cost -- likely a second refinement pass added to
+   `cavity()` after the rib cut, on a construction that already takes minutes per build at large `U`.
+3. **Widen the wall tolerance specifically for stations inside a shallow-angle notch's span,
+   leaving it absolute everywhere else.** Accepts the thinning as a known, bounded property of the
+   shallow-angle case rather than either bounding `U` or fixing the construction. Benefit: no
+   construction change. Drawback: directly contradicts this project's own stated reasoning for why the
+   wall tolerance is absolute rather than scaled ([cowl_interior_surface.md §5](
+   cowl_interior_surface.md#the-tolerance-and-why-it-is-absolute)) — a wall this much thinner than
+   nominal is still physically thinner, regardless of where it sits.
+
+**Recommendation**
+
+**, updated 2026-09-25.** The distinguishing step this recommendation originally called for is done
+(see the Progress note above): the thinning is a genuine geometric consequence, not a numerical
+artifact, and alternative 1 is rejected outright on standing project policy (a `U` restriction is
+only for an actual geometric constraint at the minimum `U`, already verified feasible, not a
+stand-in for fixing a construction failure at the high end). Alternative 3 carries a version of the
+same objection in its own drawback -- accepting the thinning by scoping the tolerance around it is
+not fixing the construction failure either, only exempting one symptom of it from the check that
+would otherwise catch it.
+
+**Decision**
 
 **Resolved, 2026-09-25: alternative 2.** The cowl's interior wall (nominal `t` =
 `cowl_n_perimeters * extrusion_width`, 0.6 mm at the sheet's current values, held to an absolute
@@ -2899,13 +3119,6 @@ deterministic consequence of the dilated rib tool's own geometry meeting the smo
 surface at a shallow angle** — present, in miniature and under tolerance, at every `U` this
 construction has ever built, not a defect introduced at large sizes.
 
-Bounding `U` (alternative 1) was rejected outright on standing project policy: a `U`-range
-restriction is only acceptable for an actual geometric constraint, which can only occur at the
-minimum `U` (already verified feasible at `U` = 0.5); a defect that only crosses tolerance at the
-high end is a construction failure to fix, not grounds to shrink the part's declared valid domain.
-Scoping the tolerance (alternative 3) carries the same objection in its own drawback — exempting
-the symptom from the check is not fixing the failure either.
-
 **Chosen fix**: add a second convergence loop that measures the *finished*, rib-cut wall near a
 notch boundary — not only the smooth pre-rib surface `cavity()` checks today — and refine against
 that measurement until it also converges inside tolerance, closing the coverage gap this item
@@ -2917,6 +3130,17 @@ loop belongs there, measured directly on `shell_solid()`'s own finished, cell-si
 `body`-derived exterior reference `cavity()` has no way to keep current with the rib cut. This is a
 real algorithm change, not a constant retune, and is not yet designed or implemented; tracked
 through to completion in [IP-FC-143](../implementation/freecad_migration.md).
+
+**Rationale**
+
+Bounding `U` (alternative 1) was rejected outright on standing project policy: a `U`-range
+restriction is only acceptable for an actual geometric constraint, which can only occur at the
+minimum `U` (already verified feasible at `U` = 0.5); a defect that only crosses tolerance at the
+high end is a construction failure to fix, not grounds to shrink the part's declared valid domain.
+Scoping the tolerance (alternative 3) carries the same objection in its own drawback — exempting
+the symptom from the check is not fixing the failure either.
+
+**Caveats**
 
 **Second correction, 2026-10-05: the chosen fix stands, but this item's scope statement and the
 quality of its evidence do not.** Three things were found while answering
@@ -2958,10 +3182,72 @@ samples at `U` = 4 on a 0.6 mm wall; at a fixed 0.125 mm spacing the same walls 
 So this item's own 0.053 mm and 0.150 mm figures were of the right order after all, and the
 `U` = 3.0 figure in particular is close to the 0.0469 mm now measured.
 
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
 ### OQ-DES-CW22 — The post-cut refinement loop's per-round re-scan makes real convergence unaffordably slow — RESOLVED 2026-09-27
 
+**Problem**
+
+**Problem.**
+[OQ-DES-CW21](#open-questions)
+decided that `cavity()` (or, per that item's later correction, `shell_solid()`) needs a second
+refinement pass: after the rib cut, measure the *finished* wall's own thickness near every notch
+(buttress-tool) boundary and, wherever it reads thinner than the tolerance τ = 0.05 mm, insert an
+extra station into the smooth-surface fit and redo the cut, repeating up to a bounded number of
+rounds (`POST_CUT_ROUNDS` = 6) before giving up. A first working implementation of this pass exists
+in [cowl_interior.py](../../src/Fuselage/freecad/cowl_interior.py), and it is correct: on
+`tail_shell` at `U` = 1.0 — a build every earlier step of the IP-FC-143 investigation had treated
+as clean — it found a genuine 0.0621 mm deficit and converged it to 0.0493 mm over six rounds; on
+`U` = 3.0 (the item's original target) it was still converging when the build that was measuring it
+had to be killed after 9.5 hours.
+
+**Alternatives**
+
+1. **Restrict each round's re-scan to a local window around that round's own insertions.** Round 0
+   still scans the full patch (uniform baseline plus edge-focused points). Benefit: directly targets
+   the measured cost driver (re-scanning unchanged regions). Drawback: measured on one station, one
+   build (`tail_shell` `U` = 1.0) — not yet confirmed to generalize to a station nearer a patch
+   boundary (where `_lid`/`_side_caps` interact with the fit differently) or to the nose's octant cell
+   (two construction planes rather than one).
+2. **Reduce `POST_CUT_ROUNDS` and/or the scan's density, accepting coarser convergence.** Keep the
+   existing full-patch re-scan, but cap the rounds lower (e.g. 2–3) or coarsen the scan spacing, so a
+   slow-converging case raises `Unconverged` sooner rather than running for hours. Benefit: minimal
+   code change. Drawback: does not establish that the real target cases (`U` = 3.0, 4.0 on both cowl
+   kinds) actually converge inside a lower round budget — IP-FC-143's own uniformly-tightened-`tau`
+   test found the worst station barely moved even under much finer sampling, so a lower round cap
+   could simply make every target case raise `Unconverged` instead of shipping a thin wall, which is
+   safe but does not close the coverage gap OQ-DES-CW21 exists to close.
+3. **Front-load station placement using the notch topology already read for the edge-focused
+   scan.** Instead of discovering needed stations one bisection at a time, insert every station the
+   notch topology suggests will be needed directly into round 0's fit, trading a bigger round-0 scan
+   for fewer total rounds. Benefit: could converge in one or two rounds instead of six, if the
+   up-front guess is good. Drawback: the amount of up-front insertion actually needed is not yet known
+   — guessing too many stations pays the cost anyway.
+4. **Decouple this check from every routine build; run it as a separate, offline verification or
+   soak step.** `cavity()`/`shell_solid()` would build without the second pass. Benefit: removes the
+   cost from every routine build entirely. Drawback: reopens, at the mechanism level, the same
+   build-time-cost question
+   [OQ-DES-CW21](#open-questions)'s
+   own alternative 1 raised and this project rejected outright as standing policy — not because
+   bounding `U` is at issue here, but because it moves a known, fixable construction defect from
+   "caught before the part ships" back to "caught later, if someone remembers to run the separate
+   check," which is the same shape of deferral regardless of what triggers it.
+
+**Recommendation**
+
+Alternative 1, at a ±15–20 mm window. It addresses the actual, measured cost driver — re-scanning
+regions nothing changed in — directly, rather than trading away the convergence quality alternative
+2 would give up, or relying on an unmeasured prediction the way alternative 3 would; and unlike
+when this question was first raised, the window width is no longer a guess — it is sized from a
+direct measurement of how far one bisected insertion's effect on the finished wall actually reaches
+(see alternative 1's own entry above).
+
+**Decision**
+
 **Resolved, 2026-09-27: alternatives 1 and 3, combined.** IP-FC-143's post-cut refinement pass
-(decided by [OQ-DES-CW21](#oq-des-cw21--the-finished-wall-reads-thinner-than-tolerance-near-the-tails-diagonal-buttresses-at-large-u--resolved-2026-09-25))
+(decided by [OQ-DES-CW21](#open-questions))
 re-scans the entire patch on every one of up to six rounds, which was invisible while every case
 tested converged in round 0 but cost 9.5 hours without finishing once real convergence (`tail_shell`
 `U` = 1.0 and `U` = 3.0) was actually exercised. Round 1 onward will instead only re-check a
@@ -2972,6 +3258,8 @@ one properly-bisected insertion's effect on the finished wall actually reaches (
 already read for the edge-focused scan, to insert as many of the likely-needed stations as
 possible before the bisection loop starts, trading a larger round-0 scan for fewer total rounds.
 
+**Rationale**
+
 **The combination was chosen over alternative 1 alone because the two are complementary, not
 redundant**: windowing (alternative 1) cuts the cost of whatever rounds still run; front-loading
 (alternative 3) aims to cut the number of rounds needed in the first place, and alternative 3's own
@@ -2979,6 +3267,8 @@ listed drawback — guessing too few stations still falls back on the existing b
 that loop still needs to be cheap — is exactly what alternative 1 supplies. Alternative 2 (reduce
 `POST_CUT_ROUNDS`/density) and alternative 4 (defer the check out of the build) remain rejected for
 the reasons already recorded against them above.
+
+**Caveats**
 
 **Not yet implemented, and one open measurement remains from before this was decided**: alternative
 1's window was measured on a single station on `tail_shell` `U` = 1.0 only, not yet confirmed to
@@ -2988,7 +3278,18 @@ alone predicts which stations end up needed) is likewise still unmeasured. Both 
 implementation questions for IP-FC-143 to resolve with evidence as it proceeds, not blocking
 conditions on starting the work.
 
-### OQ-DES-CW23 — `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut — WITHDRAWN 2026-10-10, not a design choice
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW23 — `cavity()`'s post-cut check predicts the finished wall's thickness rather than measuring the real cut — WITHDRAWN 2026-10-10
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Why withdrawn**
 
 **Withdrawn rather than resolved, because it was never a design question.** This item asked how to
 handle "the resulting small residual gap" between pass 2's prediction and the real cut, and offered
@@ -3079,6 +3380,13 @@ only at a geometric floor and never to dodge a construction defect. The defect t
 
 ### OQ-DES-CW24 — `shell_solid()`'s cut can sever the cell wall, and neither metric built to predict it does so — RESOLVED 2026-10-04
 
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
 **Closed as recommended: alternatives 2 and 3 adopted now, alternative 4 scheduled behind them,
 alternative 1 not adopted on its own.**
 
@@ -3107,9 +3415,13 @@ the orderings disagree. Work item: IP-FC-147.
 crowding ratio, row spacing — and testing refuted all three, which is why no fourth is to be
 designed before the mechanism is known. Work item: IP-FC-146.
 
+**Rationale**
+
 **1 was not adopted on its own** because the 0.03 mm sign-reversed "silent result" from an earlier
 round has never been retested, and it is the only claim of a failure the existing checks would not
 catch. Reproducing or withdrawing it is IP-FC-145.
+
+**Caveats**
 
 **Caveats attached to this closure.**
 
@@ -3120,9 +3432,11 @@ catch. Reproducing or withdrawing it is IP-FC-145.
   ([cowl_interior_surface.md §6.2](cowl_interior_surface.md)). If it does not, the severity of this
   whole item drops substantially.
 - Metric A's final disposition was not settled here. It became
-  [OQ-DES-CW25](#oq-des-cw25--metric-a-measures-a-clearance-that-does-not-exist--resolved-2026-10-25),
+  [OQ-DES-CW25](#open-questions),
   closed 2026-10-25: Metric A is retired, because the clearance it reports is zero at every station
   by construction.
+
+**Where it is recorded**
 
 **Where this item's design content now lives.** It had been carrying construction and verification
 design inline, which is not where authoritative design belongs:
@@ -3136,9 +3450,18 @@ row actually does; [§5](cowl_interior_surface.md) the refinement blind spot;
 
 ### OQ-DES-CW25 — Metric A measures a clearance that does not exist — RESOLVED 2026-10-25
 
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
 **Resolved as recommended: alternative 3. Metric A is retired and the `clearance_check` path is
 removed.** The code change is scheduled as IP-FC-155 and is not done yet; this entry records the
 decision, not its implementation.
+
+**Rationale**
 
 **What the question was.** Metric A is the in-plane clearance, at a sampled station, between the
 fitted interior surface's cross-section and the nearest *dilated* buttress tool's cross-section.
@@ -3171,6 +3494,8 @@ touch. This is the same ground [OQ-DES-CW24](#open-questions) retired Metric B o
 a quantity with no geometric meaning is sound* — now with a census behind it rather than an
 argument.
 
+**Caveats**
+
 **Caveats attached to the choice.**
 
 - **Alternative 4 is not foreclosed, but it is a separate question.** A direct cut-floor-to-outer-
@@ -3189,12 +3514,25 @@ argument.
 - **IP-FC-154 is superseded by this**, since it repaired the engagement sampling inside the scan
   being removed.
 
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
 ### OQ-DES-CW26 — The rib cut can break the wall's section ring; which checks catch it — RESOLVED 2026-10-28
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
 
 **Resolved 2026-10-28, on alternative 2: run the annulus identity on the finished wall's own
 sections at build time.** At each checked station, slice the mirrored wall and hand the wires to
 `Part.makeFace(wires, 'Part::FaceMakerBullseye')` — one face with two wires is a continuous ring,
 several one-wire faces mean it is broken into that many arcs.
+
+**Rationale**
 
 **The rationale, and it is narrower than it was when this question was opened.** This item was
 built on a wall with a 93 mm hole in it passing all five construction checks with no exception
@@ -3216,6 +3554,8 @@ would notice. It is adopted on what survives that:
   threshold to tune per `U`, and it tests the property that makes the part a shell, so it catches
   any break rather than this one.
 
+**Caveats**
+
 **Caveats attached to the choice.** It does not measure thickness, so it would not catch a uniform
 thinning — that is `_finished_wall_gap`'s job and is
 [OQ-DES-CW29](#open-questions)'s and [OQ-DES-CW33](#open-questions)'s question, not this one. A
@@ -3223,6 +3563,16 @@ slot's end cap may legitimately break the annulus at some stations, so the false
 across both kinds and the swept `U` range must be surveyed before it can refuse a build. And this
 is cheap insurance against a specific gap in a catcher that already works, not the difference
 between catching and shipping a broken part — it should be funded as the former.
+
+**What remains open, and is not this question.** Whether an unperturbed build can reach the severed
+state is still unproven rather than disproven — every occurrence comes from the row-nudge probe, and
+the dose series displaces one notch edge of 27 per configuration. The tail's 242 interaction *walls*
+are unbuilt, at about 42 hours. Large-`U` interactions are untested. And *where* along `z` the
+finished wall closes is unrecorded, which `worst_finished_z` now carries. Those are
+[IP-FC-146](../implementation/freecad_migration.md#work-items), and the build-time check itself is
+[IP-FC-152](../implementation/freecad_migration.md#work-items).
+
+**Where it is recorded**
 
 **What was established while answering it**, all of which lives in the body rather than here:
 
@@ -3247,15 +3597,9 @@ between catching and shipping a broken part — it should be funded as the forme
 - The annulus identity's own measured separation, 7 of 7 against 5 of 7, and its two limits:
   [§4.4](cowl_interior_surface.md#44-the-surface).
 
-**What remains open, and is not this question.** Whether an unperturbed build can reach the severed
-state is still unproven rather than disproven — every occurrence comes from the row-nudge probe, and
-the dose series displaces one notch edge of 27 per configuration. The tail's 242 interaction *walls*
-are unbuilt, at about 42 hours. Large-`U` interactions are untested. And *where* along `z` the
-finished wall closes is unrecorded, which `worst_finished_z` now carries. Those are
-[IP-FC-146](../implementation/freecad_migration.md#work-items), and the build-time check itself is
-[IP-FC-152](../implementation/freecad_migration.md#work-items).
+### OQ-DES-CW27 — A shape's triangulation is cached, so a repeated convergence run converges on nothing — OPEN
 
-### OQ-DES-CW27 — A shape's triangulation is cached, so a repeated convergence run converges on nothing
+**Problem**
 
 **What this is about.** Measuring the volume of a solid built from B-spline surfaces cannot be done
 by asking the kernel for it: `Shape.Volume` is wrong by 0.16 to 0.24% on this project's cowl
@@ -3271,7 +3615,7 @@ tessellates the same solid repeatedly at successively smaller deflections — 0.
 the evidence the answer no longer depends on the discretization. It returns the volume, the
 deflection it stopped at, and the triangle count.
 
-**The problem.** FreeCAD caches a shape's triangulation on the shape object. `tessellate(d)` does
+FreeCAD caches a shape's triangulation on the shape object. `tessellate(d)` does
 not re-mesh a shape that has already been meshed; it returns the mesh it already has, whatever `d`
 is asked for. Measured 2026-10-06 on a cylinder of radius 5 mm and height 10 mm:
 
@@ -3311,26 +3655,26 @@ the same class each time, and the second call did not raise.
 
 1. **Document it and require a fresh shape.** Add the caution to the measurement-cautions list,
    state in `converged_volume`'s docstring that it must be given a shape that has not been
-   tessellated, and have the tests build a fresh shape per convergence run. *Benefits:* no code
+   tessellated, and have the tests build a fresh shape per convergence run. *Benefits.* no code
    change, no cost on any build, and the constraint is honest about what the kernel does.
-   *Drawbacks:* a silent wrong answer remains one mistake away, and the mistake is invisible —
-   nothing raises, and the returned volume looks right. *Prerequisites:* none.
+   *Drawbacks.* a silent wrong answer remains one mistake away, and the mistake is invisible —
+   nothing raises, and the returned volume looks right. *Prerequisites.* none.
 2. **Copy the shape before each deflection.** `Shape.copy()` yields an untessellated shape, so each
-   deflection would mesh from scratch. *Benefits:* `converged_volume` becomes correct for any
-   caller with no constraint to remember. *Drawbacks:* a copy of a real cowl wall is not free, and
+   deflection would mesh from scratch. *Benefits.* `converged_volume` becomes correct for any
+   caller with no constraint to remember. *Drawbacks.* a copy of a real cowl wall is not free, and
    this would add one copy per deflection rung to a measurement already rejected for the soak on
-   cost; the copy cost on a 2 464-face wall has not been measured. *Prerequisites:* measure
+   cost; the copy cost on a 2 464-face wall has not been measured. *Prerequisites.* measure
    `Shape.copy()` on a real `tail_shell` wall at `U` = 1 and 4.
 3. **Detect the cache instead of defeating it.** Compare the triangle count against the previous
-   rung and raise if it did not change when a finer deflection was requested. *Benefits:* cheap —
+   rung and raise if it did not change when a finer deflection was requested. *Benefits.* cheap —
    one integer comparison — and turns a silent wrong claim into a named failure; it also catches
-   the genuine case where a shape is already as fine as the kernel will make it. *Drawbacks:* makes
+   the genuine case where a shape is already as fine as the kernel will make it. *Drawbacks.* makes
    `converged_volume` refuse a reused shape rather than measure it, so a caller still has to supply
-   a fresh one; it reports the problem without solving it. *Prerequisites:* none.
+   a fresh one; it reports the problem without solving it. *Prerequisites.* none.
 4. **Ask FreeCAD to drop the cached mesh.** If a supported call clears a shape's triangulation,
-   calling it per rung would be cheaper than a copy. *Benefits:* correctness without the copy cost.
-   *Drawbacks:* no such call is known to be exposed in FreeCAD's Python API; it may not exist.
-   *Prerequisites:* establish whether one exists in 1.1.3.
+   calling it per rung would be cheaper than a copy. *Benefits.* correctness without the copy cost.
+   *Drawbacks.* no such call is known to be exposed in FreeCAD's Python API; it may not exist.
+   *Prerequisites.* establish whether one exists in 1.1.3.
 
 **Recommendation**
 
@@ -3347,9 +3691,9 @@ them first would be the wrong order. Alternative 4 would dominate 2 if the call 
 checked. Alternative 1 alone is not enough, because the failure is silent and the returned volume
 looks correct.
 
-### OQ-DES-CW28 — The fit converges to five times looser than the tolerance the wall must meet
+### OQ-DES-CW28 — The fit converges to five times looser than the tolerance the wall must meet — OPEN
 
-**The problem**
+**Problem**
 
 Both cowl cells are built by fitting a smooth interior surface through a stack of eroded
 cross-sections and then subtracting the buttress ribs from it
@@ -3494,51 +3838,51 @@ distinguish them and none is offered.
 
 1. **Tie `TAU` to `WALL_TOL`** — set `TAU` = `WALL_TOL` = 0.01 mm, and keep them equal by
    construction so the fit converges to the tolerance the part must meet.
-   *Benefits:* the only setting under which the construction can guarantee its own acceptance
+   *Benefits.* the only setting under which the construction can guarantee its own acceptance
    criterion rather than meeting it by luck; removes the standing inconsistency between the two
    thresholds; measured to give five times the margin on `nose_cowl_shell` at `U` = 4; one
    constant, no new plumbing.
-   *Drawbacks:* **measured not to build, at two configurations.** On `tail_shell` at `U` = 0.5 it
+   *Drawbacks.* **measured not to build, at two configurations.** On `tail_shell` at `U` = 0.5 it
    raises `Unconverged` after 2 154 s and at `U` = 2.0 after 1 799 s, both against the 64-station
    patch budget rather than the round budget, having moved pass 2's gap not at all either time.
    Adopting it as written would refuse every tail, which is a worse outcome than the thin wall it is
    meant to fix. It also equates thresholds on two different measures referenced to two different
    exteriors (see the problem statement), so even the compliance it appears to guarantee is not the
    compliance the gate tests.
-   *Prerequisites:* to become viable again it needs whatever makes a tail converge — alternative 5
+   *Prerequisites.* to become viable again it needs whatever makes a tail converge — alternative 5
    or alternative 7 — not a further measurement of itself.
 
 2. **Set `TAU` = 0.02 mm** — the loosest value measured to produce a compliant wall.
-   *Benefits:* compliant on `nose_cowl_shell` at `U` = 4 at 14 % more build time.
-   *Drawbacks:* **also measured not to build**, and it fails *more* expensively than alternative 1:
+   *Benefits.* compliant on `nose_cowl_shell` at `U` = 4 at 14 % more build time.
+   *Drawbacks.* **also measured not to build**, and it fails *more* expensively than alternative 1:
    `Unconverged` after 3 827 s on `tail_shell` at `U` = 0.5 and 5 656 s at `U` = 2.0, reaching round
    3 and round 2 respectively before exhausting the station budget. At `U` = 2.0 its worst gap also
    *rose* between those rounds, 0.0481 to 0.0514 mm, after 27 insertions. It is additionally still
    looser than the tolerance, so on the kinds where it does build it is a measured coincidence
    rather than a guarantee.
-   *Prerequisites:* the same as alternative 1.
+   *Prerequisites.* the same as alternative 1.
 
 3. **Keep `TAU` = 0.05 mm and accept the walls as built** — record that the finished wall is within
    0.047 mm of nominal rather than 0.01 mm, and state the compliance claim at that figure.
-   *Benefits:* no build-time cost; no risk to any configuration that currently converges; honest
+   *Benefits.* no build-time cost; no risk to any configuration that currently converges; honest
    about what the construction delivers.
-   *Drawbacks:* `WALL_TOL` exists because a single-perimeter spiral-vase wall can have its
+   *Drawbacks.* `WALL_TOL` exists because a single-perimeter spiral-vase wall can have its
    perimeter dropped, so accepting 0.047 mm is accepting that risk on every tail at every `U`,
    which is a print-reliability decision and not a documentation one. It would also leave the
    subsystem with an acceptance tolerance nothing is held to.
-   *Prerequisites:* none to adopt; it would need a statement of what wall error the print
+   *Prerequisites.* none to adopt; it would need a statement of what wall error the print
    actually tolerates, which no measurement in this project supplies.
 
 4. **Make `TAU` adaptive** — keep the loose criterion for the bulk of the fit and tighten only
    where pass 2 measures a station over `WALL_TOL`.
-   *Benefits:* pays the extra rows only where the wall needs them, which is the pattern pass 2
+   *Benefits.* pays the extra rows only where the wall needs them, which is the pattern pass 2
    already follows; it inserts stations selectively and re-scans a window around each insertion
    rather than re-scanning the patch. Potentially the cheapest route to full compliance on a tail.
-   *Drawbacks:* a genuine code change to the refinement loop rather than a constant; the loop's
+   *Drawbacks.* a genuine code change to the refinement loop rather than a constant; the loop's
    bisection discipline is load-bearing (forcing a station at an arbitrary `z` was measured to make
    the finished wall 0.10–0.35 mm *worse* everywhere in the patch), so a second criterion
    interacting with it needs its own measurement; harder to reason about than one number.
-   *Prerequisites:* none outstanding. Its prerequisite was alternative 1's or 2's measurement, to
+   *Prerequisites.* none outstanding. Its prerequisite was alternative 1's or 2's measurement, to
    know whether a uniform tightening was affordable; that measurement is done and a uniform
    tightening does not build on a tail, so this alternative's complexity is no longer competing
    against a simpler setting that works. One caution the measurement adds: pass 2 already inserts
@@ -3549,33 +3893,33 @@ distinguish them and none is offered.
    the residual, on the evidence that the nose's thinning is strictly monotonic in `U` (0.00115 to
    0.01403 mm over `U` = 0.5 to 4.0, a factor of 12.2 across a factor of 8) while the tail's is not
    monotonic at all and is twelve times the nose at `U` = 0.5. Two terms, one scaling and one not.
-   *Benefits:* if the residual has a removable cause, every build gets compliant at no extra time
+   *Benefits.* if the residual has a removable cause, every build gets compliant at no extra time
    cost, which no other alternative offers; the `U`-linear nose term is a specific, cheap lead and
    the nose is forty times cheaper to build than the tail.
-   *Drawbacks:* the mechanism is not identified and five candidates are already refuted (chord sag,
+   *Drawbacks.* the mechanism is not identified and five candidates are already refuted (chord sag,
    envelope merging, lateral-versus-normal offset, local curvature, rib proximity), as is a
    boundary-value error at the rib creases — so there is no estimate of how long this takes or
    whether it ends in a fix. It is not an alternative to choosing a `TAU` in the meantime.
-   *Prerequisites:* IP-WTM-26 and IP-WTM-36.
+   *Prerequisites.* IP-WTM-26 and IP-WTM-36.
 
 6. **Expose `TAU` as a per-part property** — orthogonal to the value question: add `Tau` to the
    shell object and a column to the parameter sheets, so a configuration that needs a tighter
    criterion can have one without every part paying for it.
-   *Benefits:* lets the expensive kinds and the cheap kinds differ; makes the criterion visible in
+   *Benefits.* lets the expensive kinds and the cheap kinds differ; makes the criterion visible in
    the saved document rather than implicit in the module.
-   *Drawbacks:* a new property, a new sheet column and a migration of the existing sheets, which
+   *Drawbacks.* a new property, a new sheet column and a migration of the existing sheets, which
    the project's own sequencing rule keeps as a separate work item from the generator change that
    reads it; a per-part criterion is one more thing that can be set wrong silently, and the current
    single constant is at least uniform.
-   *Prerequisites:* a decided value for the default, from one of 1–4.
+   *Prerequisites.* a decided value for the default, from one of 1–4.
 
 7. **Raise the refiner's own limits** — `cavity`'s `budget` = 64 stations a patch and
    `MIN_INTERVAL` = 0.20 mm (a 0.400 mm subdivision floor) are what the tail actually hit, not
    `TAU`. Raise one or both, and a tighter `TAU` may simply converge.
-   *Benefits:* the only alternative that attacks the measured failure rather than the symptom that
+   *Benefits.* the only alternative that attacks the measured failure rather than the symptom that
    led to it; both are constants; it would tell us whether a tight criterion is unreachable in
    principle on a tail or merely disallowed by two numbers chosen for a different situation.
-   *Drawbacks:* the evidence that it would be enough is weak and points the other way, and `U` = 2.0
+   *Drawbacks.* the evidence that it would be enough is weak and points the other way, and `U` = 2.0
    strengthened that. 77 of the over-tolerance stations at `TAU` = 0.02 on the `U` = 0.5 build are
    already at the 0.400 mm floor and cannot be split at any budget; pass 2's worst gap did not move
    across a fivefold range of `TAU` at either configuration; and at `U` = 2.0 the gap **rose** from
@@ -3592,7 +3936,7 @@ distinguish them and none is offered.
    `TAU` = 0.02 and 0.004 the nose's station count goes 28 to 63, a 2.25x increase well inside the
    budget, and the finished wall does not move at all. A budget raise buys stations, and on the kind
    where stations are affordable they are already measured not to help.
-   *Prerequisites:* one run of `tau_study.py` on a tail with a raised budget, which is hours and
+   *Prerequisites.* one run of `tau_study.py` on a tail with a raised budget, which is hours and
    may not terminate; bound it before starting it.
 
 **Measured 2026-11-07: the nose's deficit is the fit's own error, almost one for one, across the
@@ -3691,9 +4035,9 @@ numeric relationship adopted between the two thresholds — and alternative 1 is
 relationship — means something different depending on how CW29 is answered. Answering CW29 first
 costs nothing here, because none of the alternatives above becomes harder for having waited.
 
-### OQ-DES-CW29 — Two wall-thickness measures now disagree about whether a nose cowl complies; which one gates?
+### OQ-DES-CW29 — Two wall-thickness measures now disagree about whether a nose cowl complies; which one gates? — OPEN
 
-**The problem**
+**Problem**
 
 The cowl's printed wall is a fixed real-world dimension — `cowl_n_perimeters * extrusion_width`,
 0.600 mm at the parameter sheet's current values — and it is held to **`WALL_TOL` = 0.01 mm**,
@@ -3858,31 +4202,31 @@ the work is [wall_thickness_measure.md](../implementation/wall_thickness_measure
 
 **Alternatives**
 
-1. **Keep the incumbent gating and go on reporting both.** *Benefits:* no verdict changes, so
+1. **Keep the incumbent gating and go on reporting both.** *Benefits.* no verdict changes, so
    nothing shipped today becomes acceptable by a change of instrument; preserves comparability with
    every figure recorded so far; the conservative reading, since the incumbent can only report more
-   thinness. *Drawbacks:* the gate's verdict rests on a measure known not to converge, so a nose
+   thinness. *Drawbacks.* the gate's verdict rests on a measure known not to converge, so a nose
    failure means "compliance is not demonstrated" rather than "the wall is this thin", and the gate
    cannot ever return a clean pass on a nose. It also leaves the project in the position of having
-   selected a measure against pre-committed gates and then not used it. *Prerequisites:* none.
-2. **Switch the gate to the selected measure, keeping the incumbent printed.** *Benefits:* the gate
+   selected a measure against pre-committed gates and then not used it. *Prerequisites.* none.
+2. **Switch the gate to the selected measure, keeping the incumbent printed.** *Benefits.* the gate
    decides with the measure the screening selected, which is the only one of the two that
-   converges; a nose build gets a verdict that means something. *Drawbacks:* it changes a failing
+   converges; a nose build gets a verdict that means something. *Drawbacks.* it changes a failing
    nose into a passing one, which is a decision to ship on the strength of a 0.30 mm exclusion
    margin that was itself chosen by screening rather than derived from the slicer's behavior. If a
    genuine 0.03 mm thin spot does sit within 0.30 mm of a slot mouth, this gate will not see it.
-   *Prerequisites:* none technically; in judgment, a reason to believe 0.30 mm is right.
-3. **Gate on both: fail if either is over tolerance.** *Benefits:* no verdict loosens, and the gate
-   gains the convergent measure's evidence without discarding the incumbent's. *Drawbacks:* given
+   *Prerequisites.* none technically; in judgment, a reason to believe 0.30 mm is right.
+3. **Gate on both: fail if either is over tolerance.** *Benefits.* no verdict loosens, and the gate
+   gains the convergent measure's evidence without discarding the incumbent's. *Drawbacks.* given
    the subset identity, failing if *either* fails is arithmetically identical to alternative 1 —
    the incumbent is always the larger reading — so this is alternative 1 under a name that suggests
-   more. Recorded because it is the obvious proposal and it is empty. *Prerequisites:* none.
+   more. Recorded because it is the obvious proposal and it is empty. *Prerequisites.* none.
 4. **Gate on the selected measure but tighten the exclusion margin until the two agree, and report
-   the margin at which they do.** *Benefits:* turns the 0.30 mm constant into a measured quantity
+   the margin at which they do.** *Benefits.* turns the 0.30 mm constant into a measured quantity
    rather than a screened one, and the margin at which a nose's verdict flips is itself a
-   diagnostic — it says how far from a corner the thinning actually extends. *Drawbacks:* more work
+   diagnostic — it says how far from a corner the thinning actually extends. *Drawbacks.* more work
    before any verdict changes, and it may find no margin that both excludes the artifact and keeps
-   the thin spot, in which case the question returns unchanged. *Prerequisites:* a sweep of
+   the thin spot, in which case the question returns unchanged. *Prerequisites.* a sweep of
    `reflex_margin_mm`, and it is cheaper than this entry first recorded — **no build at all.** The
    nose walls are already saved in the corpus and `freecad/criterion_check.py` reads them, at about
    24 s a station on a tail and less on a nose, so the sweep is minutes of machine time rather than
@@ -3891,12 +4235,12 @@ the work is [wall_thickness_measure.md](../implementation/wall_thickness_measure
    on that.** The in-plane nearest-point distance is one definition; the perpendicular distance to
    the outer contour along the inner contour's own normal is another, and the eroded-section
    construction defines a third — the wall *should* be the 2-D inset distance `t` by construction,
-   which is the quantity §6 of the algorithm document is written around. *Benefits:* the only
+   which is the quantity §6 of the algorithm document is written around. *Benefits.* the only
    alternative that answers the question rather than choosing between two proxies for it; would
    also settle `WALL_TOL` compliance for the tail, which neither measure currently does.
-   *Drawbacks:* the largest piece of work of the five, and the local-normal variant was already
+   *Drawbacks.* the largest piece of work of the five, and the local-normal variant was already
    measured to oscillate by up to 0.0139 mm, so the third definition is the one with any promise
-   and it is unbuilt. *Prerequisites:* a converged local thickness measure, which
+   and it is unbuilt. *Prerequisites.* a converged local thickness measure, which
    [cowl_interior_surface.md](cowl_interior_surface.md) §6.4 records as the standing open problem.
    **The measure selected on 2026-10-25 is converged and still does not meet this prerequisite**,
    which is worth stating because the two look like the same thing. It converges *by dropping the
@@ -3905,13 +4249,15 @@ the work is [wall_thickness_measure.md](../implementation/wall_thickness_measure
 6. **Remove the cause instead and let the question lapse.** If the fit's convergence criterion is
    tightened (OQ-DES-CW28) and the residual's mechanism found (IP-WTM-26, IP-WTM-36), the wall may
    come out well inside tolerance on both measures, at which point which one gates stops mattering.
-   *Benefits:* the only alternative that makes the disagreement irrelevant rather than adjudicated.
-   *Drawbacks:* it is a bet on two unfinished investigations, and it does nothing for a build run
+   *Benefits.* the only alternative that makes the disagreement irrelevant rather than adjudicated.
+   *Drawbacks.* it is a bet on two unfinished investigations, and it does nothing for a build run
    today. **Half of its prerequisite has now reported, negatively:** IP-WTM-28 measured that
    tightening `TAU` does not improve a tail's wall at all and raises `Unconverged` at both 0.02 and
    0.01, so the cheap half of this bet is gone and what remains rests entirely on the two mechanism
-   investigations. *Prerequisites:* OQ-DES-CW28 decided, and IP-WTM-26 or IP-WTM-36 delivering a
+   investigations. *Prerequisites.* OQ-DES-CW28 decided, and IP-WTM-26 or IP-WTM-36 delivering a
    mechanism — no longer IP-WTM-28, which has reported.
+
+**Recommendation**
 
 **Recommendation: alternative 1 for now, with alternative 4 as the work that makes alternative 2
 decidable.**
@@ -3931,9 +4277,9 @@ nothing here should wait for it. Alternative 6 is worth preferring to all of thi
 decision happens to make the wall compliant on both measures, which would be the cleanest outcome
 available and is not in this question's gift.
 
-### OQ-DES-CW30 — The cavity's shell is open at one edge and every validity check passes it
+### OQ-DES-CW30 — The cavity's shell is open at one edge and every validity check passes it — OPEN
 
-**The problem**
+**Problem**
 
 Both cowl cells are built by cutting a fitted interior solid out of a buttress-notched blank. The
 intermediate result of that cut — the **cavity** — is checked four ways by the construction, one of
@@ -3968,33 +4314,35 @@ would **fail every `tail_shell` build today**, on configurations whose finished 
 every other measure. So the choice is not "should the construction be correct" but "what should it
 refuse", and refusing a build that produces a good part has a real cost.
 
-**Alternatives:**
+**Alternatives**
 
 1. **Record it and check nothing.** Document that `valid=True` on the cavity does not mean the shell
-   is closed, and that one open edge is known and tolerated on the tail. *Benefits:* no build
-   changes; honest about what the existing check establishes. *Drawbacks:* the open shell is then an
+   is closed, and that one open edge is known and tolerated on the tail. *Benefits.* no build
+   changes; honest about what the existing check establishes. *Drawbacks.* the open shell is then an
    accepted property with nothing watching it, so a *second* one — or one that does not get resolved
-   downstream — would arrive unannounced. *Prerequisites:* none.
+   downstream — would arrive unannounced. *Prerequisites.* none.
 2. **Check the finished wall's shell instead of the cavity's.** Assert on the mirrored result, where
-   the measurement says every wall is already clean. *Benefits:* tests the thing that matters, the
+   the measurement says every wall is already clean. *Benefits.* tests the thing that matters, the
    part that gets printed, and passes on all twelve corpus walls today, so it can be added without
    failing anything. It would have caught the severed ring of OQ-DES-CW26 as well, since a break
-   leaves free edges. *Drawbacks:* it does not localize the fault — a failure says the wall is open
-   somewhere, with four candidate steps upstream and no indication which. *Prerequisites:* none;
+   leaves free edges. *Drawbacks.* it does not localize the fault — a failure says the wall is open
+   somewhere, with four candidate steps upstream and no indication which. *Prerequisites.* none;
    `boolean_edges.anomalous_edges` already does it on a saved wall and could run on a built one.
-3. **Check the cavity's shell and fix whatever leaves the edge open.** *Benefits:* the only
+3. **Check the cavity's shell and fix whatever leaves the edge open.** *Benefits.* the only
    alternative that removes the defect rather than deciding how to live with it, and it would make
    `cavity`'s own diagnosis trustworthy at the step where the geometry is still simple enough to
-   debug. *Drawbacks:* the cause is unknown and sits in the end-overrun extension, which is the part
+   debug. *Drawbacks.* the cause is unknown and sits in the end-overrun extension, which is the part
    of the construction with the least test coverage; the work is open-ended, and until it lands the
-   check cannot be enabled. *Prerequisites:* find the cause, starting from the one
+   check cannot be enabled. *Prerequisites.* find the cause, starting from the one
    `SurfaceOfExtrusion` face and the 1.0587 mm edge.
 4. **Check the cavity's shell but report rather than refuse.** Print the open-edge count in the
    build's own progress output, as `cavity` already does for rib residue and partition slip.
-   *Benefits:* the fault becomes visible on every build, at the step where it arises, for the cost
-   of a few seconds; nothing fails, so no sound part is rejected. *Drawbacks:* a reported-only check
+   *Benefits.* the fault becomes visible on every build, at the step where it arises, for the cost
+   of a few seconds; nothing fails, so no sound part is rejected. *Drawbacks.* a reported-only check
    is one nobody is obliged to read, which is the drawback OQ-DES-CW26's alternative 4 carries too.
-   *Prerequisites:* none.
+   *Prerequisites.* none.
+
+**Recommendation**
 
 **Recommendation: alternatives 4 and 2 together, and treat 3 as the real fix when someone has the
 time for it.**
@@ -4011,9 +4359,9 @@ A caveat on alternative 2 worth stating plainly: it passes on all twelve corpus 
 `U` alone. That is the same coverage bound OQ-DES-CW26's dense scan has, and it means "passes today"
 is a statement about one axis of the input space.
 
-### OQ-DES-CW31 — The fit's axial seed is a fixed count, and it is why a large nose cowl fails its wall tolerance
+### OQ-DES-CW31 — The fit's axial seed is a fixed count, and it is why a large nose cowl fails its wall tolerance — OPEN
 
-**The problem**
+**Problem**
 
 The cowl's interior surface is built by fitting a smooth surface through a stack of eroded
 cross-sections taken at discrete axial positions, called **stations**, and then subtracting the
@@ -4136,47 +4484,47 @@ real unknown rather than an incidental one.
 1. **Express the seed as an axial spacing** — replace `SEED_MAX` with a `SEED_ARC` in millimeters
    and derive the count, clamped to `SEED_MIN` and a new ceiling, exactly as `FIT_ARC` and
    `CHECK_ARC` already do for the circumferential directions.
-   *Benefits:* removes the `U` dependence at its source, so the construction's accuracy stops being
+   *Benefits.* removes the `U` dependence at its source, so the construction's accuracy stops being
    a function of part size; makes the nose compliant at every `U` measured; consistent with the two
    constants beside it, which are already spacings, so it removes an inconsistency rather than
-   adding a special case. *Drawbacks:* changes every build of both kinds, so every recorded wall
+   adding a special case. *Drawbacks.* changes every build of both kinds, so every recorded wall
    figure in this subsystem is superseded and the corpus needs re-measuring (IP-WTM-46) — which is
    now the only real cost, since the 60-patch warning is stale and the tail price is measured at
    33 %; the right spacing is a new constant needing its own derivation; and it buys the tail 12 %
-   without making it compliant. *Prerequisites:* none remaining — the tail build this listed has
+   without making it compliant. *Prerequisites.* none remaining — the tail build this listed has
    been run.
 2. **Raise `SEED_MAX` to a larger count** — leave the parameterization alone and set it to, say, 12,
    which is measured sufficient at `U` = 4.
-   *Benefits:* a one-constant change, measured to fix the only failing nose configuration, at **no
+   *Benefits.* a one-constant change, measured to fix the only failing nose configuration, at **no
    measurable build-time cost** (233 s against 236 s at `U` = 4); cannot make a short patch
-   expensive, because a short patch still falls to `SEED_MIN`. *Drawbacks:* still a count, so the
+   expensive, because a short patch still falls to `SEED_MIN`. *Drawbacks.* still a count, so the
    `U` dependence is reduced rather than removed and returns at some larger `U`; 12 is fitted to one
    configuration of one kind; leaves the construction inconsistent with `FIT_ARC`/`CHECK_ARC`.
-   *Prerequisites:* none to adopt; the tail build has been run and costs 33 %.
+   *Prerequisites.* none to adopt; the tail build has been run and costs 33 %.
 3. **Tighten `TAU` instead and let the refinement do the work** — the seed only sets where
    refinement starts, and a tighter criterion would refine further from any seed.
-   *Benefits:* no change to the seeding; **measured 2026-10-14 to fix the nose on its own**, `TAU` =
+   *Benefits.* no change to the seeding; **measured 2026-10-14 to fix the nose on its own**, `TAU` =
    0.02 at the seed as it stands taking `U` = 4 to 0.00393 mm for 19 s more build, so this is a
    complete alternative to 1 and 2 rather than a partial one; `TAU` = 0.01 and 0.004 give the
-   identical wall, so the setting is not delicate. *Drawbacks:* **measured not to build a
+   identical wall, so the setting is not delicate. *Drawbacks.* **measured not to build a
    `tail_shell`** at either 0.02 or 0.01, at two separate `U` (OQ-DES-CW28), so it cannot be adopted
    globally — it would have to be per-kind, which is a worse kind of special case than the one
    alternative 1 removes; and it leaves the seed a count, so the `U` dependence is still there in
-   the fit even where the criterion hides it. *Prerequisites:* OQ-DES-CW28, which this would
+   the fit even where the criterion hides it. *Prerequisites.* OQ-DES-CW28, which this would
    pre-empt.
 4. **Accept it and bound `U` for the nose** — declare `U` = 4.0 out of range for a
    `nose_cowl_shell`.
-   *Benefits:* no code change, no re-measurement. *Drawbacks:* this is a construction defect with
+   *Benefits.* no code change, no re-measurement. *Drawbacks.* this is a construction defect with
    an identified cause and a measured fix, so bounding the input range to avoid it is the thing
    this project has a standing rule against — `U` limits belong at the geometric floor, not in front
    of a fixable defect. It also leaves the `U` = 3.0 nose at 0.00997 mm, inside tolerance by
-   0.00003 mm, which is not a margin. *Prerequisites:* none.
+   0.00003 mm, which is not a margin. *Prerequisites.* none.
 5. **Do nothing yet and fix the floor first** — if the floor's cause were the same mechanism, one
    change might address both.
-   *Benefits:* avoids changing the construction twice and re-measuring the corpus twice.
-   *Drawbacks:* **the premise is gone.** The 0.0071 mm figure is not a floor, it is `TAU`; the floor
+   *Benefits.* avoids changing the construction twice and re-measuring the corpus twice.
+   *Drawbacks.* **the premise is gone.** The 0.0071 mm figure is not a floor, it is `TAU`; the floor
    under it is 0.00268 mm, 3.7x inside tolerance, and is not what makes any configuration fail. There
-   is nothing here to wait for. *Prerequisites:* none; this alternative is retired.
+   is nothing here to wait for. *Prerequisites.* none; this alternative is retired.
 
 **Recommendation**
 
@@ -4210,6 +4558,50 @@ subject.
 
 ### OQ-DES-CW32 — The rib dilation's facet count is fixed, and it is what bounds the design inputs — RESOLVED 2026-11-23
 
+**Problem**
+
+Each buttress cutting tool is a thin slab. Before the interior cavity is cut, `cowl_interior`
+**dilates** every slab by the wall thickness `t`, so that the cavity it carves out stops `t` short
+of the rib and the finished wall keeps its full thickness where a rib passes through it. The
+dilation is not an exact offset — `Part.makeOffsetShape` returns a null shape on the first tail
+tool — but a union of `RIB_FACETS` = 48 translated copies of the slab, placed at equal angles on a
+circle of radius `t` lying in the layer plane.
+
+**Alternatives**
+
+1. **Derive `N` per tool from its own `in_plane` and `t`.** `N = ceil(π / asin(in_plane / 2t)) +
+   1`, clamped below by the 38 the gap-accuracy measurement already requires and above by a stated
+   ceiling. Benefit: the construction builds every configuration whose geometry is sound instead of
+   refusing it. Drawback: build time becomes a function of the design inputs, and `N` would differ per
+   tool on a tail, where the 30° diagonals have twice the in-plane thickness of an axial slab.
+2. **Raise `RIB_FACETS` to a single larger fixed count.** 80 would cover `cowl_n_perimeters` = 2 at
+   the sheet's cut thickness. Benefit: one constant, no per-tool variation, no new arithmetic, and the
+   dilation accuracy only improves. Drawback: **every** build pays for the worst case, and the
+   measured cost is steep — at 96 facets, 23.6 s a tool against 4.0 s at 48, which on a tail's eleven
+   tools is minutes a build spent for configurations nobody is using.
+3. **Leave the count and document the buildable region.** Put the inequality and the two numeric
+   bounds in this document and in `RIB_FACETS`' note, so a configuration that will be refused is known
+   before a build is started. Benefit: free. Drawback: leaves `cowl_n_perimeters` = 2 unbuildable and
+   leaves the construction refusing configurations whose geometry is sound.
+4. **Hoist the precondition above pass 1.** Independent of 1–3 and compatible with all of them:
+   move the per-tool check to before the interior fit, where its two inputs already exist. Benefit: a
+   refused configuration stops before paying for a fit it will discard. Drawback: **the saving is
+   small, and that is measured rather than assumed** — about 26 s on a `tail_shell` at `U` = 0.5 and
+   less on a nose, because a refusal already costs only 83–99 s on a tail and 36–38 s on a nose, and
+   most of that is the OML import and the body and notch construction, which the check consumes as
+   inputs.
+
+**Recommendation**
+
+**Alternative 1, with alternative 4 taken alongside it, and alternative 3's documentation written
+either way.** Deriving the count is the same correction this subsystem has now made five times for
+a fixed count standing against a quantity that varies, the expression needed is already in the code
+— in the error message that currently refuses the build — and a clamp bounds the cost at both ends.
+What it needs first is one tail build at a derived `N`, because the count drives the boolean cost
+and 77 facets on eleven tools is unpriced; that is 727 s and nothing blocks it.
+
+**Decision**
+
 **Resolved by removing the facet count.** The question was what to do about the rib dilation's
 solidity floor. Each rib tool is the union of `RIB_FACETS` = 48 copies of its slab on a circle of
 radius `t`, and that union is one solid only while `in_plane / t > 2·sin(π/48)` = 0.130806. Here
@@ -4219,14 +4611,18 @@ single-row excursions crossed the floor and were refused: `buttress_cut_thicknes
 `extrusion_width` 0.8 mm and `cowl_n_perimeters` 2. Those refusals also put 43 of the nose's 128
 two-input pairs out of reach.
 
-OQ-DES-CW40 then adopted planar ribs, on 2026-11-23. Each convex part of a slab is grown by
-intersecting half-spaces, so it is one solid for any `in_plane` and `t`. There is no facet count
-left to derive, raise or document. The user closed this question on that basis.
-
 **The written recommendation is not what was adopted.** It was Alternative 1, deriving the count
 per tool, with Alternative 4, checking the floor before the interior fit, alongside it and
 Alternative 3's documentation either way. All three concern the 48-gon construction that planar
 ribs replace, so none of them is to be implemented.
+
+**Rationale**
+
+OQ-DES-CW40 then adopted planar ribs, on 2026-11-23. Each convex part of a slab is grown by
+intersecting half-spaces, so it is one solid for any `in_plane` and `t`. There is no facet count
+left to derive, raise or document. The user closed this question on that basis.
+
+**Caveats**
 
 **Caveats.**
 - *Until planar ribs are built in production, the floor still applies.* `dilated_notches` still
@@ -4237,9 +4633,14 @@ ribs replace, so none of them is to be implemented.
   `buttress_cut_thickness` 0.07 mm, builds with a correct wall is expected from the construction
   but not measured.
 
-### OQ-DES-CW33 — Every measure the gate has is in-plane, and the wall is inclined to the layer plane
+**Where it is recorded**
 
-**The problem**
+[cowl_interior_surface.md §9.2](cowl_interior_surface.md) describes the 48-gon construction
+that stays in production until planar ribs are built.
+
+### OQ-DES-CW33 — Every measure the gate has is in-plane, and the wall is inclined to the layer plane — OPEN
+
+**Problem**
 
 The acceptance gate decides whether a finished cowl wall is at least `t` = 0.6 mm thick by sectioning
 it at twelve stations and measuring, **within each section plane**, from the inner loop to the outer
@@ -4302,14 +4703,14 @@ cost of producing and checking one.
 1. **Leave the gate in-plane and record the bias.** State in the design document and in the gate's
    own output that a reading is `thickness / cos θ` and therefore optimistic wherever the surface is
    inclined, with the measured factor of 1.08–1.16 at the thin stations as the known case.
-   *Benefits:* free; changes no verdict; the bias has a sign, so an in-plane pass is not evidence of
-   compliance while an in-plane *failure* is still evidence of a defect. *Drawbacks:* leaves a
+   *Benefits.* free; changes no verdict; the bias has a sign, so an in-plane pass is not evidence of
+   compliance while an in-plane *failure* is still evidence of a defect. *Drawbacks.* leaves a
    measured 0.0943 mm deficit invisible to every check, on the kind that already fails; "we know the
-   number is wrong and by roughly how much" is not a gate. *Prerequisites:* none.
+   number is wrong and by roughly how much" is not a gate. *Prerequisites.* none.
 2. **Add a 3-D confirmation pass over the worst in-plane samples.** Keep the in-plane measure as the
    cheap search, then re-measure the worst N samples a station along their normals, and gate on that.
-   *Benefits:* the gate measures the quantity it is supposed to; the machinery exists and is verified
-   against closed form. *Drawbacks:* **its prerequisite has now been measured and it refutes the
+   *Benefits.* the gate measures the quantity it is supposed to; the machinery exists and is verified
+   against closed form. *Drawbacks.* **its prerequisite has now been measured and it refutes the
    alternative.** In-plane severity ranks the readings that are wall thicknesses at the *bottom* of
    the ordering, on every wall that has any — ranks 38–52 of 55, 48–58 of 62, 14–35 of 36, 12–87 of
    88, and 19–2 016 of 2 017 — so on three of five measured stations `N` would have to be every thin
@@ -4318,27 +4719,27 @@ cost of producing and checking one.
    1.08–1.16 and so sits *just* under tolerance. Sorting by severity sorts artifacts first by
    construction. The first run of the measure demonstrated it accidentally: at `N` = 12 a station it
    re-measured 111 samples on a `tail_shell` and found **none** of the 24 that were wall thicknesses.
-   *Prerequisites:* none remaining; the prerequisite was run and the answer is that this selector
+   *Prerequisites.* none remaining; the prerequisite was run and the answer is that this selector
    does not work.
 3. **Gate on the face class first, then measure.** Discard readings taken on cut faces outright —
    they are not wall thicknesses — and apply the 3-D measure to every remaining sample.
-   *Benefits:* selects **correctly**, which alternative 2 is now measured not to; removes the
+   *Benefits.* selects **correctly**, which alternative 2 is now measured not to; removes the
    artifact population at the root rather than excluding it by a geometric heuristic as
    `corner_excluded_min` does; on three of the four walls measured it cuts the set hard — 372 to 24,
-   251 to 94, 109 to nothing at all. *Drawbacks:* **it is not cheap where it matters.** On the
+   251 to 94, 109 to nothing at all. *Drawbacks.* **it is not cheap where it matters.** On the
    `tail_shell` at `U` = 1.0 the filter still leaves 2 018 samples, about 67 minutes at the measured
    ~2 s a sample, so on the wall with the worst defect this is a re-measurement and not a
    confirmation pass. It also makes the gate depend on the kernel's face classification, a
    construction detail rather than a design quantity, and `Part::GeomBSplineSurface` identifies both
    the fitted interior surface **and** the OML, so the class alone is not a complete discriminator.
-   *Prerequisites:* a reliable way to name the fitted interior surface specifically, which the
+   *Prerequisites.* a reliable way to name the fitted interior surface specifically, which the
    surface type does not give; and a way to bound the cost on a wall where most readings are real.
 4. **Make the fit's own criterion the gate and stop measuring the finished wall.** Pass 1 measures
    the eroded section against the interior candidate directly and reaches 0.00579 mm on this wall.
-   *Benefits:* cheap, already computed, and converges. *Drawbacks:* measures the wrong object — pass 1
+   *Benefits.* cheap, already computed, and converges. *Drawbacks.* measures the wrong object — pass 1
    and the finished wall measure out to **different exteriors**, diverging by up to 26.5 mm at one
    station (§6.8.2), which is why pass 1 reads 0.00579 mm on a wall whose real worst is 0.0943;
-   it would be gating on a prediction rather than on the part. *Prerequisites:* none; this is listed
+   it would be gating on a prediction rather than on the part. *Prerequisites.* none; this is listed
    to be rejected.
 
 **Recommendation**
@@ -4373,7 +4774,14 @@ They decide whether the gate can see a defect that is now measured at 0.065–0.
 what to do about the defect itself is not this question, and nothing in this plan has yet explained
 why the interior surface is inclined 21–31° where the wall is thin.
 
-### OQ-DES-CW34 — Nothing outside `cavity` could drive the booleans after the fit — RESOLVED 2026-10-25, revised 2026-10-28
+### OQ-DES-CW34 — Nothing outside `cavity` could drive the booleans after the fit — RESOLVED 2026-10-25
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
 
 **This question is closed and nothing about it is pending.** It asked how the booleans after the
 fit could be driven from outside, since they could not be. They can be now, and they have been — at
@@ -4398,25 +4806,7 @@ A reader of `cavity` now sees the construction and nothing else, and
 `tests/test_wall_measure_probe.py` pins what that rests on: that the seam is inert, that it is
 always removed, that it cannot nest, and that neither entry point's signature mentions measurement.
 
-**What this closure does not settle is a separate question, not a loose end in this one.** A
-test-only seam still exists *in* the production module, just not in its interface — about eight
-lines, inert in every build. Whether the module should carry one at all, against decomposing
-`cavity` so that a harness composes the pipeline and no seam is needed, is
-[OQ-DES-CW35](#open-questions). It is filed separately because the decision is of a different kind
-and has a different cost: this question was whether the post-fit booleans can be measured, which
-is answered and built; CW35 is how `cowl_interior` is laid out, which is a refactor of the
-subsystem's most delicate code that no measurement forces and that nobody has priced.
-
-**The superseded decision, kept because the reasoning behind the hook's placement still holds:
-alternative 1, an optional probe parameter on `cavity`, forwarded by `shell_solid`.**
-The wall is produced in two stages, and the severance [OQ-DES-CW26](#open-questions) reproduced is
-in the second one: `cavity` fits the interior surface and cuts the ribs, then `shell_solid` extends
-the cavity across each cell plane, cuts it out of the notched blank and mirrors the result. The fit
-alone is measured not to produce the severance
-([cowl_interior_surface.md §4.4](cowl_interior_surface.md#44-the-surface)), and those three
-booleans had never been measured under a perturbation because there was no way to feed one in —
-`cavity` derives its own stations and returns only a finished solid, and the functions that
-assemble that solid are closures inside it.
+**Rationale**
 
 **The basis for the decision, recorded because it was not a formal closure.** The cost of the dose
 series was approved at about two hours, and this alternative was the recommendation; the choice was
@@ -4447,7 +4837,35 @@ and the severance was then reproduced through this seam at the station the produ
 by declining to drop it rather than by forcing it in — all of it in §4.4, and all of it work this
 question made possible.
 
-### OQ-DES-CW35 — Should the interior-surface construction carry a test-only seam at all?
+**Caveats**
+
+**What this closure does not settle is a separate question, not a loose end in this one.** A
+test-only seam still exists *in* the production module, just not in its interface — about eight
+lines, inert in every build. Whether the module should carry one at all, against decomposing
+`cavity` so that a harness composes the pipeline and no seam is needed, is
+[OQ-DES-CW35](#open-questions). It is filed separately because the decision is of a different kind
+and has a different cost: this question was whether the post-fit booleans can be measured, which
+is answered and built; CW35 is how `cowl_interior` is laid out, which is a refactor of the
+subsystem's most delicate code that no measurement forces and that nobody has priced.
+
+**The superseded decision, kept because the reasoning behind the hook's placement still holds:
+alternative 1, an optional probe parameter on `cavity`, forwarded by `shell_solid`.**
+The wall is produced in two stages, and the severance [OQ-DES-CW26](#open-questions) reproduced is
+in the second one: `cavity` fits the interior surface and cuts the ribs, then `shell_solid` extends
+the cavity across each cell plane, cuts it out of the notched blank and mirrors the result. The fit
+alone is measured not to produce the severance
+([cowl_interior_surface.md §4.4](cowl_interior_surface.md#44-the-surface)), and those three
+booleans had never been measured under a perturbation because there was no way to feed one in —
+`cavity` derives its own stations and returns only a finished solid, and the functions that
+assemble that solid are closures inside it.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW35 — Should the interior-surface construction carry a test-only seam at all? — OPEN
+
+**Problem**
 
 `src/Fuselage/freecad/cowl_interior.py` builds a cowl's interior cavity and its finished wall. It
 has two entry points: `cavity`, which fits the interior surface and cuts the printed ribs out of
@@ -4499,33 +4917,33 @@ position caches. The contour seam sits inside `fit_at` and the floor seam inside
 a decomposition that removes the seam has to lift the fit sources as well as the assembly trio, and
 all 21 captured names have to become explicit arguments or a context object.
 
-#### Alternatives
+**Alternatives**
 
 1. **Keep the seam as it is.** Change nothing; the eight lines stay, inert, with their tests.
-   *Benefits:* no cost and no risk, and the seam is greppable — two accessors with one name
+   *Benefits.* no cost and no risk, and the seam is greppable — two accessors with one name
    between them, so a reader asking "where can a measurement reach in" has a complete answer in one
-   search. *Drawbacks:* all three costs above stand. *Prerequisites:* none.
+   search. *Drawbacks.* all three costs above stand. *Prerequisites.* none.
 
 2. **Decompose `cavity` so the pipeline can be composed from outside, and delete the seam.** Lift
    the eight nested functions to module level, passing the 21 captured names explicitly or through
    a context object, so a harness builds the fit, the rib cut and the assembly in sequence itself
    and substitutes its own contour source and station set without the production module knowing a
-   measurement exists. *Benefits:* removes the seam entirely rather than hiding it; makes each
+   measurement exists. *Benefits.* removes the seam entirely rather than hiding it; makes each
    stage independently testable, which today it is not; and any future measurement needs no
-   production change at all, which is what stops the hook count growing. *Drawbacks:* it refactors
+   production change at all, which is what stops the hook count growing. *Drawbacks.* it refactors
    the most delicate code in the subsystem to serve a measurement, which inverts the cost; and the
    kernel's reproducibility floor means a passing before/after regression is weak evidence that
    nothing moved, because the same source already gives different bytes near a degenerate
-   configuration. *Prerequisites:* a bit-comparison of built walls before and after on both kinds
+   configuration. *Prerequisites.* a bit-comparison of built walls before and after on both kinds
    across the swept `U` range, with the reproducibility floor accounted for in how its result is
    read.
 
 3. **Delete the seam and let a harness substitute the production functions by name.** No seam is
    needed to reach either decision: `station_floor` is already a module-level function, and the
    contour the seam intercepts is `_resample_open(eroded_arc(...))`, both also module level. A
-   harness could replace either by name for the duration of a build. *Benefits:* removes every
+   harness could replace either by name for the duration of a build. *Benefits.* removes every
    inert line from the production module today, at no risk to `cavity`, and the vocabulary stays
-   where it already is in `wall_measure.probe`. *Drawbacks:* those functions have callers outside
+   where it already is in `wall_measure.probe`. *Drawbacks.* those functions have callers outside
    `cavity` — `check_cowl_interior` calls `eroded_arc` twice and `station_floor` once, and
    `wall_vanish`, `station_gaps` and `fit_amplification` each call `station_floor` — so a
    substitution applies to every caller in the process, and a measurement meaning "one row"
@@ -4533,18 +4951,18 @@ all 21 captured names have to become explicit arguments or a context object.
    it pins the harness to internal names *and* to where they are called, with nothing left to
    grep for: if `fit_at` stopped going through `eroded_arc`, the measurement would silently stop
    happening, which is cost three above with the seam's one advantage removed.
-   *Prerequisites:* none.
+   *Prerequisites.* none.
 
 4. **Promote the seam to a designed production extension point.** Make supplying a contour source
    and a station floor a supported feature of the subsystem rather than test apparatus, documented
-   and specified. *Benefits:* the inert code stops being inert, and the floor override becomes
-   reachable without a measurement module at all. *Drawbacks:* nothing in the design calls for
+   and specified. *Benefits.* the inert code stops being inert, and the floor override becomes
+   reachable without a measurement module at all. *Drawbacks.* nothing in the design calls for
    either to be configurable. The station floor is a property of the wall being built, not an
    input to it, and a configurable contour source has no design purpose whatsoever — so this
    dignifies test apparatus as a specification, which this project has an explicit rule against.
-   *Prerequisites:* a design purpose for the configurability, which does not exist.
+   *Prerequisites.* a design purpose for the configurability, which does not exist.
 
-#### Recommendation
+**Recommendation**
 
 **Alternative 1: keep the seam, and revisit when a third hook is wanted.** Two accessors is a seam;
 four would be an interface nobody designed, and that is the trigger to come back to this.
@@ -4584,6 +5002,57 @@ evidence.
 
 ### OQ-DES-CW36 — The interior contour is selected by whether a kernel offset happens to fail — RESOLVED 2026-11-02
 
+**Problem**
+
+`src/Fuselage/freecad/cowl_interior.py` builds a cowl's interior surface by taking a cross-section
+of the body at each of a number of axial stations, eroding that section inward by the wall
+thickness `t` = 0.600 mm, and fitting one B-spline surface through the resulting contours. The
+erosion is `eroded_arc`, and it works by refitting the section's open arc as a cubic B-spline
+through `n` sampled points and then calling OpenCASCADE's `makeOffset2D` on that curve.
+
+**Alternatives**
+
+1. **Always use the finest rung.** Drop the ladder and refit every section at `4n` — 1600 points at
+   the current floor — so the sampling no longer depends on whether a coarser attempt failed. Benefit:
+   the result becomes a function of the geometry alone, and the reproducibility question disappears
+   rather than being bounded. Drawback: cost.
+2. **Choose `n` from the geometry and refuse a failure.** Pick the sampling density from a property
+   of the section — its arc length, its curvature extremes, or the ratio `in_plane / t` the facet
+   count already uses — and treat a `makeOffset2D` failure as a precondition failure rather than a
+   retry. Benefit: the density becomes a stated design rule instead of an accident, and a failure
+   becomes visible rather than absorbed. Drawback: it will refuse builds that currently succeed, and
+   how many is unmeasured.
+3. **Keep the ladder and pin the result.** Leave the construction alone, but record the
+   reproducibility floor as a stated property of the interior surface — about 1e-5 of the wall volume,
+   from this mechanism — and have the acceptance check print which rung each station used, so a
+   changed figure can be attributed instead of investigated from scratch. Benefit: no geometry
+   changes, no build cost, and the next person who sees a wall volume move has the evidence in the
+   log. Drawback: it documents the fragility rather than removing it, and the wall volume remains
+   unusable as a regression signal at better than 1e-5.
+4. **Find out why the offset fails and remove the cause.** `makeOffset2D` returning null on a refit
+   cubic through 400 points of a smooth section is itself the thing to explain. Benefit: if the offset
+   can be made to succeed at the first rung always, the ladder stops mattering and alternative 1's
+   cost disappears with it. Drawback: open-ended, and it is an investigation into OpenCASCADE's offset
+   algorithm rather than into this project's geometry.
+5. **Accept it and stop reporting the figure.** Treat the wall volume as a diagnostic rather than a
+   recorded result, and judge a build only on the quantities that are stable — the station set, the
+   wall-thickness statistics and the verdict, all of which reproduce exactly. Benefit: honest about
+   what the construction can and cannot promise, and costs nothing. Drawback: the volume is genuinely
+   useful for catching gross errors, and removing it to avoid a 1e-5 wobble gives up a signal that
+   catches much larger faults.
+
+**Recommendation**
+
+**Alternative 3 now, and alternative 4 as the investigation that would make 1 affordable.** The
+parts are correct to every stated tolerance, so nothing here justifies changing geometry or
+multiplying a build's cost before the mechanism is understood — and alternative 1 pays four times
+the inner-loop cost at every station to fix two. What is not acceptable is leaving the floor
+unrecorded, because the next last-bit change will produce the same investigation from the same
+standing start; this entry is that record, and printing the rung per station makes it self-evident
+in a log.
+
+**Decision**
+
 **Chosen: alternative 3, record the floor and print the rung, with alternative 4's investigation
 run first to find out what the mechanism is not.** Alternatives 1, 2 and 5 were declined.
 
@@ -4600,6 +5069,8 @@ being investigated from a standing start, which is what it cost the first time. 
 `REFIT_TOL_M` and 50 times inside `WALL_TOL`, so no stated tolerance is involved. A wall volume is
 therefore not a regression signal below 1e-5, and the station set, the wall-thickness statistics
 and the verdict, all of which reproduce bit-for-bit, carry that job instead.
+
+**Rationale**
 
 **What the investigation found, and why it changes the shape of the remaining question.**
 `offset_ladder.py` walks the ladder at five rungs per station and records the refit curve's own
@@ -4630,6 +5101,8 @@ from the belief that denser is better, which is measured to be false.
 **Alternative 5 was declined** because a volume still catches gross faults, and giving up a signal
 that works at 1e-2 to avoid a wobble at 1e-5 is the wrong trade.
 
+**Caveats**
+
 **A measured lead is left open rather than taken.** The coarsest rung tried, `n` = 200, is half the
 construction's `SAMPLE_MIN` floor and **offset successfully at all ten stations**, with a refit
 deviation of 1.2e-3 to 1.7e-3 mm against the 5.0e-3 mm allowed. A coarser refit is both reliable
@@ -4659,9 +5132,15 @@ offset, and nothing measured here shows they share a cause.
 item: OQ-DES-CW37 (whether the sample density should come down) and OQ-DES-CW38 (the tail's
 unexplained 5e-7).
 
-### OQ-DES-CW37 — The refit's sample density is a floor, and the one density measured below it was the only one that never failed
+**Where it is recorded**
 
-**Problem.** Each cowl is built by fitting an interior surface inside the outer mould line at a
+No separate record; this subsection holds the decision.
+
+### OQ-DES-CW37 — The refit's sample density is a floor, and the one density measured below it was the only one that never failed — OPEN
+
+**Problem**
+
+Each cowl is built by fitting an interior surface inside the outer mould line at a
 constant wall thickness `t`. The surface is built station by station along the part's axis. At a
 station, `eroded_arc` takes that station's cross-section arc, samples it at `n` evenly spaced
 points, builds a cubic B-spline from those points, and then asks OpenCASCADE for a copy of that
@@ -4772,52 +5251,52 @@ surface's** accuracy — as opposed to a single station's curve against a single
 is all `REFIT_TOL_M` governs — has not been measured at all. Those are different quantities, and §6
 judges the first.
 
-**Alternatives.**
+**Alternatives**
 
 1. **Leave `SAMPLE_MIN` and the ladder as they are.** Keep 400 as the floor and keep doubling on
-   refusal. *Benefits:* no figure in the corpus moves, nothing needs re-measuring, and the
+   refusal. *Benefits.* no figure in the corpus moves, nothing needs re-measuring, and the
    consequence is already bounded, logged and documented. The measurement above is preserved as a
-   finding without being acted on. *Drawbacks:* the construction keeps a retry rule that is
+   finding without being acted on. *Drawbacks.* the construction keeps a retry rule that is
    measured to climb in the wrong direction, so a future part may exhaust all three rungs at a
-   station a coarser attempt would have cleared. The 1e-5 floor stays. *Prerequisites:* none.
+   station a coarser attempt would have cleared. The 1e-5 floor stays. *Prerequisites.* none.
 
 2. **Lower `SAMPLE_MIN` to 200.** Change the floor so most stations sample coarser, leaving the
-   doubling ladder in place above it. *Benefits:* applies the measurement directly; likely removes
-   most or all retries and with them the floor. *Drawbacks:* every wall figure in the corpus moves
+   doubling ladder in place above it. *Benefits.* applies the measurement directly; likely removes
+   most or all retries and with them the floor. *Drawbacks.* every wall figure in the corpus moves
    at once, so every recorded number in `cowl_interior_surface.md` and every gate verdict must be
    re-measured and re-stated. The evidence supporting it is one nose at one `U`, and this is the
-   largest change the evidence could be used to justify. *Prerequisites:* the same ladder study on
+   largest change the evidence could be used to justify. *Prerequisites.* the same ladder study on
    a `tail_shell` and across the `U` range, plus a measurement of the **fitted surface's** accuracy
    at the lower density, not only the refit's.
 
 3. **Add a coarser rung below the current one.** Leave `SAMPLE_MIN` at 400, and on refusal try
-   `n/2` first, before `2n` and `4n`. *Benefits:* changes nothing at any station that succeeds
+   `n/2` first, before `2n` and `4n`. *Benefits.* changes nothing at any station that succeeds
    first time — on the nose, 9 of 10 — so the blast radius is the retrying stations alone, where
    the difference is already bounded at 2.0e-4 mm. It tests the finding in production without
    betting the corpus on it, and it is the smallest change that uses what was measured.
-   *Drawbacks:* keeps the ladder and therefore keeps a floor, only a smaller one; and it adds a
+   *Drawbacks.* keeps the ladder and therefore keeps a floor, only a smaller one; and it adds a
    rung to a mechanism whose selection rule is still "whichever the kernel happens to accept".
-   *Prerequisites:* one nose and one tail build to confirm which stations move and by how much.
+   *Prerequisites.* one nose and one tail build to confirm which stations move and by how much.
 
 4. **Stop building a curve before offsetting.** Offset the station's own arc, or its discretized
-   polyline, rather than a B-spline derived from samples of it. *Benefits:* removes `n` from the
+   polyline, rather than a B-spline derived from samples of it. *Benefits.* removes `n` from the
    offset's success condition entirely, which is the thing all of the above are working around.
-   *Drawbacks:* the largest change by far; the smoothing exists because the arc the station yields
+   *Drawbacks.* the largest change by far; the smoothing exists because the arc the station yields
    is a chain of up to 64 fragments that `makeOffset2D` refuses outright — 19 of 81 stations failed
    that way in 2026-09-02's measurement, and a 1600-point polygon did not help — so this is a
    redesign of §4.3 rather than a parameter choice, and it would move every figure in the corpus as
-   surely as alternative 2. *Prerequisites:* establishing what `makeOffset2D` will accept directly,
+   surely as alternative 2. *Prerequisites.* establishing what `makeOffset2D` will accept directly,
    which was not part of either study.
 
 5. **Separate the sampling from the fit.** Keep observing the arc at `n` points, but stop using
    those observations as the curve's control points: interpolate them, or approximate them with a
    pole count chosen against `REFIT_TOL_M` instead of inherited from `n`. Density and degrees of
-   freedom then become two knobs, and the ladder can move either one. *Benefits:* measured to be
+   freedom then become two knobs, and the ladder can move either one. *Benefits.* measured to be
    **2.9 times more accurate at the worst rung and 28 times at the best**, from identical
    observations, so most of the deviation budget the construction currently spends is recoverable;
    and it makes every later question about density answerable, which no other alternative does. It
    also removes a genuine conceptual defect — an observation count standing in for a model's
-   complexity. *Drawbacks:* **measured not to improve reliability** (47 of 50 rungs against 46 of
+   complexity. *Drawbacks.* **measured not to improve reliability** (47 of 50 rungs against 46 of
    50), so it is an accuracy change and not a fix for the refusals, and anyone adopting it for
    reliability would be adopting it for a reason that has been tested and failed. It moves every
    figure in the corpus, like alternatives 2 and 4. Interpolating observations of a sectioned
@@ -4830,10 +5309,12 @@ judges the first.
    constructions at `n` = 200 through 3200 across fifty rungs without incident — so it is a
    property of that synthetic arc and is unexplained. It is recorded because it shows the cost of
    an interpolated offset is not bounded by the poles version's, and a build-time regression is
-   exactly the kind of thing that would be discovered late. *Prerequisites:* the same
+   exactly the kind of thing that would be discovered late. *Prerequisites.* the same
    both-constructions comparison on a `tail_shell`, whose sections have corners the nose does not;
    a build-time measurement on both kinds, not only a per-station one; and a decision on whether
    `REFIT_TOL_M` should then be tightened, since the measured headroom would otherwise go unused.
+
+**Recommendation**
 
 **Recommendation.** Alternative 3 now, alternative 5 next, and not alternative 2 yet.
 
@@ -4859,9 +5340,11 @@ samples, not curve accuracy, not curvature, and not the poles construction. Noth
 diagnosis of `makeOffset2D`, and the two reliable observations are only that 200 works everywhere
 measured and 400 works least often. Choose on that basis and not on a mechanism.
 
-### OQ-DES-CW38 — A tail wall's volume moves while every operand the instrument can see is identical
+### OQ-DES-CW38 — A tail wall's volume moves while every operand the instrument can see is identical — OPEN
 
-**Problem.** Between the revision before the units conversion and the revision after it, a
+**Problem**
+
+Between the revision before the units conversion and the revision after it, a
 `tail_shell`'s finished wall volume moved from 23617.2932 to 23617.3047 mm3 — 4.9e-7 relative. The
 conversion changed stored constants from millimeters to meters and changed no geometry, so a moved
 figure is a defect in the conversion, a kernel effect, or a measurement artifact, and it has to be
@@ -4901,39 +5384,41 @@ bit-identical across the two revisions. The practical consequence is that
 stated mechanism covers the nose only, and tells a tail reader to apply the same floor for a reason
 that is explicitly not the stated one.
 
-**Alternatives.**
+**Alternatives**
 
 1. **Accept it as covered by the stated floor.** Leave §10.0 as it is: the floor is 1e-5, this
-   effect is 5e-7, and the document already says the cause is unidentified. *Benefits:* costs
-   nothing, and the statement is honest as written. *Drawbacks:* an unattributed deterministic
+   effect is 5e-7, and the document already says the cause is unidentified. *Benefits.* costs
+   nothing, and the statement is honest as written. *Drawbacks.* an unattributed deterministic
    difference is the shape of a real defect that happens to be small today, and nothing would
    notice if a later change made it large. It also leaves the project asserting a floor it has
-   explained for one cowl kind out of two. *Prerequisites:* none.
+   explained for one cowl kind out of two. *Prerequisites.* none.
 
 2. **Sharpen the instrument, then re-compare.** Extend `solid_identity` to compare the surfaces
    themselves — poles, knots and multiplicities per face, under a canonical face ordering — and
-   re-run the comparison on the two revisions' saved cell-wall operands. *Benefits:* settles
+   re-run the comparison on the two revisions' saved cell-wall operands. *Benefits.* settles
    whether the premise of this question is even true. If the operands differ, the question becomes
    an ordinary one about where in the conversion they diverged; if they genuinely do not, the
    question becomes a real one about the kernel and is worth the cost of alternative 3. It also
-   leaves a better instrument behind for every future comparison of this kind. *Drawbacks:* face
+   leaves a better instrument behind for every future comparison of this kind. *Drawbacks.* face
    ordering is not stable between builds, so the comparison needs a canonical ordering before it
-   can mean anything, which is the bulk of the work. *Prerequisites:* a `tail_shell` build at each
+   can mean anything, which is the bulk of the work. *Prerequisites.* a `tail_shell` build at each
    revision — roughly 20 minutes each — unless the shapes from the 2026-11-02 runs are still saved.
 
 3. **Bisect the cell-wall step.** Capture and compare each intermediate solid through
    `notched.cut(inside)`, `_extend_across_cell`, `_strip_seam` and the `common`, to find the first
-   one that differs. *Benefits:* localizes the effect to a single kernel call, which is what any
-   real explanation has to start from. *Drawbacks:* without alternative 2 it compares those
+   one that differs. *Benefits.* localizes the effect to a single kernel call, which is what any
+   real explanation has to start from. *Drawbacks.* without alternative 2 it compares those
    intermediates with the same instrument that produced the puzzle, so a null result at every step
-   would be uninformative in exactly the way this question is about. *Prerequisites:* alternative 2,
+   would be uninformative in exactly the way this question is about. *Prerequisites.* alternative 2,
    or an explicit decision to accept the weaker instrument.
 
 4. **Treat it as kernel non-determinism and check for it.** Add a repeated-build check that fails
-   when two builds of one part at one revision disagree. *Benefits:* catches the general class
-   rather than this instance. *Drawbacks:* measured not to apply — each revision already reproduces
+   when two builds of one part at one revision disagree. *Benefits.* catches the general class
+   rather than this instance. *Drawbacks.* measured not to apply — each revision already reproduces
    itself exactly, so this check would pass today and say nothing about the difference actually
-   seen. *Prerequisites:* none, but the evidence currently contradicts the premise.
+   seen. *Prerequisites.* none, but the evidence currently contradicts the premise.
+
+**Recommendation**
 
 **Recommendation.** Alternative 2, before deciding anything else. The question as written rests on
 "identical operands, different result", and that claim is only as strong as a function that does not
@@ -4945,6 +5430,51 @@ stops being a kernel question at all.
 
 ### OQ-DES-CW39 — The rib-cut residue check cannot tell a failed cut from a clean one — RESOLVED 2026-11-19
 
+**Problem**
+
+**Problem.** The cowl's interior cavity is built by fitting a smooth surface inside the outer skin,
+then cutting a *rib tool* out of it. The rib tool is the union of eleven solids, each a notch shape
+grown by the wall thickness `t` = 0.6 mm (6.0e-4 m); where it is cut out of the cavity, wall
+material remains, and those ribs are what bridge the buttress slots so the wall stays one piece.
+After the cut, `cowl_interior.cavity`'s `cut_and_check` verifies it with one boolean: the
+*residue*, `cut.common((tool,), RIB_CUT_FUZZ_MM)`, the part of the rib tool still inside the cut
+cavity.
+
+**Alternatives**
+
+1. **Keep the volume residue as it is.** Benefit: no cost. Drawback: measured blind to a complete
+   failure on real operands.
+2. **Residue per rib.** Run the same `common` against each of the eleven rib solids separately.
+   Benefit: smaller operands, and measured to find five of the six failed ribs on this cavity at 16-28
+   s each. Drawback: it missed the sixth, so it is still a boolean checking a boolean and can share
+   the failure.
+3. **Point containment, with no boolean.** Sample points strictly inside each rib where it lies
+   inside the smooth surface (inside both by `isInside`), at a fixed spacing, and require that the cut
+   cavity contains none of them. Benefit: independent of the boolean that failed, so it cannot fail
+   the same way. Drawback: a sample spacing bounds what it can see -- a residue thinner than the
+   spacing can be missed -- so it complements alternative 1 rather than replacing it.
+4. **Section comparison at the existing scan stations.** At each post-cut scan station, intersect
+   the cavity's section with the rib tool's section in 2D and require no area. Benefit: reuses the
+   stations the post-cut pass already scans. Drawback: still booleans.
+5. **Volume accounting.** Require the cut to have removed what the rib tool overlaps: smooth volume
+   minus cut volume against the overlap volume. Benefit: one comparison. Drawback: the volume
+   instrument is wrong by 0.16-0.24 % on these B-spline solids (IP-FC-119), about 13 000-19 000 mm3 on
+   an 8.0e6 mm3 cavity, larger than the 8641.5 mm3 signal.
+6. **Rely on the downstream refusals and fix the message.** Leave detection to the finished-wall
+   gap and the solid count, and make the post-cut refusal say that a gap near `t` everywhere can be an
+   uncut rib. Benefit: cheapest. Drawback: detects only failures that sever the wall or thin a
+   measured section, and late, after the re-cut rounds.
+
+**Recommendation**
+
+Alternative 3, kept beside alternative 1, with alternative 6's message change made regardless. The
+defect is that the only check on the rib cut is the same kind of operation on the same operands as
+the cut it checks, so it fails with it; a point test is the one option here that does not share
+that failure, and the failure it must catch -- a whole rib left uncut -- is the easiest thing for a
+point test to see.
+
+**Decision**
+
 **Resolved by requirement, not by choice.** The question was filed as a menu of six detection
 methods with a recommendation. The maintainer's direction: the answer follows from the requirement
 -- detect a failed rib cut with no false negatives and no false positives -- with the method
@@ -4955,12 +5485,56 @@ accounting cannot resolve the threshold; the sampled methods cannot see a residu
 spacing at the 0.01 mm threshold), so the requirement calls for an exact detector, and finding and
 qualifying one is IP-FC-169 against the criteria in §7.2.
 
+**Rationale**
+
+Given with the decision.
+
+**Caveats**
+
 **One premise of the question as filed was wrong.** It said the post-cut refusal "pointed this
 investigation at station density". The refusal's message already says that a gap approaching `t` is
 material absent and that more stations will not close it. The diagnosis went astray for other
 reasons, chiefly the dose harness's unit defects (IP-FC-146).
 
+**Where it is recorded**
+
+[cowl_interior_surface.md §7.2](cowl_interior_surface.md) sets out the requirement and the
+methods it eliminated.
+
 ### OQ-DES-CW40 — An exact rib-cut detector needs an inner offset the kernel cannot build — RESOLVED 2026-11-23
+
+**Problem**
+
+Before the interior cavity is cut, each buttress cutting tool is dilated by the wall thickness `t`
+into a rib tool, and the fused rib tools are cut from the cavity. When that cut fails, rib material
+is left in the cavity, and the finished wall is missing it. A detector for that failure must flag
+every residue deeper than `WALL_TOL_M` (ε = 0.01 mm) past the tool's boundary, and nothing
+shallower.
+
+**Alternatives**
+
+1. **Dilate each rib as an exact Minkowski sum.** Build each rib as the convex hull of its 48
+   copies, after splitting the five non-convex slabs into convex parts. Benefit: Every face of the
+   tool is a plane, so its inner offset can be built exactly from planes, cylinders and balls, with no
+   kernel offset. Drawback: It changes production geometry, so the wall changes by up to the valley
+   depth and the cut needs requalifying.
+2. **Keep the tool and build its inner offset in project code.** That means the tool minus the
+   union of every face's ε-neighborhood: a prism for each face, a cylinder for each edge and a sphere
+   for each vertex. -. Benefit: No production change. -. Drawback: 2,740 faces means thousands of
+   boolean operands, on the tool whose booleans are the failures this question started from.
+3. **Restate the requirement as a band.** Keep "no false positive below ε" and allow false
+   negatives up to `ε + β`. Benefit: No construction work beyond what exists. -. Drawback: `β` is not
+   bounded today.
+
+**Recommendation**
+
+**Alternative 1, but the evidence it needs comes first.** It is the only route whose detector rests
+on geometry that can be built exactly, rather than on a kernel operation already measured failing
+on this tool: the tool minus a prism ε deep under every face, a cylinder of radius ε along every
+concave edge, and a ball of radius ε at each end of one. (This was first written as each convex
+part's planes moved in by ε plus cylinders at the creases.
+
+**Decision**
 
 **Decision: Alternative 1, with planar ribs.** The user adopted planar ribs on 2026-11-23. Each rib
 tool is to be built as `rib_hull.dilate_planar` builds it, in place of today's union of 48 copies
@@ -4979,6 +5553,8 @@ the tool's inner offset by ε (`WALL_TOL_M`, 0.01 mm), built exactly from the to
 cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a failed cut
 (`rib_hull.reaches`).
 
+**Rationale**
+
 **Why.**
 - The user's design input: a rib's inner corners need not be round. A chamfer or a square corner
   is acceptable, so long as no wall of the U-shaped rib gets thinner than the extrusion width,
@@ -4990,6 +5566,8 @@ cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a
   tool has 125 faces against 2,122 for the hull tool. Its inner offset is built and qualified, and
   the detector gave no wrong verdict in 41 cases with a known answer. The tail shell built in
   21 minutes, against 91 to 102 with the shipped ribs.
+
+**Caveats**
 
 **Caveats.**
 - *The wall must match the slicer's line width.* The shell's wall is
@@ -5008,8 +5586,12 @@ cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a
 - *OQ-DES-CW32 was closed on this decision.* Planar ribs have no facet count, so once they are built
   in production the 48-gon's solidity floor no longer applies.
 
+**Where it is recorded**
+
 The construction, the measurements behind the decision, and the qualification are in
 [cowl_interior_surface.md §7.2.1](cowl_interior_surface.md).
+
+## See also
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

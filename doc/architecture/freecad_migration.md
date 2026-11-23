@@ -1037,1228 +1037,11 @@ the port is verified would make it impossible to tell which layer a discrepancy 
 
 ---
 
-## Open questions
+## The bulkhead flange's chamfer and rounded corners
 
-| ID | Status | Question |
-| --- | --- | --- |
-| ARCH-1 | decided 2026-08-07 | `Part::` or `PartDesign::`? — build both, then choose (IP-FC-5) |
-| ARCH-2 | decided 2026-08-07 | What replaces the exact verification tier? — do both, plus every method that works |
-| ARCH-3 | withdrawn 2026-08-07 | Not an open question — a measurement. See IP-FC-1 |
-| ARCH-4 | decided 2026-08-07 | Retire it after IP-FC-13; FreeCAD becomes the definition of correctness |
-| ARCH-5 | decided 2026-08-07 | Adaptive curvature-aware slice-and-fit; G1 threshold, G2 objective; never ruled |
-| ARCH-6 | decided 2026-08-07 | FreeCAD Assembly joints, verified against the constructed placement |
-| ARCH-7 | decided 2026-08-07 | Dimensions are expressions over parameters; interfaces are a floor; family drawing with a variant table |
-| ARCH-8 | withdrawn 2026-08-07 | Not an open question — a survey. See IP-FC-6 |
-| ARCH-9 | resolved 2026-08-07 | Is OpenVSP's license compatible with the project's policy, and in which usage pattern? |
-| ARCH-10 | withdrawn 2026-08-09 | Not an open question — a measurement. OCCT needs no overlap at all; the premise was wrong. See IP-FC-49 |
-| ARCH-11 | decided 2026-08-15 | Constraints. `PartDesign::` is the target state; staged, starting with constrained sketches for derived features |
-| ARCH-12 | decided 2026-08-16 | `BBOX_TOL` scales with `U`. The reference is not re-rendered to binary; the limit expires with the OpenSCAD sweep |
-| ARCH-13 | decided 2026-08-16 | Leave the construction for now and record that it is an OpenSCAD workaround; make it a real chamfer feature with the `PartDesign` move (IP-FC-78) |
-| ARCH-14 | decided 2026-08-17 | Convert all four rounded corners, into one cohesive sketch carrying only the fillets active for the variant. Implemented the same day (IP-FC-73); the change to the flown part the decision accepted turned out to be **zero** in all 27 affected variants, since the omitted body lay inside the bolt hole |
-| ARCH-15 | decided 2026-08-18 | The baseline does not move. Re-baselining lets every step pass while the total wanders, so `variant_output_baseline` stays the authority for the whole port and differences are enumerated in a ledger and justified, not absorbed. Retired only after the `PartDesign::` end state, on a reviewed sign-off (IP-FC-80, IP-FC-81) |
-| ARCH-16 | decided 2026-08-18 | Both: fix the tolerances to the project's own rule — relative volume, `U`-scaled bbox, triangle count advisory — **and** add a surface distance computed on a sampled subset rather than every vertex. Cheap criteria screen, distance adjudicates (IP-FC-82, IP-FC-83) |
-| ARCH-17 | resolved 2026-08-21 | What supplies material where a horizontal inset leaves none? — **nothing, because the design has no such region.** The cowl avoids near-horizontal geometry deliberately: the nose closure is split off as its own parts (`nose_nose`, `nose_plate`) so the body never turns over, the tail is open at both ends, and every internal relief is cut at `overhang_angle_from_bed`. Only the perimeters are printed, so there is no top or bottom skin to find an equivalent for either. The thinnest wall the design admits is `0.6 × cos 55° = 0.344 mm`, seven times the 0.05 mm floor. IP-FC-16 carries it as a stated **precondition the implementation asserts**, not as a material rule. **Unblocks IP-FC-16** |
-| ARCH-18 | withdrawn 2026-08-22 | What measures a dimension's annotation extent? — **filed on strings the drawing does not carry.** OQ-ARCH-7 put values in a table and lettered callouts on the view, so the annotation text is one capital, not `20.00 mm`. Remeasured: the worst cross-font spread falls from 6.139 mm to 1.270 mm against a lane spacing near 8 mm, and — the larger half — every callout becomes the same length, so bounding every letter by the widest (`W`, 3.461 mm) shifts the layout uniformly instead of distorting it. Pinning the font and template is real and moves to IP-FC-21. **Unblocks IP-FC-21** |
-| ARCH-19 | decided 2026-09-06 | What reproducibility is required of a generated solid? — **two thresholds, and a screen that cannot give a false negative.** Both measured and set about four times above what reproduction actually costs |
-| ARCH-20 | decided 2026-09-06 | Is a volume tolerance relative to volume, or to surface area? — **to surface area and part scale**, `\|Va − Vb\| / (A · 100U)`, dimensionless. A tessellated mesh's volume error goes as offset × area, so the denominator was the defect |
-| ARCH-21 | open | How is the reproducibility criterion *sampled*? OQ-ARCH-19 fixed its two thresholds and not its sample count, seed or combination rule -- and near the bar those decide the verdict |
-| ARCH-22 | decided 2026-10-06 | How does the pytest tier reach FreeCAD, given that the project's interpreter must stay free of both vendors' build choices? — **alternative 7: an adaptation library passing remote object references across a process boundary.** Designed in [geometry_bridge.md](geometry_bridge.md) |
-| ARCH-23 | withdrawn 2026-10-31 | **Not a question — the decision was taken at the project's start and the finding is a conformance gap.** [general.md](../guidelines/general.md) names *the FreeCAD port* in the SI standard's own scope list and requires every stored value to be SI, so asking whether the port should be millimeters or SI re-opened a settled standard. The measurement behind the question stands and is worse than it was first written up: **46 of 79 port modules hold 173 millimeter constants**, and the mm parameter inflow propagates through the whole geometry pipeline. Recorded in *The unit boundary* above and scheduled as IP-FC-158 |
-| ARCH-24 | decided 2026-11-02 | How does `tools/wall_measure` reach the unit standard, when a committed test asserts it may import nothing outside numpy and the standard library -- so that it stays loadable under FreeCAD's embedded interpreter -- and `freecad/si.py` imports FreeCAD? -- **alternative 1: `freecad/units.py` is admitted to the allowlist**, named explicitly so admitting one pure module does not admit `si.py` behind it. Both of the alternative's premises were checked before acting and both moved. The package's own boundary over `units` is `wall_measure/kern.py`; the conversion landed as IP-FC-163 and the package is SI as of 2026-11-06 |
-| ARCH-25 | decided 2026-11-07 | Where does the port's SI parameter layer sit? -- **alternative 3: convert at the derivation.** `derived_parameters()` returns meters, the CSV read converts in, the `.scad` emission converts out, and the exported JSON is meters. Chosen by the project owner as the only one of the five satisfying three requirements set the same day. **Carries no guideline reversal** -- the OpenSCAD exemption protects the `.scad` files, the CSV axes and the exported meshes for traceability to the original design, not the Python around them, so general.md needs a wording fix rather than an amendment. Gate: byte-identical `.scad` across all 576 variants -- **recorded as reachable, and it is not; see OQ-ARCH-26**. Unblocks IP-FC-159 |
-| ARCH-26 | open | **What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?** OQ-ARCH-25 set IP-FC-159's gate at byte-identical `.scad` and recorded it as reachable. Measured 2026-11-07 on the derivation rather than the inflow: **523 of 544 parts (96.1%) change text**, by two mechanisms neither of which any conversion operator removes -- a whole number of millimeters is not a whole number of meters, and the millimeter path's own 1.1 ULP rounding residue is a property of the order of operations. No geometry moves. **Reframed 2026-11-08 by R1, a requirement set on direct instruction: a value carrying an epsilon offset must not become a reference value in the verification.** Measured against it, **114 reference values on disk today already carry residue** -- `flange_thickness` reading 1.7999999999999998 where the design means 1.8 -- from an exact integer count times an inexact binary 0.6 or 0.2, which has nothing to do with units. So the corpus has this defect now, independent of IP-FC-159, and R1 makes alternative 3 (round at emission, 12 significant figures) **necessary**; what stays open is the gate, between 1 and 2. **Blocks IP-FC-159** |
+Recorded while deciding [OQ-ARCH-13](#open-questions) and [OQ-ARCH-14](#open-questions).
 
-### OQ-ARCH-1 — `Part::` or `PartDesign::`? — DECIDED 2026-08-07: build both
-
-The roadmap calls this the decision that shapes the whole phase. The geometry today is
-CSG: unions and differences of primitives and extrusions, with masks trimming an octant and
-mirrors tiling it.
-
-**Alternatives**
-
-1. **`Part::` primitives with booleans.**
-   *Benefits:* maps directly onto the existing code, so the port is a translation rather
-   than a redesign; a `Shape` is a value that can be reused as a cutting tool, which is
-   exactly how the greeble is formed today; the octant-and-mirror construction carries over
-   unchanged.
-   *Drawbacks:* less idiomatic FreeCAD; fillets and drafts are applied to edges selected
-   programmatically, which is fragile if edge ordering shifts.
-   *Prerequisites:* none.
-
-2. **`PartDesign::` bodies with sketches.**
-   *Benefits:* idiomatic; proper parametric fillets and drafts; better suited to TechDraw
-   and to later assembly work.
-   *Drawbacks:* a body is a single contiguous solid, and reusing one body as a cutter for
-   another is awkward — which is a direct problem for the greeble, whose whole safety
-   property is that both halves are complements of one shape; sketches must be constructed
-   programmatically, which is more code than the geometry warrants.
-   *Prerequisites:* a way to express the joint that preserves the single-description
-   property.
-
-3. **`Part::` for the joint, `PartDesign::` for the rest.**
-   *Benefits:* keeps the risky part in the paradigm that suits it.
-   *Drawbacks:* two paradigms in one codebase, and the boundary between them is another
-   thing to get wrong.
-   *Prerequisites:* both of the above understood first.
-
-**Recommendation was alternative 1.** The single-description property of the greeble is the
-strongest constraint in the geometry and `Part::` preserves it for free. The fillet
-fragility is real but confined to the flange and web features, which are the least
-load-bearing geometry in the project.
-
----
-
-**DECIDED 2026-08-07: build the parts *both* ways, then choose.** Neither alternative is
-selected on paper. IP-FC-5 produces a `Part::` corner **and** a `PartDesign::` corner, and
-the paradigm decision follows from comparing them.
-
-This is a deliberate deferral, and it is bought rather than free — it costs a second
-prototype. It is worth that because the roadmap calls this "the decision that shapes the
-whole phase", and the arguments on each side are of a kind that prototypes settle and
-reasoning does not:
-
-- Whether `PartDesign::` can express the greeble's single-description property at all, or
-  needs a constraint where `Part::` has an identity, is a question about how the workbench
-  behaves — not about the geometry.
-- Whether programmatic edge selection for fillets is as fragile as feared is a question
-  about topological naming stability across a parameter sweep, which only a sweep answers.
-- Whether sketch-based construction is genuinely a "bigger rewrite" is a question about how
-  much of the octant-and-mirror structure survives, which is visible once one part exists
-  in both forms.
-
-**What the comparison must produce**, so it decides something rather than becoming two
-prototypes nobody chooses between:
-
-1. Identical measured geometry from both — volume and bounding box against the OpenSCAD
-   reference, to prove both are correct before either is preferred.
-2. A statement of whether the greeble can be formed in `PartDesign::` by reusing the
-   corner's end section, and what it costs if not.
-3. Line counts and, more importantly, how each behaves when a parameter changes — a
-   regenerate across several `U` values, checking whether fillet references survive.
-
-Until IP-FC-5 reports, no other part is ported. That is the point of the deferral.
-
-### OQ-ARCH-2 — What replaces the exact verification tier? — DECIDED 2026-08-07: do both, and more
-
-`scad_snapshot.py` is exact, runs in seconds, and disappears with the generated `.scad`.
-
-**Alternatives**
-
-1. **Snapshot the parameter dataclasses instead.**
-   *Benefits:* same cost and exactness; covers axes, derivation, validity, and naming —
-   where most changes land; toolchain-independent, so it works before, during, and after
-   the port.
-   *Drawbacks:* covers nothing below geometry construction, so geometry changes still cost
-   a render.
-   *Prerequisites:* none; the dataclasses already exist.
-
-2. **Serialize each `Shape` to BREP and byte-compare.**
-   *Benefits:* covers the geometry layer exactly.
-   *Drawbacks:* BREP is not obviously stable across kernel versions or construction order,
-   so a false difference is likely; unproven.
-   *Prerequisites:* measure whether identical input yields identical BREP bytes.
-
-3. **Accept the loss and rely on measured geometry alone.**
-   *Benefits:* no work.
-   *Drawbacks:* every Python-side change costs a full sweep; that is the situation Phase 1
-   built tooling to escape.
-   *Prerequisites:* none.
-
-**Recommendation was alternative 1 now, alternative 2 opportunistically.** They compose —
-parameters above, BREP below — and 1 is cheap enough to build before it is needed.
-
----
-
-**DECIDED 2026-08-07: do both, and pursue every shape-comparison method available.**
-Alternative 3 — accepting the loss — is rejected outright. The governing statement:
-
-> **At this point we cannot afford to operate without verification coverage.**
-
-That is a stronger position than any single alternative above, and it reframes the
-question. The default is **not** "pick the cheapest adequate check". It is **try every
-method, keep everything that works, and deprecate a method only after demonstrating it
-cannot be made to work** — a failed attempt is evidence; an untried idea is not.
-
-**What this commits to building:**
-
-| Method | Layer it covers | Item |
-| --- | --- | --- |
-| Parameter snapshot | everything above geometry construction — axes, derivation, validity, naming | IP-FC-2 |
-| BREP serialization compare | the geometry layer, exactly, within FreeCAD | IP-FC-32 |
-| Measured geometry | cross-toolchain and within-toolchain | survives as `sweep_check.py` |
-| Generator-script render | that every part still builds at all | successor to `verify_drivers.py` |
-
-These are complements, not competitors. A parameter snapshot cannot see a geometry change; a
-BREP compare cannot see a naming change; measured geometry sees both but costs a render.
-**Layered coverage is the goal and redundancy between layers is a feature** — Phase 2 found
-defects that only one of its three tiers could have caught, more than once, and the two dead
-parameters (OQ-DES-B6, OQ-DES-C3) were invisible to *all* of them.
-
-**Grounds for deprecating a method:** demonstrate that it produces false results or cannot
-be made to work, and record the finding. "It seemed redundant" is not sufficient, because
-redundancy is the property being bought.
-
-**Why this matters more after the port than before.** Phase 2's cheapest tier was exact,
-ran in seconds, and carried most of the verification load. The port deletes it. Replacing
-one strong check with one weaker check would quietly reduce coverage at exactly the moment
-the codebase is least trustworthy — a newly ported geometry engine with no track record.
-Several partial checks is the right response, even though it is more work than the
-arrangement it replaces.
-
-### OQ-ARCH-3 — Is subprocess-per-part viable? — WITHDRAWN 2026-08-07: not an open question
-
-**This was miscategorized.** An open question is a decision requiring judgment between
-alternatives whose merits cannot be settled by looking. This is a **measurement** — take the
-`freecadcmd` startup time and a single part's build time, and the answer follows
-mechanically from the ratio. There is no design judgment in it.
-
-The substance has moved to where it belongs:
-
-- **The measurement** is [IP-FC-1](../implementation/freecad_migration.md), already an
-  unblocked work item and the first thing in the plan.
-- **The decision tree** — which architecture each outcome implies, and what each costs — is
-  in [§What must be preserved](#what-must-be-preserved), beside the discussion of why the
-  driver keeps its subprocess model.
-
-Nothing is lost by withdrawing it; the ID is retained rather than renumbered so that
-references elsewhere stay valid.
-
-**Worth noting as a pattern**, since this document raised nine questions and one of them
-was not a question: *"we do not know X"* is not sufficient grounds for an OQ. The test is
-whether knowing X requires a **decision** or merely an **observation**. If an afternoon of
-measurement settles it, it is a work item.
-
-### OQ-ARCH-4 — What becomes of the OpenSCAD implementation? — DECIDED 2026-08-07: retire it
-
-The roadmap says do not delete it before the FreeCAD path is proven across the full
-parameter range, which settles the near term but not the end state.
-
-**Alternatives**
-
-1. **Retire it once equivalence is demonstrated.**
-   *Benefits:* one implementation to maintain; no divergence.
-   *Drawbacks:* loses the only independent check on the new geometry.
-   *Prerequisites:* full-range equivalence.
-
-2. **Keep it as a cross-check, run on demand.**
-   *Benefits:* two independent implementations of the same geometry is a strong check —
-   the current design documents were written partly by reading it.
-   *Drawbacks:* every geometry change must be made twice or the check rots into a source of
-   false alarms.
-   *Prerequisites:* a decision about who keeps them in step.
-
-3. **Freeze it as a reference corpus, not as code.**
-   *Benefits:* keeps the 576-part output tree as the golden reference forever, at no
-   maintenance cost; the `.scad` sources stay readable as documentation of intent.
-   *Drawbacks:* the reference goes stale the moment the geometry legitimately changes.
-   *Prerequisites:* none.
-
-**Recommendation was alternative 3.** A frozen corpus captures nearly all the value of
-alternative 2 — an independent statement of what the geometry was — without the standing
-cost of maintaining two implementations, which alternative 2 will lose to entropy.
-
----
-
-**DECIDED 2026-08-07: alternative 1 — retire it.** No new geometry will be developed in
-OpenSCAD, and two implementations will not be maintained in parallel. **Once verified, the
-FreeCAD implementation becomes the definition of correctness.**
-
-That last clause settles it, and it is what my recommendation missed. Alternative 3 proposed
-keeping the OpenSCAD output as a frozen reference corpus — but a corpus is only useful as a
-*datum*, and there cannot be two definitions of correctness. The moment IP-FC-13 signs off
-equivalence, the OpenSCAD tree stops being an independent check and becomes a second,
-unmaintained answer to a question that now has an authoritative one. Keeping it invites
-someone to read a disagreement as ambiguous when it is not.
-
-**The corpus is therefore a migration instrument with a defined end of life, not an asset:**
-
-| Phase | Role of the OpenSCAD output |
-| --- | --- |
-| Until IP-FC-13 | **The datum** — every ported part is checked against it |
-| At IP-FC-13 | Equivalence demonstrated across the full parameter range |
-| After IP-FC-13 | **Superseded** — FreeCAD defines correctness; the OpenSCAD implementation is removed |
-
-**Deleting it is safer than it feels**, which is worth stating because working code is hard
-to throw away: the implementation lives in git history and stays recoverable indefinitely.
-Removing it from the working tree destroys nothing — it stops it being read, maintained, or
-mistaken for authoritative. And the part that *would* genuinely have been lost, the design
-intent the code was the only record of, is now in [corner.md](../design/corner.md),
-[bulkhead.md](../design/bulkhead.md) and [cowl.md](../design/cowl.md).
-
-**Two conditions on the removal**, both still binding:
-
-1. **Not before the full parameter range is proven** — IP-FC-13, not the first part that
-   matches.
-2. **Not before the design documents are checked against it one last time.** They were
-   reconstructed *from* this code; once it is gone, an error in them is no longer
-   falsifiable against the original. This session found several such errors, so the risk is
-   demonstrated rather than theoretical.
-
-Tracked as IP-FC-34.
-
----
-
-### OQ-ARCH-5 — How is the cowl interior surface generated? — DECIDED 2026-08-07: adaptive slice-and-fit
-
-Required by UC-4. The interior must be a per-layer 2D inset matching slicer behavior, not
-a perpendicular shell offset — see the use-case section for why the two differ and why the
-difference is intended.
-
-**The parameter question is settled.** Extrusion width already exists; it was stored under
-the name `nozzle_diameter` and has been renamed (IP-GEO-24). No new field is needed, and —
-more to the point — no new field should be *added*, because doing so would produce two
-nearly-equal parameters where the design has one.
-
-The offset should still be expressed as an explicit multiple, `n_perimeters ×
-extrusion_width`, so the count and the width stay separately visible. That matches the
-existing convention for `flange_thickness` and `plate_thickness`, which are already whole
-multiples of extrusion width and layer height respectively.
-
-**What remains open is the method** — how layers are sliced, how the inset is computed per
-layer, how the sections are joined into a solid, and what supplies material at
-near-horizontal surfaces where a horizontal inset leaves none.
-
-**Alternatives**
-
-1. **Slice-and-loft** — section the solid at `layer_height` intervals, offset each 2D
-   contour inward by `n_perimeters × extrusion_width`, and loft the resulting contours.
-   *Benefits:* directly mirrors what the slicer does, so the model matches the print by
-   construction; each step uses standard 2D offset operations that OCC provides.
-   *Drawbacks:* produces one contour per layer — thousands for a large cowl — so the loft
-   is heavy and the resulting B-rep is large; contour topology can change between layers
-   (a notch closing, a hole appearing) and a loft does not handle that gracefully.
-   *Prerequisites:* none.
-
-2. **Coarse slice-and-loft** — the same, at a spacing much larger than `layer_height`,
-   chosen so the offset error stays within tolerance.
-   *Benefits:* far cheaper; a smooth cowl needs few sections to capture an offset that
-   varies slowly; the result is a clean surface rather than a staircase.
-   *Drawbacks:* no longer exactly what the printer produces; needs a stated tolerance and
-   a way to check it.
-   *Prerequisites:* deciding the acceptable deviation from the true per-layer inset.
-
-3. **3D shell offset with local correction** — use `Part::Offset`/`makeThickness` for the
-   bulk, and correct where the surface approaches horizontal.
-   *Benefits:* one kernel operation for most of the surface; robust and fast where the
-   surface is steep.
-   *Drawbacks:* offsets normal to the surface, which is *not* what the slicer does, so it
-   is wrong by `1/cos α` everywhere the surface is not vertical — precisely the error this
-   use case exists to avoid; the correction region is where the method is least reliable.
-   *Prerequisites:* a criterion for where to switch methods.
-
-4. **Two surfaces, explicitly** — model a nominal interior independent of slicer behavior,
-   and record that it is an idealisation.
-   *Benefits:* simplest to build and to reason about; adequate for mass properties and
-   assembly clearance.
-   *Drawbacks:* diverges from the printed part in a way that matters for UC-8; interacts
-   with OQ-DES-CW6, where the ribs have the same problem.
-   *Prerequisites:* agreement on what the model is *for* — settled by OQ-DES-CW6
-   (2026-08-09): the solid model is for everything except printing, and the print keeps its
-   own representation.
-
-**Recommendation: alternative 2.** It keeps the mechanism that makes the result correct —
-horizontal insets, matching the slicer — while avoiding a per-layer loft that no downstream
-consumer needs at full resolution. Alternative 3 is the tempting one and should be
-resisted: a normal offset is the exact error mode this use case was raised to prevent.
-The near-horizontal rule needs deciding regardless of which is chosen, and it is the same
-decision as the top-and-bottom-solid-layers rule a slicer applies. **Not so, and settled
-2026-08-21 by [OQ-ARCH-17](#open-questions):** the cowl is printed as perimeters only, with no
-top or bottom solid layers to be the equivalent of, and its design avoids near-horizontal
-geometry rather than accommodating it. No rule is needed under any of these alternatives.
-
-**The full method belongs in an algorithm document**, not here — see IP-FC-16.
-
----
-
-**DECIDED 2026-08-07: alternative 2, with four requirements on the surface it produces.**
-
-1. **Curvature-aware, adaptive section spacing.** Not a fixed interval. Section density
-   follows local curvature — close where the OML turns hard, sparse where it is nearly
-   straight. Uniform spacing wastes sections on the parallel midbody and under-samples the
-   nose radius, which is the one place accuracy matters.
-2. **Bidirectional curvature.** The interior must be doubly curved — circumferentially
-   *and* axially. Not developable, not ruled.
-3. **Axial continuity: G1 tangency is the threshold, G2 curvature is the objective.**
-   Tangency across every section join is the minimum acceptable result; curvature
-   continuity is the goal to design toward.
-4. **Explicitly not a ruled surface with tangency discontinuity.** A loft that
-   straight-lines between adjacent contours and meets only C0 at each section is precisely
-   the failure this requirement excludes.
-
-**Why the continuity requirement is not cosmetic.** Wall thickness is the *difference*
-between exterior and interior surfaces. The exterior is a piecewise cubic Bézier carrying
-G2 across several stations by design (§1.2). If the interior is only C0 at its section
-joins, then **wall thickness is discontinuous at every join** — a thickness step at a seam
-the exterior does not have — even though each surface is individually acceptable. That is a
-stress raiser for UC-8 and a visible artifact in UC-4 and UC-7.
-
-Matching the interior's continuity class to the exterior's is the real requirement; G1
-threshold / G2 objective is how it is stated.
-
-**What this rules out in implementation.** A `ruled=True` loft is excluded by (4). So is a
-`ruled=False` loft that merely interpolates the section curves without tangency
-constraints, since that satisfies neither (3) nor generally (2). The method wants a surface
-**fit** through the offset contours with continuity conditions imposed — the same class of
-construction OpenVSP uses for the exterior, applied to the interior.
-
-**Adaptive spacing has a natural termination test:** refine the interval until the deviation
-between the fitted surface and the true per-layer offset falls below tolerance. That makes
-spacing a derived quantity rather than a tuning knob, and gives the algorithm document a
-convergence criterion to state.
-
-The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
-layers — remains the main undecided item inside IP-FC-16. **Settled 2026-08-21 by
-[OQ-ARCH-17](#open-questions): there is no such rule, because the design has no
-near-horizontal geometry and the cowl has no top or bottom skin.** It had stood here as the
-main undecided item since 2026-08-07 without ever being filed as a question, so it blocked
-IP-FC-16 while reading as prose. What IP-FC-16 carries instead is the precondition, asserted
-rather than assumed.
-
-**Amended 2026-08-09 by OQ-DES-CW6: this surface is not what gets printed.** Cowls are
-printable in **spiral vase mode**, which permits one contour per layer and no interior
-geometry at all, so a cowl carrying this interior surface is no longer vase-printable. The
-interior therefore serves UC-2, UC-3, UC-4, UC-7 and UC-8, and the UC-1 export continues to
-come from the un-shelled notched blank — two representations from one parametric source, as
-[cowl.md §6.4](../design/cowl.md) records. Two consequences here. First, alternative 4's
-"diverges from the printed part" drawback is no longer a drawback to be weighed: divergence
-is the *design*, and the thing to guard is that the two paths stay separate. Second, the
-interior's fidelity requirements above are unchanged but their justification narrows — they
-matter because analysis and assembly need them, not because a printer will follow them.
-
-### OQ-ARCH-6 — How are assembly joints defined and stored? — DECIDED 2026-08-07: Assembly joints
-
-Required by UC-4: fuselage unit, nose, tail, and full fuselage assemblies with real joints.
-
-The unresolved part is where the mating information lives. The geometry already knows how
-the parts mate — the greeble post and its bore are complements of one shape, and the bolt
-pattern is a shared parameter — so an assembly could in principle place parts by
-construction rather than by constraint. That is the same argument that appears in
-[OQ-DES-C3](../design/corner.md#open-questions) for the joint itself.
-
-**Alternatives**
-
-1. **Place parts by construction, from the parameters that already position them.**
-   *Benefits:* cannot be inconsistent, for the same reason the greeble cannot; no
-   constraint solver in the sweep path; headless-friendly.
-   *Drawbacks:* not a FreeCAD Assembly document, so it does not interoperate with the
-   Assembly workbench's tooling.
-   *Prerequisites:* none.
-
-2. **Use FreeCAD's Assembly workbench with real joints.**
-   *Benefits:* idiomatic; interference checks and kinematics come free; exports as a
-   proper assembly to STEP.
-   *Drawbacks:* constraints can be violated or fail to solve, which is a new failure mode
-   in a batch context; the solver's headless behavior is unverified.
-   *Prerequisites:* confirm the Assembly workbench is scriptable under `freecadcmd`.
-
-3. **Both — construction for placement, joints added for downstream use.**
-   *Benefits:* placement stays deterministic while the assembly still carries joint
-   semantics for consumers.
-   *Drawbacks:* two representations of the same relationship, which is exactly the class
-   of duplication this project has spent Phase 2 removing.
-   *Prerequisites:* both of the above understood.
-
-**Recommendation was to measure alternative 2's headless behavior first**, because it
-decides whether the choice is real. If the Assembly workbench does not script cleanly under
-`freecadcmd`, alternative 1 is the only option that runs in a sweep.
-
----
-
-**DECIDED 2026-08-07: alternative 2 — FreeCAD Assembly with real joints.**
-
-This buys what UC-4 and UC-7 actually need: interference checking, kinematics, and an
-assembly that exports to STEP as an assembly rather than as a bag of solids.
-
-**The headless question becomes a work item, not a decision gate.** Confirming that the
-Assembly workbench scripts under `freecadcmd` is now a prerequisite task inside IP-FC-19
-rather than a condition on the choice. If it turns out not to script, that is a problem to
-solve — not a reason to revisit the decision.
-
-**The one real objection to this option has a cheap mitigation, and it should be built in
-from the start.** The drawback of joints over construction is that a constraint can fail to
-solve, or solve to something unintended, and in a batch context nothing would notice.
-
-But **the constructed placement remains computable from the parameters** — that is what
-alternative 1 would have used, and those parameters do not go away. So:
-
-> **Solve with joints; verify against the constructed placement.**
-> For every assembly, compute where each part *should* sit from `unit_width`,
-> `bulkhead_thickness`, `unit_length` and the rest, and assert the solver put it there
-> within tolerance.
-
-That converts the failure mode from silent into loud, at the cost of arithmetic that is
-already available. It preserves the property [OQ-DES-C3](../design/corner.md#open-questions)
-established — that parts sharing parameters cannot drift — while still producing a real
-assembly with real joints.
-
-**Note what this does and does not change about the geometry.** Parts still share their
-cross-section and joint parameters by construction; the greeble is still formed by cutting
-with `corner_end()`. Joints are an additional layer describing how parts relate, for the
-benefit of downstream consumers. They are not a substitute for the parametric consistency
-that makes the parts fit in the first place, and nothing here should be read as license to
-let the two representations diverge.
-
-### OQ-ARCH-7 — What decides which dimensions a generated drawing carries? — DECIDED 2026-08-07
-
-Required by UC-7. Projecting a view is the easy part; TechDraw does it from any shape.
-The hard part is *which* dimensions to place, and that is a question about design intent,
-not geometry. A part has hundreds of dimensionable edges and a useful drawing carries a
-dozen.
-
-The observation that shapes this: **the parameter set already is the design intent.**
-`corner_radius`, `bolt_offset`, `panel_thickness`, `bulkhead_thickness` are exactly the
-quantities a reader of the drawing needs, and they are exactly what the geometry was
-built from.
-
-**Alternatives**
-
-1. **Generate the dimension scheme from the `Parameters` object.**
-   *Benefits:* a drawing is guaranteed to dimension the things that are actually
-   parametric, and it cannot drift from the model — both come from one source; scales to
-   every variant in the sweep for free.
-   *Drawbacks:* needs a mapping from each parameter to the edges or faces that express it,
-   which is per-part work and brittle if the topology changes.
-   *Prerequisites:* stable topological references, which bears on OQ-ARCH-1.
-
-2. **Hand-author a drawing template per part type**, reused across variants.
-   *Benefits:* full control over layout and standards compliance; a draftsman's drawing
-   rather than a generated one.
-   *Drawbacks:* the template references specific edges, so it breaks when the geometry
-   changes; one template per part type is real ongoing work.
-   *Prerequisites:* none.
-
-3. **Dimension only the interfaces** — bolt pattern, mating diameters, overall envelope —
-   and treat internal structure as non-dimensioned reference geometry.
-   *Benefits:* small, stable set; matches what the drawing is actually *for*, which is
-   fit between parts and inspection of what mates.
-   *Drawbacks:* not a manufacturing drawing in the full sense.
-   *Prerequisites:* agreement on what belongs to the interface, which
-   [dimension_scheme.md](../design/dimension_scheme.md#2-the-interface-register)'s
-   interface register should own.
-
-**Recommendation: alternative 3 first, then 1.** The interface dimensions are the ones
-that matter and the ones that are already named as shared conventions, so they are both
-the most valuable and the most stable. Growing that into a full parameter-driven scheme is
-a natural second step; starting there risks spending the effort on internal dimensions
-nobody reads.
-
-Note that this use case does **not** change the OQ-ARCH-1 recommendation. TechDraw
-projects any shape and does not require `PartDesign::` bodies or sketches — its dimensions
-attach to projected edges and vertices, not to sketch constraints.
-
----
-
-**DECIDED 2026-08-07: none of the three as posed.** The alternatives framed this as a choice
-between dimensioning *interfaces* and dimensioning *parameters*. That framing is wrong twice
-over.
-
-**First: a dimension is an expression over parameters, not a parameter.** Some are a
-parameter directly — `corner_radius`, `bolt_offset`. Many are *combinations*: the bulkhead's
-flange inner edge sits at `corner_radius − panel_thickness − panel_tolerance`, its outer
-flange face a further `flange_thickness` in. Neither is a parameter anyone set; both are
-what a machinist or inspector needs.
-
-The dimension scheme is therefore a set of **named expressions**, each bound to two
-topological references. Alternative 1's "generate from the `Parameters` object" was too
-literal — the object supplies the *inputs*, not the dimensions.
-
-**A useful consequence:** the design documents already contain many of these expressions,
-because documenting the geometry required deriving them.
-`corner_radius − panel_thickness − panel_tolerance` appears in
-[bulkhead.md](../design/bulkhead.md); the buttress profile vertices in
-[cowl.md §4.1](../design/cowl.md) are expressions of exactly this kind. The scheme starts
-from the design authority rather than blank.
-
-**Second: interfaces are a floor, not the scope.** The physical interface must be documented
-with dimensioning — that part of alternative 3 stands — but the drawing must also be
-**complete**, and complete and **readable** pull against one another. That tension is the
-real design problem and neither side is negotiable.
-
-### What this implies
-
-**Completeness has a testable definition** and should be stated as one: every dimension
-needed to manufacture and inspect the part is present, and none is redundant.
-Over-dimensioning — the same distance implied twice through different chains — is a genuine
-defect rather than mere clutter, because the two chains can disagree once tolerances apply.
-
-**The sweep makes readability easier, not harder.** 576 variants share one *scheme* and
-differ only in *values*. That is exactly what classical drafting solves with a **family
-drawing**: lettered callouts (A, B, C …) on the views and a table of values per variant. One
-readable sheet replaces 576 crowded ones, completeness is checked once against the scheme
-rather than per part, and a new variant adds a table row rather than a drawing.
-
-That form also inverts the earlier worry about which dimensions to include: with values in a
-table rather than on the view, an extra dimension costs a column instead of a crowded leader
-line — so **completeness becomes affordable in a way it is not on a one-off drawing.**
-
-**Still to settle**, and belonging to the drawing scheme's own design work:
-
-1. Which expressions constitute the interface set — the floor, and something
-   `overview.md`'s interface-conventions section should own once it exists.
-2. What "complete" means for this family: fully defining every part, or fully defining
-   every mating and inspected feature.
-3. Whether internal structure — webs, fillets, chamfers — is dimensioned at all, or shown
-   as reference geometry governed by the model.
-4. How topological references survive a parameter change. This is the same edge-naming
-   stability question IP-FC-5's two prototypes will answer, so it need not be solved twice.
-
-### OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material? — WITHDRAWN 2026-08-07: not an open question
-
-**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions).** The question was
-"does a permissively-licensed tool exist for bead-level FDM analysis" — and I said in the
-original text that it "should be answered by looking". That is the admission that it is a
-**work item**: an observation, not a decision between alternatives.
-
-It is [IP-FC-6](../implementation/freecad_migration.md), already an unblocked survey task.
-
-The substance that was worth keeping is not the question but the **ladder it sat at the top
-of**, and that is recorded in [§UC-8 is a ladder](#uc-8-is-a-ladder-not-a-single-capability):
-
-- Tier 3 — orthotropic per part — is reachable with the stack already in use. CalculiX
-  supports orthotropic elasticity, FreeCAD invokes it as a separate process, and the layer
-  axis per part is now recorded (IP-FC-3).
-- Tier 4 — bead-level or toolpath-resolved — depends on tooling whose existence is unknown.
-
-**The decision that *would* have been an open question is a different one:** whether to
-stop at tier 3 or pursue tier 4 at the cost of a heavy dependency. That question cannot be
-posed usefully until the survey reports, because its alternatives depend on what the survey
-finds. If IP-FC-6 turns up a viable tool, raise it then.
-
-**Two of the nine questions in this document were work items** — this and OQ-ARCH-3. Both
-had the same shape: *"we do not know the value of X"*, where X is discoverable by looking.
-The test that separates them is whether resolution requires a **judgment** or an
-**observation**. Recorded here because it is a cheap mistake to repeat.
-
-### OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern? — RESOLVED 2026-08-07
-
-**Read from the installed copy:** `C:\Program Files\OpenVSP-3.50.5-win64\LICENSE` —
-**NASA Open Source Agreement version 1.3** (3.47.0 is also installed, same terms).
-
-**It is compatible, and the usage pattern does not matter.** NOSA's obligations key on
-*distribution*, not on linkage:
-
-| Clause | Says | Effect here |
-| --- | --- | --- |
-| §3.A | Obligations attach to "Distribution or Redistribution of the Subject Software" | We use OpenVSP; we do not ship it. **§3 does not bite.** |
-| §3.I | A Recipient may combine Subject Software with software not governed by the Agreement and distribute the result as a single product, provided the OpenVSP portions remain under NOSA | Component-level, **not viral**. Our code keeps its own license even if OpenVSP were bundled. |
-| §1.F | "the act of including Subject Software as part of a Larger Work does not in and of itself constitute a Modification" | Using it does not make us a Contributor with §3.C change-log duties. |
-| §3.F | Registration "is requested" | A courtesy, not a condition. |
-
-**So the distinction I drew between driving it as a process and importing its Python API
-was wrong.** That distinction is the GPL/LGPL mental model, where linkage is what triggers
-copyleft. NOSA has no such trigger — both patterns are equally fine, and the choice should
-be made on engineering grounds alone. Importing the Python API is the better option for
-UC-9's parametric generation, and there is no license reason to avoid it.
-
-Two notes worth carrying forward:
-
-- **§4.B is the clause that actually deserves thought**, and it is a liability term rather
-  than a copyleft one: the Recipient waives all claims against the US Government and
-  agrees to indemnify it for damages "from products based on, or resulting from,
-  Recipient's use of the Subject Software", with the sole remedy being termination of the
-  agreement. That is the commonly-cited objection to NOSA. It bears on shipping an
-  *aircraft* designed with these tools, not on the code, and it is not a code-licensing
-  question at all.
-- **The Python tree is mixed-license, and OpenVSP states the split explicitly.**
-  `python/openvsp/openvsp/LICENSE` opens: *"The base openvsp vsp api files (`_vsp.so`,
-  `_vsp.pyd`, `vsp.py`) are distributed under the NOSA license listed below."* Everything
-  else in `python/` — `utilities.py`, `parasite_drag.py`, `degen_geom_parse.py`,
-  `surface_patches.py`, `facade.py`, and the sibling packages `AvlPy`, `CHARM`,
-  `degen_geom`, `utilities` — is **MIT, Copyright 2018–2020 Uber Technologies**, and
-  `python/openvsp/setup.py` declares `license='MIT', author='Uber Technologies'`.
-
-  So the file you `import` for the API itself (`vsp.py`, wrapping the 30 MB `_vsp.pyd`) is
-  **NOSA** — which is why the import-versus-subprocess question genuinely was a NOSA
-  question, and why the answer above settles it. The higher-level helpers layered on top
-  are MIT and unconditionally fine.
-
-- **VSPAERO ships inside the Python package.** `vspaero.exe`, `vspaero_opt.exe`,
-  `vsploads.exe` and `vspviewer.exe` sit in `python/openvsp/openvsp/`, so UC-9's aero half
-  needs no separate install — and those are executables invoked as processes, the least
-  encumbered pattern of all.
-
-**The project's license table should gain a NOSA row**, since it now has a real dependency
-under a license the table does not mention. Suggested wording: *acceptable as a separate
-tool or an imported module; obligations attach only on redistribution; note the §4.B
-indemnity.*
-
-### OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big? — WITHDRAWN 2026-08-09: not an open question
-
-**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions) and
-[OQ-ARCH-8](#open-questions), and for a more interesting reason than either.** Those two were
-*"we do not know the value of X"*. This one was *"we know X must exist, so how big should it
-be"* — and the premise was false. The overlap does not need to exist.
-
-The question as posed asked what should *replace* the 0.01 mm sliver, taking for granted that
-a union of two solids meeting on a shared plane needs help. That is true of OpenSCAD, which
-is why the overlap was added. It is not true of OCCT, and one measurement settles it:
-
-| Fuse of a solid with its own mirror about the touching plane | 10 mm | 100 mm | 250 mm | 400 mm |
-| --- | --- | --- | --- | --- |
-| No overlap at all | valid, exact | valid, exact | valid, exact | valid, exact |
-
-So the answer is not a scaled `eps`, a fuzzy tolerance, or a redesigned tiling — the three
-alternatives this section originally weighed. It is `mask_eps = 0`. Every U from 0.5 to 4.0
-tiles into one valid solid, the part is dimensionally unchanged (the sliver was being
-reclaimed, so the full volume is identical to seven figures either way), OpenSCAD parity is
-preserved at +0.00023%, and the `8 × octant` check gets stronger rather than weaker. Recorded
-in [IP-FC-49](../implementation/freecad_migration.md).
-
-**The generalizable mistake.** The earlier two work items failed the judgment-versus-
-observation test outright. This one *looked* like a judgment because it presented as a
-trade-off with three costed alternatives, and every one of those alternatives was real —
-they were just all answers to the wrong question. A constant inherited from a port is a claim
-about the *source* toolchain, and it needs re-measuring against the target before its size is
-debated. The question that should have been asked first is not "how big" but "at all".
-
-**Three of the ten questions in this document were not questions.** The test that separates
-them still holds; what this adds is that it has to be applied to the premise as well as to
-the question.
-
-### OQ-ARCH-10 (as originally posed) — retained for the alternatives, none of which was needed
-
-`geometry_eps()` is `0.01` mm, a constant of the OpenSCAD source, carried into the port
-verbatim. Two jobs rest on it: making cuts overshoot the material they pass through, and
-making the octant overlap its own mirror so the tiling fuse has something to work with.
-`bulkhead_full`'s own docstring records the second — *"`octant_mask` is shifted by `eps`, so
-adjacent octants overlap by a sliver and the union reclaims it"*.
-
-That works in OpenSCAD, whose CGAL kernel is exact. It does not work in OCCT, whose booleans
-work to a tolerance that scales with the shape. At U=2.5 the bulkhead is 250 mm across and
-the sliver is 4 × 10⁻⁵ of it:
-
-| U | Octant | Mirror | **Their fuse** |
-| --- | --- | --- | --- |
-| ≤ 2.0 | valid | valid | valid |
-| ≥ 2.5 | valid | valid | **invalid** |
-
-Only the fuse fails, and it fails for every panel — so it is a threshold in U and nothing
-else. Raising `eps` at U=2.5 makes it valid again at 0.05 and every value above. The corner
-is unaffected at every U up to 4.0, because the octant-and-mirror tiling is `bulkhead_full`'s
-construction alone.
-
-**`eps` is not free, which is what makes this a decision rather than a constant to raise.**
-It changes the finished volume, because it is not purely internal — it also sets how far
-cuts overshoot:
-
-| U=2.0, `eps` | 0.01 | 0.05 | 0.1 | 0.25 | 0.5 |
-| --- | --- | --- | --- | --- | --- |
-| Volume mm³ | 39413.1119 | 39416.2807 | 39420.1978 | 39431.6900 | 39450.1504 |
-
-**Alternatives**
-
-1. **Scale `eps` with U.** One line, and it matches what the value is *for* — a sliver that
-   has to stay resolvable relative to the part.
-   *Drawbacks:* the port stops agreeing with `geometry_eps()`, so FreeCAD and OpenSCAD
-   produce different volumes at every U ≠ 1, by roughly 0.01% at the sizes measured. That is
-   above the tolerance IP-FC-13 has been holding the port to (0.0006%), so IP-FC-13 would
-   need a stated exemption for it rather than a threshold that quietly absorbs it.
-   *Prerequisite:* deciding whether OpenSCAD scales too, which changes the shipped parts.
-
-2. **Give the boolean a fuzzy tolerance instead of moving geometry.** Tells OCCT to treat
-   the faces as coincident, leaving the model dimensionally identical to OpenSCAD's.
-   *Drawbacks:* `Part::Cut`/`Part::Fuse` document objects expose no fuzzy value —
-   `Shape.fuse(other, tolerance)` does, but that returns a computed shape, not a feature, so
-   the tiling would stop being a live parametric tree. That is the one property the port
-   exists to preserve.
-
-3. **Do not create the coincident seam.** Build the full section directly rather than an
-   octant plus seven mirrors, so no boolean is ever asked about two faces on the same plane.
-   *Drawbacks:* discards the construction the port is transcribing, and with it the check
-   that makes the tiling verifiable — the eps overlap is why the full part is *not* eight
-   times the octant, which is what proves the mirrors are about the right planes.
-
-**None of the three was needed.** Each trades against something recorded as intent —
-OpenSCAD parity, the live parametric tree, fidelity to the construction being ported — and
-all three are answers to a question whose premise did not hold. Alternative 3's stated
-drawback is the one to reread: it says the eps overlap *is* what proves the mirrors are about
-the right planes. That was the assumption doing the damage. Removing the overlap makes the
-full part exactly eight times the octant, which proves the same thing more directly.
-
-Kept because the alternatives were correctly costed and the reasoning is sound given its
-premise — which is exactly why it is worth being able to recognize this shape again.
-
----
-
-### OQ-ARCH-11 — Should geometric relationships be expressed as constraints, or stay solved into coordinates? — DECIDED 2026-08-15: constraints, staged toward `PartDesign::`
-
-A part in this port is a CSG tree of primitives whose positions and sizes are bound by
-expression to a spreadsheet. One built frame bulkhead is 158 objects:
-
-    Part::Box 39   Part::Cut 39   Part::Fuse 31   Part::Cylinder 20   Part::Refine 13
-    Part::Cone 8   Part::Mirroring 4   Part::Common 1   Part::Extrusion 1
-    Sketcher::SketchObject 1   Spreadsheet::Sheet 1
-
-Roughly 192 `Placement` bindings plus `Height`, `Length`, `Width` and `Radius` expressions
-place all of it. There is one sketch, and it exists only because a wedge profile did not
-decompose into primitives.
-
-**No geometric constraint is expressed anywhere in the port.** The complete constraint
-vocabulary across every module is `Coincident`, `Horizontal`, `Vertical`, `PointOnObject`,
-`DistanceX` and `DistanceY` — all of them on that single sketch. There is no `Tangent`, no
-`Equal`, no `Symmetric`, no `Perpendicular`, no `Parallel`, no `Angle`, and no `Radius`
-constraint in the project. Relationships that a CAD model would normally *state* are instead
-*solved* in the spreadsheet and stored as coordinates.
-
-The bolt-flange fillet is the clearest case. Its center must lie tangent to the ring of
-material around the bolt, and that condition appears as a hand-solved quadratic:
-
-    bbf_cy = sqrt(max(r_bolt_fillet ^ 2 - bbf_dx ^ 2; 0)) + bolt_c
-
-which is "where the vertical line `x = bbf_cx` meets the circle of radius `r_bolt_fillet`
-about the bolt center", evaluated to a number. See [OQ-DES-B14](../design/bulkhead.md), which
-is one instance of this question.
-
-**The variation argument does not settle it.** The obvious defense of coordinates is that the
-geometry is not one shape but a family, and the relationships that hold are not the same at
-every parameter value — a constraint set that is satisfiable at `U = 2` may not be at
-`U = 0.5`. That is true, and it is *already represented*: it is exactly what the `max(...; 0)`
-clamps, the `min`/`max` selections such as `bbf_sx = max(flange_inner_x; bolt_c)`, and the
-branching in `derived_parameters()` encode. So the variation is not a reason to omit
-constraints; it is the thing a constraint model would have to express, and the arithmetic is
-already expressing it — just in a form nothing can inspect.
-
-**The cost is that FreeCAD does not know what the geometry means.** The document records
-where every face is and never why. Concretely:
-
-- **Unsatisfiable configurations resolve silently.** A tangency the solver cannot satisfy is
-  reported; `max(discriminant; 0)` returns a plausible wrong answer instead. Measured across
-  the 88 valid end-type variants the clamp is never currently reached — closest approach is
-  `|bbf_dx| / r_bolt_fillet = 0.9182` at `U=0.5 end_bolt 1mm`, discriminant 4.748 — so this is
-  unguarded margin held by four independently chosen dimensions, not a designed limit.
-- **Near-degenerate configurations are invisible.** IP-FC-58 was a boolean that touched a
-  block at exactly one point and produced a negative-area face. A model that stated "this edge
-  is tangent to that circle" has somewhere to check; a model of coordinates has nowhere.
-- **Downstream features need topology, not numbers.** OQ-ARCH-7 already decided that drawing
-  dimensions are named expressions *bound to topological references* (IP-FC-21), OQ-ARCH-6
-  that assemblies use real joints verified against constructed placements (IP-FC-19), and
-  IP-FC-36 that interface dimensions are enumerated. All three want to attach meaning to
-  faces and edges of a tree that currently carries none, over a 158-node CSG history where
-  topological names are least stable.
-- **A hand edit has nothing to preserve.** Someone opening a generated document sees a box at
-  x = −11.8 with no record that it is one fillet radius outboard of the flange face; move it
-  and nothing objects.
-
-**Alternatives**
-
-1. **Keep coordinates everywhere.** Status quo. *Benefits:* fastest to build (~1.3 s/part),
-   trivially diffable, and it is what made the port verifiable — every part could be compared
-   numerically against the OpenSCAD original because both are pure functions of parameters.
-   Editability in the sense that matters today is preserved: change `U` and everything
-   follows. *Drawbacks:* every point above. *Prerequisites:* none.
-
-2. **Express relationships as constraints only where a relationship exists.** Keep CSG for
-   bulk material; use fully constrained sketches with real `Tangent`, `Perpendicular` and
-   `Equal` constraints for the features whose position is *derived* from another feature —
-   the fillets, the chamfers, the greeble interface. *Benefits:* the solver reports what the
-   arithmetic clamps; the document states intent; drawing and assembly references attach to
-   things that mean something. *Drawbacks:* sketches are slower to solve, and a solver can
-   pick the wrong branch of a relationship that has two solutions — the other intersection of
-   a line and a circle — which is a real risk and a detectable one. Variants where a
-   relationship is unsatisfiable now *fail* rather than clamp, which is the point but changes
-   the swept space. **It does not cost the OpenSCAD verification**, contrary to the first
-   draft of this question: `compare_backends` measures the *built solid* — mesh volume and
-   bounding box — and never needs a closed-form parameter-to-coordinate mapping, so a
-   constrained feature is compared exactly as a computed one is. *Prerequisites:* deciding,
-   per feature, what the relationship actually is — which is OQ-DES-B14 for the bolt-flange
-   fillet, and is not recorded for the others either.
-
-3. **Keep coordinates, add assertions.** Compute as now, but check the relationship the
-   arithmetic is supposed to satisfy — assert tangency to a tolerance, assert discriminants
-   are positive by a margin, assert no two construction planes are closer than some distance.
-   *Benefits:* catches every failure mode listed above at build time, costs no solver time,
-   changes no geometry, and is verifiable as a no-op. *Drawbacks:* does nothing for the
-   downstream topology problem — drawings and assemblies still have nothing to bind to — and
-   the assertions restate the intent in a third place rather than recording it once.
-   *Prerequisites:* none technically; each assertion still needs the intent it is asserting.
-
-4. **Move the whole port to `PartDesign::` with sketch-driven features.** Revisits OQ-ARCH-1,
-   which chose `Part::` on the evidence of IP-FC-5. *Benefits:* the fullest expression of
-   intent, and the native path for drawings and assemblies — **this is what a FreeCAD model of
-   this part would look like if it had been authored in FreeCAD rather than translated into
-   it.** *Drawbacks:* a rewrite of every ported module, and PartDesign's single-solid-per-body
-   rule fits the octant-and-mirror construction badly — that constraint needs a real answer,
-   not a workaround. *Prerequisites:* the OpenSCAD reference retired or frozen (see the
-   staging below), and a resolution for the body rule against the tiling.
-
-**Direction — decided 2026-08-15: stage toward Alternative 4, starting with Alternative 2**
-
-**Alternative 4 is the target state, not a rejected option.** It is the true native FreeCAD
-implementation, and the intent is to get there rather than to settle permanently for a
-translated CSG tree. What follows is the route, and the first step is Alternative 2 —
-relationships expressed as constraints FreeCAD can act on, not merely computed and stored.
-
-Two facts make the staging principled rather than arbitrary:
-
-- **Constraints do not cost the OpenSCAD verification.** `compare_backends` measures the built
-  solid's volume and bounding box. Nothing in it requires geometry to be a closed-form
-  function of the parameters, so a constrained feature is checked exactly as a computed one
-  is. The first draft of this question claimed otherwise and was wrong; that error was the
-  main reason it recommended deferring.
-- **The OpenSCAD reference already has a planned retirement.** OQ-ARCH-4 decided on 2026-08-07
-  to retire it once IP-FC-13 demonstrates equivalence across the parameter range, at which
-  point FreeCAD becomes the definition of correctness. So the strongest objection to
-  Alternative 4 — that a rewrite discards the verification chain — expires on a date the
-  architecture has already chosen, rather than standing forever.
-
-**Stage 1 — express the relationships (Alternative 2), OpenSCAD reference intact.**
-Keep CSG for bulk material. Convert the features whose position is *derived* from another
-feature — the five fillets and chamfers in `fillets.py` first, since that is where IP-FC-58
-came from — to fully constrained sketches carrying the real relationship. Each conversion is
-verified with the existing comparison, which continues to work unchanged. Each also forces the
-intent question for that feature to be answered and written down, which is the part that has
-no shortcut: OQ-DES-B14 is that question for the bolt-flange fillet and nothing equivalent is
-recorded for the others. Exit criterion: every derived feature states its relationship, and
-the whole corpus still agrees with OpenSCAD.
-
-**Stage 2 — bind the downstream work to it.** With features carrying stable, meaningful
-references, IP-FC-21's family drawings and IP-FC-19's assembly joints attach to geometry
-rather than to positions in a 158-node boolean history. These are the features that make the
-constraint work pay, and they should pull stage 1 forward for whatever they need first rather
-than waiting for it to complete.
-
-**Stage 3 — Alternative 4, gated on OQ-ARCH-4 firing.** When IP-FC-12 completes the cowls and
-IP-FC-13 closes whole-corpus equivalence, OpenSCAD retires and a frozen FreeCAD corpus becomes
-the reference — `compare_backends` compares meshes, so it retargets to that corpus with no
-change to what it does. At that point PartDesign conversion is verifiable body by body against
-frozen geometry, which is the safe way to do it, and stage 1 will already have produced the
-constrained sketches PartDesign features need. The open item to resolve before stage 3 is the
-single-solid-per-body rule against the octant-and-mirror construction — that is a real
-architectural question and it should be raised on its own once stage 1 is under way.
-
-**What is still genuinely open**, and should not be read as settled by the above: whether
-stage 3 converts the whole corpus or only the parts that benefit; how a solver branch
-ambiguity is guarded against in stage 1 (a constraint with two solutions can converge on the
-wrong one, which the mesh comparison detects but does not prevent); and whether Alternative 3's
-assertions are still worth adding as an interim measure for features not yet converted. The
-first stage-1 conversion should be treated as answering those empirically.
-
-**Superseded recommendation, kept because it was wrong in an instructive way.** The first
-draft of this question recommended *Alternative 3 now, Alternative 2 only where IP-FC-21 and
-IP-FC-19 force it, and not Alternative 4*, on the reasoning that constraints would cost the
-numeric verification chain and that the chain is the only reason the port is trustworthy. **The
-premise was false**: `compare_backends` compares built meshes, not coordinates, so constraints
-cost it nothing. The conclusion inherited the error — it deferred the architecturally correct
-move to protect something that was never at risk, and it treated as permanent an objection that
-OQ-ARCH-4 had already scheduled to expire. Worth rereading whenever "we cannot do that, it
-would break verification" is offered as an argument: check what the verification actually
-measures first.
-
----
-
-### OQ-ARCH-12 — What carries the interface verification tier above 100 mm? — DECIDED 2026-08-16: scale `BBOX_TOL` with `U`, and let the limit expire with the OpenSCAD sweep
-
-**Resolution.** **Alternative 2** for the mechanism — `BBOX_TOL` becomes `5e-4 mm × U`, floored
-at its historical value for `U` < 1 — together with **Alternative 4** for the disposition: the
-underlying limit is accepted and allowed to lapse when OQ-ARCH-4 retires the OpenSCAD reference
-after IP-FC-13. **Alternative 1 was explicitly declined**: the reference is *not* to be
-re-rendered as binary STL, even though the measurement showed it would drive the difference to
-exactly zero, because it invalidates every stored reference tree to improve a check that already
-has a scheduled end. Alternative 3 was not taken up.
-
-Implemented the same day in `compare_backends.py` as `bbox_tol(u)`, with `u_of(name)` reading
-the size off the part filename the way `kind_of` already reads the kind — the comparison is
-handed nothing but names and two rendered trees. A name whose `U` cannot be read raises rather
-than defaulting, since assuming `U` = 1 would apply a threshold too tight for a large part and
-report a failure that is not real.
-
-**Extended 2026-08-18 to the FreeCAD-side checks, which had the same defect and had not been
-covered by this decision.** The rule here is about *any* tolerance on a length, not only the one
-in `compare_backends`: a part's coordinates are proportional to `U`, so a fixed millimeter figure
-means something four times stricter at `U` = 4 than at `U` = 1. Three had been left absolute —
-`check_tangency.TOL` and `SWEEP_TOL`, which measure how far a solved fillet center is from where
-its tangencies put it, and the branch guard inside `fillets._fillet_tangency_sketch()`. All three
-now scale linearly and are floored at `U` = 1, as `bbox_tol()` is, and `check_tangency.u_of()`
-refuses a seed carrying no `U` for the reason `compare_backends.u_of()` does. `fillets.py` reads
-the size as `unit_width / 100` because the octant's sheet carries only the rows it builds from and
-`U` is not among them. The same pass made `check_unread_rows` scale its bounding-box tolerance and
-made its *volume* tolerance relative to the part's own volume — which is this rule as `U`³, the
-form that reads correctly for a volume, a threshold linear in `U` being wrong for a cubic
-quantity. That one was not cosmetic: the absolute figure it replaced sat below the solid kernel's
-own reproducibility and made every bulkhead run refuse, which IP-FC-56 records in full.
-
-**Caveats attached to the choice, each of which is a thing this deliberately gives up.**
-
-- **The interface tier is now size-dependent**, which is the drawback recorded under
-  Alternative 2 and is accepted, not solved: at large `U` the threshold is a fraction of the
-  part rather than a fixed distance, which is closer to what the volume tier already measures.
-- **The relative component is set from the reference's file format, not from any design
-  requirement.** `5e-4 × U` was chosen because it clears the six-significant-figure quantum at
-  every swept size — 5.0× headroom at `U` ≤ 1, 10× at `U` = 2.0, and a thinnest 1.2× at
-  `U` = 2.5, immediately after the quantum's decade step. It carries no other meaning.
-- **The change can only loosen, never tighten**, which is why no corpus re-run was required to
-  adopt it safely: with the floor at `U` = 1 the new threshold is greater than or equal to the
-  old one at every swept size, so no part that passed before can fail now. The converse is the
-  cost — parts whose bounding boxes differ by between 5e-4 mm and `5e-4 × U` will now pass
-  silently. From the last full run only IP-FC-71's two bulkheads were anywhere near the old
-  threshold, and both are explained.
-- **Nothing physical is at stake in either direction**, which is what makes accepting the limit
-  reasonable: the worst discrepancy involved is 1e-3 mm, 100× under a printed bolt clearance and
-  200× under one layer.
-
-**The question and its alternatives are kept below**, in this document's usual practice, because
-the measurements in them are the justification for the number — particularly the binary-STL
-result, which will be the right answer for anyone who revisits this before OQ-ARCH-4 fires.
-
----
-
-**Not blocking, and the physical stakes are low.** No part is known to be wrong, the check is
-sound on every part whose extents stay under about 100 mm — all of `U` ≤ 2.0 — and the largest
-discrepancy involved, 1e-3 mm, is **100 times under a printed bolt clearance and 200 times under
-one 0.2 mm layer**. Nothing here is a fit or airworthiness question. What is at stake is
-*detection*: the strictest tier of the equivalence check quietly loses its resolution on the
-largest parts, and nothing in the output says so.
-
-**The setup, in full.** The port is verified by rendering the same variant with both geometry
-engines and comparing the two solids. `compare_backends.py` applies two independent tolerances
-per part: a **volume** tolerance, relative, 6e-5 for kinds that reproduce exactly and 1e-4 for
-kinds carrying fillets; and a **bounding-box** tolerance, `BBOX_TOL`, **absolute at 5e-4 mm**
-(0.5 µm). The two answer different questions. Volume asks whether the same amount of material is
-present; the bounding box asks whether it is in the same *place*, since a part can be the right
-size and have one face displaced. `BBOX_TOL` is deliberately absolute and deliberately strict in
-both tiers, per OQ-DES-B9 in [bulkhead.md](../design/bulkhead.md), on the reasoning that **no
-interface dimension is set by a fillet** — faceting error explains a volume difference and never
-explains a moved interface.
-
-**The problem is that the reference cannot express 5e-4 mm at the sizes involved.** OpenSCAD
-emits an **ASCII STL**, which writes each coordinate at **six significant figures**. That is a
-quantization whose absolute size grows with the coordinate:
-
-| coordinate magnitude | ASCII STL quantum | against `BBOX_TOL` = 5e-4 mm |
-| --- | --- | --- |
-| 1 to 10 mm | 1e-5 mm | 50× finer than the tolerance — check is sound |
-| 10 to 100 mm | 1e-4 mm | 5× finer — still sound |
-| 100 to 1000 mm | 1e-3 mm | **2× coarser — the check cannot resolve its own tolerance** |
-
-Measured on this build rather than derived from the format: writing 1.234565, 12.34565, 98.76545,
-123.4565 and 234.5675 mm gives back `1.23457`, `12.3456`, `98.7654`, `123.456` and `234.568`.
-The quantum steps by decade, so the boundary is sharp — a coordinate at 99 mm is checked five
-times finer than its tolerance and one at 101 mm twice coarser.
-
-FreeCAD writes a **binary STL**, whose float32 coordinates carry about seven significant figures
-— 7.6e-6 mm at 120 mm and 1.5e-5 mm at 200 mm, comfortably inside the tolerance. So the two
-meshes are not equally precise, and the less precise one is the authority. **The format, not the
-engine, is what differs**: OpenSCAD writes binary STL to the same float32 precision when asked,
-measured on this build (see Alternative 1), so this is a choice the port made rather than a
-limitation of the reference implementation.
-
-**Measured, not projected.** On `U_2.5 imperial 3/16in`, the plan half-extent is
-`unit_width / 2 − (panel_thickness + panel_tolerance)` = 125 − 4.8625 = **120.1375 mm exactly**,
-seven significant figures. OpenSCAD writes `120.137`; FreeCAD stores `120.137496948`, the nearest
-float32 to the true value. **Both engines built the same geometry** — the entire 0.000497 mm
-difference is how the number was written down. The same discrepancy appears on `U_3.0 3/16in` at
-145.137 against 145.1375, **identical to the last digit** at 0.00049694824218704525 mm. Note the
-imperial panel is the trigger only because it produces a seven-figure extent: 3/16 in is
-4.7625 mm exactly, and 4.7625 + 0.1 mm of tolerance leaves a trailing 5 that the sixth figure
-cannot hold. Metric panels at the same sizes land on shorter decimals and are unaffected.
-
-**Why this surfaced now, and why it looked like a geometry defect.** Both variants were reported
-as bounding-box failures at exactly 0.000500 mm (IP-FC-71), because the comparison rounded each
-box to four decimal places before subtracting — landing 120.137 and 120.1375 on different grid
-points — and the resulting subtraction of two ~120 mm doubles fell 2.4e-15 mm above the tolerance.
-That rounding is fixed. What is left is the underlying limit, which the fix does not touch:
-these parts now pass partly because OpenSCAD's sixth digit happened to round **down**. Had it
-rounded up to `120.138`, the raw difference would be 0.000503 mm and the check would still fail
-with the two models in exact agreement.
-
-**The underlying mismatch is that the three quantities involved do not scale the same way,
-and this was bound to break somewhere.** `unit_width` is `100 · U` exactly, so every plan
-coordinate grows linearly with `U` and every volume grows as `U³`. Against that:
-
-| quantity | how it is expressed | what happens as `U` grows |
-| --- | --- | --- |
-| volume tolerances (6e-5, 1e-4) | **relative** to the part's volume | absolute allowance grows as `U³` — tracks the part |
-| ASCII STL precision | **relative** (six significant figures) | absolute quantum grows with the coordinate, by decade steps |
-| `BBOX_TOL` (5e-4 mm) | **absolute** | unchanged — so it becomes *relatively stricter* |
-
-In numbers, `BBOX_TOL` as a fraction of the part's own half-extent (`50 · U`) is 2.0e-5 at
-`U` = 0.5, 1.0e-5 at `U` = 1.0, 4.0e-6 at `U` = 2.5 and 2.5e-6 at `U` = 4.0 — **eight times
-stricter on the largest part than on the smallest**, while the reference's relative precision
-stays flat at roughly six figures throughout. Two curves moving in opposite directions must
-cross, and the crossing is exactly the 100 mm step in the table above: the extent is
-`unit_width / 2 − (panel_thickness + panel_tolerance)`, which is 95.1375 mm at `U` = 2.0 and
-120.1375 mm at `U` = 2.5.
-
-**`BBOX_TOL` is a numerical agreement threshold, not a manufacturing tolerance, and reading it
-as the latter leads to wrong conclusions.** It is worth being explicit, because the mistake is
-easy: 5e-4 mm is **200 times tighter than a printed bolt clearance**, which is on the order of
-0.1 mm, and **400 times finer than the 0.2 mm layer height**. No joint on this airframe is toleranced
-anywhere near 5e-4 mm and none could be — the process cannot hold it. What OQ-DES-B9 actually
-says is that parts built before and after the port are interchangeable *at every interface*,
-"since no interface dimension is set by a fillet": fillets are the only thing the port changes,
-so the **expected difference at an interface is exactly zero**. `BBOX_TOL` is therefore a noise
-floor around that zero — set as low as the two meshes allow, to catch a modeling divergence
-whose signature happens to be small — and not a statement about what a joint may be out by.
-
-**That reframing sets the real severity, which is lower than a bounding-box failure suggests.**
-The worst discrepancy this question concerns is the 1e-3 mm ASCII quantum, which is 100 times
-under a bolt clearance and 200 times under one printed layer. **Nothing unfittable or unprintable
-is hiding here.** What is at stake is evidence, not airworthiness: the check exists to notice
-that a face moved at all, because on a part whose interfaces should reproduce exactly, a
-sub-micron displacement can be the visible tip of a modeling difference that matters elsewhere.
-Losing resolution costs detection, not fit.
-
-**The absolute form is still the right one for a floor around zero** — a threshold that grows
-with the part would stop meaning "these agree" and start meaning "these agree to within a
-fraction," which is what the volume tier already measures. The defect is that the *reference's
-precision* is relative while the *threshold* is absolute, so any absolute threshold whatsoever
-fails once the part is large enough. Nothing about 5e-4 mm in particular is at fault; a 1e-3 mm
-threshold would meet the same wall a decade further out.
-
-**Affected and unaffected.** Affected: any extent whose value needs a seventh significant figure,
-which in the swept space means `U` ≥ 2.5 on the imperial panels — measured at U = 2.5 and U = 3.0,
-and predicted at U = 4.0 (195.1375 mm) by the same arithmetic. Unaffected: every metric panel,
-every `U` ≤ 2.0, the volume tolerance at all sizes, and the FreeCAD side throughout. Also
-unaffected is anything that reads the FreeCAD `.FCStd` rather than a mesh — the parametric
-document carries doubles and is not involved.
-
-#### Alternatives
-
-1. **Export the OpenSCAD reference as binary STL.**
-   OpenSCAD emits binary STL with `--export-format binstl`. **Measured 2026-08-16 on this build
-   (OpenSCAD 2021.01), and it is better than "about seven significant figures":** exporting a
-   solid whose extents are 120.1375, 145.1375 and 195.1375 mm — the three plan half-extents that
-   need a seventh figure — the ASCII writer emits `120.137`, `145.137`, `195.137`, while the
-   binary writer stores `120.13749694824219`, `145.1374969482422` and `195.1374969482422`. Those
-   are **exactly the nearest float32 to each true value, and bit-identical to what FreeCAD's own
-   binary STL stores.** The float32 quantum at these magnitudes is 7.6e-6 mm below 128 mm and
-   1.5e-5 mm above it — **33 to 65 times finer than `BBOX_TOL`**, against the ASCII writer's
-   1e-3 mm, which is twice coarser.
-   *Benefits:* removes the limit rather than describing it, at every swept size; because both
-   engines would then write the nearest float32 of the same true value, the bounding-box
-   difference on the affected extents becomes **exactly zero rather than merely under tolerance**;
-   `BBOX_TOL` and the OQ-DES-B9 position stay exactly as they are; no per-size special casing
-   anywhere. **The comparison tooling needs no change** — `mesh_stats.load_triangles` already
-   reads binary STL, since the FreeCAD side has always been binary, and nothing outside that
-   module parses STL text.
-   *Drawbacks:* changes the authority's output format, so every stored reference mesh is
-   invalidated and `--reference` trees must be re-rendered; the ASCII form is human-readable and
-   greppable, which has been useful in diagnosis — including this one, where reading the vertex
-   line directly is what identified the cause; float32 is still not exact, so the limit is pushed
-   out by four orders rather than removed in principle.
-   *Prerequisites:* confirm this OpenSCAD build's binary STL writer is float32 — **done, see
-   above.** Remaining: the render command is `solid2`'s `openscad_stl_command` template, used at
-   one call site in `fuselage_variants.py`, so the change is that template plus a full corpus
-   re-render and comparison to confirm no verdict changes.
-
-2. **Give `BBOX_TOL` a relative component sized to the reference's precision.**
-   Replace the absolute 5e-4 mm with something like `max(5e-4, k · |coordinate|)`, where `k` is
-   set from the six-significant-figure quantum.
-   *Benefits:* keeps the strict absolute limit on the small parts, where it bites hardest and
-   where interfaces are tightest; needs no change to the authority or to any stored mesh; states
-   the limit in the check itself rather than leaving it implicit.
-   *Drawbacks:* explicitly weakens the interface tier on the largest parts — at 120 mm the
-   tolerance would have to reach about 1e-3 mm, twice its current value, to cover the quantum,
-   and a real 1e-3 mm face displacement there would then pass; it encodes a property of the
-   *reference's file format* into a tolerance that is supposed to express a *design* position,
-   so the number stops meaning "these two agree" and starts meaning "these two agree to within a
-   fraction of the part", which is what the volume tier already measures; the interface check
-   then no longer has a form the volume check does not.
-   *Prerequisites:* a value for the relative component, taken from the reference's six-figure
-   precision rather than from any design requirement — which is the honest way to set it, and
-   also the tell that it is compensating for a file format.
-   *A drawback claimed here on 2026-08-16 and withdrawn the same day:* that a relative component
-   "inverts the design intent" by letting the largest parts have the loosest joints. That reads
-   `BBOX_TOL` as a manufacturing tolerance, which it is not — 5e-4 mm is 200 times tighter than a
-   printed bolt clearance and could not be held by the process. It is a noise floor around an
-   expected zero, and scaling a noise floor with the noise is coherent. The real objection to
-   this alternative is the one above: it makes the interface tier a second volume tier.
-
-3. **Compare each extent against its derived design value instead of mesh against mesh.**
-   Express the expected bounding box as a function of the parameters — for the frame bulkhead,
-   `unit_width / 2 − (panel_thickness + panel_tolerance)` and its counterparts — and check each
-   mesh against that rather than against the other mesh.
-   *Benefits:* the only option that inherits neither mesh's precision, so it is exact for both
-   engines at every size; it also catches the case where *both* engines are wrong in the same
-   way, which a mesh-to-mesh comparison can never detect; it makes the interface dimensions
-   explicit as expressions, which is what OQ-ARCH-7 already decided drawing dimensions must be.
-   *Drawbacks:* by far the most work, and the work is per kind — each part's extents must be
-   derived and kept correct as geometry changes, which is a second implementation of the geometry
-   that can itself be wrong; a wrong expression produces confident false failures.
-   *Prerequisites:* the extents expressed as parameters for all five kinds; a way to keep them
-   honest against the geometry modules, since a stale expression is worse than no check.
-
-4. **Accept the limit and let it expire with the OpenSCAD reference.**
-   Record the limit, leave the check as it is, and let it lapse when OQ-ARCH-4 fires and the
-   OpenSCAD implementation is retired after IP-FC-13 — at which point there is no reference mesh
-   and no cross-kernel bounding-box comparison at all.
-   *Benefits:* costs nothing; touches neither the authority nor the tolerance nor the design
-   position; matches the precedent set in IP-FC-55, where a real but non-urgent removal was
-   deliberately deferred to IP-FC-34 rather than weakening a check against the authority while
-   the authority still stood.
-   *Drawbacks:* IP-FC-13 is the item this check exists to *serve*, so the weakened tier is in
-   force for exactly the period it matters most — every remaining verdict on the largest parts is
-   taken with a check that cannot resolve its own tolerance; if a genuine interface defect at
-   1e-3 mm exists on a large part today, this option is the one that guarantees it is not found.
-   *Prerequisites:* none, but it needs the limit recorded where a reader of a passing comparison
-   will see it, not only here.
-
-#### Recommendation
-
-**Alternative 1, binary STL for the reference, with Alternative 4's reasoning as the reason not
-to do more than that.**
-
-It is the only option that restores the check to what it was supposed to be, and it does so
-without touching `BBOX_TOL` or OQ-DES-B9 — the position is not in question here, only the file
-format's ability to carry it. Because OQ-DES-B9's claim is that the expected interface
-difference is **exactly zero**, and binary STL makes both engines write the same bits, this
-alternative does not merely widen the margin — it lets the check assert the thing the design
-position actually claims. Alternative 2 reaches the same verdicts by loosening the threshold
-until the format's noise fits inside it, which works, but leaves the interface tier measuring a
-fraction of the part — a second volume tier, in a check that already has one.
-Alternative 3 is the right long-term answer for a different reason — it catches both engines
-being wrong together, which nothing currently does — but it is a large piece of work whose
-failure mode is confident false failures, and it should be justified on its own merits rather
-than adopted as a fix for a six-digit export.
-
-Alternative 4 is a serious contender and is what makes this "not blocking": the whole
-cross-kernel comparison has a scheduled end, and spending heavily on it now is exactly the
-mistake OQ-ARCH-11's superseded recommendation made in the other direction. That is the argument
-against Alternatives 2 and 3, not against 1 — Alternative 1 is a change to a render flag and a
-re-render, small enough that the retirement schedule does not argue against it.
-
-**The measurement this recommendation was conditional on has been made, and it came back
-favorable.** OpenSCAD 2021.01's binary writer stores full float32 — bit-identical to FreeCAD's,
-33 to 65 times finer than `BBOX_TOL` at the magnitudes involved — so the conditional fallback to
-Alternative 4 does not apply. It also strengthens the case beyond what was first written here:
-the two engines would not merely agree within tolerance on the affected extents, they would write
-**the same bits**, which is the strongest form this check can take. And the comparison tooling
-already reads binary STL, so the change is a render flag rather than a porting job.
-
-**What remains before closing is a decision, not a measurement**: whether re-rendering every
-stored reference tree is worth spending on a check that OQ-ARCH-4 has scheduled for retirement.
-That is the one real cost, and it is the question this alternative turns on.
-
----
-
-### OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature? — DECIDED 2026-08-16: yes, but with the `PartDesign` move; leave it alone until then
-
-**Resolution.** **Alternative 1 now, alternative 3 later**, as recommended. The two-prism
-construction stays for the present and `fillets.py` records beside it that the shape is a
-workaround for OpenSCAD rather than a design, so the next reader does not mistake it for
-intent the way the first draft of this question did. Converting it to a real chamfer
-feature is scheduled as **IP-FC-78**, to be done with the move to `PartDesign` (IP-FC-75),
-which is where edge references become stable enough to name one and where a chamfer
-operation is the natural way to express the feature.
-
-**Caveats carried by the choice.** The chamfer keeps its nine spreadsheet rows and its
-rotated construction frame in the meantime, so a change to the flange outline still has to
-be carried into those rows by hand and nothing will report it if it is not. The conversion
-is also the one piece of this work that can move the flown part, so when IP-FC-78 is done
-it needs a whole-corpus comparison rather than the bit-identical check the rounded corners
-get, and the behavior where two runs meet at a corner has to be measured rather than
-assumed. **The question and its alternatives are kept below**, in this document's usual
-practice: the reasoning about why the construction is not evidence of intent is the part
-worth having when IP-FC-78 comes up.
-
----
-
-**Nothing is blocked by this today.** The three rounded corners still to be converted can be done
-without an answer. The one thing it holds up is being able to say the work on the bulkhead is
-finished, because that work was defined in a way that neither clearly includes nor clearly
-excludes this one feature.
-
-#### What the feature is
+### What the feature is
 
 The bulkhead is a flat plate with a wall — the flange — standing up around its outer edge. Where
 the inside of that wall meets the flat material inboard of it there is a sharp internal corner,
@@ -2286,7 +1069,7 @@ along the flat and 1.0 mm up the wall, at 45 degrees:
 
 ![The flange sawn through, with the chamfer picked out](img/flange_chamfer/section.svg)
 
-#### What the four rounded corners are
+### What the four rounded corners are
 
 The same job — filling an internal corner between two surfaces — but with a circular arc instead
 of a straight face. This one fills the corner between a wall that runs diagonally across the
@@ -2294,7 +1077,7 @@ bulkhead and the raised boss around a bolt hole:
 
 ![A rounded corner and the two surfaces it touches](img/flange_chamfer/rounded_corner.svg)
 
-#### Why the chamfer sits awkwardly in this work
+### Why the chamfer sits awkwardly in this work
 
 Both kinds of feature are defined against two surfaces, so the difference is not that one has a
 relationship and the other does not. The difference is what has to happen before you can say
@@ -2318,7 +1101,7 @@ disagree here, in a single sentence:
 
 The four rounded corners match both. The chamfer matches the second and not the first.
 
-#### What was measured
+### What was measured
 
 On 2026-08-16 each of the four rounded corners was checked, on all 148 buildable bulkheads,
 against the claim that its position is exactly where the two surfaces it touches put it. All four
@@ -2327,7 +1110,7 @@ worked out by hand, and replacing them with stated requirements will not move th
 `tools/fillet_intent.py` is that check. The chamfer is absent from it because there is no
 equivalent claim to test.
 
-#### How the chamfer is built today, and why
+### How the chamfer is built today, and why
 
 Two prisms, one running along the flange and one turning in toward the bolt. Each is a
 rectangular box with a second box, rotated 45 degrees, subtracted from it to take one corner off
@@ -2335,184 +1118,11 @@ rectangular box with a second box, rotated 45 degrees, subtracted from it to tak
 spreadsheet rows size and place those boxes, and it is the only feature in the file built in a
 rotated frame of its own rather than in the part's coordinates.
 
-**That construction is not a design decision — it is a workaround for OpenSCAD** (stated
-2026-08-16). OpenSCAD has no way to point at an edge and chamfer it, the way a CAD package does,
-so a chamfer has to be built as explicit geometry, in as many pieces as the corner has runs. The
-FreeCAD port then transcribed that workaround faithfully, which was the right thing to do while
-OpenSCAD was the authority.
-
-**That reframes the question.** Two different things were lost getting these features into the
-model, with different causes and different fixes:
-
-| what was lost | how | which features |
-| --- | --- | --- |
-| the *reason* a position is what it is | a tangency solved by hand, the answer stored as coordinates | the four rounded corners |
-| the *operation* the feature is | a tool that cannot chamfer an edge, so the shape is built by hand | the chamfer |
-
-The work in progress addresses the first. The chamfer suffers the second. Both amount to "the
-model no longer says what was meant", which is why grouping all five together looked reasonable —
-but the fix for one is not the fix for the other, and only the chamfer's fix is blocked on
-something outside itself.
-
-#### Alternatives
-
-1. **Leave the construction as it is, and write down why.**
-   Record that this feature's position needs no solving and that its build is an OpenSCAD
-   workaround, and leave it alone.
-   *Benefits:* no work, and no risk to a part that is currently correct.
-   *Drawbacks:* keeps a hand-built stand-in for an operation FreeCAD can perform directly, and
-   keeps nine spreadsheet rows that must stay mutually consistent to produce one 45 degree face.
-   *Prerequisites:* none.
-
-2. **Draw its outline as a sketch.**
-   Replace the box-minus-rotated-box with a five-corner sketch of the profile, dimensioned
-   against the same spreadsheet rows and extruded to the same lengths.
-   *Benefits:* the profile becomes a shape a reader can see rather than the residue of a
-   subtraction. Two of the nine rows exist only to place the rotated cutting box and would go.
-   *Drawbacks:* states nothing that was not already stated, and it is still a hand-built shape
-   standing in for an operation.
-   *Prerequisites:* none; the sketch conventions already exist in this file.
-
-3. **Use a real chamfer feature.**
-   Build the flange with a sharp internal corner, then apply FreeCAD's chamfer operation to that
-   edge, sized by the one parameter that means "how much relief".
-   *Benefits:* the only option where the model says what the feature is and does what it is for.
-   One parameter replaces nine spreadsheet rows. The chamfer follows the corner wherever the
-   corner goes, instead of being re-derived by hand if the flange outline changes. It also
-   produces a named edge, which is what the later work on drawings and assembly joints needs.
-   *Drawbacks:* it has to identify an edge of a shape produced by a boolean, and those names are
-   not stable across a rebuild — the same instability already blocking that later work. The
-   chamfer runs around corners where two runs meet, and whether FreeCAD produces the same shape
-   there as the present construction is unknown. **This is the only alternative that can change
-   the flown part**, so it needs a full comparison against OpenSCAD rather than the bit-identical
-   check the rounded corners get.
-   *Prerequisites:* a dependable way to name the edge; a whole-corpus comparison.
-
-4. **Decide it later.**
-   Leave it alone and revisit when the parts move to FreeCAD's `PartDesign` workbench, where the
-   choice comes up anyway.
-   *Benefits:* avoids doing the work twice. Costs nothing now.
-   *Drawbacks:* the question stays open until then, and that move is itself blocked behind a
-   whole-corpus comparison.
-
-#### Recommendation
-
-**Alternative 3 — a real chamfer feature — is the right end state, and alternative 1 is what to
-do until it can be done safely.** So: leave the construction alone for now, write next to it in
-`fillets.py` that it is an OpenSCAD workaround rather than a design, and do alternative 3 as part
-of the work that makes edge references stable.
-
-**This reverses the first recommendation written here, and the reason is worth keeping.** That
-version argued for leaving the chamfer alone permanently, on the grounds that its position is
-measured rather than solved, so it is simply not the kind of feature this work is about. The
-first half of that is still true. The conclusion was wrong, because it reasoned from the
-construction as though the construction were intended. Once it is known that the two-prism build
-exists only because OpenSCAD cannot chamfer an edge, "not the kind of thing we are fixing" stops
-holding: it is exactly the kind of thing — a feature the model no longer states, because the tool
-of the day could not state it — and FreeCAD is the tool that can.
-
-Three things make it the target rather than a nice-to-have:
-
-- **The feature is defined by the edge it follows.** Its purpose is strain relief along the
-  interior corner. A chamfer applied to that edge follows the corner wherever it goes; two
-  hand-placed prisms have to be re-derived by hand if the flange outline changes, and nothing
-  would report it if they were not.
-- **Its size is structural.** One parameter meaning "how much relief" is safer than nine
-  spreadsheet rows that must stay mutually consistent to produce it.
-- **The reason for the workaround is being retired.** OQ-ARCH-4 already decided OpenSCAD goes
-  once the comparison passes, after which FreeCAD is the definition of correctness. Carrying its
-  limitations past that point is the opposite of the point of the migration.
-
-**What holds it back is real and unchanged**: it needs to name an edge of a shape produced by a
-boolean, those names are not stable across a rebuild, it is the only option here that can move
-the flown part, and the behavior where two runs meet has to be measured rather than assumed. None
-of that argues for never doing it. It argues for doing it with the work that solves edge naming,
-and not before.
-
-Alternative 2 is not worth doing on its own: it would move dimensions from one place to another
-and still leave a hand-built shape standing in for an operation. If the remaining rounded corners
-end up needing sketched profiles anyway it becomes nearly free, but it is a waypoint, not a
-destination.
-
 The figures are generated by `tools/draw_flange_chamfer.py`. The two that show the part are
 traced from the assembled bulkhead for U = 1.0, bolt end, 3/16 in panel, from a snapshot written
 by `chamfer_analysis/measure_chamfer_context.py`; re-run that if the geometry moves.
 
----
-
-### OQ-ARCH-14 — Do the last two fillets need converting, by the test just adopted? — DECIDED 2026-08-17: convert all four, into one sketch carrying only the fillets active for that variant
-
-**Alternative 1, with an addition that changes what the work is.** All four rounded corners are
-converted. Rather than four sketches whose inactive elements are overlaid on variants that do
-not use them, the four tangencies live in **one cohesive sketch, which carries only the fillets
-active for the parameter set being built**.
-
-That addition is what makes converting all four coherent rather than a list being finished. The
-question spent three recommendations arguing whether each feature individually earned a
-conversion — and the answer that settles it is not about any one of them. It is that "which
-fillets exist here" is itself a property of the variant, currently expressed nowhere: the
-greeble-to-web fillet's `max(...)` clamp is that question answered badly, by relocating a body
-instead of omitting it. One sketch that contains what is active states it once, in the place a
-reader would look.
-
-**What this commits to, stated plainly because it looked like it changed the flown part.**
-Omitting an inactive fillet means the 27 variants where the greeble-to-web clamp fires lose that
-body. This section originally recorded that cost as *at most 0.042 mm³ per variant, a real
-difference from the OpenSCAD reference that `compare_backends` would report*, and accepted it.
-**Implementing it measured the figure properly and it is zero** — every one of the 27, to below
-1e-6 mm³, on 2026-08-17 (`fillet_scope_analysis/sweep_clamped_gtw.py`).
-
-The 0.042 mm³ was measured at the wrong stage, and the mistake is worth keeping because it is
-easy to repeat. A fillet is a *positive*, fused into the flange **before** the bolt hole, the
-corner socket and the octant mask are cut. 0.042 mm³ was this fillet's net share of the
-**positive** — material no other positive supplied. But the clamp parks the body on the bolt
-centerline, *inside the bolt hole*, so the hole cut then removes all of it. The material was
-never in the finished part to lose. Measuring by fusing the body into the finished octant
-instead makes the opposite error and reads 1.374 mm³, because at that stage the fuse fills the
-hole back in. The only measurement that answers the question is building the octant both ways.
-
-So the decision keeps its meaning and loses its cost: the port still agrees with OpenSCAD
-everywhere, and the omission removes a body that had no effect on any part that was ever built.
-
-**What decides "active" must not be the clamp wearing a different hat.** Deciding activity from
-the same `max` comparison would move the defect rather than remove it. The predicate is a stated
-geometric condition and the sketch refusing to solve stays a *check* that the predicate was
-right, never the mechanism that produces it — the same branch-guard discipline IP-FC-76
-established, applied to existence instead of position.
-
-Implementation settled what that condition is, and it is **not** "whether the web emerges from
-the corner block", which is what this section first guessed. `greeble_web.py` builds the web as
-a 45° strip along the segment from the corner at the origin to the bolt center, and it stops
-there. The flange's inner face is the plane `x = flange_inner_x`. The corner the fillet rounds
-is where the two meet, so it exists exactly while that plane falls inside the segment's span —
-**the flange face is inboard of the bolt center**. That is the same inequality the `max` tested,
-and the honest description says so; what differs is what is done with it. The `max` used it to
-pick a different face to measure from, putting the fillet somewhere it is tangent to nothing.
-The predicate uses it to decide whether the corner is there.
-
-**One more thing implementation found, which the question never thought to ask.** This section
-argued at length about *which* of the four corners a variant has. It did not ask how often the
-swept corpus actually visits the configurations where that answer changes, and the answer is:
-almost never. Three switches decide what the sketch and the bodies look like —
-
-| switch | what it decides | how close the corpus gets |
-| --- | --- | --- |
-| `flange_inner_x` vs `bolt_c` | greeble-to-web corner exists; bolt-flange profile is a quad or a triangle | **crosses it**, 27 of 148 variants, and comes within 0.05 mm |
-| `bolt_boss_r` vs `flange_thickness / 2` | web-to-bolt fillet is placeable | never within a factor of **4.33** |
-| bolt-flange reach vs its offset | bolt-flange fillet is placeable | within 0.45 mm, never crosses |
-
-— so two of the three refusal paths were only ever reached by one synthetic edit, made from
-whichever seed a check happened to be handed. Walking them deliberately, with deliberately thin
-bolt bosses against thick greeble webs, found a band where the web-to-bolt tangency is
-satisfiable and the body still cannot be built, failing several features downstream with a
-message naming nothing. IP-FC-73 has the detail and the fix. The general lesson is worth
-stating here rather than there: **a swept corpus is not a test suite**, and "every variant we
-build works" says nothing about the configurations the sweep does not visit.
-
-Carried to IP-FC-73, which is unblocked and rescoped by this. The evidence that produced the
-decision follows.
-
-#### Where this comes from
+### Where this comes from
 
 OQ-ARCH-13 asked whether the flange chamfer belonged in the work that replaces hand-worked-out
 positions with stated geometric requirements. It was decided that it does not, on this test:
@@ -2524,7 +1134,7 @@ That test was applied to the chamfer and it excluded it. It has not been applied
 rounded corners, because when it was written they were all assumed to be on the other side of
 it. Two of them are not.
 
-#### Where the four are
+### Where the four are
 
 All four are small rounded corners inside the standing flange, repeated once per octant, so
 there are thirty-two of them on a bulkhead. One sits where the flange wall turns the outer
@@ -2533,7 +1143,7 @@ marks rather than shapes, which is why the two details below are needed:
 
 ![The four flange fillets located on the bulkhead](img/fillet_scope/bulkhead.svg)
 
-#### What the two already converted had to remove
+### What the two already converted had to remove
 
 The bolt-flange fillet's height was `sqrt(max(r_bolt_fillet^2 - dx^2; 0)) + bolt_c`, and the
 web-to-bolt fillet's pair came out of the same shape of expression. Both are the leg of a right
@@ -2546,7 +1156,7 @@ anywhere in `fillets.py`**. The `sqrt(2)`s that survive are the constant for a 4
 and the two surviving `max(...)` calls select between two candidate faces rather than clamping a
 discriminant.
 
-#### The outer corner fillet: measured, and doing real work
+### The outer corner fillet: measured, and doing real work
 
 Its center is `flange_inner_x - flange_fillet_radius` and `flange_y - flange_fillet_radius`. The
 two faces are at right angles, so each coordinate is one face minus the radius, and there is
@@ -2561,7 +1171,7 @@ mm³** that no other body supplies, across all 44 measured variants, growing wit
 So by the test as written it belongs on the chamfer's side of the line: measured, not solved —
 but it is genuinely part of the shape.
 
-#### What the two web fillets are for
+### What the two web fillets are for
 
 Recorded 2026-08-17, because it is not recoverable from the code and the first two attempts at
 these figures were drawn without it.
@@ -2579,7 +1189,7 @@ frequently **hidden entirely by the bolt-flange fillet** — that is what its 7%
 U = 3.0 above means, and it is expected rather than a defect: at that flange thickness and
 fillet radius the bolt-flange fillet already covers the web's bolt end.
 
-#### The greeble-to-web fillet: the conditional is a clamp, and it fires into the bolt hole
+### The greeble-to-web fillet: the conditional is a clamp, and it fires into the bolt hole
 
 Its x reference is
 
@@ -2682,7 +1292,7 @@ bodies around it already supply it.
 would re-measure the same corner. That is an assumption, stated here because it is the one thing
 that would widen the result if it were wrong.
 
-#### What it would cost to convert either
+### What it would cost to convert either
 
 Each conversion is roughly what the last one was: a construction sketch, two `Tangent`
 constraints, an entry in `check_tangency.py`, and verification that nothing moved. The
@@ -2696,76 +1306,6 @@ asserts less than it appears to is its own small liability.
 And the greeble-to-web fillet needs a sketch that can express a reference which is sometimes not
 there at all, and **refuse** rather than substitute one — which is more than either completed
 conversion had to do, and is also the point of doing it.
-
-#### Alternatives
-
-1. **Convert both, finishing the list of four.**
-   *Benefits:* all four rounded corners state their relationship; consistent to read.
-   *Drawbacks:* the outer corner fillet has nothing to gain — no discriminant, no branch, no
-   configuration that can fail — so this spends the expensive part, the verification, on a
-   feature the adopted test already excludes.
-   *Prerequisites:* establish how a sketch refuses when the web has no greeble end.
-
-2. **Convert neither, and close the item at two of four.**
-   *Benefits:* consistent with the decision made about the chamfer; no further work.
-   *Drawbacks:* leaves a clamp that silently produces a meaningless body in 27 of 148 variants —
-   the same class of defect this work exists to remove, left in place because it is small.
-   *Prerequisites:* none.
-
-3. **Convert the greeble-to-web fillet only, and have it refuse where the junction does not
-   exist.** Replace `max(flange_inner_x; -bolt_offset)` with a tangency the sketch either
-   satisfies or reports as unsatisfiable, and omit the body in the variants where the corner
-   block has swallowed the web.
-   *Benefits:* removes a clamp that returns a plausible wrong answer, which is the defect the
-   whole item is about; states the junction the fillet is actually for; the 27 variants where it
-   fires stop carrying a body that rounds nothing. Cheap to verify — the body contributes at
-   most 0.042 mm³, so omitting it moves almost nothing.
-   *Drawbacks:* three of four converted is a harder rule to state than all or none; changes the
-   part, slightly, in the variants where the body is dropped; needs a refusal path the two
-   completed conversions did not.
-   *Prerequisites:* agreement that omitting the fillet where the web has no greeble end is
-   correct rather than a regression against the OpenSCAD reference — it *will* show up as a
-   difference in `compare_backends`.
-
-4. **Convert neither, and raise the clamp as a design question instead.**
-   Close this item at two of four, and ask separately, in the bulkhead design document, what the
-   greeble-to-web fillet should do when there is no greeble end to fillet.
-   *Benefits:* puts the question where it belongs if the answer is a change to the part rather
-   than to how the part is expressed.
-   *Drawbacks:* opens a second question rather than closing one, and the answer feeds straight
-   back into this one; the mechanism that implements "refuse" is the conversion, so splitting
-   them separates a question from its own remedy.
-   *Prerequisites:* none. The behavior is inherited, not introduced —
-   `fuselage_bulkhead_geometry.scad` computes the same `max` and builds the same polygon.
-
-#### Recommendation *(superseded by the decision above — retained because it changed three times)*
-
-The recommendation moved three times, and the reason each time was evidence rather than
-argument. It first read *convert the greeble-to-web fillet only*, on the strength of its
-conditional reference. Then *convert neither*, when measurement showed the body contributes
-nothing anywhere. Then back to *the greeble-to-web fillet only*, once the recorded intent showed
-the conditional is a clamp rather than a relationship. None of the three considered that "which
-fillets are active" could be expressed directly, which is what the decision does.
-
-The one argument in them that survives is against converting the outer corner fillet on its own
-merits: its position is two perpendicular faces each minus a radius, with no discriminant, no
-branch and no configuration that can fail, so a `Tangent` constraint states something already
-obvious and one of the four permanent checks — that an impossible setup is refused — has nothing
-to assert for it. It is converted anyway, because a single sketch that holds three of the four
-and omits the fourth would need a reason a reader could not find in the geometry.
-
-#### What the decision leaves to the implementation
-
-- **A single sketch fails as a unit.** `solve()` and `FullyConstrained` are per sketch, so four
-  tangency sub-systems in one object means one unsatisfiable sub-system reports as one failed
-  sketch, losing which fillet caused it. `check_tangency.py` and the generator's own guard must
-  identify the sub-system, or the refusal check gets weaker exactly as the number of things it
-  covers goes up.
-- **Reference-dimension names share one namespace.** `Constraints.<name>` is flat within a
-  sketch. The existing prefixes (`bbf_`, `wtb_`) already keep them apart and must stay.
-- **The two completed conversions are restructured, not left beside the new one.** `BffTangency`
-  and `WtbTangency` merge into the cohesive sketch; both are bit-identical today and must stay
-  so, which is the cheapest possible regression test for the merge itself.
 
 The figures are generated by `tools/draw_fillet_scope.py`, traced from the assembled bulkhead by
 `fillet_scope_analysis/measure_fillet_context.py` for U = 3.0 and U = 0.75, bolt end, 1/8 in
@@ -2791,14 +1331,1285 @@ Two further conventions, both learned by getting them wrong:
 The volumes come from `fillet_scope_analysis/sweep_fillet_share.py`. Re-run both if the geometry
 moves.
 
+## Open questions
+
+| ID | Summary | Blocking |
+| --- | --- | --- |
+| OQ-ARCH-21 | How is the reproducibility criterion sampled: what sample count, seed and combination rule? | Not blocking |
+| OQ-ARCH-26 | What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry? | Blocking IP-FC-159 |
+
+### OQ-ARCH-1 — `Part::` or `PartDesign::`? — RESOLVED 2026-08-07
+
+**Problem**
+
+The roadmap calls this the decision that shapes the whole phase. The geometry today is
+CSG: unions and differences of primitives and extrusions, with masks trimming an octant and
+mirrors tiling it.
+
+**Alternatives**
+
+1. **`Part::` primitives with booleans.** Benefit: maps directly onto the existing code, so the
+   port is a translation rather than a redesign. Drawback: less idiomatic FreeCAD.
+2. **`PartDesign::` bodies with sketches.** Benefit: idiomatic. Drawback: a body is a single
+   contiguous solid, and reusing one body as a cutter for another is awkward — which is a direct
+   problem for the greeble, whose whole safety property is that both halves are complements of one
+   shape.
+3. **`Part::` for the joint, `PartDesign::` for the rest.** Benefit: keeps the risky part in the
+   paradigm that suits it. Drawback: two paradigms in one codebase, and the boundary between them is
+   another thing to get wrong.
+
+**Recommendation**
+
+**Alternative 1.** The single-description property of the greeble is the strongest constraint in
+the geometry and `Part::` preserves it for free. The fillet fragility is real but confined to the
+flange and web features, which are the least load-bearing geometry in the project.
+
+**Decision**
+
+**Build the parts *both* ways, then choose.** Neither alternative is
+selected on paper. IP-FC-5 produces a `Part::` corner **and** a `PartDesign::` corner, and
+the paradigm decision follows from comparing them.
+
+**What the comparison must produce**, so it decides something rather than becoming two
+prototypes nobody chooses between:
+
+1. Identical measured geometry from both — volume and bounding box against the OpenSCAD
+   reference, to prove both are correct before either is preferred.
+2. A statement of whether the greeble can be formed in `PartDesign::` by reusing the
+   corner's end section, and what it costs if not.
+3. Line counts and, more importantly, how each behaves when a parameter changes — a
+   regenerate across several `U` values, checking whether fillet references survive.
+
+**Rationale**
+
+This is a deliberate deferral, and it is bought rather than free — it costs a second
+prototype. It is worth that because the roadmap calls this "the decision that shapes the
+whole phase", and the arguments on each side are of a kind that prototypes settle and
+reasoning does not:
+
+- Whether `PartDesign::` can express the greeble's single-description property at all, or
+  needs a constraint where `Part::` has an identity, is a question about how the workbench
+  behaves — not about the geometry.
+- Whether programmatic edge selection for fillets is as fragile as feared is a question
+  about topological naming stability across a parameter sweep, which only a sweep answers.
+- Whether sketch-based construction is genuinely a "bigger rewrite" is a question about how
+  much of the octant-and-mirror structure survives, which is visible once one part exists
+  in both forms.
+
+**Caveats**
+
+Until IP-FC-5 reports, no other part is ported. That is the point of the deferral.
+
+**Where it is recorded**
+
+[IP-FC-5](../implementation/freecad_migration.md) builds the corner both ways.
+
+### OQ-ARCH-2 — What replaces the exact verification tier? — RESOLVED 2026-08-07
+
+**Problem**
+
+`scad_snapshot.py` is exact, runs in seconds, and disappears with the generated `.scad`.
+
+**Alternatives**
+
+1. **Snapshot the parameter dataclasses instead.** Benefit: same cost and exactness. Drawback:
+   covers nothing below geometry construction, so geometry changes still cost a render.
+2. **Serialize each `Shape` to BREP and byte-compare.** Benefit: covers the geometry layer exactly.
+   Drawback: BREP is not obviously stable across kernel versions or construction order, so a false
+   difference is likely.
+3. **Accept the loss and rely on measured geometry alone.** Benefit: no work. Drawback: every
+   Python-side change costs a full sweep.
+
+**Recommendation**
+
+**Alternative 1 now, alternative 2 opportunistically.** They compose — parameters above, BREP below
+— and 1 is cheap enough to build before it is needed.
+
+**Decision**
+
+**Do both, and pursue every shape-comparison method available.**
+Alternative 3 — accepting the loss — is rejected outright. The governing statement:
+
+> **At this point we cannot afford to operate without verification coverage.**
+
+**What this commits to building:**
+
+| Method | Layer it covers | Item |
+| --- | --- | --- |
+| Parameter snapshot | everything above geometry construction — axes, derivation, validity, naming | IP-FC-2 |
+| BREP serialization compare | the geometry layer, exactly, within FreeCAD | IP-FC-32 |
+| Measured geometry | cross-toolchain and within-toolchain | survives as `sweep_check.py` |
+| Generator-script render | that every part still builds at all | successor to `verify_drivers.py` |
+
+**Rationale**
+
+That is a stronger position than any single alternative above, and it reframes the
+question. The default is **not** "pick the cheapest adequate check". It is **try every
+method, keep everything that works, and deprecate a method only after demonstrating it
+cannot be made to work** — a failed attempt is evidence; an untried idea is not.
+
+These are complements, not competitors. A parameter snapshot cannot see a geometry change; a
+BREP compare cannot see a naming change; measured geometry sees both but costs a render.
+**Layered coverage is the goal and redundancy between layers is a feature** — Phase 2 found
+defects that only one of its three tiers could have caught, more than once, and the two dead
+parameters (OQ-DES-B6, OQ-DES-C3) were invisible to *all* of them.
+
+**Why this matters more after the port than before.** Phase 2's cheapest tier was exact,
+ran in seconds, and carried most of the verification load. The port deletes it. Replacing
+one strong check with one weaker check would quietly reduce coverage at exactly the moment
+the codebase is least trustworthy — a newly ported geometry engine with no track record.
+Several partial checks is the right response, even though it is more work than the
+arrangement it replaces.
+
+**Caveats**
+
+**Grounds for deprecating a method:** demonstrate that it produces false results or cannot
+be made to work, and record the finding. "It seemed redundant" is not sufficient, because
+redundancy is the property being bought.
+
+**Where it is recorded**
+
+The table under the decision names the work item for each method.
+
+### OQ-ARCH-3 — Is subprocess-per-part viable? — WITHDRAWN 2026-08-07
+
+**Problem**
+
+Keeping "render is a subprocess" preserves the entire sweep driver. It costs a FreeCAD process
+start per part, and FreeCAD starts far more slowly than OpenSCAD.
+
+**Alternatives**
+
+1. **One `freecadcmd` process per part.** Benefit: the queue, worker budget, atomic writes, retry,
+   and resume all survive unchanged. Drawback: startup cost multiplied by part count.
+2. **One long-lived worker process handling many parts.** Benefit: startup paid once per worker.
+   Drawback: loses crash isolation — one bad part can take a worker's whole batch.
+3. **In-process, multiprocessing instead of threads.** Benefit: no process-per-part startup.
+   Drawback: rewrites the queue.
+
+**Recommendation**
+
+**Measure before choosing**, and this is step 1 of the sequence above. If startup is a small
+fraction of a part's build time — plausible, since these parts take seconds to minutes of kernel
+work — alternative 1 wins on every other axis.
+
+**Why withdrawn**
+
+**This was miscategorized.** An open question is a decision requiring judgment between
+alternatives whose merits cannot be settled by looking. This is a **measurement** — take the
+`freecadcmd` startup time and a single part's build time, and the answer follows
+mechanically from the ratio. There is no design judgment in it.
+
+Nothing is lost by withdrawing it; the ID is retained rather than renumbered so that
+references elsewhere stay valid.
+
+**Worth noting as a pattern**, since this document raised nine questions and one of them
+was not a question: *"we do not know X"* is not sufficient grounds for an OQ. The test is
+whether knowing X requires a **decision** or merely an **observation**. If an afternoon of
+measurement settles it, it is a work item.
+
+**Where it is recorded**
+
+The substance has moved to where it belongs:
+
+- **The measurement** is [IP-FC-1](../implementation/freecad_migration.md), already an
+  unblocked work item and the first thing in the plan.
+- **The decision tree** — which architecture each outcome implies, and what each costs — is
+  in [§What must be preserved](#what-must-be-preserved), beside the discussion of why the
+  driver keeps its subprocess model.
+
+### OQ-ARCH-4 — What becomes of the OpenSCAD implementation? — RESOLVED 2026-08-07
+
+**Problem**
+
+The roadmap says do not delete it before the FreeCAD path is proven across the full
+parameter range, which settles the near term but not the end state.
+
+**Alternatives**
+
+1. **Retire it once equivalence is demonstrated.** Benefit: one implementation to maintain.
+   Drawback: loses the only independent check on the new geometry.
+2. **Keep it as a cross-check, run on demand.** Benefit: two independent implementations of the
+   same geometry is a strong check — the current design documents were written partly by reading it.
+   Drawback: every geometry change must be made twice or the check rots into a source of false alarms.
+3. **Freeze it as a reference corpus, not as code.** Benefit: keeps the 576-part output tree as the
+   golden reference forever, at no maintenance cost. Drawback: the reference goes stale the moment the
+   geometry legitimately changes.
+
+**Recommendation**
+
+**Alternative 3.** A frozen corpus captures nearly all the value of alternative 2 — an independent
+statement of what the geometry was — without the standing cost of maintaining two implementations,
+which alternative 2 will lose to entropy.
+
+**Decision**
+
+**Alternative 1 — retire it.** No new geometry will be developed in
+OpenSCAD, and two implementations will not be maintained in parallel. **Once verified, the
+FreeCAD implementation becomes the definition of correctness.**
+
+**The corpus is therefore a migration instrument with a defined end of life, not an asset:**
+
+| Phase | Role of the OpenSCAD output |
+| --- | --- |
+| Until IP-FC-13 | **The datum** — every ported part is checked against it |
+| At IP-FC-13 | Equivalence demonstrated across the full parameter range |
+| After IP-FC-13 | **Superseded** — FreeCAD defines correctness; the OpenSCAD implementation is removed |
+
+**Rationale**
+
+That last clause settles it, and it is what my recommendation missed. Alternative 3 proposed
+keeping the OpenSCAD output as a frozen reference corpus — but a corpus is only useful as a
+*datum*, and there cannot be two definitions of correctness. The moment IP-FC-13 signs off
+equivalence, the OpenSCAD tree stops being an independent check and becomes a second,
+unmaintained answer to a question that now has an authoritative one. Keeping it invites
+someone to read a disagreement as ambiguous when it is not.
+
+**Deleting it is safer than it feels**, which is worth stating because working code is hard
+to throw away: the implementation lives in git history and stays recoverable indefinitely.
+Removing it from the working tree destroys nothing — it stops it being read, maintained, or
+mistaken for authoritative. And the part that *would* genuinely have been lost, the design
+intent the code was the only record of, is now in [corner.md](../design/corner.md),
+[bulkhead.md](../design/bulkhead.md) and [cowl.md](../design/cowl.md).
+
+**Caveats**
+
+**Two conditions on the removal**, both still binding:
+
+1. **Not before the full parameter range is proven** — IP-FC-13, not the first part that
+   matches.
+2. **Not before the design documents are checked against it one last time.** They were
+   reconstructed *from* this code; once it is gone, an error in them is no longer
+   falsifiable against the original. This session found several such errors, so the risk is
+   demonstrated rather than theoretical.
+
+**Where it is recorded**
+
+Tracked as IP-FC-34.
+
 ---
 
-### OQ-ARCH-15 — What is the reference corpus a reference *to*, and what keeps it current? — DECIDED 2026-08-18: freeze the baseline, reason about the deltas
+### OQ-ARCH-5 — How is the cowl interior surface generated? — RESOLVED 2026-08-07
 
-**The problem.** `verify_sweep_change.py` compares a freshly built sample against
+**Problem**
+
+Required by UC-4. The interior must be a per-layer 2D inset matching slicer behavior, not
+a perpendicular shell offset — see the use-case section for why the two differ and why the
+difference is intended.
+
+**The parameter question is settled.** Extrusion width already exists; it was stored under
+the name `nozzle_diameter` and has been renamed (IP-GEO-24). No new field is needed, and —
+more to the point — no new field should be *added*, because doing so would produce two
+nearly-equal parameters where the design has one.
+
+The offset should still be expressed as an explicit multiple, `n_perimeters ×
+extrusion_width`, so the count and the width stay separately visible. That matches the
+existing convention for `flange_thickness` and `plate_thickness`, which are already whole
+multiples of extrusion width and layer height respectively.
+
+**What remains open is the method** — how layers are sliced, how the inset is computed per
+layer, how the sections are joined into a solid, and what supplies material at
+near-horizontal surfaces where a horizontal inset leaves none.
+
+**Alternatives**
+
+1. **Slice-and-loft** — section the solid at `layer_height` intervals, offset each 2D contour
+   inward by `n_perimeters × extrusion_width`, and loft the resulting contours. Benefit: directly
+   mirrors what the slicer does, so the model matches the print by construction. Drawback: produces
+   one contour per layer — thousands for a large cowl — so the loft is heavy and the resulting B-rep
+   is large.
+2. **Coarse slice-and-loft** — the same, at a spacing much larger than `layer_height`, chosen so
+   the offset error stays within tolerance. Benefit: far cheaper. Drawback: no longer exactly what the
+   printer produces.
+3. **3D shell offset with local correction** — use `Part::Offset`/`makeThickness` for the bulk, and
+   correct where the surface approaches horizontal. Benefit: one kernel operation for most of the
+   surface. Drawback: offsets normal to the surface, which is *not* what the slicer does, so it is
+   wrong by `1/cos α` everywhere the surface is not vertical — precisely the error this use case
+   exists to avoid.
+4. **Two surfaces, explicitly** — model a nominal interior independent of slicer behavior, and
+   record that it is an idealisation. Benefit: simplest to build and to reason about. Drawback:
+   diverges from the printed part in a way that matters for UC-8.
+
+**Recommendation**
+
+**Alternative 2.** It keeps the mechanism that makes the result correct — horizontal insets,
+matching the slicer — while avoiding a per-layer loft that no downstream consumer needs at full
+resolution. Alternative 3 is the tempting one and should be resisted: a normal offset is the exact
+error mode this use case was raised to prevent.
+
+**Decision**
+
+**Alternative 2, with four requirements on the surface it produces.**
+
+1. **Curvature-aware, adaptive section spacing.** Not a fixed interval. Section density
+   follows local curvature — close where the OML turns hard, sparse where it is nearly
+   straight. Uniform spacing wastes sections on the parallel midbody and under-samples the
+   nose radius, which is the one place accuracy matters.
+2. **Bidirectional curvature.** The interior must be doubly curved — circumferentially
+   *and* axially. Not developable, not ruled.
+3. **Axial continuity: G1 tangency is the threshold, G2 curvature is the objective.**
+   Tangency across every section join is the minimum acceptable result; curvature
+   continuity is the goal to design toward.
+4. **Explicitly not a ruled surface with tangency discontinuity.** A loft that
+   straight-lines between adjacent contours and meets only C0 at each section is precisely
+   the failure this requirement excludes.
+
+**Rationale**
+
+**Why the continuity requirement is not cosmetic.** Wall thickness is the *difference*
+between exterior and interior surfaces. The exterior is a piecewise cubic Bézier carrying
+G2 across several stations by design (§1.2). If the interior is only C0 at its section
+joins, then **wall thickness is discontinuous at every join** — a thickness step at a seam
+the exterior does not have — even though each surface is individually acceptable. That is a
+stress raiser for UC-8 and a visible artifact in UC-4 and UC-7.
+
+Matching the interior's continuity class to the exterior's is the real requirement; G1
+threshold / G2 objective is how it is stated.
+
+**What this rules out in implementation.** A `ruled=True` loft is excluded by (4). So is a
+`ruled=False` loft that merely interpolates the section curves without tangency
+constraints, since that satisfies neither (3) nor generally (2). The method wants a surface
+**fit** through the offset contours with continuity conditions imposed — the same class of
+construction OpenVSP uses for the exterior, applied to the interior.
+
+**Adaptive spacing has a natural termination test:** refine the interval until the deviation
+between the fitted surface and the true per-layer offset falls below tolerance. That makes
+spacing a derived quantity rather than a tuning knob, and gives the algorithm document a
+convergence criterion to state.
+
+The near-horizontal material rule — the equivalent of a slicer's top and bottom solid
+layers — remains the main undecided item inside IP-FC-16. **Settled 2026-08-21 by
+[OQ-ARCH-17](#open-questions): there is no such rule, because the design has no
+near-horizontal geometry and the cowl has no top or bottom skin.** It had stood here as the
+main undecided item since 2026-08-07 without ever being filed as a question, so it blocked
+IP-FC-16 while reading as prose. What IP-FC-16 carries instead is the precondition, asserted
+rather than assumed.
+
+**Caveats**
+
+**Amended 2026-08-09 by OQ-DES-CW6: this surface is not what gets printed.** Cowls are
+printable in **spiral vase mode**, which permits one contour per layer and no interior
+geometry at all, so a cowl carrying this interior surface is no longer vase-printable. The
+interior therefore serves UC-2, UC-3, UC-4, UC-7 and UC-8, and the UC-1 export continues to
+come from the un-shelled notched blank — two representations from one parametric source, as
+[cowl.md §6.4](../design/cowl.md) records. Two consequences here. First, alternative 4's
+"diverges from the printed part" drawback is no longer a drawback to be weighed: divergence
+is the *design*, and the thing to guard is that the two paths stay separate. Second, the
+interior's fidelity requirements above are unchanged but their justification narrows — they
+matter because analysis and assembly need them, not because a printer will follow them.
+
+**Where it is recorded**
+
+**The full method belongs in an algorithm document**, not here — see IP-FC-16.
+
+### OQ-ARCH-6 — How are assembly joints defined and stored? — RESOLVED 2026-08-07
+
+**Problem**
+
+Required by UC-4: fuselage unit, nose, tail, and full fuselage assemblies with real joints.
+
+The unresolved part is where the mating information lives. The geometry already knows how
+the parts mate — the greeble post and its bore are complements of one shape, and the bolt
+pattern is a shared parameter — so an assembly could in principle place parts by
+construction rather than by constraint. That is the same argument that appears in
+[OQ-DES-C3](../design/corner.md#open-questions) for the joint itself.
+
+**Alternatives**
+
+1. **Place parts by construction, from the parameters that already position them.** Benefit: cannot
+   be inconsistent, for the same reason the greeble cannot. Drawback: not a FreeCAD Assembly document,
+   so it does not interoperate with the Assembly workbench's tooling.
+2. **Use FreeCAD's Assembly workbench with real joints.** Benefit: idiomatic. Drawback: constraints
+   can be violated or fail to solve, which is a new failure mode in a batch context.
+3. **Both — construction for placement, joints added for downstream use.** Benefit: placement stays
+   deterministic while the assembly still carries joint semantics for consumers. Drawback: two
+   representations of the same relationship, which is exactly the class of duplication this project
+   has spent Phase 2 removing.
+
+**Recommendation**
+
+**To measure alternative 2's headless behavior first**, because it decides whether the choice is
+real. If the Assembly workbench does not script cleanly under `freecadcmd`, alternative 1 is the
+only option that runs in a sweep.
+
+**Decision**
+
+**Alternative 2 — FreeCAD Assembly with real joints.**
+
+This buys what UC-4 and UC-7 actually need: interference checking, kinematics, and an
+assembly that exports to STEP as an assembly rather than as a bag of solids.
+
+**Rationale**
+
+**The headless question becomes a work item, not a decision gate.** Confirming that the
+Assembly workbench scripts under `freecadcmd` is now a prerequisite task inside IP-FC-19
+rather than a condition on the choice. If it turns out not to script, that is a problem to
+solve — not a reason to revisit the decision.
+
+**The one real objection to this option has a cheap mitigation, and it should be built in
+from the start.** The drawback of joints over construction is that a constraint can fail to
+solve, or solve to something unintended, and in a batch context nothing would notice.
+
+But **the constructed placement remains computable from the parameters** — that is what
+alternative 1 would have used, and those parameters do not go away. So:
+
+> **Solve with joints; verify against the constructed placement.**
+> For every assembly, compute where each part *should* sit from `unit_width`,
+> `bulkhead_thickness`, `unit_length` and the rest, and assert the solver put it there
+> within tolerance.
+
+That converts the failure mode from silent into loud, at the cost of arithmetic that is
+already available. It preserves the property [OQ-DES-C3](../design/corner.md#open-questions)
+established — that parts sharing parameters cannot drift — while still producing a real
+assembly with real joints.
+
+**Caveats**
+
+**Note what this does and does not change about the geometry.** Parts still share their
+cross-section and joint parameters by construction; the greeble is still formed by cutting
+with `corner_end()`. Joints are an additional layer describing how parts relate, for the
+benefit of downstream consumers. They are not a substitute for the parametric consistency
+that makes the parts fit in the first place, and nothing here should be read as license to
+let the two representations diverge.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-ARCH-7 — What decides which dimensions a generated drawing carries? — RESOLVED 2026-08-07
+
+**Problem**
+
+Required by UC-7. Projecting a view is the easy part; TechDraw does it from any shape.
+The hard part is *which* dimensions to place, and that is a question about design intent,
+not geometry. A part has hundreds of dimensionable edges and a useful drawing carries a
+dozen.
+
+The observation that shapes this: **the parameter set already is the design intent.**
+`corner_radius`, `bolt_offset`, `panel_thickness`, `bulkhead_thickness` are exactly the
+quantities a reader of the drawing needs, and they are exactly what the geometry was
+built from.
+
+**Alternatives**
+
+1. **Generate the dimension scheme from the `Parameters` object.** Benefit: a drawing is guaranteed
+   to dimension the things that are actually parametric, and it cannot drift from the model — both
+   come from one source. Drawback: needs a mapping from each parameter to the edges or faces that
+   express it, which is per-part work and brittle if the topology changes.
+2. **Hand-author a drawing template per part type** , reused across variants. Benefit: full control
+   over layout and standards compliance. Drawback: the template references specific edges, so it
+   breaks when the geometry changes.
+3. **Dimension only the interfaces** — bolt pattern, mating diameters, overall envelope — and treat
+   internal structure as non-dimensioned reference geometry. Benefit: small, stable set. Drawback: not
+   a manufacturing drawing in the full sense.
+
+**Recommendation**
+
+**Alternative 3 first, then 1.** The interface dimensions are the ones that matter and the ones
+that are already named as shared conventions, so they are both the most valuable and the most
+stable. Growing that into a full parameter-driven scheme is a natural second step; starting there
+risks spending the effort on internal dimensions nobody reads.
+
+**Decision**
+
+**None of the three as posed.** The alternatives framed this as a choice
+between dimensioning *interfaces* and dimensioning *parameters*. That framing is wrong twice
+over.
+
+**First: a dimension is an expression over parameters, not a parameter.** Some are a
+parameter directly — `corner_radius`, `bolt_offset`. Many are *combinations*: the bulkhead's
+flange inner edge sits at `corner_radius − panel_thickness − panel_tolerance`, its outer
+flange face a further `flange_thickness` in. Neither is a parameter anyone set; both are
+what a machinist or inspector needs.
+
+The dimension scheme is therefore a set of **named expressions**, each bound to two
+topological references. Alternative 1's "generate from the `Parameters` object" was too
+literal — the object supplies the *inputs*, not the dimensions.
+
+**Second: interfaces are a floor, not the scope.** The physical interface must be documented
+with dimensioning — that part of alternative 3 stands — but the drawing must also be
+**complete**, and complete and **readable** pull against one another. That tension is the
+real design problem and neither side is negotiable.
+
+**Rationale**
+
+**A useful consequence:** the design documents already contain many of these expressions,
+because documenting the geometry required deriving them.
+`corner_radius − panel_thickness − panel_tolerance` appears in
+[bulkhead.md](../design/bulkhead.md); the buttress profile vertices in
+[cowl.md §4.1](../design/cowl.md) are expressions of exactly this kind. The scheme starts
+from the design authority rather than blank.
+
+**Completeness has a testable definition** and should be stated as one: every dimension
+needed to manufacture and inspect the part is present, and none is redundant.
+Over-dimensioning — the same distance implied twice through different chains — is a genuine
+defect rather than mere clutter, because the two chains can disagree once tolerances apply.
+
+**The sweep makes readability easier, not harder.** 576 variants share one *scheme* and
+differ only in *values*. That is exactly what classical drafting solves with a **family
+drawing**: lettered callouts (A, B, C …) on the views and a table of values per variant. One
+readable sheet replaces 576 crowded ones, completeness is checked once against the scheme
+rather than per part, and a new variant adds a table row rather than a drawing.
+
+That form also inverts the earlier worry about which dimensions to include: with values in a
+table rather than on the view, an extra dimension costs a column instead of a crowded leader
+line — so **completeness becomes affordable in a way it is not on a one-off drawing.**
+
+**Caveats**
+
+**Still to settle**, and belonging to the drawing scheme's own design work:
+
+1. Which expressions constitute the interface set — the floor, and something
+   `overview.md`'s interface-conventions section should own once it exists.
+2. What "complete" means for this family: fully defining every part, or fully defining
+   every mating and inspected feature.
+3. Whether internal structure — webs, fillets, chamfers — is dimensioned at all, or shown
+   as reference geometry governed by the model.
+4. How topological references survive a parameter change. This is the same edge-naming
+   stability question IP-FC-5's two prototypes will answer, so it need not be solved twice.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-ARCH-8 — Can printed parts be analyzed as non-uniform material? — WITHDRAWN 2026-08-07
+
+**Problem**
+
+Required by UC-8 tier 4. An FDM part is not the isotropic solid an FEM solver assumes by default:
+it is stiff along the deposited beads and weak across the layer interface, and its properties
+depend on toolpath and orientation rather than on shape alone.
+
+**Alternatives**
+
+1. **Stop at tier 3 — orthotropic per part, from recorded print orientation.** Benefit: reachable
+   with the stack already in use. Drawback: treats each part as a uniform orthotropic continuum, so it
+   cannot see infill pattern, perimeter count, or a weak seam.
+2. **Adopt a permissively-licensed additive-manufacturing analysis tool, if one exists.** Benefit:
+   the stated ideal — properties that follow the actual deposition. Drawback: unknown whether such a
+   tool exists at usable maturity.
+3. **Calibrate tier 3 against test articles** rather than seeking a finer model. Benefit: a coupon
+   test gives real orthotropic constants for *this* printer, material and profile, which is more
+   trustworthy than a finer model fed generic data. Drawback: physical test work.
+
+**Recommendation**
+
+**1, then 3, and treat 2 as a survey to run before committing to either.** The largest single error
+in analyzing a printed part is assuming isotropy, and tier 3 removes it. Going from measured
+orthotropic constants to bead-level modeling is a much smaller refinement than the one before it,
+and it is not obviously worth a heavy dependency — but that judgment should follow the survey
+rather than precede it.
+
+**Why withdrawn**
+
+**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions).** The question was
+"does a permissively-licensed tool exist for bead-level FDM analysis" — and I said in the
+original text that it "should be answered by looking". That is the admission that it is a
+**work item**: an observation, not a decision between alternatives.
+
+**The decision that *would* have been an open question is a different one:** whether to
+stop at tier 3 or pursue tier 4 at the cost of a heavy dependency. That question cannot be
+posed usefully until the survey reports, because its alternatives depend on what the survey
+finds. If IP-FC-6 turns up a viable tool, raise it then.
+
+**Two of the nine questions in this document were work items** — this and OQ-ARCH-3. Both
+had the same shape: *"we do not know the value of X"*, where X is discoverable by looking.
+The test that separates them is whether resolution requires a **judgment** or an
+**observation**. Recorded here because it is a cheap mistake to repeat.
+
+**Where it is recorded**
+
+It is [IP-FC-6](../implementation/freecad_migration.md), already an unblocked survey task.
+
+The substance that was worth keeping is not the question but the **ladder it sat at the top
+of**, and that is recorded in [§UC-8 is a ladder](#uc-8-is-a-ladder-not-a-single-capability):
+
+- Tier 3 — orthotropic per part — is reachable with the stack already in use. CalculiX
+  supports orthotropic elasticity, FreeCAD invokes it as a separate process, and the layer
+  axis per part is now recorded (IP-FC-3).
+- Tier 4 — bead-level or toolpath-resolved — depends on tooling whose existence is unknown.
+
+### OQ-ARCH-9 — Is OpenVSP's license compatible, and in which usage pattern? — RESOLVED 2026-08-07
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+**It is compatible, and the usage pattern does not matter.** NOSA's obligations key on
+*distribution*, not on linkage:
+
+| Clause | Says | Effect here |
+| --- | --- | --- |
+| §3.A | Obligations attach to "Distribution or Redistribution of the Subject Software" | We use OpenVSP; we do not ship it. **§3 does not bite.** |
+| §3.I | A Recipient may combine Subject Software with software not governed by the Agreement and distribute the result as a single product, provided the OpenVSP portions remain under NOSA | Component-level, **not viral**. Our code keeps its own license even if OpenVSP were bundled. |
+| §1.F | "the act of including Subject Software as part of a Larger Work does not in and of itself constitute a Modification" | Using it does not make us a Contributor with §3.C change-log duties. |
+| §3.F | Registration "is requested" | A courtesy, not a condition. |
+
+**Rationale**
+
+**Read from the installed copy:** `C:\Program Files\OpenVSP-3.50.5-win64\LICENSE` —
+**NASA Open Source Agreement version 1.3** (3.47.0 is also installed, same terms).
+
+**So the distinction I drew between driving it as a process and importing its Python API
+was wrong.** That distinction is the GPL/LGPL mental model, where linkage is what triggers
+copyleft. NOSA has no such trigger — both patterns are equally fine, and the choice should
+be made on engineering grounds alone. Importing the Python API is the better option for
+UC-9's parametric generation, and there is no license reason to avoid it.
+
+**Caveats**
+
+Two notes worth carrying forward:
+
+- **§4.B is the clause that actually deserves thought**, and it is a liability term rather
+  than a copyleft one: the Recipient waives all claims against the US Government and
+  agrees to indemnify it for damages "from products based on, or resulting from,
+  Recipient's use of the Subject Software", with the sole remedy being termination of the
+  agreement. That is the commonly-cited objection to NOSA. It bears on shipping an
+  *aircraft* designed with these tools, not on the code, and it is not a code-licensing
+  question at all.
+- **The Python tree is mixed-license, and OpenVSP states the split explicitly.**
+  `python/openvsp/openvsp/LICENSE` opens: *"The base openvsp vsp api files (`_vsp.so`,
+  `_vsp.pyd`, `vsp.py`) are distributed under the NOSA license listed below."* Everything
+  else in `python/` — `utilities.py`, `parasite_drag.py`, `degen_geom_parse.py`,
+  `surface_patches.py`, `facade.py`, and the sibling packages `AvlPy`, `CHARM`,
+  `degen_geom`, `utilities` — is **MIT, Copyright 2018–2020 Uber Technologies**, and
+  `python/openvsp/setup.py` declares `license='MIT', author='Uber Technologies'`.
+
+  So the file you `import` for the API itself (`vsp.py`, wrapping the 30 MB `_vsp.pyd`) is
+  **NOSA** — which is why the import-versus-subprocess question genuinely was a NOSA
+  question, and why the answer above settles it. The higher-level helpers layered on top
+  are MIT and unconditionally fine.
+
+- **VSPAERO ships inside the Python package.** `vspaero.exe`, `vspaero_opt.exe`,
+  `vsploads.exe` and `vspviewer.exe` sit in `python/openvsp/openvsp/`, so UC-9's aero half
+  needs no separate install — and those are executables invoked as processes, the least
+  encumbered pattern of all.
+
+**Where it is recorded**
+
+**The project's license table should gain a NOSA row**, since it now has a real dependency
+under a license the table does not mention. Suggested wording: *acceptable as a separate
+tool or an imported module; obligations attach only on redistribution; note the §4.B
+indemnity.*
+
+### OQ-ARCH-10 — What replaces the absolute `eps` when the part gets big? — WITHDRAWN 2026-08-09
+
+**Problem**
+
+`geometry_eps()` is `0.01` mm, a constant of the OpenSCAD source, carried into the port
+verbatim. Two jobs rest on it: making cuts overshoot the material they pass through, and
+making the octant overlap its own mirror so the tiling fuse has something to work with.
+`bulkhead_full`'s own docstring records the second — *"`octant_mask` is shifted by `eps`, so
+adjacent octants overlap by a sliver and the union reclaims it"*.
+
+That works in OpenSCAD, whose CGAL kernel is exact. It does not work in OCCT, whose booleans
+work to a tolerance that scales with the shape. At U=2.5 the bulkhead is 250 mm across and
+the sliver is 4 × 10⁻⁵ of it:
+
+| U | Octant | Mirror | **Their fuse** |
+| --- | --- | --- | --- |
+| ≤ 2.0 | valid | valid | valid |
+| ≥ 2.5 | valid | valid | **invalid** |
+
+Only the fuse fails, and it fails for every panel — so it is a threshold in U and nothing
+else. Raising `eps` at U=2.5 makes it valid again at 0.05 and every value above. The corner
+is unaffected at every U up to 4.0, because the octant-and-mirror tiling is `bulkhead_full`'s
+construction alone.
+
+**`eps` is not free, which is what makes this a decision rather than a constant to raise.**
+It changes the finished volume, because it is not purely internal — it also sets how far
+cuts overshoot:
+
+| U=2.0, `eps` | 0.01 | 0.05 | 0.1 | 0.25 | 0.5 |
+| --- | --- | --- | --- | --- | --- |
+| Volume mm³ | 39413.1119 | 39416.2807 | 39420.1978 | 39431.6900 | 39450.1504 |
+
+**Alternatives**
+
+1. **Scale `eps` with U.** One line, and it matches what the value is *for* — a sliver that has to
+   stay resolvable relative to the part. Drawback: the port stops agreeing with `geometry_eps()`, so
+   FreeCAD and OpenSCAD produce different volumes at every U ≠ 1, by roughly 0.01% at the sizes
+   measured.
+2. **Give the boolean a fuzzy tolerance instead of moving geometry.** Tells OCCT to treat the faces
+   as coincident, leaving the model dimensionally identical to OpenSCAD's. Drawback:
+   `Part::Cut`/`Part::Fuse` document objects expose no fuzzy value — `Shape.fuse(other, tolerance)`
+   does, but that returns a computed shape, not a feature, so the tiling would stop being a live
+   parametric tree.
+3. **Do not create the coincident seam.** Build the full section directly rather than an octant
+   plus seven mirrors, so no boolean is ever asked about two faces on the same plane. Drawback:
+   discards the construction the port is transcribing, and with it the check that makes the tiling
+   verifiable — the eps overlap is why the full part is *not* eight times the octant, which is what
+   proves the mirrors are about the right planes.
+
+**Recommendation**
+
+None was recorded with the question.
+
+**Why withdrawn**
+
+**Miscategorized, in the same way as [OQ-ARCH-3](#open-questions) and
+[OQ-ARCH-8](#open-questions), and for a more interesting reason than either.** Those two were
+*"we do not know the value of X"*. This one was *"we know X must exist, so how big should it
+be"* — and the premise was false. The overlap does not need to exist.
+
+The question as posed asked what should *replace* the 0.01 mm sliver, taking for granted that
+a union of two solids meeting on a shared plane needs help. That is true of OpenSCAD, which
+is why the overlap was added. It is not true of OCCT, and one measurement settles it:
+
+| Fuse of a solid with its own mirror about the touching plane | 10 mm | 100 mm | 250 mm | 400 mm |
+| --- | --- | --- | --- | --- |
+| No overlap at all | valid, exact | valid, exact | valid, exact | valid, exact |
+
+So the answer is not a scaled `eps`, a fuzzy tolerance, or a redesigned tiling — the three
+alternatives this section originally weighed. It is `mask_eps = 0`. Every U from 0.5 to 4.0
+tiles into one valid solid, the part is dimensionally unchanged (the sliver was being
+reclaimed, so the full volume is identical to seven figures either way), OpenSCAD parity is
+preserved at +0.00023%, and the `8 × octant` check gets stronger rather than weaker. Recorded
+in [IP-FC-49](../implementation/freecad_migration.md).
+
+**The generalizable mistake.** The earlier two work items failed the judgment-versus-
+observation test outright. This one *looked* like a judgment because it presented as a
+trade-off with three costed alternatives, and every one of those alternatives was real —
+they were just all answers to the wrong question. A constant inherited from a port is a claim
+about the *source* toolchain, and it needs re-measuring against the target before its size is
+debated. The question that should have been asked first is not "how big" but "at all".
+
+**Three of the ten questions in this document were not questions.** The test that separates
+them still holds; what this adds is that it has to be applied to the premise as well as to
+the question.
+
+**None of the three was needed.** Each trades against something recorded as intent —
+OpenSCAD parity, the live parametric tree, fidelity to the construction being ported — and
+all three are answers to a question whose premise did not hold. Alternative 3's stated
+drawback is the one to reread: it says the eps overlap *is* what proves the mirrors are about
+the right planes. That was the assumption doing the damage. Removing the overlap makes the
+full part exactly eight times the octant, which proves the same thing more directly.
+
+**Where it is recorded**
+
+[IP-FC-49](../implementation/freecad_migration.md), which sets `mask_eps = 0`.
+
+---
+
+### OQ-ARCH-11 — Should geometric relationships be expressed as constraints, or stay solved into coordinates? — RESOLVED 2026-08-15
+
+**Problem**
+
+A part in this port is a CSG tree of primitives whose positions and sizes are bound by
+expression to a spreadsheet. One built frame bulkhead is 158 objects:
+
+**No geometric constraint is expressed anywhere in the port.** The complete constraint
+vocabulary across every module is `Coincident`, `Horizontal`, `Vertical`, `PointOnObject`,
+`DistanceX` and `DistanceY` — all of them on that single sketch. There is no `Tangent`, no
+`Equal`, no `Symmetric`, no `Perpendicular`, no `Parallel`, no `Angle`, and no `Radius`
+constraint in the project. Relationships that a CAD model would normally *state* are instead
+*solved* in the spreadsheet and stored as coordinates.
+
+**The cost is that FreeCAD does not know what the geometry means.** The document records
+where every face is and never why. Concretely:
+
+**Alternatives**
+
+1. **Keep coordinates everywhere.** Status quo. Benefit: fastest to build (~1.3 s/part), trivially
+   diffable, and it is what made the port verifiable — every part could be compared numerically
+   against the OpenSCAD original because both are pure functions of parameters. Drawback: every point
+   above.
+2. **Express relationships as constraints only where a relationship exists.** Keep CSG for bulk
+   material. Benefit: the solver reports what the arithmetic clamps. Drawback: sketches are slower to
+   solve, and a solver can pick the wrong branch of a relationship that has two solutions — the other
+   intersection of a line and a circle — which is a real risk and a detectable one.
+3. **Keep coordinates, add assertions.** Compute as now, but check the relationship the arithmetic
+   is supposed to satisfy — assert tangency to a tolerance, assert discriminants are positive by a
+   margin, assert no two construction planes are closer than some distance. Benefit: catches every
+   failure mode listed above at build time, costs no solver time, changes no geometry, and is
+   verifiable as a no-op. Drawback: does nothing for the downstream topology problem — drawings and
+   assemblies still have nothing to bind to — and the assertions restate the intent in a third place
+   rather than recording it once.
+4. **Move the whole port to `PartDesign::` with sketch-driven features.** Revisits OQ-ARCH-1, which
+   chose `Part::` on the evidence of IP-FC-5. Benefit: the fullest expression of intent, and the
+   native path for drawings and assemblies — **this is what a FreeCAD model of this part would look
+   like if it had been authored in FreeCAD rather than translated into it.**. Drawback: a rewrite of
+   every ported module, and PartDesign's single-solid-per-body rule fits the octant-and-mirror
+   construction badly — that constraint needs a real answer, not a workaround.
+
+**Recommendation**
+
+Alternative 3 now, alternative 2 only where IP-FC-21 and IP-FC-19 force it, and not
+alternative 4. That rested on constraints costing the numeric verification chain, a premise
+found false before the decision.
+
+**Decision**
+
+**Direction — decided 2026-08-15: stage toward Alternative 4, starting with Alternative 2**
+
+**Stage 1 — express the relationships (Alternative 2), OpenSCAD reference intact.**
+Keep CSG for bulk material. Convert the features whose position is *derived* from another
+feature — the five fillets and chamfers in `fillets.py` first, since that is where IP-FC-58
+came from — to fully constrained sketches carrying the real relationship. Each conversion is
+verified with the existing comparison, which continues to work unchanged. Each also forces the
+intent question for that feature to be answered and written down, which is the part that has
+no shortcut: OQ-DES-B14 is that question for the bolt-flange fillet and nothing equivalent is
+recorded for the others. Exit criterion: every derived feature states its relationship, and
+the whole corpus still agrees with OpenSCAD.
+
+**Stage 2 — bind the downstream work to it.** With features carrying stable, meaningful
+references, IP-FC-21's family drawings and IP-FC-19's assembly joints attach to geometry
+rather than to positions in a 158-node boolean history. These are the features that make the
+constraint work pay, and they should pull stage 1 forward for whatever they need first rather
+than waiting for it to complete.
+
+**Stage 3 — Alternative 4, gated on OQ-ARCH-4 firing.** When IP-FC-12 completes the cowls and
+IP-FC-13 closes whole-corpus equivalence, OpenSCAD retires and a frozen FreeCAD corpus becomes
+the reference — `compare_backends` compares meshes, so it retargets to that corpus with no
+change to what it does. At that point PartDesign conversion is verifiable body by body against
+frozen geometry, which is the safe way to do it, and stage 1 will already have produced the
+constrained sketches PartDesign features need. The open item to resolve before stage 3 is the
+single-solid-per-body rule against the octant-and-mirror construction — that is a real
+architectural question and it should be raised on its own once stage 1 is under way.
+
+**Rationale**
+
+**Alternative 4 is the target state, not a rejected option.** It is the true native FreeCAD
+implementation, and the intent is to get there rather than to settle permanently for a
+translated CSG tree. What follows is the route, and the first step is Alternative 2 —
+relationships expressed as constraints FreeCAD can act on, not merely computed and stored.
+
+Two facts make the staging principled rather than arbitrary:
+
+- **Constraints do not cost the OpenSCAD verification.** `compare_backends` measures the built
+  solid's volume and bounding box. Nothing in it requires geometry to be a closed-form
+  function of the parameters, so a constrained feature is checked exactly as a computed one
+  is. The first draft of this question claimed otherwise and was wrong; that error was the
+  main reason it recommended deferring.
+- **The OpenSCAD reference already has a planned retirement.** OQ-ARCH-4 decided on 2026-08-07
+  to retire it once IP-FC-13 demonstrates equivalence across the parameter range, at which
+  point FreeCAD becomes the definition of correctness. So the strongest objection to
+  Alternative 4 — that a rewrite discards the verification chain — expires on a date the
+  architecture has already chosen, rather than standing forever.
+
+**Superseded recommendation, kept because it was wrong in an instructive way.** The first
+draft of this question recommended *Alternative 3 now, Alternative 2 only where IP-FC-21 and
+IP-FC-19 force it, and not Alternative 4*, on the reasoning that constraints would cost the
+numeric verification chain and that the chain is the only reason the port is trustworthy. **The
+premise was false**: `compare_backends` compares built meshes, not coordinates, so constraints
+cost it nothing. The conclusion inherited the error — it deferred the architecturally correct
+move to protect something that was never at risk, and it treated as permanent an objection that
+OQ-ARCH-4 had already scheduled to expire. Worth rereading whenever "we cannot do that, it
+would break verification" is offered as an argument: check what the verification actually
+measures first.
+
+**Caveats**
+
+**What is still genuinely open**, and should not be read as settled by the above: whether
+stage 3 converts the whole corpus or only the parts that benefit; how a solver branch
+ambiguity is guarded against in stage 1 (a constraint with two solutions can converge on the
+wrong one, which the mesh comparison detects but does not prevent); and whether Alternative 3's
+assertions are still worth adding as an interim measure for features not yet converted. The
+first stage-1 conversion should be treated as answering those empirically.
+
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+---
+
+### OQ-ARCH-12 — What carries the interface verification tier above 100 mm? — RESOLVED 2026-08-16
+
+**Problem**
+
+**The setup, in full.** The port is verified by rendering the same variant with both geometry
+engines and comparing the two solids. `compare_backends.py` applies two independent tolerances per
+part: a **volume** tolerance, relative, 6e-5 for kinds that reproduce exactly and 1e-4 for kinds
+carrying fillets; and a **bounding-box** tolerance, `BBOX_TOL`, **absolute at 5e-4 mm** (0.5 µm).
+**The problem is that the reference cannot express 5e-4 mm at the sizes involved.** OpenSCAD emits
+an **ASCII STL**, which writes each coordinate at **six significant figures**. That is a
+quantization whose absolute size grows with the coordinate:
+
+**Alternatives**
+
+1. **Export the OpenSCAD reference as binary STL.** OpenSCAD emits binary STL with `--export-format
+   binstl`. Benefit: removes the limit rather than describing it, at every swept size. Drawback:
+   changes the authority's output format, so every stored reference mesh is invalidated and
+   `--reference` trees must be re-rendered.
+2. **Give `BBOX_TOL` a relative component sized to the reference's precision.** Replace the
+   absolute 5e-4 mm with something like `max(5e-4, k · |coordinate|)`, where `k` is set from the
+   six-significant-figure quantum. Benefit: keeps the strict absolute limit on the small parts, where
+   it bites hardest and where interfaces are tightest. Drawback: explicitly weakens the interface tier
+   on the largest parts — at 120 mm the tolerance would have to reach about 1e-3 mm, twice its current
+   value, to cover the quantum, and a real 1e-3 mm face displacement there would then pass.
+3. **Compare each extent against its derived design value instead of mesh against mesh.** Express
+   the expected bounding box as a function of the parameters — for the frame bulkhead, `unit_width / 2
+   − (panel_thickness + panel_tolerance)` and its counterparts — and check each mesh against that
+   rather than against the other mesh. Benefit: the only option that inherits neither mesh's
+   precision, so it is exact for both engines at every size. Drawback: by far the most work, and the
+   work is per kind — each part's extents must be derived and kept correct as geometry changes, which
+   is a second implementation of the geometry that can itself be wrong.
+4. **Accept the limit and let it expire with the OpenSCAD reference.** Record the limit, leave the
+   check as it is, and let it lapse when OQ-ARCH-4 fires and the OpenSCAD implementation is retired
+   after IP-FC-13 — at which point there is no reference mesh and no cross-kernel bounding-box
+   comparison at all. Benefit: costs nothing. Drawback: IP-FC-13 is the item this check exists to
+   *serve*, so the weakened tier is in force for exactly the period it matters most — every remaining
+   verdict on the largest parts is taken with a check that cannot resolve its own tolerance.
+
+**Recommendation**
+
+**Alternative 1, binary STL for the reference, with Alternative 4's reasoning as the reason not to
+do more than that.**
+
+**Decision**
+
+**Resolution.** **Alternative 2** for the mechanism — `BBOX_TOL` becomes `5e-4 mm × U`, floored
+at its historical value for `U` < 1 — together with **Alternative 4** for the disposition: the
+underlying limit is accepted and allowed to lapse when OQ-ARCH-4 retires the OpenSCAD reference
+after IP-FC-13. **Alternative 1 was explicitly declined**: the reference is *not* to be
+re-rendered as binary STL, even though the measurement showed it would drive the difference to
+exactly zero, because it invalidates every stored reference tree to improve a check that already
+has a scheduled end. Alternative 3 was not taken up.
+
+Implemented the same day in `compare_backends.py` as `bbox_tol(u)`, with `u_of(name)` reading
+the size off the part filename the way `kind_of` already reads the kind — the comparison is
+handed nothing but names and two rendered trees. A name whose `U` cannot be read raises rather
+than defaulting, since assuming `U` = 1 would apply a threshold too tight for a large part and
+report a failure that is not real.
+
+**Extended 2026-08-18 to the FreeCAD-side checks, which had the same defect and had not been
+covered by this decision.** The rule here is about *any* tolerance on a length, not only the one
+in `compare_backends`: a part's coordinates are proportional to `U`, so a fixed millimeter figure
+means something four times stricter at `U` = 4 than at `U` = 1. Three had been left absolute —
+`check_tangency.TOL` and `SWEEP_TOL`, which measure how far a solved fillet center is from where
+its tangencies put it, and the branch guard inside `fillets._fillet_tangency_sketch()`. All three
+now scale linearly and are floored at `U` = 1, as `bbox_tol()` is, and `check_tangency.u_of()`
+refuses a seed carrying no `U` for the reason `compare_backends.u_of()` does. `fillets.py` reads
+the size as `unit_width / 100` because the octant's sheet carries only the rows it builds from and
+`U` is not among them. The same pass made `check_unread_rows` scale its bounding-box tolerance and
+made its *volume* tolerance relative to the part's own volume — which is this rule as `U`³, the
+form that reads correctly for a volume, a threshold linear in `U` being wrong for a cubic
+quantity. That one was not cosmetic: the absolute figure it replaced sat below the solid kernel's
+own reproducibility and made every bulkhead run refuse, which IP-FC-56 records in full.
+
+**Rationale**
+
+**`BBOX_TOL` is a numerical agreement threshold, not a manufacturing tolerance, and reading it
+as the latter leads to wrong conclusions.** It is worth being explicit, because the mistake is
+easy: 5e-4 mm is **200 times tighter than a printed bolt clearance**, which is on the order of
+0.1 mm, and **400 times finer than the 0.2 mm layer height**. No joint on this airframe is toleranced
+anywhere near 5e-4 mm and none could be — the process cannot hold it. What OQ-DES-B9 actually
+says is that parts built before and after the port are interchangeable *at every interface*,
+"since no interface dimension is set by a fillet": fillets are the only thing the port changes,
+so the **expected difference at an interface is exactly zero**. `BBOX_TOL` is therefore a noise
+floor around that zero — set as low as the two meshes allow, to catch a modeling divergence
+whose signature happens to be small — and not a statement about what a joint may be out by.
+
+**That reframing sets the real severity, which is lower than a bounding-box failure suggests.**
+The worst discrepancy this question concerns is the 1e-3 mm ASCII quantum, which is 100 times
+under a bolt clearance and 200 times under one printed layer. **Nothing unfittable or unprintable
+is hiding here.** What is at stake is evidence, not airworthiness: the check exists to notice
+that a face moved at all, because on a part whose interfaces should reproduce exactly, a
+sub-micron displacement can be the visible tip of a modeling difference that matters elsewhere.
+Losing resolution costs detection, not fit.
+
+**Caveats**
+
+**Caveats attached to the choice, each of which is a thing this deliberately gives up.**
+
+- **The interface tier is now size-dependent**, which is the drawback recorded under
+  Alternative 2 and is accepted, not solved: at large `U` the threshold is a fraction of the
+  part rather than a fixed distance, which is closer to what the volume tier already measures.
+- **The relative component is set from the reference's file format, not from any design
+  requirement.** `5e-4 × U` was chosen because it clears the six-significant-figure quantum at
+  every swept size — 5.0× headroom at `U` ≤ 1, 10× at `U` = 2.0, and a thinnest 1.2× at
+  `U` = 2.5, immediately after the quantum's decade step. It carries no other meaning.
+- **The change can only loosen, never tighten**, which is why no corpus re-run was required to
+  adopt it safely: with the floor at `U` = 1 the new threshold is greater than or equal to the
+  old one at every swept size, so no part that passed before can fail now. The converse is the
+  cost — parts whose bounding boxes differ by between 5e-4 mm and `5e-4 × U` will now pass
+  silently. From the last full run only IP-FC-71's two bulkheads were anywhere near the old
+  threshold, and both are explained.
+- **Nothing physical is at stake in either direction**, which is what makes accepting the limit
+  reasonable: the worst discrepancy involved is 1e-3 mm, 100× under a printed bolt clearance and
+  200× under one layer.
+
+**Where it is recorded**
+
+`bbox_tol(u)` in `compare_backends.py`, named in the decision.
+
+---
+
+### OQ-ARCH-13 — Should the flange chamfer become a real chamfer feature? — RESOLVED 2026-08-16
+
+**Problem**
+
+**What it is for, stated 2026-08-16:** it runs the full interior perimeter of the flange and
+continues around the bolt or anchor, and its job is **strain relief** at that interior corner
+between the flange and the web. That is a structural purpose, not a cosmetic break of a sharp edge,
+and it is not recoverable from the code — the geometry says where the material is and nothing says
+why. **That construction is not a design decision — it is a workaround for OpenSCAD** (stated
+2026-08-16). OpenSCAD has no way to point at an edge and chamfer it, the way a CAD package does, so
+a chamfer has to be built as explicit geometry, in as many pieces as the corner has runs.
+
+**Alternatives**
+
+1. **Leave the construction as it is, and write down why.** Record that this feature's position
+   needs no solving and that its build is an OpenSCAD workaround, and leave it alone. Benefit: no
+   work, and no risk to a part that is currently correct. Drawback: keeps a hand-built stand-in for an
+   operation FreeCAD can perform directly, and keeps nine spreadsheet rows that must stay mutually
+   consistent to produce one 45 degree face.
+2. **Draw its outline as a sketch.** Replace the box-minus-rotated-box with a five-corner sketch of
+   the profile, dimensioned against the same spreadsheet rows and extruded to the same lengths.
+   Benefit: the profile becomes a shape a reader can see rather than the residue of a subtraction.
+   Drawback: states nothing that was not already stated, and it is still a hand-built shape standing
+   in for an operation.
+3. **Use a real chamfer feature.** Build the flange with a sharp internal corner, then apply
+   FreeCAD's chamfer operation to that edge, sized by the one parameter that means "how much relief".
+   Benefit: the only option where the model says what the feature is and does what it is for.
+   Drawback: it has to identify an edge of a shape produced by a boolean, and those names are not
+   stable across a rebuild — the same instability already blocking that later work.
+4. **Decide it later.** Leave it alone and revisit when the parts move to FreeCAD's `PartDesign`
+   workbench, where the choice comes up anyway. Benefit: avoids doing the work twice. Drawback: the
+   question stays open until then, and that move is itself blocked behind a whole-corpus comparison.
+
+**Recommendation**
+
+**Alternative 3 — a real chamfer feature — is the right end state, and alternative 1 is what to do
+until it can be done safely.** So: leave the construction alone for now, write next to it in
+`fillets.py` that it is an OpenSCAD workaround rather than a design, and do alternative 3 as part
+of the work that makes edge references stable.
+
+**Decision**
+
+**Resolution.** **Alternative 1 now, alternative 3 later**, as recommended. The two-prism
+construction stays for the present and `fillets.py` records beside it that the shape is a
+workaround for OpenSCAD rather than a design, so the next reader does not mistake it for
+intent the way the first draft of this question did. Converting it to a real chamfer
+feature is scheduled as **IP-FC-78**, to be done with the move to `PartDesign` (IP-FC-75),
+which is where edge references become stable enough to name one and where a chamfer
+operation is the natural way to express the feature.
+
+**Rationale**
+
+**That construction is not a design decision — it is a workaround for OpenSCAD** (stated
+2026-08-16). OpenSCAD has no way to point at an edge and chamfer it, the way a CAD package does,
+so a chamfer has to be built as explicit geometry, in as many pieces as the corner has runs. The
+FreeCAD port then transcribed that workaround faithfully, which was the right thing to do while
+OpenSCAD was the authority.
+
+**That reframes the question.** Two different things were lost getting these features into the
+model, with different causes and different fixes:
+
+| what was lost | how | which features |
+| --- | --- | --- |
+| the *reason* a position is what it is | a tangency solved by hand, the answer stored as coordinates | the four rounded corners |
+| the *operation* the feature is | a tool that cannot chamfer an edge, so the shape is built by hand | the chamfer |
+
+The work in progress addresses the first. The chamfer suffers the second. Both amount to "the
+model no longer says what was meant", which is why grouping all five together looked reasonable —
+but the fix for one is not the fix for the other, and only the chamfer's fix is blocked on
+something outside itself.
+
+**Caveats**
+
+**Caveats carried by the choice.** The chamfer keeps its nine spreadsheet rows and its
+rotated construction frame in the meantime, so a change to the flange outline still has to
+be carried into those rows by hand and nothing will report it if it is not. The conversion
+is also the one piece of this work that can move the flown part, so when IP-FC-78 is done
+it needs a whole-corpus comparison rather than the bit-identical check the rounded corners
+get, and the behavior where two runs meet at a corner has to be measured rather than
+assumed. **The question and its alternatives are kept below**, in this document's usual
+practice: the reasoning about why the construction is not evidence of intent is the part
+worth having when IP-FC-78 comes up.
+
+**What holds it back is real and unchanged**: it needs to name an edge of a shape produced by a
+boolean, those names are not stable across a rebuild, it is the only option here that can move
+the flown part, and the behavior where two runs meet has to be measured rather than assumed. None
+of that argues for never doing it. It argues for doing it with the work that solves edge naming,
+and not before.
+
+**Where it is recorded**
+
+[The bulkhead flange's chamfer and rounded corners](#the-bulkhead-flanges-chamfer-and-rounded-corners), above, holds the description and the measurements.
+
+---
+
+### OQ-ARCH-14 — Do the last two fillets need converting, by the test just adopted? — RESOLVED 2026-08-17
+
+**Problem**
+
+OQ-ARCH-13 asked whether the flange chamfer belonged in the work that replaces hand-worked-out
+positions with stated geometric requirements. It was decided that it does not, on this test: That
+test was applied to the chamfer and it excluded it. It has not been applied to the four rounded
+corners, because when it was written they were all assumed to be on the other side of it.
+
+**Alternatives**
+
+1. **Convert both, finishing the list of four.** Benefit: all four rounded corners state their
+   relationship. Drawback: the outer corner fillet has nothing to gain — no discriminant, no branch,
+   no configuration that can fail — so this spends the expensive part, the verification, on a feature
+   the adopted test already excludes.
+2. **Convert neither, and close the item at two of four.** Benefit: consistent with the decision
+   made about the chamfer. Drawback: leaves a clamp that silently produces a meaningless body in 27 of
+   148 variants — the same class of defect this work exists to remove, left in place because it is
+   small.
+3. **Convert the greeble-to-web fillet only, and have it refuse where the junction does not
+   exist.** Replace `max(flange_inner_x. Benefit: removes a clamp that returns a plausible wrong
+   answer, which is the defect the whole item is about. Drawback: three of four converted is a harder
+   rule to state than all or none.
+4. **Convert neither, and raise the clamp as a design question instead.** Close this item at two of
+   four, and ask separately, in the bulkhead design document, what the greeble-to-web fillet should do
+   when there is no greeble end to fillet. Benefit: puts the question where it belongs if the answer
+   is a change to the part rather than to how the part is expressed. Drawback: opens a second question
+   rather than closing one, and the answer feeds straight back into this one.
+
+**Recommendation**
+
+The recommendation moved three times, and the reason each time was evidence rather than argument.
+It first read *convert the greeble-to-web fillet only*, on the strength of its conditional
+reference.
+
+**Decision**
+
+**Alternative 1, with an addition that changes what the work is.** All four rounded corners are
+converted. Rather than four sketches whose inactive elements are overlaid on variants that do
+not use them, the four tangencies live in **one cohesive sketch, which carries only the fillets
+active for the parameter set being built**.
+
+That addition is what makes converting all four coherent rather than a list being finished. The
+question spent three recommendations arguing whether each feature individually earned a
+conversion — and the answer that settles it is not about any one of them. It is that "which
+fillets exist here" is itself a property of the variant, currently expressed nowhere: the
+greeble-to-web fillet's `max(...)` clamp is that question answered badly, by relocating a body
+instead of omitting it. One sketch that contains what is active states it once, in the place a
+reader would look.
+
+**What this commits to, stated plainly because it looked like it changed the flown part.**
+Omitting an inactive fillet means the 27 variants where the greeble-to-web clamp fires lose that
+body. This section originally recorded that cost as *at most 0.042 mm³ per variant, a real
+difference from the OpenSCAD reference that `compare_backends` would report*, and accepted it.
+**Implementing it measured the figure properly and it is zero** — every one of the 27, to below
+1e-6 mm³, on 2026-08-17 (`fillet_scope_analysis/sweep_clamped_gtw.py`).
+
+The 0.042 mm³ was measured at the wrong stage, and the mistake is worth keeping because it is
+easy to repeat. A fillet is a *positive*, fused into the flange **before** the bolt hole, the
+corner socket and the octant mask are cut. 0.042 mm³ was this fillet's net share of the
+**positive** — material no other positive supplied. But the clamp parks the body on the bolt
+centerline, *inside the bolt hole*, so the hole cut then removes all of it. The material was
+never in the finished part to lose. Measuring by fusing the body into the finished octant
+instead makes the opposite error and reads 1.374 mm³, because at that stage the fuse fills the
+hole back in. The only measurement that answers the question is building the octant both ways.
+
+So the decision keeps its meaning and loses its cost: the port still agrees with OpenSCAD
+everywhere, and the omission removes a body that had no effect on any part that was ever built.
+
+**Rationale**
+
+**What decides "active" must not be the clamp wearing a different hat.** Deciding activity from
+the same `max` comparison would move the defect rather than remove it. The predicate is a stated
+geometric condition and the sketch refusing to solve stays a *check* that the predicate was
+right, never the mechanism that produces it — the same branch-guard discipline IP-FC-76
+established, applied to existence instead of position.
+
+Implementation settled what that condition is, and it is **not** "whether the web emerges from
+the corner block", which is what this section first guessed. `greeble_web.py` builds the web as
+a 45° strip along the segment from the corner at the origin to the bolt center, and it stops
+there. The flange's inner face is the plane `x = flange_inner_x`. The corner the fillet rounds
+is where the two meet, so it exists exactly while that plane falls inside the segment's span —
+**the flange face is inboard of the bolt center**. That is the same inequality the `max` tested,
+and the honest description says so; what differs is what is done with it. The `max` used it to
+pick a different face to measure from, putting the fillet somewhere it is tangent to nothing.
+The predicate uses it to decide whether the corner is there.
+
+**One more thing implementation found, which the question never thought to ask.** This section
+argued at length about *which* of the four corners a variant has. It did not ask how often the
+swept corpus actually visits the configurations where that answer changes, and the answer is:
+almost never. Three switches decide what the sketch and the bodies look like —
+
+| switch | what it decides | how close the corpus gets |
+| --- | --- | --- |
+| `flange_inner_x` vs `bolt_c` | greeble-to-web corner exists; bolt-flange profile is a quad or a triangle | **crosses it**, 27 of 148 variants, and comes within 0.05 mm |
+| `bolt_boss_r` vs `flange_thickness / 2` | web-to-bolt fillet is placeable | never within a factor of **4.33** |
+| bolt-flange reach vs its offset | bolt-flange fillet is placeable | within 0.45 mm, never crosses |
+
+— so two of the three refusal paths were only ever reached by one synthetic edit, made from
+whichever seed a check happened to be handed. Walking them deliberately, with deliberately thin
+bolt bosses against thick greeble webs, found a band where the web-to-bolt tangency is
+satisfiable and the body still cannot be built, failing several features downstream with a
+message naming nothing. IP-FC-73 has the detail and the fix. The general lesson is worth
+stating here rather than there: **a swept corpus is not a test suite**, and "every variant we
+build works" says nothing about the configurations the sweep does not visit.
+
+The one argument in them that survives is against converting the outer corner fillet on its own
+merits: its position is two perpendicular faces each minus a radius, with no discriminant, no
+branch and no configuration that can fail, so a `Tangent` constraint states something already
+obvious and one of the four permanent checks — that an impossible setup is refused — has nothing
+to assert for it. It is converted anyway, because a single sketch that holds three of the four
+and omits the fourth would need a reason a reader could not find in the geometry.
+
+**Caveats**
+
+- **A single sketch fails as a unit.** `solve()` and `FullyConstrained` are per sketch, so four
+  tangency sub-systems in one object means one unsatisfiable sub-system reports as one failed
+  sketch, losing which fillet caused it. `check_tangency.py` and the generator's own guard must
+  identify the sub-system, or the refusal check gets weaker exactly as the number of things it
+  covers goes up.
+- **Reference-dimension names share one namespace.** `Constraints.<name>` is flat within a
+  sketch. The existing prefixes (`bbf_`, `wtb_`) already keep them apart and must stay.
+- **The two completed conversions are restructured, not left beside the new one.** `BffTangency`
+  and `WtbTangency` merge into the cohesive sketch; both are bit-identical today and must stay
+  so, which is the cheapest possible regression test for the merge itself.
+
+**Where it is recorded**
+
+Carried to IP-FC-73, which is unblocked and rescoped by this. The evidence that produced the
+decision follows.
+
+[The bulkhead flange's chamfer and rounded corners](#the-bulkhead-flanges-chamfer-and-rounded-corners), above, holds the description and the measurements.
+
+---
+
+### OQ-ARCH-15 — What is the reference corpus a reference *to*, and what keeps it current? — RESOLVED 2026-08-18
+
+**Problem**
+
+`verify_sweep_change.py` compares a freshly built sample against
 `variant_output_baseline` (rendered 2026-08-02) and, run at HEAD on 2026-08-18 with no local
 changes, reported three of five sampled parts differing. All three were investigated and all
 three are intentional:
+
+**Alternatives**
+
+1. **Regenerate the trees now, and again after every intentional geometry change.** Benefit:
+   smallest change. Drawback: a full sweep is expensive and this project deliberately samples rather
+   than running one.
+2. **Stamp the corpus with a manifest and refuse to compare across drift.** Write a file beside
+   each tree recording the commit, the date and the tool versions that produced it. Benefit: turns a
+   silent wrong answer into a clear refusal, which is the failure mode this project has repeatedly
+   chosen elsewhere. Drawback: does not by itself make the comparison possible again — it converts an
+   uninterpretable failure into a blocked run.
+3. **Derive the reference on demand from a named commit.** Drop the stored trees. Benefit: the
+   comparison becomes the question actually being asked — "does my change move geometry against a
+   stated baseline?" — and it is current by construction, because the baseline is named at run time
+   rather than stored. Drawback: doubles render cost per run, since the reference side is rendered
+   too.
+4. **Keep the corpus and redefine the tool as a change detector rather than a gate.** Report
+   differences, never claim pass or fail, and require a human to triage each one. Benefit: honest
+   about what a stale reference can support. Drawback: gives up automated verification for the exact
+   class of change it was built for.
+
+**Recommendation**
+
+**Alternative 3, with alternative 2's manifest as the interim step.** The corpus did not fail
+because it is old. It failed because "reference" was never defined against anything: a stored tree
+cannot answer "compared to what?", and this one demonstrably cannot even be identified with a
+commit in this repository.
+
+**Decision**
+
+**Decision: the baseline does not move.** `variant_output_baseline` stays the authority for
+the whole of the port, and differences against it are *reasoned about* rather than absorbed.
+
+**Rationale**
 
 | Part | Difference | Bisected to | Cause |
 | --- | --- | --- | --- |
@@ -2810,9 +2621,6 @@ The corner was bisected by extracting `src/Fuselage/scad/` at each candidate com
 and rendering the same generated call against it. `9bc386b` reproduces the baseline exactly —
 1202.6214 mm³, 17,324 triangles, bbox −6.15 — and `299633c`, the next commit to touch that
 file, gives 1202.8714 mm³, 17,316 triangles, bbox −6.25.
-
-**Decision: the baseline does not move.** `variant_output_baseline` stays the authority for
-the whole of the port, and differences against it are *reasoned about* rather than absorbed.
 
 **The reason is cumulative drift, and it rules out re-baselining outright.** Every alternative
 that re-establishes the reference as work proceeds — regenerating the trees, or deriving the
@@ -2833,6 +2641,8 @@ corrected — the corner's `panel_tolerance` leak above is one — and that is n
 replace it. A reference does not have to be right to be useful; it has to be *fixed*, so that
 every departure from it is a departure someone chose. The corrections are recorded as
 departures rather than folded silently into a new baseline.
+
+**Caveats**
 
 **What this requires, and it is the real cost.** Differences against the baseline must be
 enumerated and justified, not discovered one at a time by whoever next runs the tool. That
@@ -2861,11 +2671,15 @@ rather than less, since the ledger's entries are meaningless without knowing wha
 departures *from*. The manifest proposed as alternative 2 is therefore still wanted — not to
 gate on drift, which is now the ledger's job, but to state what the frozen baseline is.
 
+**Where it is recorded**
+
 *Recorded as IP-FC-80 (inventory and ledger) and IP-FC-81 (baseline manifest).*
 
-### OQ-ARCH-16 — Is `same_geometry` the right test for "the same solid"? — DECIDED 2026-08-18: fix the tolerances, and add a sampled surface distance
+### OQ-ARCH-16 — Is `same_geometry` the right test for "the same solid"? — RESOLVED 2026-08-18
 
-**The problem.** Every geometric comparison routes through `mesh_stats.same_geometry`, which
+**Problem**
+
+Every geometric comparison routes through `mesh_stats.same_geometry`, which
 requires exact triangle-count equality, an **absolute** 1e-6 mm³ volume tolerance, and exact
 float equality of the bounding box. Three criteria, three separate defects: the triangle count
 rejects retessellation that moves no geometry — measured on 2026-08-18, the boom bulkhead at
@@ -2873,6 +2687,33 @@ rejects retessellation that moves no geometry — measured on 2026-08-18, the bo
 does not scale with `U`, contradicting [OQ-ARCH-12](#open-questions) and amounting to bitwise
 equality on a 1092 mm³ part; and the bounding box admits no tolerance at all on numbers from a
 kernel that is not bit-reproducible.
+
+**Alternatives**
+
+1. **Bring it in line with the rest of the project.** Volume compared relatively. Benefit: one rule
+   for tolerances across the whole project rather than two. Drawback: a pathological change that
+   preserves volume and bounding box while moving material internally would pass — an unlikely shape
+   but not an impossible one.
+2. **Keep triangle count as a hard criterion and add an opt-out flag.** Benefit: preserves the
+   strictest possible default. Drawback: the flag will be passed every time, because retessellation is
+   expected on most refactors, and a check that is always overridden is not a check.
+3. **Compare by geometric distance instead of by proxies.** Replace count/volume/bbox with a
+   Hausdorff or mean surface distance between the two meshes, thresholded in millimeters and scaled
+   with `U`. Benefit: measures what the question actually is — did any surface move, and by how much —
+   rather than three proxies for it. Drawback: substantially more work and a new dependency for mesh
+   distance.
+4. **Leave it alone and treat all three criteria as advisory** , triaging every report by hand.
+   Benefit: no code change. Drawback: same as alternative 4 of OQ-ARCH-15 — abandons automated
+   verification, and the triage cost is measured in bisects.
+
+**Recommendation**
+
+**Alternative 1.** The project already decided how tolerances work — relative on volume, scaled
+with `U` on lengths, per OQ-ARCH-12 — and applied that decision everywhere except here. This is not
+a new judgment so much as finishing an old one, and the constants to use already exist in
+`compare_backends.bbox_tol()` and `check_unread_rows.VOLUME_TOL`.
+
+**Decision**
 
 **Decision: take both alternative 1 and alternative 3.** They answer different halves of the
 question and neither is sufficient alone.
@@ -2892,6 +2733,8 @@ from each mesh and each sampled point measured against the other surface, report
 maximum and the mean. The cost is then set by the sample size rather than by the mesh, which
 matters directly here: cowls carry around 90,000 triangles and the full-sweep corpus is 576
 parts.
+
+**Rationale**
 
 **Why both.** Alternative 1 makes the existing criteria honest but leaves them proxies.
 Alternative 3 measures the real quantity but is the expensive one, and on its own it discards
@@ -2961,6 +2804,8 @@ IP-FC-34 — does not survive [OQ-ARCH-15](#open-questions)'s decision. A baseli
 the `PartDesign::` end state means mesh comparison against `variant_output_baseline` is needed
 for the whole remaining life of the port, and it is the measure that review will rest on.
 
+**Caveats**
+
 **Amended 2026-09-06 by [OQ-ARCH-19](#open-questions): the two roles are right, and they were
 assigned the wrong way round.** This note has the cheap criteria screening and the distance
 adjudicating. Volume and bounding box cannot screen, because a screen is only sound if it has
@@ -2972,14 +2817,61 @@ here adjudicate the differences the hash finds, which is the question they are a
 at. Everything measured above about sampling, coverage and the tangential component stands
 unchanged; only the order of the two tiers changed.
 
+**Where it is recorded**
+
 *Recorded as IP-FC-82 (tolerances) and IP-FC-83 (sampled surface distance).*
 
-### OQ-ARCH-17 — What supplies material where a horizontal inset leaves none? — RESOLVED 2026-08-21: nothing, because the design has no such region
+### OQ-ARCH-17 — What supplies material where a horizontal inset leaves none? — RESOLVED 2026-08-21
+
+**Problem**
+
+**Problem.** The cowl's interior surface is built by taking horizontal cross-sections of the outer
+mould line and insetting each one inward by `cowl_n_perimeters × extrusion_width` (OQ-ARCH-5,
+alternative 2). That mirrors what a slicer does per layer, which is the whole reason the interior
+is modeled at all rather than assumed to be a uniform shell.
+
+**Alternatives**
+
+1. **Boolean of two offsets — the slicer's own rule, stated as geometry.** The interior is the
+   horizontal inset region **minus** everything within `n_solid_layers × layer_height` measured
+   *vertically* of the exterior skin. Benefit: * it is exactly what a slicer lays down, so it inherits
+   the justification the whole method rests on. Drawback: * the two offsets meet on a real seam curve,
+   and G1 across that seam has to be demonstrated rather than assumed — it is a genuine crease in the
+   general case, and the fit must either absorb it or the requirement must be relaxed there
+   deliberately.
+2. **Clamp the perpendicular wall to a floor.** Keep the horizontal inset, but where `t·cos α`
+   would fall below a minimum, offset along the surface normal by that minimum instead. Benefit: * one
+   parameter, a guaranteed manufacturable and analyzable wall everywhere, no degenerate contours
+   anywhere. Drawback: * it is a normal offset, applied exactly where OQ-ARCH-5 says a normal offset
+   is wrong — and the region it applies to is the turnover, where a curved normal offset diverges from
+   a layered process most, not least.
+3. **Terminate the cavity and leave the turnover solid.** Stop the interior surface on a closed
+   boundary where the wall would thin past a threshold. Benefit: * no offset rule, no blend, no
+   tangency question — the interior surface simply ends, and a closed boundary is easy to build and
+   easy to verify. Drawback: * it overestimates mass at both ends, and by an amount nobody has bounded
+   — for UC-8 that is a CG error at the extreme ends of the airframe, which is the worst place for
+   one.
+4. **Leave it — let the wall thin to zero.** *. Benefit: * no parameter and no rule. Drawback: * it
+   does not produce a valid solid at the turnover, so it is not really an alternative for a model
+   whose entire purpose is to be one.
+
+**Recommendation**
+
+**Alternative 1.** It is the only one that answers the question the same way the rest of the method
+does — by reproducing what the process actually lays down — and stating it as a Boolean of a
+horizontal and a vertical offset, rather than as a rule that switches on surface angle, is what
+makes that practical: the transition is wherever the binding constraint changes, so the threshold
+angle and the blend that alternatives 2 and 3 both need do not exist to be tuned or got wrong. It
+also puts the new parameter somewhere the project already has a category for.
+
+**Decision**
 
 **Answer: the rule is not needed.** Not deferred — not needed. The question assumed the cowl
 has near-horizontal surfaces that a horizontal inset would fail to give material to, and that
 a slicer would fill them with top and bottom solid layers. **Both halves are false for this
 part.**
+
+**Rationale**
 
 **1. The cowl design takes great pains to avoid near-horizontal geometry.** That is what
 `overhang_angle_from_bed` is *for*, and it is enforced structurally rather than by convention:
@@ -3018,6 +2910,8 @@ original question ran to 80°, 85° and 90° from vertical, which are 10°, 5° 
 bed: the exact overhangs the design forbids. **The degenerate rows were outside the domain,
 which is why they looked so alarming.**
 
+**Caveats**
+
 **What IP-FC-16 must carry instead of a material rule.** The absence of a rule is only safe
 while the premise holds, so the algorithm document states it as a **precondition on its input**
 rather than leaving it as a property nobody wrote down:
@@ -3038,9 +2932,53 @@ has to agree with where the nose/cowl break line falls and with the buttress ram
 **nothing enforces those couplings** (OQ-DES-CW11). An assertion inside the interior algorithm
 is one of the few places a violation would actually surface.
 
+**Where it is recorded**
+
 *Implementation: IP-FC-16, unblocked.*
 
-### OQ-ARCH-18 — What measures a dimension's annotation extent, when nothing headless renders it? — WITHDRAWN 2026-08-22: filed on strings the drawing does not carry
+### OQ-ARCH-18 — What measures a dimension's annotation extent, when nothing headless renders it? — WITHDRAWN 2026-08-22
+
+**Problem**
+
+[dimension_scheme.md §5](../design/dimension_scheme.md) states five hard constraints on where a
+generated drawing puts its dimensions, and a build that violates one fails rather than emitting the
+drawing. Three of the five — **H1 containment**, **H2 text against text**, and **H3 text against
+geometry** — are statements about a rectangle: the space the annotation occupies on the page.
+Deciding whether two rectangles overlap is trivial.
+
+**Alternatives**
+
+1. **A conservative box from character count and a width factor.** Model the text block as
+   `len(text) × k × height` with `k` chosen high enough to bound every candidate font, and inflate the
+   arrow allowance to a fixed multiple of the text height. Benefit: no new dependency. Drawback: to
+   bound DejaVu Sans, `k` must be set for a font the drawing does not use, so every annotation is
+   modeled ~35 % wider than it renders.
+2. **Exact advance widths read from the font file, via `fontTools`.** Sum the `hmtx` advance for
+   each character through the font's `cmap`, scale by `unitsPerEm` and the text height. Benefit: exact
+   for the font actually used, to the font's own precision. Drawback: it ignores kerning and any
+   shaping, which for digits and a space is a rounding error but is not nothing.
+3. **Parse the exported DXF's `TEXT` entities.** Let the placer place, export the page, then read
+   the insertion points, heights and strings back out of the artifact. Benefit: measures the delivered
+   file rather than an intention, which is the strongest form of §5.6's independence. Drawback: **it
+   does not solve the problem** — a DXF `TEXT` entity carries the string, the insertion point and the
+   height, but not the rendered width, so the width still has to be modeled or measured by one of the
+   other alternatives.
+4. **Certify in a GUI pass.** Build headless, then open the page once in a real FreeCAD session
+   where the view provider exists, ask it for the laid-out annotation rectangles, and record the
+   verdict. Benefit: measures what will actually be drawn, arrowheads included, with no model at all.
+   Drawback: puts a window in the middle of a batch sweep, which is the thing
+   [`spike_assembly.py`](../../src/Fuselage/freecad/spike_assembly.py) and this spike were both
+   written to avoid.
+5. **Rasterize the page and check pixels.** Render the exported page and test for ink overlap
+   directly. Benefit: catches every collision including ones no box model anticipates — hatch, center
+   marks, the template's own title block. Drawback: needs a renderer and a font stack, which
+   reintroduces exactly the environment dependence being avoided.
+
+**Recommendation**
+
+**Alternative 2 for the extent, alternative 3 for the check, and pin the font as project data.**
+
+**Why withdrawn**
 
 **The question was posed against per-variant value text, and this project decided in 2026-08-07
 not to put value text on the view.** OQ-ARCH-7's decision is a **family drawing** — *"lettered
@@ -3094,11 +3032,47 @@ work. Recorded in full rather than deleted: the same failure produced
 [OQ-ARCH-17](#open-questions) the day before, and the pattern — a well-argued question resting
 on a premise nobody verified — is worth being able to point at twice.
 
+**Where it is recorded**
+
 *Implementation: IP-FC-21, unblocked.*
 
-### OQ-ARCH-19 — What reproducibility is required of a generated solid? — DECIDED 2026-09-06
+### OQ-ARCH-19 — What reproducibility is required of a generated solid? — RESOLVED 2026-09-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
 
 **Two thresholds, and a screen that cannot give a false negative.**
+
+**Scope: screen on a canonical hash, adjudicate with the criteria above.** The screening pattern
+was adopted **on the condition that the screen has no possible false negative**, and the obvious
+screen fails that condition: volume and bounding box can both agree while the shape has changed —
+move material from one side of a part to the other and the volume difference is exactly zero.
+That loophole is live in `baseline_manifest.verify` today.
+
+`mesh_stats.canonical_hash` meets the condition. It rotates each triangle so its lowest vertex
+comes first — preserving winding, where sorting the three vertices would flip half of them — then
+sorts the triangles and hashes. **Equal hashes mean the same set of triangles, so the same
+geometry, exactly.** Its errors run one way only: a last-bit coordinate difference makes it say
+"different" about parts that agree, which costs a closer look, and it can never say "same" about
+parts that differ.
+
+**Adopted alternatives: 1, 3 and 6**, together rather than chosen between — a per-class
+tolerance, surface distance as the adjudicator, and the symmetric difference as the metric — with
+**6 amended by measurement**: the boolean XOR is exact between solids that share surfaces
+(a planted 0.001 mm³ recovered exactly in 2 s) and unusable between independently built ones
+(invalid halves, a planted difference in the wrong half with the wrong sign), so the metric is
+computed by `solid_measure.surface_difference` and the boolean is kept for pairs that share
+surfaces. `isValid()` on both halves tells the cases apart. **Alternative 5 rejected.**
+**Alternatives 2 and 4 withdrawn** — each existed because the parts were believed not to
+reproduce, one to sidestep that and one to repair it, and there is nothing left to sidestep or
+repair. Alternative 2's residue, that a shell costs ten minutes to build, is a performance
+argument and belongs to its own item.
+
+**Rationale**
 
 **What the question turned out to be about.** It was filed on a measured 5.8e-3 run-to-run spread
 in a shelled cowl's wall volume, which looked like a kernel that could not reproduce its own
@@ -3133,19 +3107,6 @@ orders of magnitude, which is what this question suspected when it called a diff
 a lower bound. The ratio decided nothing and the magnitude decided everything: 260 × a very small
 number is still very small.
 
-**Scope: screen on a canonical hash, adjudicate with the criteria above.** The screening pattern
-was adopted **on the condition that the screen has no possible false negative**, and the obvious
-screen fails that condition: volume and bounding box can both agree while the shape has changed —
-move material from one side of a part to the other and the volume difference is exactly zero.
-That loophole is live in `baseline_manifest.verify` today.
-
-`mesh_stats.canonical_hash` meets the condition. It rotates each triangle so its lowest vertex
-comes first — preserving winding, where sorting the three vertices would flip half of them — then
-sorts the triangles and hashes. **Equal hashes mean the same set of triangles, so the same
-geometry, exactly.** Its errors run one way only: a last-bit coordinate difference makes it say
-"different" about parts that agree, which costs a closer look, and it can never say "same" about
-parts that differ.
-
 **It fires on real data, which was not obvious.** The same bulkhead rendered into four
 independent trees has four completely different *file* hashes — `24eef96b`, `c52009f0`,
 `f9eb383a`, `d5558215` — and one canonical hash. OpenSCAD writes the same geometry in a different
@@ -3157,17 +3118,7 @@ answer *does the difference matter*. The volume-and-bbox tolerances stop being a
 which they were never sound as, and remain what they are good at — judging a difference that is
 already known to exist. Implemented under IP-FC-124.
 
-**Adopted alternatives: 1, 3 and 6**, together rather than chosen between — a per-class
-tolerance, surface distance as the adjudicator, and the symmetric difference as the metric — with
-**6 amended by measurement**: the boolean XOR is exact between solids that share surfaces
-(a planted 0.001 mm³ recovered exactly in 2 s) and unusable between independently built ones
-(invalid halves, a planted difference in the wrong half with the wrong sign), so the metric is
-computed by `solid_measure.surface_difference` and the boolean is kept for pairs that share
-surfaces. `isValid()` on both halves tells the cases apart. **Alternative 5 rejected.**
-**Alternatives 2 and 4 withdrawn** — each existed because the parts were believed not to
-reproduce, one to sidestep that and one to repair it, and there is nothing left to sidestep or
-repair. Alternative 2's residue, that a shell costs ten minutes to build, is a performance
-argument and belongs to its own item.
+**Caveats**
 
 **What is not settled by this.** The thresholds are set from **one pair of builds at `U` = 1**.
 Whether the corner divergence stays noise at other scales — or becomes systematic, the same
@@ -3175,21 +3126,23 @@ corners moving the same way — is IP-FC-117's soak, which has not run. And a sa
 lower bound that cannot be made an upper one by sampling harder; the surface-distance threshold
 inherits that limit.
 
-### OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area? — DECIDED 2026-09-06
+**Where it is recorded**
+
+No separate record; this subsection holds the decision.
+
+### OQ-ARCH-20 — Is a volume tolerance relative to volume, or to surface area? — RESOLVED 2026-09-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
 
 **To surface area and part scale: the criterion is `|Va − Vb| / (A · 100U)`, dimensionless.**
 Alternative 1. Dividing by area turns the number into the surface offset the error physically is;
 dividing again by `100U` — the unit width, the length scale the rest of the metric set already
 uses — makes it a pure number, so one figure speaks for a part at any size.
-
-**Why the denominator was the defect.** A tessellated mesh's volume error goes as offset × area,
-so dividing it by the part's own volume charges a hollow part for being hollow. Measured
-2026-09-06 at deflection 0.001 mm, the same 6.0e-4 asks a solid cowl for 0.006578 mm of surface
-agreement and its shell for 0.000168 mm — 39 times tighter, and 1 % of the 0.02 mm the part is
-exported at, so the shell was required to agree sixty times more closely than either mesh is
-built to. The same table disposes of a distinction that had been carried without examining it:
-the nose and tail shells have A/V ratios of 3.58 and 3.57 and identical implied offsets, so the
-class that bears on this is solid against shell, not which end of the airframe a part sits on.
 
 **The threshold is 6.6e-5, for the cowl and shell kinds.** That is what the present tolerance
 already grants the solid cowls — 6.578e-5 tail, 6.809e-5 nose, taking the smaller so nothing
@@ -3218,6 +3171,17 @@ own bounding box and would export a nose and a tail at one `U` at two different 
 `U` = 1 nothing changes; `LINEAR_DEFLECTION` for the prismatic kinds is untouched, having a
 float32 STL floor and a deliberate facet-count match with the OpenSCAD reference.
 
+**Rationale**
+
+**Why the denominator was the defect.** A tessellated mesh's volume error goes as offset × area,
+so dividing it by the part's own volume charges a hollow part for being hollow. Measured
+2026-09-06 at deflection 0.001 mm, the same 6.0e-4 asks a solid cowl for 0.006578 mm of surface
+agreement and its shell for 0.000168 mm — 39 times tighter, and 1 % of the 0.02 mm the part is
+exported at, so the shell was required to agree sixty times more closely than either mesh is
+built to. The same table disposes of a distinction that had been carried without examining it:
+the nose and tail shells have A/V ratios of 3.58 and 3.57 and identical implied offsets, so the
+class that bears on this is solid against shell, not which end of the airframe a part sits on.
+
 **And the classification defect goes with it.** `compare_backends.kind_of` finds a kind by
 looking for a known kind name inside the filename, and no shelled kind was in its table, so
 `..._tail_shell.stl` would have been compared as `tail` — a shell judged against the solid it was
@@ -3231,11 +3195,19 @@ and there is no B-rep to boolean. The two are not competing. The XOR is the inst
 both sides are solids — which is OQ-ARCH-19's case, and IP-FC-115's — and this criterion is for
 where one side is only ever a mesh.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 **Implemented under IP-FC-122.** What is not yet shown is that the comparison still passes at
 `U` ≠ 1, since every FreeCAD cowl STL there now changes; that needs a `compare_backends` run over
 the cowl kinds at several `U`.
 
-### OQ-ARCH-21 — How is the reproducibility criterion sampled?
+### OQ-ARCH-21 — How is the reproducibility criterion sampled? — OPEN
+
+**Problem**
 
 [OQ-ARCH-19](#open-questions) decided when two builds of one part are the same part: the
 symmetric difference `XOR / (A · 100U)` at most **1.0e-6**, and no sampled surface gap over
@@ -3283,37 +3255,39 @@ evidence that would establish or refute it. **It should not be decided ahead of 
 1. **State a sampling protocol; keep the thresholds.** Name the sample count, a fixed list of
    seeds, and the rule for combining them — for instance 800 samples at seeds 99, 7 and 1234,
    with a pair passing only if every seed passes.
-   *Benefits*: makes the criterion reproducible, which is the one thing it is currently not;
+   *Benefits.* makes the criterion reproducible, which is the one thing it is currently not;
    costs nothing but writing the numbers down; the thresholds keep the meaning they were
-   calibrated with. *Drawbacks*: three seeds cost three times one; and "every seed must pass"
+   calibrated with. *Drawbacks.* three seeds cost three times one; and "every seed must pass"
    is marginally stricter than the single-seed run the thresholds were set against, so a pair
-   near the bar that used to pass may now fail. *Prerequisites*: none.
+   near the bar that used to pass may now fail. *Prerequisites.* none.
 
 2. **Judge against a confidence bound rather than a point estimate.** `surface_difference`
    already returns a standard error for the XOR half; require its upper bound to sit inside the
-   threshold. *Benefits*: statistically honest, and no arbitrary seed list. *Drawbacks*: does
+   threshold. *Benefits.* statistically honest, and no arbitrary seed list. *Drawbacks.* does
    nothing for the gap half, which is a maximum and has no standard error — the half that
    actually failed here; and it needs a confidence level, which is one more number to decide.
-   *Prerequisites*: a way to put an interval on a maximum, which this method does not offer.
+   *Prerequisites.* a way to put an interval on a maximum, which this method does not offer.
 
 3. **Replace the maximum gap with a high quantile** — a 99th percentile, say, which converges
-   with sample count where a maximum does not. *Benefits*: makes the second half behave like
-   the first, with error bars, and removes the main source of seed sensitivity. *Drawbacks*:
+   with sample count where a maximum does not. *Benefits.* makes the second half behave like
+   the first, with error bars, and removes the main source of seed sensitivity. *Drawbacks.*
    changes what the criterion means. OQ-ARCH-19 kept a surface distance precisely because the
    volume metric "averages away a local excursion", and a quantile puts some of that averaging
    back. The 5.0e-5 threshold was calibrated against a maximum and would have to be re-derived.
-   *Prerequisites*: re-measure the calibration pair under the new statistic.
+   *Prerequisites.* re-measure the calibration pair under the new statistic.
 
-4. **Raise the thresholds until nothing sits near them.** *Benefits*: trivial to do.
-   *Drawbacks*: picks the answer instead of measuring it. The thresholds were deliberately set
+4. **Raise the thresholds until nothing sits near them.** *Benefits.* trivial to do.
+   *Drawbacks.* picks the answer instead of measuring it. The thresholds were deliberately set
    at about four times what reproduction costs; widening them to clear a marginal case throws
    away the sensitivity the soak exists to have. Listed for completeness.
+   *Prerequisites.* None stated.
 
 5. **Change nothing; treat `MARGINAL` as a real third verdict.** Report the spread across seeds
-   and call a straddling pair neither same nor different. *Benefits*: no change to a decided
-   criterion, and it is honest — the implementation does this today. *Drawbacks*: a soak that
+   and call a straddling pair neither same nor different. *Benefits.* no change to a decided
+   criterion, and it is honest — the implementation does this today. *Drawbacks.* a soak that
    returns `MARGINAL` for many pairs has not answered its question, and it hands the same
    decision to every future reader of the report.
+   *Prerequisites.* None stated.
 
 **Recommendation**
 
@@ -3323,27 +3297,9 @@ by measurement untouched. Keeping `MARGINAL` as a reportable verdict is the hone
 pairs the method genuinely cannot separate from the bar, rather than forcing them one way on
 the strength of a seed.
 
-### OQ-ARCH-22 — How does the pytest tier reach FreeCAD? — DECIDED 2026-10-06: alternative 7
+### OQ-ARCH-22 — How does the pytest tier reach FreeCAD? — RESOLVED 2026-10-06
 
-**Decision.** Alternative 7: an adaptation library over both FreeCAD and OpenVSP, passing remote
-object references across a process boundary. The rationale is the 2026-10-05 constraint recorded
-below — the project chooses its own Python version on its own merits, and neither vendor's build
-choice may dictate it — which eliminates alternatives 2, 3 and 5 outright, and the measurement
-that 7 is both more expressive *and* faster than 6, at 0.9 ms per handle operation against 8.8 ms
-per evaluated snippet.
-
-**The design is [geometry_bridge.md](geometry_bridge.md)**, which is the authority for it. Twelve
-probes were run against the prototype after this question was written, specifically to find
-problems it had not raised; five were real gaps, and the design rules follow from those
-measurements. The problem statement and the rejected alternatives are kept below as the record of
-why, and are not the design.
-
-**Caveat attached to the choice.** The library is infrastructure the project owns, and its own
-failure mode is that a defect in the proxy presents as the vendor API appearing not to exist. Two
-such defects were found while prototyping — one of them freed a live object, which is worse than a
-leak — and both were caught only by tests written for the converse case. The design's verification
-section exists because of that, and alternative 6 remains the documented fallback if the library
-proves more than the project wants to maintain.
+**Problem**
 
 The project's automated checks run in two separate places. `pytest`, in `tests/`, runs under the
 project's virtual environment (its "venv" — a private Python installation with the project's
@@ -3368,57 +3324,70 @@ importable from the venv". Neither names a mechanism.
 **Measured 2026-10-05, the claim is false as stated.** The obstacle is a Python version mismatch,
 and nothing else:
 
-| | Python |
-| --- | --- |
-| Project venv (`.python-version`, `requires-python`) | 3.13.12 |
-| FreeCAD 1.1.3's bundled interpreter | 3.11.14 (conda-forge), ships `python311.dll` |
+**Alternatives**
 
-FreeCAD's Python modules are `.pyd` files — Windows C extension modules — and a `.pyd` is
-compiled against one specific CPython version's binary interface. Loading FreeCAD's from the
-3.13 venv fails in the loader, before any FreeCAD code runs:
+1. **Change nothing.** Keep the two tiers and keep testing geometry only through `check_*.py`.
+   Benefit: no work. Drawback: fails a stated requirement — pytest cases that call FreeCAD.
+2. **Add a second pytest tier under FreeCAD's bundled interpreter.** A new test directory, a
+   `conftest.py` that puts `bin`, `lib` and `Mod` on `sys.path` and registers the DLL directories, and
+   pytest plus any test-only dependencies installed by `pip install --target` into a directory outside
+   the FreeCAD tree, reached by `PYTHONPATH`. Benefit: proven working, 6 cases in 0.84 s. Drawback:
+   two commands rather than one, which needs a documented runner and a CI entry.
+3. **Move the whole project to Python 3.11 and run one pytest.** Change `.python-version` and
+   `requires-python`, re-lock, and add the FreeCAD paths in the root `conftest.py`. Benefit: one
+   interpreter, one command, one dependency set. Drawback: breaks the OpenVSP export tier, which is a
+   committed capability and not a test-only dependency.
+4. **Have pytest drive `freecadcmd` as a subprocess.** Keep the venv at 3.13 and write pytest cases
+   that run a `check_*.py` script, or a small purpose-built script, and assert on its parsed output or
+   on an exported artifact. Benefit: works today with no new environment. Drawback: the assertions are
+   on text or on files, not on live `Shape` objects, so a test cannot build geometry in a fixture,
+   pass it around, and measure it.
+5. **Install pytest into the FreeCAD installation itself** , using the `pip` 25.3 already present
+   in its bundled interpreter, and run `freecadcmd -m pytest` or `bin/python.exe -m pytest` directly.
+   Benefit: the simplest possible invocation, no `PYTHONPATH` and no `--target` directory. Drawback:
+   modifies a third-party installation that the project does not own and cannot reproduce.
+6. **Run FreeCAD as a persistent worker behind a process boundary.** pytest stays in the project's
+   own venv, on whatever Python the project chooses, and never imports FreeCAD. Benefit: the only
+   alternative that satisfies the 2026-10-05 constraint — the project's pin is independent of both
+   vendors, and a FreeCAD that moves to 3.12 or an OpenVSP that moves to 3.14 changes nothing on the
+   project's side. Drawback: **the loss is expressiveness, not efficiency, and the two should not be
+   confused.** A `Shape` cannot be serialized across the boundary, but nothing forces it to be
+   rebuilt: it stays in the worker and is addressed by name, so one expensive build serves any number
+   of assertions.
+7. **An adaptation library over both FreeCAD and OpenVSP, with remote object references.** The
+   boundary of alternative 6, but passing *handles* instead of source: a worker-side registry holds
+   the live objects, the client holds proxy objects, and attribute and method access become round
+   trips. Benefit: satisfies the 2026-10-05 constraint for both vendors at once and keeps satisfying
+   it when either moves, because switching a backend is one line and no test changes. Drawback:
+   materially more code than alternative 6 — an encoder, a handle registry, a proxy type, a
+   synthesized-exception module and two backends — and it is infrastructure the project must own, test
+   and debug.
 
-```text
-import FreeCAD  -> ModuleNotFoundError: No module named 'FreeCAD'
-import Part     -> ImportError: Module use of python311.dll conflicts with this version of Python.
-```
+**Recommendation**
 
-That was measured with FreeCAD's `lib` on `sys.path` and both `bin` and `lib` registered via
-`os.add_dll_directory`, so it is not a search-path failure. (Python 3.8 and later stopped
-honoring `PATH` when resolving an extension module's own dependent DLLs, which is the usual false
-culprit; it was ruled out.) The modules do exist and are ordinary importable extensions:
-`FreeCAD.pyd` and `FreeCADGui.pyd` in `bin`, and 45 more including `Part.pyd` in `lib`.
+**Alternative 7**, built in the shape of alternative 6 so that 6 is the fallback if the library
+proves more than the project wants to own. **Chosen 2026-10-06; see the decision note at the head
+of this question, and [geometry_bridge.md](geometry_bridge.md) for the design.** The 2026-10-05
+constraint eliminates most of the field: alternatives 2 and 5 run the project's tests under
+FreeCAD's interpreter, and 3 moves the project's own pin to match it, so all three hand the choice
+of Python to a CAD vendor.
 
-**Under FreeCAD's own bundled `python.exe`, pytest reaches the geometry code and passes.**
-Proven with pytest installed by `pip install --target` into a scratch directory, reached through
-`PYTHONPATH`, leaving the FreeCAD installation itself untouched; a `conftest.py` adds `bin`,
-`lib` and `Mod` to `sys.path` and registers the two DLL directories. Six cases — a kernel
-boolean asserting an exact volume, a tube section asserting the annulus identity through
-`check_cowl_interior.section_regions`, its converse on two separate tubes, `_Polyline.closest`
-against `distances`, `_check_slope` under `pytest.raises(PreconditionFailed)`, and the
-`WALL_TOL < TAU` split — **6 passed in 0.84 s**. None of these needs a cowl build.
+**Decision**
 
-Three further measurements bear on the choice:
+Alternative 7: an adaptation library over both FreeCAD and OpenVSP, passing remote
+object references across a process boundary. The rationale is the 2026-10-05 constraint recorded
+below — the project chooses its own Python version on its own merits, and neither vendor's build
+choice may dictate it — which eliminates alternatives 2, 3 and 5 outright, and the measurement
+that 7 is both more expressive *and* faster than 6, at 0.9 ms per handle operation against 8.8 ms
+per evaluated snippet.
 
-1. **The existing suite also runs under 3.11: 865 passed, 2 failed, 6 errors in 48 s**, against
-   873 passed in 89 s under 3.13. Every one of the eight is `tests/test_oml_export.py`.
-2. **The eight break on OpenVSP, which is pinned the other way.** `openvsp` is not a
-   pip-installed dependency — `oml_export.import_vsp()` discovers it on disk under
-   `C:\Program Files\OpenVSP-*\python\openvsp` — and its `_vsp.pyd` raises `ImportError: DLL load
-   failed while importing _vsp` under 3.11 while working under 3.13. So there is no wheel to
-   re-resolve; a 3.11 OpenVSP would have to be obtained or built.
-3. **A newer numpy over FreeCAD's own is harmless.** The project requires `numpy>=2.3.2`;
-   FreeCAD bundles 1.26.4. With numpy 2.4.6 shadowing it, `FreeCAD`, `Part`, `Mesh` and
-   `MeshPart` all import and a boolean returns the right volume. `pandas` 2.3.3 and
-   `solidpython2` 2.1.3 also resolve for 3.11, so the only cross-version casualty is OpenVSP.
+**The design is [geometry_bridge.md](geometry_bridge.md)**, which is the authority for it. Twelve
+probes were run against the prototype after this question was written, specifically to find
+problems it had not raised; five were real gaps, and the design rules follow from those
+measurements. The problem statement and the rejected alternatives are kept below as the record of
+why, and are not the design.
 
-**How the situation arose, for the record.** `.python-version` = 3.13 and
-`requires-python = ">=3.13"` landed on 2026-08-04 in commit `d97d81a` ("python env and roadmap
-doc"), which added only `.python-version`, `doc/roadmap.md`, `pyproject.toml` and `uv.lock` — the
-environment for what was then an OpenSCAD and `solidpython2` project. The first code under
-`src/Fuselage/freecad/` landed four days later, on 2026-08-08 (`973a33e`). The pin was never
-weighed against FreeCAD compatibility, because FreeCAD was not yet in the repository. The
-permanence claim in the guidelines was written later, describing the resulting situation as
-though it were a property of the tools.
+**Rationale**
 
 **Constraint, set 2026-10-05: the project chooses its own interpreter.** The project's Python
 version is to be selected on the project's own merits — support lifetime, language features,
@@ -3429,236 +3398,32 @@ a requirement on the answer, not one of the alternatives: it eliminates every op
 the project's own test suite under a vendor's interpreter, or that moves the project's pin to
 match one.
 
-What the choice decides is which interpreter runs which tests, and who picks it:
+**Caveats**
 
-```text
-                    venv 3.13          FreeCAD's 3.11        worker behind a pipe
-                    ---------          --------------        --------------------
-tests/ (873)        yes                yes, minus 8 VSP      yes, all of them
-FreeCAD geometry    impossible (ABI)   yes, 0.84 s / 6       yes, 1.30 s / 19
-OpenVSP export      yes                no                    yes
-project's pin       free               FreeCAD dictates      free
-per-operation cost  none               none                  0.9 ms (handle)
-                                                             8.8 ms (snippet)
-```
-
-**Alternatives**
-
-1. **Change nothing.** Keep the two tiers and keep testing geometry only through `check_*.py`.
-   *Benefits:* no work; no second environment to maintain; the `check_*.py` scripts are real
-   integration tests that do catch defects, and they found every cowl defect recorded in this
-   document. *Drawbacks:* fails a stated requirement — pytest cases that call FreeCAD. Geometry
-   assertions stay unnamed and uncollected, there is no `pytest.raises` for the precondition
-   classes, a single exception still ends a whole report, and the guidelines keep a false
-   justification that forecloses the question for future readers. *Prerequisites:* none.
-
-2. **Add a second pytest tier under FreeCAD's bundled interpreter.** A new test directory, a
-   `conftest.py` that puts `bin`, `lib` and `Mod` on `sys.path` and registers the DLL
-   directories, and pytest plus any test-only dependencies installed by `pip install --target`
-   into a directory outside the FreeCAD tree, reached by `PYTHONPATH`. Two pytest invocations,
-   each with its own interpreter. *Benefits:* proven working, 6 cases in 0.84 s; strictly
-   additive, so the existing 873 tests and the OpenVSP tests are untouched; the FreeCAD
-   installation is not modified, so a FreeCAD upgrade cannot break it by overwriting anything;
-   named assertions, fixtures and `pytest.raises` become available for geometry; fast cases can
-   be unit tests while `check_*.py` keeps the slow whole-build integration role.
-   *Drawbacks:* two commands rather than one, which needs a documented runner and a CI entry;
-   the `--target` directory must be rebuilt whenever FreeCAD's bundled Python version changes;
-   two sets of pinned test dependencies can drift apart. *Prerequisites:* decide where the new
-   tests live and how the FreeCAD path is discovered rather than hardcoded —
-   `freecad_render.freecadcmd_path()` already solves the same discovery problem for the
-   `check_*.py` tier and should be reused.
-
-3. **Move the whole project to Python 3.11 and run one pytest.** Change `.python-version` and
-   `requires-python`, re-lock, and add the FreeCAD paths in the root `conftest.py`.
-   *Benefits:* one interpreter, one command, one dependency set; geometry and pure-Python tests
-   share fixtures and parametrization directly; the measured 3.11 run was also faster, 48 s
-   against 89 s. *Drawbacks:* breaks the OpenVSP export tier, which is a committed capability
-   and not a test-only dependency; 3.11 reaches end of security support well before 3.13, so the
-   project would be pinned to an aging interpreter by a CAD tool's build choice, and pinned again
-   each time FreeCAD moves; any 3.12-or-later syntax or library behavior in the existing code
-   would have to be found and removed. *Prerequisites:* a working 3.11 OpenVSP Python API, which
-   does not exist on this machine and may require building OpenVSP from source; and a full run of
-   the existing suite plus the sweep under 3.11 to find version-sensitive behavior.
-
-4. **Have pytest drive `freecadcmd` as a subprocess.** Keep the venv at 3.13 and write pytest
-   cases that run a `check_*.py` script, or a small purpose-built script, and assert on its parsed
-   output or on an exported artifact. *Benefits:* works today with no new environment; one pytest
-   invocation; naturally covers the `freecadcmd` exit-code trap by asserting on output rather than
-   on status. *Drawbacks:* the assertions are on text or on files, not on live `Shape` objects, so
-   a test cannot build geometry in a fixture, pass it around, and measure it; each case pays
-   process startup, which is seconds rather than the measured 0.84 s for six in-process cases; a
-   parse layer between the assertion and the geometry is itself something to maintain and get
-   wrong. *Prerequisites:* a stable machine-readable output format from the check scripts, which
-   today print prose intended for a human reader.
-
-5. **Install pytest into the FreeCAD installation itself**, using the `pip` 25.3 already present
-   in its bundled interpreter, and run `freecadcmd -m pytest` or `bin/python.exe -m pytest`
-   directly. *Benefits:* the simplest possible invocation, no `PYTHONPATH` and no `--target`
-   directory. *Drawbacks:* modifies a third-party installation that the project does not own and
-   cannot reproduce; the packages are lost or left stale on every FreeCAD upgrade or reinstall;
-   a dependency installed there is invisible to the project's lock file, so what the tests ran
-   against is unrecorded. *Prerequisites:* none, which is the trap.
-
-6. **Run FreeCAD as a persistent worker behind a process boundary.** pytest stays in the
-   project's own venv, on whatever Python the project chooses, and never imports FreeCAD. A
-   session-scoped fixture starts one `freecadcmd` worker that holds `FreeCAD`, `Part`,
-   `cowl_interior` and `check_cowl_interior`, and the client sends snippets and receives
-   JSON-encodable measurements over the worker's stdin and stdout. The same pattern the FreeCAD
-   MCP server already uses in this toolchain, reduced to a pipe and a session fixture.
-   *Benefits:* the only alternative that satisfies the 2026-10-05 constraint — the project's pin
-   is independent of both vendors, and a FreeCAD that moves to 3.12 or an OpenVSP that moves to
-   3.14 changes nothing on the project's side. Measured working end to end: **16 geometry cases
-   in 0.90 s**, worker startup **0.69 s** once per session, **8.8 ms per call**, with the client
-   on 3.13.12 and the worker on 3.11.14 simultaneously. Fixtures and `@pytest.mark.parametrize`
-   work normally, and `fc.raises('PreconditionFailed', ...)` is a usable stand-in for
-   `pytest.raises`. **Expensive state lives worker-side**: the worker execs into one persistent
-   namespace, so a build is paid once and asserted against many times — the access pattern a
-   990 s cowl build requires, proven on a cheap stand-in. One pytest invocation and one
-   dependency set, so the existing 873 tests and the OpenVSP tests keep running unchanged in the
-   same session. Robustness measured, not assumed: a **45 s** single call survives the pipe with
-   the client blocked on the read throughout, a hard worker death is reported as a named test
-   failure in **0.01 s** rather than hanging, and a remote `SyntaxError` surfaces as a failure.
-   *Drawbacks:* **the loss is expressiveness, not efficiency, and the two should not be
-   confused.** A `Shape` cannot be serialized across the boundary, but nothing forces it to be
-   rebuilt: it stays in the worker and is addressed by name, so one expensive build serves any
-   number of assertions. What this variant does cost is that geometry is written as snippets of
-   source in strings rather than as ordinary Python in the test body, so an editor will not
-   refactor, type-check or lint it and a mistake in one is found at run time. Exception classes
-   do not cross either, only type names, so a typo in an expected name is a test that cannot fail
-   for the right reason. A worker holding session state means tests are not isolated from each
-   other by default. And the bridge is itself project code that has to be maintained and tested.
-   *Prerequisites:* decide the worker's state-isolation policy (one worker per session, per
-   module, or per test, trading startup against independence).
-
-7. **An adaptation library over both FreeCAD and OpenVSP, with remote object references.** The
-   boundary of alternative 6, but passing *handles* instead of source: a worker-side registry
-   holds the live objects, the client holds proxy objects, and attribute and method access become
-   round trips. `wall.Volume` returns a float, `wall.isValid()` returns a bool,
-   `wall.BoundBox.ZLength` and `wall.Solids[0]` return further proxies, and `a.cut(b).cut(c)`
-   passes handles so the whole chain happens worker-side with only the final number crossing.
-   Both libraries sit behind one interface with two interchangeable backends — a worker for a
-   library whose build does not match the project's interpreter, and plain in-process imports for
-   one that does. *Benefits:* satisfies the 2026-10-05 constraint for both vendors at once and
-   keeps satisfying it when either moves, because switching a backend is one line and no test
-   changes. OpenVSP takes the in-process backend today, so nothing about the working export path
-   changes now while the seam that future-proofs it exists. It removes alternative 6's real
-   drawback: geometry is ordinary Python in the test body, so an editor refactors, type-checks and
-   lints it. Measured working: **19 cases in 1.30 s**, worker startup 0.94 s, **323 round trips at
-   0.9 ms each** — faster per operation than snippet evaluation, because a handle operation
-   compiles nothing. Reuse of one build across eleven parametrized stations plus eight further
-   assertions, with a counter asserting the build ran exactly once before and after; and reuse
-   measured **16.2× cheaper than rebuilding** even on a shape that takes 5 ms to build, a ratio
-   that grows to about six orders of magnitude on a 990 s cowl.
-
-   **Error reporting is not a casualty, and the first draft of this entry wrongly said it was.**
-   Measured: the worker sends the exception's class name, its full base chain and its traceback,
-   and the client rebuilds a matching class once and caches it. A project precondition arrives as
-   `PreconditionFailed` and satisfies `pytest.raises(PreconditionFailed)`; the same failure is
-   still caught by a hierarchy catch; the synthesized class is the same object on every raise, so
-   it can be reused; a real kernel refusal arrives as the kernel's own
-   `CADKernelError: makeOffset2D: offset result has no wires.`; and a remote `AttributeError` is
-   catchable as a real `AttributeError`, because a remote builtin inherits from the genuine
-   builtin as well as from the remote base. The worker's traceback names the remote file, function
-   and line and is printed in the failure report, while `__tracebackhide__` on the bridge frames
-   keeps the report pointing at the test's own line. A bridge fault — a dead worker, a broken
-   protocol — is raised as a deliberately *unrelated* class, so a crashed worker cannot be
-   mistaken for a geometry finding and sent someone hunting for a defect that is not there.
-
-   *Drawbacks:* materially more code than alternative 6 — an encoder, a handle registry, a proxy
-   type, a synthesized-exception module and two backends — and it is infrastructure the project
-   must own, test and debug. The failure mode is specific and worth naming: a defect in the proxy
-   presents as the geometry API appearing not to exist. One was found while building this
-   prototype — the proxy refused every attribute beginning with an underscore, which silently made
-   the whole private half of `cowl_interior` unreachable, `_check_slope`, `_Polyline`, `_fit` and
-   `_thin_stations` among them, exactly the functions a unit test wants. Each attribute access is a
-   round trip, so a loop over thousands of samples wants a batched call rather than per-element
-   proxying, and the library has to offer one. Only what is reachable through attribute and call
-   syntax is exposed; operator overloads and anything relying on Python-level object identity need
-   explicit support. A synthesized exception class is not the worker's class object and cannot be,
-   so a test must take its identity from the library rather than by importing the real one.
-   *Prerequisites:* a batching call for sample loops; a decision on where the library lives and
-   whether it is tested independently of the geometry tests that use it.
-
-   **Handle lifetime is the library's responsibility, not the test author's.** An earlier draft of
-   this entry listed memory growth as a cost to be managed by a release policy the author would
-   follow. That is the wrong division of labor and it is unnecessary; the design below removes it,
-   and each part is asserted by a test rather than described:
-
-   - *Distributed reference counting.* The client proxy's `__del__` queues its handle for release,
-     which CPython's reference counting makes prompt for the ordinary non-cyclic case. Measured:
-     200 temporaries in a loop leave nothing behind, and a chain of booleans leaves exactly one
-     live handle — the result — which is freed in turn when it goes out of scope.
-   - *Releases ride along.* The pending list is attached to the next request, so reclaiming costs
-     no round trip of its own; a threshold flush covers a session that has gone quiet.
-   - *A method call allocates nothing.* One `callattr` op does the attribute lookup and the call
-     worker-side, so no handle is created for a bound method — which would otherwise be one per
-     call site, the largest source of growth. A client-side cache of which names are callable per
-     remote type removes the probe round trip, so a warm method call is a single trip: measured
-     20 trips for 20 calls.
-   - *Shutdown is safe.* `__del__` only appends to a list and never performs I/O, which during
-     interpreter teardown would deadlock or raise against half-finalized modules.
-   - *A leak is observable.* The worker reports live and high-water handle counts, and the library
-     offers an explicit no-leak assertion, so the invariant can be pinned in CI instead of
-     trusted.
-   - *Use after free is named.* A released handle used again raises `StaleHandle` identifying the
-     handle, rather than surfacing a bare `KeyError` from inside unrelated work, which would read
-     as a geometry fault and send someone looking for a defect that is not there.
-
-   **One defect found while building this is worth recording, because it is the mistake the design
-   invites.** The bound-method object held the owner's handle *id* rather than a reference to the
-   owner proxy. In `a.cut(b).cut(c)` the first result is never named, so once `.cut` had produced a
-   method object the only thing referring to that shape was an integer: the proxy was collected,
-   its release was queued, and the very request carrying that release then used the handle. The
-   symptom was a `StaleHandle` on an object logically still in use — a live object freed, which is
-   worse than a leak, since a leak wastes memory while this corrupts a result. The rule the fix
-   establishes is *alive while reachable*, not *alive while named*. It was caught only by the test
-   written for the converse — that a still-referenced object must not be freed — which is the test
-   this kind of library most needs and is easiest to omit.
-
-**Recommendation**
-
-**Alternative 7**, built in the shape of alternative 6 so that 6 is the fallback if the library
-proves more than the project wants to own. **Chosen 2026-10-06; see the decision note at the head
-of this question, and [geometry_bridge.md](geometry_bridge.md) for the design.** The 2026-10-05
-constraint eliminates most of the
-field: alternatives 2 and 5 run the project's tests under FreeCAD's interpreter, and 3 moves the
-project's own pin to match it, so all three hand the choice of Python to a CAD vendor. Of the
-three that remain, 6 and 7 both dominate 4 on the thing that matters — a sub-millisecond call
-against a process launch per assertion, and the ability to pay a 990 s build once per session
-rather than once per test — while keeping a single pytest invocation and a single dependency set.
-
-7 is preferred over 6 because it buys back the only real cost of the boundary at a price the
-measurements show is negative rather than positive: a handle operation came in at **0.9 ms**
-against **8.8 ms** for evaluating a snippet, because it compiles nothing. So the variant that
-reads as ordinary Python is also the faster one, and the choice is not a trade between
-expressiveness and speed. What 7 genuinely costs is code the project has to own. Building it in
-the shape of 6 keeps that reversible: the worker, the pipe and the session fixture are common to
-both, and the proxy layer is the part that can be abandoned.
-
-Two things this recommendation deliberately does not claim. **Neither variant loses test
-efficiency.** The worry that a shape could not be reused across assertions is specific to
-*serializing* objects, and neither design serializes them — one build served nineteen cases with a
-counter asserting it ran exactly once, before and after. And **OpenVSP needs no bridge today**,
-since its extension happens to match the project's current interpreter; its place in 7 is the
-in-process backend behind the shared interface, so the day either vendor moves is a one-line
-change rather than a port.
-
-Alternative 1 remains correct for the slow whole-build integration checks. The `check_*.py`
-scripts should not be converted: a quarter-hour build whose job is to print a report is well
-served by a standalone script, and the bridge is for the fast, named, asserted cases that
-have no home today.
+The library is infrastructure the project owns, and its own
+failure mode is that a defect in the proxy presents as the vendor API appearing not to exist. Two
+such defects were found while prototyping — one of them freed a live object, which is worse than a
+leak — and both were caught only by tests written for the converse case. The design's verification
+section exists because of that, and alternative 6 remains the documented fallback if the library
+proves more than the project wants to maintain.
 
 Whichever is chosen, the two guidelines passages quoted above should be corrected: the mechanism
 is an ABI version lock, not an impossibility, and the two-tier split should be justified by its
 real cost — OpenVSP's opposite pin, two dependency sets, and the expressiveness of a process
 boundary — rather than by a claim that measurement contradicts.
 
-Alternative 3 is the better long-run answer **if** the soak shows `MARGINAL` is common rather
-than a one-off at the small end — but it requires re-deriving a calibrated threshold, so it
-should be decided on the soak's evidence rather than in advance of it. The `U`-normalization
-question above is in the same position and for the same reason.
+**Where it is recorded**
+
+[geometry_bridge.md](geometry_bridge.md), the design of the library.
 
 ### OQ-ARCH-23 — The port's unit regime — WITHDRAWN 2026-10-31
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Why withdrawn**
 
 **Withdrawn as never open.** This question asked which unit regime the port should work in. That
 was decided at the start of the project, and [general.md](../guidelines/general.md) records it:
@@ -3707,6 +3472,63 @@ converting the port's consumers of it.
 
 ### OQ-ARCH-24 — How does `wall_measure` reach the unit standard, when it may not import the conversion layer? — RESOLVED 2026-11-02
 
+**Problem**
+
+**The subsystem.** `src/Fuselage/tools/wall_measure/` is the wall-thickness measurement
+subsystem: 19 modules, 8 022 lines, 61 module-level numeric constants and 41 bare inline
+dimensional literals (measured 2026-11-01). It holds the candidate wall measures, the five
+pre-committed gates they were selected against, the corpus sweep, the ring-break scan, the
+normal-distance measure and the synthetic truth fixtures. Thirty-eight of its 61 constants are
+lengths, areas or angles in millimeters and degrees — `WALL_TOL = 0.01`, `SAMPLE_ARC = 0.20`,
+`NOMINAL = 0.6`, `ALIGN_DEG = 30.0`, `truth.R_OUTER = 10.0` and so on.
+
+**Why it cannot simply be converted.** `tests/test_wall_measure_sweep.py` asserts, as a committed
+property with its reason recorded, that no module in the package imports anything outside
+`numpy, json, os, re, sys, time, math, collections, itertools, functools`:
+
+**Alternatives**
+
+1. **Admit `freecad/units.py` to the allowlist.** `units.py` holds `MM_PER_M`, `M_PER_MM`,
+   `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions, and imports only `math` — it has no
+   FreeCAD import at all, which IP-FC-8 recorded as deliberate ("any interpreter can read it").
+   Benefit: one import, no duplicated factor, and the allowlist's actual purpose — nothing that
+   FreeCAD's embedded interpreter cannot load — is preserved, since `units.py` is pure Python.
+   Drawback: it couples `tools/wall_measure` to a module under `freecad/`, which is a direction of
+   dependency the tree does not otherwise have, and the allowlist stops being "numpy and the standard
+   library" and becomes "numpy, the standard library, and one named project module", which is a weaker
+   and more easily eroded statement.
+2. **Move the conversion factors to a module both trees may import.** A new `src/Fuselage/units.py`
+   (or `tools/units.py`) holding the factors, with `freecad/units.py` re-exporting them. Benefit: no
+   cross-tree dependency and no duplicated literal. Drawback: a third file in the units story, and the
+   project already has one conversion module whose docstring argues at length that there should be
+   exactly one.
+3. **Give `wall_measure` its own factor.** `MM_PER_M = 1000.0` declared locally, with a comment
+   pointing at `freecad/units.py`. Benefit: no import, no allowlist change, no new file. Drawback: it
+   is the duplication `units.py`'s own docstring singles out as the thing to avoid — it carefully
+   explains why `tools/oml_export.MODEL_UNIT_MM` is *not* a duplicate, which this plainly would be.
+4. **Declare the package's interface a boundary and convert at it.** Keep `wall_measure`
+   millimeters throughout, and convert in each caller — one crossing per call, named. Benefit: no
+   change to the package, its tests, its corpus or its published figures, all of which are millimeter
+   figures today. Drawback: it leaves 8 022 lines of library code storing millimeters, which is what
+   the standard forbids, and the 38 constants include design tolerances (`WALL_TOL`, the gate
+   thresholds) that are project figures rather than kernel ones.
+5. **Convert the package and relax the allowlist test to a narrower assertion.** Replace "nothing
+   outside numpy and the stdlib" with the property it is actually protecting — "importable under
+   FreeCAD's embedded interpreter" — asserted by importing the package under `freecadcmd` in `check_*`
+   rather than by inspecting import statements. Benefit: the test then checks the real requirement
+   instead of a proxy for it, and the conversion needs no exemption at all. Drawback: the proxy is
+   cheap and runs in the pytest tier.
+
+**Recommendation**
+
+**Alternative 1, and if the cross-tree direction is unwanted, alternative 2.** The allowlist exists
+to keep the package loadable under FreeCAD's embedded Python, and `freecad/units.py` is loadable
+under any Python — admitting it costs the allowlist's purpose nothing while removing the whole
+obstacle. Alternative 3 duplicates the project's only length factor, which `units.py` argues
+against by name.
+
+**Decision**
+
 **Resolution: alternative 1 — `freecad/units.py` is admitted to the allowlist.** The project owner authorized
 completing the unit repair on 2026-11-02. `tools/wall_measure` now imports `units`, which holds
 `MM_PER_M`, `M_PER_MM`, `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions and imports
@@ -3731,6 +3553,8 @@ adding `freecad/` to `pythonpath` shadows nothing in either direction. Being on 
 importing: the `freecad/` modules that import FreeCAD at module level are no more reachable by
 accident than any other module in the tree.
 
+**Rationale**
+
 **Alternative 2 was adopted first and then withdrawn, on the same day, which is worth recording.**
 Moving the factors to a `tools/units.py` with `freecad/units.py` re-exporting them was chosen on an
 unmeasured assumption that widening the test path was expensive. It is not, and alternative 2 turns
@@ -3742,6 +3566,8 @@ direction. The collision count is what settled it.
 Alternative 4 remains the one to avoid, for the reason recorded below: declaring the package's
 interface a boundary would decide the question by renaming it.
 
+**Caveats**
+
 **One thing this question did not see, found 2026-11-02 while answering it.** `unit_regime.py`
 enumerated with `os.listdir` rather than `os.walk` at all three sweep sites, so
 `tools/wall_measure/` — a subdirectory — was never opened by any sweep. Its 19 modules were not
@@ -3749,109 +3575,18 @@ reported clean; they were not reported. Every "0 still stored in millimeters" re
 that fix excluded the largest body of unconverted code in the project. The sweep is recursive now,
 and IP-FC-167 carries the fix.
 
-The alternatives as considered are kept below, because the reasoning against 3 and 4 is what keeps
-them from being revisited.
+**Where it is recorded**
 
-**The subsystem.** `src/Fuselage/tools/wall_measure/` is the wall-thickness measurement
-subsystem: 19 modules, 8 022 lines, 61 module-level numeric constants and 41 bare inline
-dimensional literals (measured 2026-11-01). It holds the candidate wall measures, the five
-pre-committed gates they were selected against, the corpus sweep, the ring-break scan, the
-normal-distance measure and the synthetic truth fixtures. Thirty-eight of its 61 constants are
-lengths, areas or angles in millimeters and degrees — `WALL_TOL = 0.01`, `SAMPLE_ARC = 0.20`,
-`NOMINAL = 0.6`, `ALIGN_DEG = 30.0`, `truth.R_OUTER = 10.0` and so on.
+`freecad/units.py`, admitted to the allowlist.
 
-**Why it is in scope.** It is project Python performing internal calculations, so
-[general.md](../guidelines/general.md)'s standard covers it: *"Every internally stored value uses
-SI base units … This applies to every variable, field, parameter, function argument, and return
-value in the project."* Nothing about a measurement subsystem exempts it, and there is no file
-interface between it and the code it serves — it is called directly from
-`freecad/check_cowl_interior.py`, which is now SI, and from seven diagnostic drivers in the port.
+### OQ-ARCH-25 — Where does the port's SI parameter layer sit? — RESOLVED 2026-11-07
 
-**Why it cannot simply be converted.** `tests/test_wall_measure_sweep.py` asserts, as a committed
-property with its reason recorded, that no module in the package imports anything outside
-`numpy, json, os, re, sys, time, math, collections, itertools, functools`:
+**Posing not recovered**
 
-> IP-WTM-10 adopts the selected measure inside `check_cowl_interior`, which runs under FreeCAD's
-> embedded Python 3.11 with numpy 1.26 — not the project's 3.13. **So the measure has to depend on
-> nothing but numpy and the standard library.**
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
 
-`freecad/si.py` — the project's kernel-unit boundary — imports `FreeCAD` and `Part`. Three of the
-package's modules (`boolean_edges`, `locate`, `normal_distance`) receive the `Part` and `App`
-modules as *arguments* precisely so the package never imports them, and those three are the ones
-that make kernel calls and therefore need a conversion at each call. So the conversion needs
-either a new import, a local factor, or a boundary — and each of those is a change to a decided
-property rather than a mechanical edit.
-
-**What is affected while it is unresolved.** Nineteen constants in seven port modules
-(`sever_doses` 5, `normal_check` 3, `fit_amplification` 3, `refused_wall` 2, `ring_scan` 2,
-`tau_study` 2, `wall_vanish` 2), because each of those drivers passes geometry through
-`wall_measure` and converting one side alone would put a crossing on every call. They are
-`unnamed-unit` findings in `tools/unit_regime.py` today and the only ones left.
-`check_cowl_interior` is converted and carries one named millimeter crossing at its two
-`wall_measure` calls, which whichever alternative wins will delete.
-
-**Alternatives.**
-
-1. **Admit `freecad/units.py` to the allowlist.** `units.py` holds `MM_PER_M`, `M_PER_MM`,
-   `MM2_PER_M2`, `MM3_PER_M3` and the four conversion functions, and imports only `math` — it has
-   no FreeCAD import at all, which IP-FC-8 recorded as deliberate ("any interpreter can read
-   it"). *Benefits:* one import, no duplicated factor, and the allowlist's actual purpose —
-   nothing that FreeCAD's embedded interpreter cannot load — is preserved, since `units.py` is
-   pure Python. *Drawbacks:* it couples `tools/wall_measure` to a module under `freecad/`, which
-   is a direction of dependency the tree does not otherwise have, and the allowlist stops being
-   "numpy and the standard library" and becomes "numpy, the standard library, and one named
-   project module", which is a weaker and more easily eroded statement. *Prerequisite:* confirm
-   `freecad/` is on `sys.path` wherever `wall_measure` is imported — it is under `freecadcmd` and
-   under `tests/conftest.py`, but `tools/` scripts that import it would need checking.
-
-2. **Move the conversion factors to a module both trees may import.** A new
-   `src/Fuselage/units.py` (or `tools/units.py`) holding the factors, with `freecad/units.py`
-   re-exporting them. *Benefits:* no cross-tree dependency and no duplicated literal; the
-   allowlist gains a module that is genuinely shared rather than borrowed. *Drawbacks:* a third
-   file in the units story, and the project already has one conversion module whose docstring
-   argues at length that there should be exactly one. *Prerequisite:* decide which tree owns it.
-
-3. **Give `wall_measure` its own factor.** `MM_PER_M = 1000.0` declared locally, with a comment
-   pointing at `freecad/units.py`. *Benefits:* no import, no allowlist change, no new file.
-   *Drawbacks:* it is the duplication `units.py`'s own docstring singles out as the thing to
-   avoid — it carefully explains why `tools/oml_export.MODEL_UNIT_MM` is *not* a duplicate, which
-   this plainly would be. A second declaration of the project's only length factor is a thing
-   that can drift.
-
-4. **Declare the package's interface a boundary and convert at it.** Keep `wall_measure`
-   millimeters throughout, and convert in each caller — one crossing per call, named. *Benefits:*
-   no change to the package, its tests, its corpus or its published figures, all of which are
-   millimeter figures today; the subsystem is handed kernel coordinates by construction, which is
-   an argument that its interface genuinely is the FreeCAD scripting boundary the guidelines list.
-   *Drawbacks:* it leaves 8 022 lines of library code storing millimeters, which is what the
-   standard forbids, and the 38 constants include design tolerances (`WALL_TOL`, the gate
-   thresholds) that are project figures rather than kernel ones. It also multiplies crossings:
-   eight call sites today, each needing points converted in and distances converted out.
-
-5. **Convert the package and relax the allowlist test to a narrower assertion.** Replace "nothing
-   outside numpy and the stdlib" with the property it is actually protecting — "importable under
-   FreeCAD's embedded interpreter" — asserted by importing the package under `freecadcmd` in
-   `check_*` rather than by inspecting import statements. *Benefits:* the test then checks the
-   real requirement instead of a proxy for it, and the conversion needs no exemption at all.
-   *Drawbacks:* the proxy is cheap and runs in the pytest tier; the real check needs FreeCAD and
-   so cannot run there, which is exactly why the proxy was chosen. It trades a fast assertion for
-   a slow one.
-
-**Recommendation: alternative 1, and if the cross-tree direction is unwanted, alternative 2.**
-The allowlist exists to keep the package loadable under FreeCAD's embedded Python, and
-`freecad/units.py` is loadable under any Python — admitting it costs the allowlist's purpose
-nothing while removing the whole obstacle. Alternative 3 duplicates the project's only length
-factor, which `units.py` argues against by name. Alternative 4 is the one to avoid: it is the
-largest body of millimeter storage left in the project and declaring its interface a boundary
-would be deciding the question by naming it something else — the same move as `units.py`'s own
-superseded docstring, which claimed `fillets.py`'s millimeter rows were "correct" and that
-converting them "would be the defect".
-
-What this does **not** turn on is any measurement nobody has taken: the subsystem's size, its
-constant count, its allowlist and the identity of the three kernel-touching modules are all
-measured above. It is a decision about where a dependency may point.
-
-### OQ-ARCH-25 — Where does the port's SI parameter layer sit? — DECIDED 2026-11-07
+**Decision**
 
 **Resolution: alternative 3 — convert at the derivation.** `derived_parameters()` returns
 meters; the parameter CSV read converts in; the `.scad` emission converts out; the exported JSON
@@ -3874,6 +3609,8 @@ on one real value, `panel_thickness` for the `3/16in` panel variant, 4.7625 mm =
 *(An earlier revision of this table omitted row 5 while the list below numbered five
 alternatives. The row is restored here; alternative 5 is the one in which nothing converts
 anywhere.)*
+
+**Rationale**
 
 **The requirements, and what each eliminated.**
 
@@ -3930,6 +3667,8 @@ against its baseline remain as cross-checks, and they are what finally feed
 `units.bbox_m_matches_mm`, dead code today because `check_si.py` exercises it only on a
 constructed box.
 
+**Caveats**
+
 **Two constraints attach to the choice.**
 
 1. **The `units` guard lands before the exported JSON's unit changes.** `export_parameters.py`
@@ -3951,9 +3690,13 @@ taken: whether a quantity-typed cell drives an expression identically to a float
 fresh build and under an edit-in-place recompute. Cheap on one real document. File it as its own
 question if it is wanted as a decision.
 
+**Where it is recorded**
+
 **Unblocks IP-FC-159.**
 
-### OQ-ARCH-26 — What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry?
+### OQ-ARCH-26 — What is the gate on a change that moves the emitted `.scad`'s digits but not its geometry? — OPEN
+
+**Problem**
 
 The sweep in `src/Fuselage/tools/fuselage_variants.py` writes an OpenSCAD source file for each
 of the 544 parts it builds. It writes them through `solid2`, whose `py2openscad` renders every
@@ -4034,66 +3777,106 @@ OQ-ARCH-25, on the belief that it was reachable. Either the rule admits a stated
 the rule stands and IP-FC-159 cannot proceed as OQ-ARCH-25 decided it. Both are changes to
 something already settled, which is why this is filed rather than resolved in passing.
 
-#### Alternatives
+**Alternatives**
 
 1. **Gate on geometric equivalence instead of byte-identity, for this change only.** Replace the
    test with: every emitted parameter agrees with its millimeter value to a relative 10⁻¹²
    (about 4 500 times the measured residue), and an integer rendered as a float is accepted.
-   *Benefits:* IP-FC-159 lands as OQ-ARCH-25 decided it, and the gate still catches any real
-   error, since a genuine mistake in this change is a factor of 1000 and not 10⁻¹⁶. *Drawbacks:*
+   *Benefits.* IP-FC-159 lands as OQ-ARCH-25 decided it, and the gate still catches any real
+   error, since a genuine mistake in this change is a factor of 1000 and not 10⁻¹⁶. *Drawbacks.*
    the exempt-artifact guarantee weakens from "did not move" to "moved within a bound", and the
    bound then needs maintaining; 523 definition files change with no ledger saying which or why.
-   *Prerequisite:* none beyond what is already measured.
+   *Prerequisites.* none beyond what is already measured.
 
 2. **Freeze a new emitted corpus, record the change as a reviewed ledger entry, and keep
    byte-identity as the standing rule against it.** Re-render the 523 parts once, enumerate them
    with the per-alias mechanism and magnitude, and gate every later change on byte-identity
-   against the new corpus. *Benefits:* the rule keeps its strength for all future work and the
+   against the new corpus. *Benefits.* the rule keeps its strength for all future work and the
    one exception is written down rather than absorbed, which is the mechanism OQ-ARCH-15 already
    established for `variant_output_baseline` — *"differences are enumerated in a ledger and
-   justified, not absorbed"*. *Drawbacks:* needs one full sweep, and a reviewed sign-off on the
-   ledger before the corpus is adopted. *Prerequisite:* a full sweep, which is expensive and is
+   justified, not absorbed"*. *Drawbacks.* needs one full sweep, and a reviewed sign-off on the
+   ledger before the corpus is adopted. *Prerequisites.* a full sweep, which is expensive and is
    the project owner's call to schedule.
 
 3. **Round at the emission boundary and accept the one-time change.** **Required by R1, and
    the rule is 12 significant figures — `float('%.12g' % value_mm)` — not a decimal count.**
-   *Benefits:* it is what R1 asks for; it repairs the 114 residue values the corpus carries
+   *Benefits.* it is what R1 asks for; it repairs the 114 residue values the corpus carries
    today; and the emitted text stops being sensitive to the order of operations at all, so this
    class of churn cannot recur on any later refactor, including the `PartDesign::` move.
-   *Drawbacks:* it does not meet byte-identity against the **current** corpus — it was measured
+   *Drawbacks.* it does not meet byte-identity against the **current** corpus — it was measured
    missing 1 018 of 14 188, every one of them a residue value it corrects — so it still needs
    whichever of 1 or 2 is chosen for how that one-time change is recorded; and it puts a
    precision decision inside the emission path, where a reader has to know the rule to predict
-   the file. *Prerequisite:* none remaining. An earlier revision of this alternative proposed
+   the file. *Prerequisites.* none remaining. An earlier revision of this alternative proposed
    `round(value_m × 1000, 9)` and called the precision "a new free parameter"; both are
    corrected below, and the decimal form was wrong rather than merely unchosen.
 
 4. **Derive twice, so the OpenSCAD emission keeps millimeter arithmetic.** This is OQ-ARCH-25's
    alternative 4, eliminated there by R1 — *"the derivation of parameters should be implemented
-   only once"*. *Benefits:* the only alternative under which the emitted `.scad` genuinely cannot
-   move, since the arithmetic producing it is untouched. *Drawbacks:* it is the alternative a
+   only once"*. *Benefits.* the only alternative under which the emitted `.scad` genuinely cannot
+   move, since the arithmetic producing it is untouched. *Drawbacks.* it is the alternative a
    stated requirement already excluded, and it duplicates 149 lines whose two copies would have
-   to be kept in agreement by hand. *Prerequisite:* reversing R1.
+   to be kept in agreement by hand. *Prerequisites.* reversing R1.
 
 5. **Retire the generated `.scad` first, then convert.** OQ-ARCH-4 already decided the OpenSCAD
    path retires after IP-FC-13; bringing that forward removes the artifact the gate is about.
-   *Benefits:* the conflict dissolves rather than being adjudicated, and no gate is needed.
-   *Drawbacks:* the OpenSCAD path is still the comparison backend for the kinds that have no
+   *Benefits.* the conflict dissolves rather than being adjudicated, and no gate is needed.
+   *Drawbacks.* the OpenSCAD path is still the comparison backend for the kinds that have no
    FreeCAD generator, and `compare_backends.py` and the `variant_output_baseline` ledger both
    rest on it, so retiring it early removes the port's own reference while the port is
-   unfinished. *Prerequisite:* an inventory of which kinds still have no FreeCAD generator, and
+   unfinished. *Prerequisites.* an inventory of which kinds still have no FreeCAD generator, and
    of what loses its reference.
 
 6. **Hold IP-FC-159 until the OpenSCAD path retires on its own schedule.** Change nothing; leave
    `derived_parameters()` in millimeters and let the conversion happen when there is no `.scad`
-   to keep identical. *Benefits:* no rule is weakened and no corpus is re-rendered. *Drawbacks:*
+   to keep identical. *Benefits.* no rule is weakened and no corpus is re-rendered. *Drawbacks.*
    the port's parameter inflow stays millimeters for the duration, which is the conformance gap
    OQ-ARCH-23 recorded and IP-FC-158 was scheduled to close; every module downstream keeps
    converting at its own edge in the meantime, which is the arrangement `si.py`'s own docstring
-   argues against. *Prerequisite:* a date for the OpenSCAD retirement, which does not exist
+   argues against. *Prerequisites.* a date for the OpenSCAD retirement, which does not exist
    today.
 
-#### R1, and what it eliminates — set on direct instruction, 2026-11-08
+**Recommendation**
+
+**Alternative 3 is now required, so the live question is 2 against 1 for the gate — and the
+recommendation stays 2.** It is alternative 1 with the project's own ledger discipline attached, and the
+discipline is what makes the difference: the reason to prefer it is not that the numbers are
+smaller but that 523 changed files become a reviewed, enumerated, explained event instead of a
+quiet weakening of a rule that was written three days earlier. OQ-ARCH-15 settled this exact
+trade for `variant_output_baseline` and settled it that way.
+
+The measurements support it on substance as well. Both mechanisms are understood, both are
+bounded, and both are inherent rather than incidental — mechanism 1 is a fact about integers and
+mechanism 2 a fact about floating-point ordering, so neither can be engineered away by a better
+implementation. A gate that cannot be met by any correct implementation is not protecting
+anything; it is only deferring the change.
+
+**Alternative 3 is taken alongside it, and is no longer a separate call** — R1 requires it. An
+earlier revision of this recommendation called it "worth taking in addition to 2 … and that is a
+separate call", costing "one new free parameter, the decimal count". Both are superseded: the
+choice is made, the rule is 12 significant figures, and the decimal form it proposed was wrong
+for a mixed-unit corpus rather than merely unchosen.
+
+Its value beyond R1 is still forward-looking, and that part stands: the same churn arrives again
+at the `PartDesign::` move and at any later refactor that reorders this arithmetic, and a rounded
+emission is the only option here that makes the `.scad` text stable under reordering rather than
+re-baselined once.
+
+**Taking 2 and 3 together also settles what the new baseline should contain**, which neither
+settles alone. The corpus is re-rendered once, and the ledger entry records two separate things
+rather than one: the parts whose text moved because the derivation changed unit, and the 114
+values that were repaired from residue to the decimal the design intends. The second group is a
+correction the project would want recorded even on its own, and merging it into "the unit change
+churned everything" would hide it.
+
+Alternative 6 is the one to take if the OpenSCAD retirement is nearer than it looks, since it
+spends nothing. That depends on a date this document does not have. **R1 weakens it, though, and
+did not before:** holding IP-FC-159 leaves the 114 residue values as reference values for however
+long the hold lasts, and they are not a consequence of the conversion.
+
+**Evidence**
+
+*2026-11-08.* **R1, and what it eliminates, set on direct instruction.**
 
 > *"Most if not all of the parameter values are intentionally either whole number millimeter
 > values or are some small denominator fraction of an integer value. I would prefer that values
@@ -4175,44 +3958,6 @@ scored it a failure, "missing 1 018 of 14 188 **in the opposite direction** … 
 number than the millimeter path's own". That is the same measurement, and under R1 those 1 018 are
 not misses. They are the corrections R1 asks for. Nothing about the arithmetic changed; the gate
 it was being judged against did.
-
-#### Recommendation
-
-**Alternative 3 is now required, so the live question is 2 against 1 for the gate — and the
-recommendation stays 2.** It is alternative 1 with the project's own ledger discipline attached, and the
-discipline is what makes the difference: the reason to prefer it is not that the numbers are
-smaller but that 523 changed files become a reviewed, enumerated, explained event instead of a
-quiet weakening of a rule that was written three days earlier. OQ-ARCH-15 settled this exact
-trade for `variant_output_baseline` and settled it that way.
-
-The measurements support it on substance as well. Both mechanisms are understood, both are
-bounded, and both are inherent rather than incidental — mechanism 1 is a fact about integers and
-mechanism 2 a fact about floating-point ordering, so neither can be engineered away by a better
-implementation. A gate that cannot be met by any correct implementation is not protecting
-anything; it is only deferring the change.
-
-**Alternative 3 is taken alongside it, and is no longer a separate call** — R1 requires it. An
-earlier revision of this recommendation called it "worth taking in addition to 2 … and that is a
-separate call", costing "one new free parameter, the decimal count". Both are superseded: the
-choice is made, the rule is 12 significant figures, and the decimal form it proposed was wrong
-for a mixed-unit corpus rather than merely unchosen.
-
-Its value beyond R1 is still forward-looking, and that part stands: the same churn arrives again
-at the `PartDesign::` move and at any later refactor that reorders this arithmetic, and a rounded
-emission is the only option here that makes the `.scad` text stable under reordering rather than
-re-baselined once.
-
-**Taking 2 and 3 together also settles what the new baseline should contain**, which neither
-settles alone. The corpus is re-rendered once, and the ledger entry records two separate things
-rather than one: the parts whose text moved because the derivation changed unit, and the 114
-values that were repaired from residue to the decimal the design intends. The second group is a
-correction the project would want recorded even on its own, and merging it into "the unit change
-churned everything" would hide it.
-
-Alternative 6 is the one to take if the OpenSCAD retirement is nearer than it looks, since it
-spends nothing. That depends on a date this document does not have. **R1 weakens it, though, and
-did not before:** holding IP-FC-159 leaves the 114 residue values as reference values for however
-long the hold lasts, and they are not a consequence of the conversion.
 
 ## References
 

@@ -615,6 +615,195 @@ def all_open_questions(pages):
     return out
 
 
+# --------------------------------------------------------------------------- open-question format
+
+#: **The `/oq` skill's fixed format, checked as the skill writes it** (`.claude/commands/oq.md`).
+#: `check_open_questions` above enforces what any open-question section needs to be readable;
+#: this checks the one format every document now uses, so a departure is a finding rather than
+#: a style the next reader has to recognize. Each rule here is a sentence of the skill.
+OQ_SECTION = '## Open questions'
+
+#: The em dash, built from its code point so this file stays ASCII.
+EM = chr(0x2014)
+
+#: An id, in any of the document series: `OQ-DES-CW40`, `OQ-ARCH-10`, `IP-FC-169`.
+_ID = r'(?:OQ|IP)(?:-[A-Z]+)*-[A-Z]*\d+'
+
+#: `### <id> -- <Title> -- <STATUS>`, with the four statuses the skill allows and nothing else.
+OQ_FIXED_HEADING = re.compile(
+    r'^### (OQ(?:-[A-Z]+)*-[A-Z]*\d+) %s (.+) %s (OPEN|RESOLVED \d{4}-\d{2}-\d{2}|'
+    r'WITHDRAWN \d{4}-\d{2}-\d{2}|SUPERSEDED \d{4}-\d{2}-\d{2} BY OQ(?:-[A-Z]+)*-[A-Z]*\d+)$'
+    % (EM, EM))
+
+#: Any heading that names a question, fixed or not: what the fixed form is checked against.
+OQ_ANY_HEADING = re.compile(r'^#{2,6}\s+(?:~~)?(OQ(?:-[A-Z]+)*-[A-Z]*\d+)\b')
+
+OQ_TABLE_HEAD = '| ID | Summary | Blocking |'
+OQ_TABLE_RULE = '| --- | --- | --- |'
+OQ_NONE_OPEN = 'No open questions.'
+OQ_BLOCKING = re.compile(r'^(Not blocking|Blocking %s(?:, %s)*)$' % (_ID, _ID))
+
+#: A part label: bold, alone on its line, no colon or period.
+OQ_LABEL = re.compile(r'^\*\*([A-Z][A-Za-z ]*)\*\*$')
+
+#: Per status, the labels that must follow the open parts, in order, then the ones allowed after
+#: them. **Every status keeps the open parts**, condensed once the question closes, because they
+#: are the context later development needs -- 76 questions lost theirs to an earlier rule that
+#: replaced the subsection with a resolution note.
+OQ_OPEN_PARTS = ('Problem', 'Alternatives', 'Recommendation')
+OQ_NOT_RECOVERED = 'Posing not recovered'
+OQ_LABELS = {
+    'OPEN': ((), ()),
+    'RESOLVED': (('Decision', 'Rationale', 'Caveats', 'Where it is recorded'), ()),
+    'WITHDRAWN': (('Why withdrawn',), ('Where it is recorded',)),
+    'SUPERSEDED': (('Superseded by', 'Caveats'), ()),
+}
+
+#: The lead-ins every alternative carries, in this order.
+OQ_LEADINS = ('*Benefits.*', '*Drawbacks.*', '*Prerequisites.*')
+
+#: A link into a question's own subsection, whose anchor moves whenever its status does.
+OQ_ANCHOR_LINK = re.compile(r'\]\([^)\s]*#oq-[a-z0-9_-]+\)')
+
+
+def _label_order_ok(found, required, optional):
+    """`found` is `required` in order, then an ordered subset of `optional`."""
+    if tuple(found[:len(required)]) != tuple(required):
+        return False
+    rest = list(found[len(required):])
+    return rest == [x for x in optional if x in rest]
+
+
+def _check_alternatives(body, rel, start, found):
+    """Every numbered alternative carries the three lead-ins, in order."""
+    items, current = [], None
+    for n, line in body:
+        m = re.match(r'^(\d+)\.\s', line)
+        if m:
+            current = [int(m.group(1)), n, line]
+            items.append(current)
+        elif current is not None:
+            current[2] += '\n' + line
+    if not items:
+        found.append(Finding('oq-format', rel, 'Alternatives has no numbered item', start))
+    for number, n, text in items:
+        at = [text.find(x) for x in OQ_LEADINS]
+        if -1 in at or at != sorted(at):
+            found.append(Finding('oq-format', rel, 'alternative %d lacks %s in that order'
+                                 % (number, ', '.join(OQ_LEADINS)), n))
+
+
+def check_oq_format(pages):
+    """Every open-question section, heading, table and subsection against the fixed format."""
+    found = []
+    for rel, page in sorted(pages.items()):
+        lines = page.lines
+        for n, line in enumerate(lines, 1):
+            if OQ_ANCHOR_LINK.search(strip_code(line)):
+                found.append(Finding('oq-anchor', rel, 'links to a question\'s own anchor, '
+                                     'which moves with its status; link to #open-questions', n))
+            if OQ_BOLD.match(line):
+                found.append(Finding('oq-format', rel, 'a question declared in bold, not as '
+                                     'a ### heading', n))
+        declared = [(n, m.group(1)) for n, line in enumerate(lines, 1)
+                    for m in [OQ_ANY_HEADING.match(line)] if m]
+        sections = [n for n, line in enumerate(lines, 1) if line.rstrip() == OQ_SECTION]
+        if not declared:
+            continue
+        if len(sections) != 1:
+            found.append(Finding('oq-format', rel, 'has %d "%s" sections; it needs exactly one'
+                                 % (len(sections), OQ_SECTION), declared[0][0]))
+            continue
+        top = sections[0]
+        end = next((n for n in range(top + 1, len(lines) + 1)
+                    if lines[n - 1].startswith('## ')), len(lines) + 1)
+
+        # The summary table, or the line that stands in for it.
+        n = top + 1
+        while n < end and not lines[n - 1].strip():
+            n += 1
+        rows = {}
+        if n < end and lines[n - 1].strip() == OQ_NONE_OPEN:
+            n += 1
+        elif n < end and lines[n - 1].strip() == OQ_TABLE_HEAD:
+            if lines[n].strip() != OQ_TABLE_RULE:
+                found.append(Finding('oq-table', rel, 'the summary table\'s rule line is not '
+                                     '"%s"' % OQ_TABLE_RULE, n + 1))
+            n += 2
+            while n < end and lines[n - 1].startswith('|'):
+                cells = [c.strip() for c in lines[n - 1].strip().strip('|').split('|')]
+                if len(cells) != 3:
+                    found.append(Finding('oq-table', rel, 'a summary row needs 3 cells, has %d'
+                                         % len(cells), n))
+                else:
+                    rows[cells[0]] = n
+                    if not OQ_BLOCKING.match(cells[2]):
+                        found.append(Finding('oq-table', rel, '%s: Blocking is "Blocking <ids>" '
+                                             'or "Not blocking", nothing else' % cells[0], n))
+                n += 1
+        else:
+            found.append(Finding('oq-table', rel, 'the section opens with neither the summary '
+                                 'table "%s" nor "%s"' % (OQ_TABLE_HEAD, OQ_NONE_OPEN), top))
+        # Nothing between the table and the first question.
+        first = next((m for m, _i in declared if top < m < end), end)
+        for m in range(n, first):
+            if lines[m - 1].strip() not in ('', '---'):
+                found.append(Finding('oq-format', rel, 'text between the summary table and the '
+                                     'first question; the section holds only those two', m))
+                break
+        numbers = [_oq_number(i) for i in rows]
+        if numbers != sorted(numbers):
+            found.append(Finding('oq-table', rel, 'summary rows are not in ascending order', top))
+
+        # Each question's heading and subsection.
+        open_ids = set()
+        for k, (m, oq_id) in enumerate(declared):
+            if not top < m < end:
+                found.append(Finding('oq-format', rel, '%s is declared outside "%s"'
+                                     % (oq_id, OQ_SECTION), m))
+                continue
+            head = OQ_FIXED_HEADING.match(lines[m - 1].rstrip())
+            if not head:
+                found.append(Finding('oq-format', rel, '%s: the heading is not "### <id> -- '
+                                     '<Title> -- <STATUS>" with a status the skill allows'
+                                     % oq_id, m))
+                continue
+            status = head.group(3).split()[0]
+            if status == 'OPEN':
+                open_ids.add(oq_id)
+            stop = declared[k + 1][0] if k + 1 < len(declared) else end
+            body = [(j, lines[j - 1]) for j in range(m + 1, stop)]
+            labels = [(j, OQ_LABEL.match(t).group(1)) for j, t in body if OQ_LABEL.match(t)]
+            names = [x for _j, x in labels]
+            closing, optional = OQ_LABELS[status]
+            # The open parts, an optional Evidence, then this status's closing parts. A closed
+            # question whose posing was lost says so in one part instead of being summarized
+            # from an inconsistent basis.
+            evidence = ('Evidence',) if 'Evidence' in names else ()
+            opening = (OQ_NOT_RECOVERED,) if (status != 'OPEN' and names[:1] ==
+                                              [OQ_NOT_RECOVERED]) else OQ_OPEN_PARTS
+            required = opening + evidence + closing
+            if not _label_order_ok(names, required, optional):
+                found.append(Finding('oq-format', rel, '%s (%s): parts are %s; the format '
+                                     'needs %s%s' % (oq_id, status, names or 'none',
+                                                     list(required),
+                                                     ' then optionally %s' % list(optional)
+                                                     if optional else ''), m))
+            elif status == 'OPEN':
+                # A closed question's alternatives are condensed, so only an open one's must
+                # carry the three lead-ins.
+                a = dict((x, j) for j, x in labels)
+                part = [(j, t) for j, t in body if a['Alternatives'] < j < a['Recommendation']]
+                _check_alternatives(part, rel, a['Alternatives'], found)
+        for oq_id in sorted(open_ids - set(rows)):
+            found.append(Finding('oq-table', rel, '%s is OPEN but has no summary row' % oq_id,
+                                 top))
+        for oq_id in sorted(set(rows) - open_ids):
+            found.append(Finding('oq-table', rel, '%s has a summary row but is not OPEN'
+                                 % oq_id, rows[oq_id]))
+    return found
+
+
 # --------------------------------------------------------------------------- plans
 
 
@@ -1001,6 +1190,7 @@ CHECKS = (
     ('links', check_links),
     ('images', check_images),
     ('open-questions', check_open_questions),
+    ('oq-format', check_oq_format),
     ('plans', check_plans),
     ('plan-index', check_plan_index),
     ('references', check_references),

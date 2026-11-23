@@ -443,817 +443,7 @@ either.
 Getting this sign wrong would print the cowl lip into the bed and leave the web as an
 unsupported ceiling. See [cowl.md](cowl.md#7-print-orientation) for the rest of the family.
 
-## Open questions
-
-| ID | Status | Question |
-| --- | --- | --- |
-| B1 | resolved 2026-08-06 | What sets `greeble_opening_angle = 35°`? |
-| B2 | resolved 2026-08-06 | Is the interconnect's cut dimensioned or fitted? |
-| B3 | **open** — intent unrecoverable | Should the web be a variant rather than a flag? |
-| B4 | resolved 2026-08-06 | Have large-`U` bulkheads been printed? |
-| B5 | resolved 2026-08-06 — not a defect | Should insert depth be a validity check? |
-| B6 | resolved 2026-08-06 | `greeble_tolerance` was dead on the bulkhead side |
-| B7 | resolved 2026-08-06 | Does one snap angle work at the *small* end? |
-| B8 | **open** | Should `BulkheadType` be split to match the two families? |
-| B9 | decided 2026-08-08 | Is the morphological fillet the authority, or is a true fillet? — true fillets |
-| B10 | resolved 2026-08-08 — fixed | `greeble_bolt_web` is called with three arguments in the wrong order |
-| B11 | decided 2026-08-10 | How should the boom bulkhead's morphological rounding be built? — split by intent |
-| B12 | resolved 2026-08-11 — fixed | The greeble-forming tool takes an accidental 0.0067 mm on the snap rib |
-| B13 | resolved 2026-08-14 — fixed | The outer-face cleanup tool sets a material face from `geometry_eps` |
-| B14 | resolved 2026-08-16 — implemented | Nothing keeps the bolt-flange fillet center off the bolt axis |
-
-**Two open: B3 and B8.** Both need a decision rather than an answer — B3's original intent is
-not recoverable, and B8 is a forward-looking structural choice that gets more expensive the
-longer it is deferred.
-
-**B14 was raised, answered and implemented between 2026-08-15 and 2026-08-16.** It turned out
-to contain a question that could be settled from the code and one that could not. The first —
-where does this fillet belong — is settled: its center is the circle of radius
-`flange_fillet_radius` tangent to both the flange's inner face and the bolt boss, exactly, on
-every swept variant, so it is a blend of the two and its placement was never free. That is now
-*stated*: `fillets.BffTangency` is a constrained sketch carrying the two `Tangent` constraints,
-and the geometry reads the solved center back from it. The second — whether that solution may
-land on the bolt axis — has no physical argument either way, so it is measured and reported
-rather than bounded (`tools/bbf_analysis/report_bbf_gap.py`).
-
-**B13 was raised, decided and fixed on 2026-08-14, and was the same shape as B12**: a constant
-whose stated job is boolean slop was setting the position of a face on the finished part. It
-was not the same *cause*, though — the `eps` was a symptom, and the decision recorded here
-first was to compute an intersection that turned out not to be the problem. The defect was one
-term in the corner's rectangular extension, which stopped one `panel_tolerance` short of the
-mating plane; fixing that made the `eps` inert, and it was then removed. Implemented as
-IP-FC-59. The geometry below is the authority, and it records all four readings including the
-three that were wrong.
-
-**B12 was raised, decided and fixed on 2026-08-11.** `corner_end` now takes an explicit
-`overshoot` argument, so its thickness argument no longer drives the snap rib as a side
-effect. The socket's rib is 2.000 mm, equal to the corner post's, and the two are now
-asserted equal on every run rather than merely printed side by side — which is how the
-0.0067 mm survived in plain sight.
-
-B4 and B7 together mean the swept range is validated in hardware at **both** ends, U=0.5
-and U=4.
-
-Resolved entries keep their full text below, in numerical position, with the reasoning
-that produced the answer.
-
-**OQ-DES-B1 — What sets `greeble_opening_angle = 35°`? — RESOLVED 2026-08-06.**
-It was **arrived at experimentally**, and what it does is let the longeron snap
-into the greeble's center hole. See [the longeron snap](#the-longeron-snaps-into-the-greeble)
-above, which is written from that answer. It is a tuned value, not a derived one: do not
-replace it with a formula.
-
-**OQ-DES-B2 — Is the interconnect's relief cut dimensioned or fitted? — RESOLVED
-2026-08-06.** It is neither a relief nor a clearance: it is a **mass
-reduction**. The interconnect's flange is only full `2·bt` depth at the corners, where
-the longerons and the bolted joints put the load, and is narrowed to `1·bt` along the
-runs between them. See [the interconnect](#the-only-true-peers-are-the-fastener-variants) above, rewritten from that answer.
-
-The question was posed badly — I had guessed it was clearance for the panel to pass
-between bays, which is wrong, and described it as a "relief cut", which named it after
-the wrong purpose. The shape is a depth profile, not a clearance.
-
-### OQ-DES-B3 — Should the web be a variant rather than a flag?
-
-**Problem.** `make_web` is a boolean passed into the bulkhead geometry that decides whether
-a section carries its internal web — the thin span, `plate_thickness` tall, that stiffens
-the bulkhead between the bolt bosses and the flange.
-
-**Original intent is not recoverable** (2026-08-06): whether it was meant to allow lighter
-bulkhead variants, or was only ever a mechanization of the differences between bulkhead
-types, is not remembered. Recorded so nobody spends time trying to recover it. What the
-code establishes still constrains the decision:
-
-- **Nothing ever chooses it.** `make_web` is `true` for every non-interconnect bulkhead
-  and for exactly one half of every interconnect, fixed by position in
-  `bulkhead_section_octant()`. No variation table has a column for it. Functionally it is
-  a mechanization today, whatever it was intended to be.
-- **But the idea exists elsewhere in the same family.**
-  `boom_bulkhead_type_variants.csv` *does* carry `make_vert_web` and `make_lower_web` as
-  variation columns. So "web presence as a variant" is realised for the boom bulkhead and
-  not for the standard one — which is as consistent with an unfinished intent as with a
-  deliberate difference.
-- **It is not a simple on/off for one feature.** `make_web` reaches three places:
-  `bulkhead_web()` itself, `bulkhead_flange_positive()`, and `outer_corner_fillet()`. It
-  is closer to "this is the web-bearing face of the section", and the flange and fillet
-  change to suit. Promoting it to a variation axis is therefore more than exposing a
-  boolean — it changes three features at once, and the two halves of an interconnect must
-  stay complementary.
-
-The question is therefore not *what was meant* but *what it should be*.
-
-**Alternatives**
-
-1. **Leave it a positional flag**, and rename it to say so — `is_web_bearing_face` rather
-   than `make_web`.
-   *Benefits:* matches what it actually does today; no geometry change; removes the
-   implication of configurability that the current name carries.
-   *Drawbacks:* forecloses lighter bulkhead variants without deciding whether they are
-   wanted.
-   *Prerequisites:* none.
-
-2. **Promote it to a variation-table column**, following `boom_bulkhead_type_variants.csv`,
-   which already exposes `make_vert_web` and `make_lower_web`.
-   *Benefits:* precedent exists in the same part family; enables a lighter end bulkhead as
-   a swept variant; makes the two families consistent with each other.
-   *Drawbacks:* it changes three features at once (`bulkhead_web()`,
-   `bulkhead_flange_positive()`, `outer_corner_fillet()`), so it is not a simple boolean
-   exposure; the two halves of an interconnect must stay complementary, which a free
-   parameter does not guarantee; doubles the bulkhead sweep.
-   *Prerequisites:* deciding whether a webless bulkhead is structurally acceptable — this
-   is a strength question, not a plumbing one.
-
-3. **Defer to the FreeCAD port**, where the section is an object and "web-bearing" is a
-   property of it rather than an argument threaded four levels deep.
-   *Benefits:* the awkwardness is an artifact of OpenSCAD's parameter passing and largely
-   disappears; the port is rewriting this layer anyway.
-   *Drawbacks:* the misleading name survives until then.
-   *Prerequisites:* none.
-
-**Recommendation: alternative 1 now, and revisit as alternative 2 only if a mass case is
-made for a webless bulkhead.** The evidence says `make_web` describes *which face of a
-section this is*, not a design choice — it is `true` everywhere except the mirrored half of
-an interconnect, and no variation table asks for anything else. Renaming makes the code
-honest at negligible cost. Promoting it to a variant is a real capability, but it should be
-motivated by a mass or stiffness requirement rather than by the observation that the flag
-exists.
-
-**OQ-DES-B4 — Have large-`U` bulkheads been printed? — RESOLVED 2026-08-06.**
-Yes. **A U=4 bulkhead section has been printed and assembled** with 16 mm
-longerons and a corner section. Both snap fits work: the longeron snaps into the greeble,
-and the corner snaps onto it.
-
-That is the top of the swept range, and it exercises both joints at once. It also
-confirms the parametric standard is being followed in hardware — `longeron_radius = 2·U`
-gives 8 mm at U=4, so a 16 mm tube is exactly the nominal size.
-
-The other end is covered by [OQ-DES-B7](#open-questions): a U=0.5 part has also been
-printed, with the tolerances working. Between them the swept range is validated in
-hardware at both extremes — which is as much as two prints can establish, and more than
-the rest of this document rests on. Everything else here is geometry that renders rather
-than hardware that fits.
-
-**OQ-DES-B5 — Should insert depth be a validity check? — RESOLVED 2026-08-06. No.**
-The question was based on a wrong assumption of mine: that the insert has to be contained
-within the bulkhead's thickness. It does not. **It is set from the interior side and may
-stand proud of that face** — the interior is free space, so the surplus goes where nothing
-lands on it, and the mating face stays clear.
-
-At the worst case in the swept range, U = 0.5, that surplus is 0.5 mm of a short M3
-insert. Not a defect, and no validity check is warranted. The depth columns are reference
-data for choosing a part, which is why nothing reads them.
-
-I had recorded this as the one question describing a part that could not be assembled.
-That was wrong, and there is now no such question here — everything else in this list is
-a decision that was not written down rather than something broken.
-
-**OQ-DES-B6 — `greeble_tolerance` is a dead parameter on the bulkhead side. —
-RESOLVED 2026-08-06.** It was threaded positionally through `bulkhead_section_full` →
-`_octant` → `bulkhead_section`, and then discarded: `greeble_tolerance_local = 0` is what
-reached `corner_end()`. The value the sweep passed (`GREEBLE_TOLERANCE_BULKHEAD_MM`,
-itself zero) had no effect, and setting it non-zero would have done nothing at all.
-
-**Chosen: drop the parameter** (IP-GEO-21), rather than honor the caller's value.
-
-The deciding argument is that *the post is nominal* is an **invariant, not a setting**.
-All greeble fit clearance lives on the corner's bore by design, because splitting it
-across both halves makes the joint carry it twice. A module that accepts a tolerance it
-must ignore in order to stay correct is advertising control it cannot offer — and the
-person most likely to reach for it is someone whose parts do not snap together, who
-would change the number, see no difference, and conclude the geometry is at fault.
-
-Honoring the caller instead would have been behavior-identical today, since every
-caller passes zero. It was rejected because it re-opens the double-clearance failure
-mode the design deliberately closed, in exchange for a knob nobody should turn.
-
-Removed from three SCAD signatures and four call sites, from both GUI drivers, from
-`bulkhead_render()`, and from the Python constants. `bulkhead_section()` now passes a
-literal `0` to `corner_end()` with the invariant stated beside it.
-
-**OQ-DES-B7 — Does one snap angle work at the *small* end? — RESOLVED 2026-08-06.**
-Yes. **A U=0.5 part has been printed and the tolerances work.** With B4's U=4 result,
-that is both ends of the swept range validated in hardware.
-
-The concern was real but did not bite. Because `greeble_opening_angle` is an angle, the
-mouth is 57.4 % of the tube diameter at every scale, while the wall doing the flexing
-goes as `√U` — and below U = 1 it stops scaling at all, pinned at two extrusion widths by
-the `max()` floor. The small sizes therefore have a proportionally *thicker*, stiffer
-wall being asked to open by proportionally the same amount: 1.2 mm of wall spreading
-0.9 mm at U = 0.5. That predicted a greeble too stiff to snap, or one that cracks. It
-snaps.
-
-So a single experimentally-tuned angle does hold across an 8× span of `U`, and the
-`√U` thickness rule with its two-extrusion floor is doing the right thing at both
-extremes. Nothing here needs a formula.
-
-### OQ-DES-B8 — Should `BulkheadType` be split to match the two families?
-
-**Problem.** The enum lists
-`END`, `INTERCONNECT`, `COWLING` and `TAIL_BOOM` as peers, but the first three are frame
-bulkheads and the fourth is an interstitial plate — a different kind of part with a
-different mating vocabulary, different symmetry, its own geometry file, its own sweep
-function and its own variation table. The code has already separated them everywhere except
-in the type.
-
-This matters now rather than later because **the plate family is expected to grow**: UC-6
-names landing-gear attachment bulkheads and structural blocks, and the boom bulkhead is
-explicitly the first of a set. Each addition made against a flat enum widens the gap between
-how the parts are organized and how they are named.
-
-**Alternatives**
-
-1. **Split into two enums** — `FrameBulkheadType` and `PlateBulkheadType`.
-   *Benefits:* the type says which family a part belongs to; validity checks and geometry
-   dispatch stop needing to know that `TAIL_BOOM` is the odd one; new plate types are added
-   without touching the frame path.
-   *Drawbacks:* `derived_parameters()` and the filename scheme both branch on the single
-   enum today, so both change; the variation tables' boolean columns need rethinking.
-   *Prerequisites:* none.
-
-2. **Keep one enum, add a family attribute** — a `family` field beside `type`.
-   *Benefits:* smallest change; existing call sites keep working.
-   *Drawbacks:* two things to keep in step, which is the failure mode this project has spent
-   Phase 2 removing; nothing stops a mismatched pair.
-   *Prerequisites:* none.
-
-3. **Defer to the FreeCAD port**, and model the families as separate classes there.
-   *Benefits:* the port is rewriting the parameter layer anyway, and Phase 3's guideline is
-   not to refactor code scheduled for replacement.
-   *Drawbacks:* every plate bulkhead designed before the port lands is built against the
-   flat enum, so the cost of the eventual split grows with each one.
-   *Prerequisites:* none.
-
-**Recommendation: alternative 3 for the OpenSCAD path, alternative 1 in the port — but
-decide the taxonomy now and record it here.** The naming does not need to change to make
-the *design* explicit, and this document now states the two families regardless. What must
-not happen is landing-gear bulkheads being designed as though they were peers of `COWLING`;
-that is a design error the enum would quietly encourage, and it is not fixed by renaming
-anything later.
-
-### OQ-DES-B9 — Is the morphological fillet the authority, or is a true fillet? — DECIDED 2026-08-08: true fillets
-
-**Decision.** The FreeCAD version uses **real fillets that make proper use of FreeCAD's
-capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
-it to hundredths of a millimeter**.
-
-**The stated premise was falsified 2026-08-10, and the decision needs re-confirming before
-the boom bulkhead is built.** Alternative 2 below was rejected partly on the ground that
-"`Part::Offset2D` demonstrably will not do it". It will. The 15%/19% divergence recorded
-below was measured at a single value of a single parameter, on a test polygon that is
-degenerate at exactly that value — a limb exactly twice the offset radius, whose erosion is a
-zero-area hairline that the following dilation paints into a wide band. Swept, the two
-engines agree to **0.00456%** on the full `fillet_inner` chain, inside the faceting floor.
-OpenSCAD's own answer at the degenerate value moves 33% across 0.002 mm. See
-[freecad_migration.md §`Part::Offset2D` reproduces the whole offset
-chain](../implementation/freecad_migration.md).
-
-The decision may well stand on its own terms — it was argued from what the feature *means*,
-not only from what was reachable — and nothing already built is affected. But two of its
-inputs have changed:
-
-- **Reproducing the morphological shape is now cheap, parametric and exact**, not a
-  hand-written offset chain. It is a `Part::Offset2D` chain of document objects, so the
-  editability constraint is satisfied either way.
-- **The boom bulkhead's use of `fillet_inner` is not a corner round.** Three of its four uses
-  wrap a *whole compound region* — `boom_bulkhead` itself applies it to a multi-island
-  difference — where the operation's job is to close slivers across the region, not to round
-  a named corner. Real fillets there mean enumerating concave vertical edges whose count
-  moves with the parameters, which is the topological-naming exposure IP-FC-5 measured. That
-  is a materially worse trade than the one this question was decided on, where the targets
-  were four named corners.
-
-`boom_key_shape` is the exception and is a genuine corner round: `fillet_outer(r)
-fillet_inner(r)` over a circle unioned with a square.
-
-**The re-decision is [OQ-DES-B11](#oq-des-b11--how-should-the-boom-bulkheads-morphological-rounding-be-built--decided-2026-08-10-split-by-intent) below**,
-decided 2026-08-10 as a split: true fillets on the key, the morphological chain for the
-region-wide remainder. This question stays decided for what it actually governed — the frame
-bulkhead's four named fillets and the chamfer, none of which reach `fillet_inner` — and B11
-governs the boom bulkhead.
-
-**Scope, established 2026-08-09 while porting: this affects the boom bulkhead only.**
-`fillet_inner` is called exactly once in `fuselage_bulkhead_geometry.scad`, inside
-`bulkhead_web_inner_shape_octant`, and the only caller of the shape that reaches it is
-`fuselage_boom_bulkhead_geometry.scad`. The frame bulkheads — end, interconnect, cowling —
-never execute it. `bulkhead_web`, which they do use, already makes a **true fillet** by
-subtracting a cylinder of `web_fillet_radius` at the re-entrant corner; the little step out
-to `x = boss_x - web_fillet_radius` in its profile is exactly the material that cylinder
-rounds. So the frame bulkhead ports with no fillet decision at all, and this question governs
-the plate family.
-
-This settles more than the web. It applies to all four fillet modules — `greeble_to_web_
-fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet` and `outer_corner_fillet` — and
-to any other geometry where OpenSCAD approximates a feature it cannot express directly.
-
-Two consequences follow, and both are load-bearing:
-
-- **Equivalence for filleted parts is a deviation tolerance, not volume equality.** IP-FC-13
-  cannot test the bulkhead the way it tests the corner. The corner remains strict; parts
-  with fillets need a stated tolerance and a comparison that measures deviation.
-- **The printed part changes slightly.** Parts printed before and after the port are not
-  interchangeable at the fillet, though they are at every interface, since no interface
-  dimension is set by a fillet.
-
-The original question and its alternatives are kept below, because the reasoning for
-rejecting a bit-exact reproduction is what justifies the tolerance.
-
----
-
-**Problem.** The web's inner corners are rounded by `fillet_inner(web_fillet_radius)`, which
-is not a fillet operation — OpenSCAD has none. It is a morphological approximation built
-from three chained 2D offsets:
-
-```scad
-intersection() { offset(-r) offset(2r) offset(-r) children; children; }
-```
-
-> ⚠️ **The paragraph below is the falsified premise, kept as written.** The fragmentation it
-> blames was incidental; the divergence came from the test polygon being degenerate at the
-> one parameter value tried. Corrected reading at the top of this question.
-
-Measured 2026-08-08, `Part::Offset2D` reproduces a *single* offset to under 0.01% but the
-chain diverges by **19%** once the intermediate shape fragments into disjoint islands. The
-bounding boxes agree exactly, so the offset distance is right; the two disagree about the
-interior. No `Join` or `Fill` setting closes the gap, and offsetting the islands separately
-gives identical results. See
-[freecad_migration.md §IP-FC-9](../implementation/freecad_migration.md).
-
-So the port cannot reproduce the current web shape by the current construction, and the
-question is which shape is actually wanted. This blocks `bulkhead_web` and everything that
-consumes its profile.
-
-**What the geometry is for.** These are inner corners in a load-carrying web, so the radius
-is there to reduce stress concentration. A morphological closing and a true fillet both do
-that; they differ in what happens where features are closer together than `2*r` — which is
-exactly the region where the two measurements diverged.
-
-**Alternatives**
-
-1. **A true fillet in the port** — round the inner corners with `Part::Fillet`, or with arcs
-   constructed in the profile sketch.
-   *Benefits:* it is what the feature means, and it is exact rather than approximate; a
-   constant radius is what a drawing would dimension and what an analyst would expect; it
-   does not degrade where features crowd.
-   *Drawbacks:* the printed part changes shape slightly, so parts printed before and after
-   the port are not identical; full-sweep equivalence (IP-FC-13) cannot use volume equality
-   for the web and needs a stated tolerance instead.
-   *Prerequisites:* a deviation tolerance for IP-FC-13.
-
-2. **Reproduce the morphological result exactly**, by whatever means that takes.
-   *Benefits:* comparable geometry across the migration; IP-FC-13 stays a strict test for
-   this part as it is for the corner.
-   *Drawbacks:* it preserves an approximation for its own sake, and the approximation is
-   worst precisely where the fillet matters most; `Part::Offset2D` demonstrably will not do
-   it, so this means writing the offset chain by hand. *(⚠️ Both clauses of that last
-   sentence are false, established 2026-08-10 — `Part::Offset2D` does it to 0.00456%, as a
-   chain of four document objects with no hand-written geometry.)*
-   *Prerequisites:* establishing why the dilations differ, which is not yet known — none;
-   the dilations do not differ.
-
-3. **Treat the current profile as incidental** and choose the radius afresh in the port.
-   *Benefits:* no effort spent matching a shape nobody chose deliberately.
-   *Drawbacks:* discards a shape that has been printed and flown; assumes the current
-   geometry carries no tuning, which has been the wrong assumption before on this project.
-   *Prerequisites:* confirmation that the web profile was never tuned by experiment.
-
-**Recommendation: alternative 1, conditional on the web never having been tuned by
-experiment.** The feature is a fillet and FreeCAD can make a fillet; carrying an
-approximation forward because it is what the old tool could express is the wrong reason to
-keep it. But this changes a part that has been printed, and OQ-DES-B1 above records that
-geometry here is sometimes arrived at by experiment rather than derivation — the greeble
-opening angle was exactly that. So whether the web profile was tuned needs answering before
-the change, not after.
-
-### OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order — FIXED 2026-08-08
-
-**Decision.** The matching names are the correct interface association; the old alignment was
-the accident. The call is corrected to
-`(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer)`.
-[`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) now reports zero
-positional mismatches across `src/Fuselage/scad`.
-
-**How wrong the arguments were depends on which parameters you feed it — and the hand driver
-is not the authority.** `fuselage_bulkhead.scad` sets `extrusion_width = 0.4`, which makes
-`flange_thickness = 0.8` equal to `plate_thickness = 0.8`, so one of the three slots landed
-correctly there and the defect was partly self-cancelling. **The sweep uses
-`extrusion_width = 0.6`**, giving `flange_thickness = 1.2`, and at those values *all three*
-arguments were wrong:
-
-| Parameter | Received (sweep) | Intended (sweep) |
-| --- | --- | --- |
-| `plate_thickness` | 1.2 | 0.8 |
-| `flange_thickness` | 1.0 | 1.2 |
-| `flange_chamfer` | 0.8 | 1.0 |
-
-**Measured effect — still smaller than the analysis below suggested.** The module's own
-output changes, but its material is *entirely absorbed* by the surrounding flange, web and
-bolt flange at the smaller sizes, so the assembled part is bit-identical. Checked by removing
-the call outright, at the driver's values *and* at a real swept variant:
-
-| Case | Assembled bulkhead, with vs without the module |
-| --- | --- |
-| U=1.0 `end_bolt` 3/16 in, derived (`ew=0.6`) | **unchanged**, 6922.5048968 mm³, 29000 triangles |
-| U=0.5, hand driver | **unchanged**, 1994.8939143 mm³ |
-| U=1, hand driver | **unchanged**, 5733.5689982 mm³ |
-| U=4, hand driver | changes — the module contributes 1584.75 mm³ |
-
-So **no part printed at U=1 was affected**, at the swept parameters as well as the driver's.
-At U=4 the bolt sits 32 mm out and the diagonal web is no longer covered by its neighbors,
-so the module does carry material and the correction moves roughly 0.1% of the part.
-
-So `greeble_bolt_web` is not dead code — it is dormant at small sizes and load-bearing at
-large ones, which is also why the defect survived: every part small enough to print and fly
-easily was immune to it.
-
----
-
-#### B10's original analysis, as written on 2026-08-08 — superseded by the decision above
-
-**This is history, not an open question.** It is kept because it is what the decision was made
-against, and because its numbers were partly wrong in a way worth being able to recognize: it
-was written at the hand driver's values, and the resolution above shows what the same call
-does at the derived ones. Nothing below is current. Its recommendation, its alternatives and
-its "porting in the meantime" note were all overtaken on 2026-08-08 — the call is fixed, and
-`audit_call_args.py` reports zero positional mismatches.
-
-Until 2026-08-14 this carried a second `### OQ-DES-B10` heading identical to the resolved
-one, so the document appeared to hold the same question twice, once decided and once open,
-and the summary table listed neither.
-
-**Problem.** Found 2026-08-08 while porting. There is one call site and its last three
-positional arguments are rotated against the signature:
-
-```scad
-module greeble_bolt_web(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer)
-
-greeble_bolt_web(bulkhead_thickness, bolt_offset, flange_thickness, flange_chamfer, plate_thickness);
-```
-
-So inside the module, at the driver's values:
-
-| Parameter | Receives | Value | Intended |
-| --- | --- | --- | --- |
-| `plate_thickness` | `flange_thickness` | 0.8 | 0.8 — correct **by coincidence** |
-| `flange_thickness` | `flange_chamfer` | **1.0** | 0.8 |
-| `flange_chamfer` | `plate_thickness` | **0.8** | 1.0 |
-
-**The table above is at the hand driver's values, which are not authoritative.**
-`fuselage_bulkhead.scad` sets `extrusion_width = 0.4`, making
-`plate_thickness = 4 * layer_height = 0.8` and `flange_thickness = 2 * extrusion_width = 0.8`
-equal, so one slot lands correctly there. The sweep derives its parameters through
-`derived_parameters()` at `extrusion_width = 0.6`, where they are 0.8 and 1.2 and **nothing
-cancels**. Design questions must be read against the derived values, not against a driver
-written to exercise one configuration by hand.
-
-**What it changes.** The diagonal web joining the greeble to the bolt flange:
-
-- its width comes from `flange_thickness/(2*sqrt(2))`, so **0.3536 instead of 0.2828** — the
-  web is 25% thicker than the flange thickness intends;
-- its chamfered rib section is
-  `[[0,0], [pt+fc,0], [pt+fc,-ft/2], [pt,-ft/2-fc], [0,-ft/2-fc]]`, built as
-  `[[0,0], [1.6,0], [1.6,-0.5], [0.8,-1.3], [0,-1.3]]` where the intent is
-  `[[0,0], [1.8,0], [1.8,-0.4], [0.8,-1.4], [0,-1.4]]`.
-
-Both are small, and both are in a load path — this web is what carries load from the
-longeron corner to the bolted joint.
-
-**This is a question, not a defect report, because the parts have been printed and flown
-with this geometry.** A thicker web is not obviously wrong; it may even be why the part
-works. What is certainly wrong is that the geometry does not follow from the parameters,
-so nobody could tune it deliberately.
-
-**Alternatives**
-
-1. **Fix the call, port the corrected geometry.**
-   *Benefits:* the part follows its parameters again; changing extrusion width or layer
-   height does what it says; the port has one description, not one plus an accident.
-   *Drawbacks:* the printed part changes in a load path, so it wants a print and a fit check
-   before it is trusted.
-   *Prerequisites:* none.
-
-2. **Fix the call and re-tune the constants** so the built geometry is unchanged — i.e.
-   decide the current dimensions were right and express them deliberately.
-   *Benefits:* keeps a flown geometry exactly while making it explicit and parametric.
-   *Drawbacks:* needs a judgment about which of the current dimensions were wanted.
-   *Prerequisites:* none.
-
-3. **Port it faithfully, bug included**, and defer.
-   *Benefits:* the port stays a pure translation and IP-FC-13 can compare strictly.
-   *Drawbacks:* carries an accident into a new codebase where it will be much harder to
-   notice, since the FreeCAD version has no positional call to misread.
-   *Prerequisites:* none.
-
-**Recommendation: alternative 2 if the current web dimensions are wanted, otherwise 1.**
-Either way the call is fixed — alternative 3 preserves a defect precisely where it is
-hardest to find later. The real question is only whether the *current* dimensions should be
-kept, and that is a judgment about a flown part rather than about the code.
-
-**Porting in the meantime follows alternative 3**, so the port continues and matches the
-existing reference; switching later is a change to two constants.
-
-### OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built? — DECIDED 2026-08-10: split by intent
-
-**Decision. Alternative 3.** True fillets on the key, and the morphological offset chain for
-the more complex remainder of the bulkhead.
-
-`boom_key_shape` is a named corner round — a circle unioned with a rectangular tab, four
-corners, a fixed count — and it gets real fillets. The other four sites (`boom_bulkhead`
-itself, `boom_web_outer_shape`, `boom_web_inner_shape` and `bulkhead_web_inner_shape_octant`)
-apply the operator to whole compound regions whose concave-corner set moves with the
-parameters, and they keep the morphological construction, which `Part::Offset2D` reproduces to
-0.00456%.
-
-**Constraint attached to the choice: the key's parameter domain is a design statement, and it
-is enforced.** Choices where the key width or depth is less than two fillet radii are invalid,
-as are extreme key widths approaching the diameter of **the hole the collet passes through** —
-`boom_diameter/2 + collet_thickness + tolerance` in radius, not the boom tube itself.
-`boom_key_validity_check()` in
-[`fuselage_variants.py`](../../src/Fuselage/tools/fuselage_variants.py) enforces all three:
-
-| Rule | Required | Tightest across the 132-variant corpus |
-| --- | --- | --- |
-| `key_width >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
-| `key_height >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
-| `key_width < 2 * collet_radius` | ratio < 1 | **0.270** |
-
-**None of the three is an arbitrary threshold; each is where the construction stops existing.**
-The width limit and the geometric singularity are one statement rather than two — the junction
-fillet center sits at height `sqrt((cr + r)² − (w/2 + r)²)`, which goes imaginary at exactly
-`w = 2·cr`, where the tab spans the hole and the junctions being filleted no longer exist. The
-height rule is what holds the junction fillets clear of the cap fillets: the junction tangent
-point is at most `cr + r` and the cap starts at `cr + h − r`, and the first is below the second
-precisely when `h ≥ 2r`. Only the width-vs-radius rule is about the tab in isolation.
-
-It excludes nothing today — 132 valid variants before and after — because `key_width` and
-`key_height` are both `max(2·U, 2)` and `key_radius` is `max(U/2, 1/2)`, so width and depth are
-each exactly **four** fillet radii at every `U`. The guard states intent rather than filtering
-the current corpus.
-
-**The OpenSCAD path was changed and verified first, before any porting.** Measured across all
-24 distinct swept key geometries, the direct construction and the morphological one agree to a
-worst **0.00522%** symmetric difference, inside the 0.0060% faceting floor. Both halves of the
-difference are measured separately, since equal amounts of added and removed material would
-cancel in a volume comparison. The relative error falls with `U` — 0.0052% at `U` = 0.5 down to
-0.0004% at `U` = 4 — which is fixed-angular tessellation on a growing part, not a construction
-error. The assembled part moves by **−0.00008%** and its bounding box does not move at all.
-
-Two things came out of the change that were not the point of it:
-
-- **The collet's fit surface is now exact.** `boom_key_shape`'s bounding box is ±7.2000 at
-  `U` = 1, where the morphological form gave ±7.1999. 7.2 is
-  `boom_diameter/2 + collet_thickness + tolerance`, the surface that fits the boom tube, and
-  the closing step had been eroding it by 1e-4 mm.
-- **The failure mode outside the domain got quieter, which is worse.** The morphological form
-  failed loudly: an opening removes any protrusion thinner than twice its radius, so a tab
-  below `2 * key_radius` did not round off, it *vanished* — measured at `U` = 1, the shape
-  collapses to the bare collet at 162.86 mm² against 166.86 mm² for a valid tab. The direct
-  construction instead returns a defined shape whose rounded cap is wider than the tab it
-  caps, because the two corner arcs cross over. That is a plausible-looking wrong part, which
-  is the one failure mode this migration most needs to avoid, and it is why the validity check
-  is load bearing rather than documentary.
-
-The reasoning is recorded in [freecad_migration.md §`Part::Offset2D` reproduces the whole
-offset chain](../implementation/freecad_migration.md), and the two constructions are measured
-against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
-which keeps the morphological form solely as the thing being compared to.
-
-### OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib — DECIDED AND FIXED 2026-08-11: fix the authority
-
-**Decision. Alternative 1.** `corner_end` gains an explicit overshoot argument, defaulting to
-zero, which extends the extrusion only. `bulkhead_thickness` goes back to meaning the
-thickness and nothing else, and keeps driving the snap rib. The greeble-forming tool calls
-`corner_end` with the true thickness and an overshoot of `eps`, instead of inflating the
-thickness to buy the overshoot.
-
-**The defect.** The bulkhead does not model its greeble socket; it cuts it with a tool that is
-the corner's own end section re-evaluated at different arguments. One of those arguments was
-`bulkhead_thickness + 2*eps`, intended purely as cut overshoot. But `corner_end` also derives
-`greeble_nub_height = bulkhead_thickness / 3` and the four nub `z` levels from that same
-argument, so the overshoot silently inflated the snap rib as well — 2.00667 mm against the
-post's 2.00000 at U = 1.0. The `-eps` shift applied afterwards nearly canceled the
-inflation, leaving the nub band centered on mid-thickness and only 0.00667 mm too tall, which
-is why it went unnoticed. The net effect was about 0.0033 mm of gap at each end of the snap.
-
-**Why it was worth fixing at 3% of a layer height.** Nothing printed is affected and nothing
-printed will change. What was wrong is that the design states all snap clearance is carried
-once, on the corner's bore, because splitting it across both halves applies it twice — and
-the code asserts exactly that for the bore while the rib quietly carried a second clearance.
-An invariant that is asserted in one place and false in another is worse than no invariant.
-
-**Why the authority and not the port.** IP-FC-50 measured that OCCT needs no cut overshoot at
-all: a tool cap coplanar with the face it exits through cuts exactly, at every scale tested,
-and yields fewer faces than the padded version. So the FreeCAD path could have been corrected
-on its own. It was not, because the two backends are compared against each other by IP-FC-13,
-and a permanent known divergence — however small, however well documented — is how a
-comparison harness stops being trusted. The conflation is one argument carrying two meanings;
-only separating them fixes the cause rather than relocating the symptom.
-
-**Constraints attached to the choice**
-
-- The signature change touches every `corner_end` call site. The corner's own calls pass the
-  default and are unaffected in behavior.
-- Shipped geometry changes by 0.0067 mm on the rib, so the stored reference volumes for the
-  greeble tool, the bulkhead section and the assembled bulkhead must be regenerated. This is
-  mechanical — the values are produced by scripts already in the tree — but it is not free,
-  and until it is done the reference comparisons will show the change as a failure.
-- On the FreeCAD side, `gt_bt` becomes `bulkhead_thickness` and the `-eps` shifts in
-  `bulkhead_tree.GREEBLE_TOOL_PARAMS` go away with it. The port keeps agreeing with the
-  authority rather than diverging from it, which was the point.
-- Alternative 3 — dropping the overshoot entirely on both paths — remains available later,
-  but only after measuring whether CGAL needs it here the way IP-FC-50 measured OCCT. That
-  measurement does not exist, and this decision does not depend on it.
-
-**Implemented the same day (IP-FC-51).** One correction to the alternative as written above:
-"extends the extrusion only" is not sufficient. `corner_end` dimensions the greeble **bore**
-from the same thickness argument, so an overshoot that moved the body and not the bore would
-have quietly left the post's ends formed flush — preserving the appearance of the old
-behavior while changing it. The argument reaches the extrusion and the bore, and nothing
-else; the four nub vertices stay dimensioned from the thickness.
-
-Outcome: socket rib 2.00667 → **2.000**, equal to the post's, and asserted equal on every run
-instead of printed beside it. The tool's z extent is unchanged. Regenerated references —
-greeble tool 557.746362 → 557.804925, octant 865.3140969 → 865.2850690, assembled part
-6922.5048968 → 6922.2726731.
-
-Two checks establish that the fix did what it claims rather than merely producing agreeable
-numbers. `ref_end` — the corner's own end section, the caller that was using the argument
-correctly — is **bit-identical** across the change at 551.815740. And OpenSCAD and FreeCAD
-agree on the *size* of the octant's change, −0.0290279 against −0.0290299, to 2e-6 mm³; that
-is the stronger evidence, because a regenerated reference can always be made to agree with
-whatever the code now does. The assembled part lost exactly eight times the octant's change,
-so the eight-way tiling was not disturbed.
-
-### OQ-DES-B13 — The outer-face cleanup tool sets a material face from `geometry_eps` — DECIDED 2026-08-14: fix the corner's extension, then delete the `eps`
-
-**Decision.** Two changes, in this order, both implemented 2026-08-14:
-
-1. **The corner's rectangular extension reaches `flat_x`** — `rect_w` becomes
-   `panel_overlap + panel_offset`, dropping the `- panel_tolerance`. Short, it stopped inboard
-   of the corner's own mating plane and left the bulkhead standing over the corner.
-2. **The `eps` comes out of `clean_r`**, which is a material face and not a cut overshoot.
-
-The order matters. Deleting the `eps` on its own makes the defect **worse**: the `eps` was the
-only thing trimming the bulkhead's overhang, so removing it lets the overhang grow to full
-height. That was this question's third wrong answer and it had been written up as decided.
-`clean_x0` does not change and must not — it is already the right datum.
-
-**The construction, as measured on the built solids rather than read off the source.** In the
-corner-local frame, corner center at the origin, lengths in mm:
-
-```
-flange_r  = corner_radius - panel_thickness - panel_tolerance   the flange's outer surface,
-                                                                sitting flush behind the panel
-flat_x    = -(panel_offset + panel_overlap)                     the corner/bulkhead interface
-rect_edge = flat_x + panel_tolerance                            the rectangular extension's edge
-```
-
-`flat_x` is the **interface between the two parts**, and it carries no tolerance. The bulkhead
-forms its side by cutting itself with the *same polygon* the corner uses for its own bulkhead
-boundary — vertices `(flat_x, corner_radius)`, `(flat_x, flat_y)`, `(flat_offset, 0)` and their
-mirror — so the two surfaces are coincident there by construction. `clean_x0` is `flat_x`,
-which is correct: the cleanup stops at the joint.
-
-**But the corner's material does not reach `flat_x` all the way up.** Tracing the corner's
-outboard face against height on the built solid, at the section that mates with the bulkhead:
-
-| Case | Height range | Face sits at | Which feature |
-| --- | --- | --- | --- |
-| 1.0 end_bolt 3/16 in | `y` 4.88 → 5.1375 | −7.2625 | the mask, at `flat_x` |
-| 1.0 end_bolt 1 mm | `y` 5.34 → 7.57 | −5.5000 | the mask, at `flat_x` |
-| | `y` 8.46 → 8.90 | −5.4000 | the rectangular extension |
-| 0.75 end_bolt 1/16 in | `y` 3.49 → 5.78 | −4.7500 | the mask, at `flat_x` |
-| | `y` 5.8125 | −4.7395 | the circle |
-
-Over almost all of its height the face is `flat_x`. Near the flange face the circle of
-`corner_radius` has curved inside, the **rectangular extension becomes the outermost feature**,
-and because it is dimensioned `panel_overlap + panel_offset - panel_tolerance` it stops one
-`panel_tolerance` short of `flat_x`. The interface therefore has a step in it, `panel_tolerance`
-deep, in a thin band below the flange face — and the bulkhead fills the notch.
-
-**The bulkhead fills that notch, and stands over the corner.** Confirmed on an OpenSCAD render
-of `1.5 end_bolt 1/16in`, probing material against void: just outboard of `flat_x` at the
-flange face is bulkhead, just inboard is void, and 0.02 mm lower the bulkhead has material
-0.044 mm *inboard* of `flat_x` — a tongue lying over the corner's shoulder, bounded by the
-corner's circle. It is in the authority, not a port artifact.
-
-**That tongue is also the only thing the `eps` was reaching.** The tool cuts `eps` below the
-flange face across it, shaving the top off: 0.0017 to 0.048 mm³ depending on the variant, on 27
-of the 132 that build. Which is why deleting the `eps` alone is backwards — it makes the tongue
-taller.
-
-**`panel_tolerance` is not the corner/bulkhead clearance** — confirmed 2026-08-14 — so its
-appearance in the interface's position was never a design intent. It was the rectangular
-extension's own dimension leaking into a mating face it was not meant to define. With the
-extension reaching `flat_x` the corner meets its mating plane at every height, the tongue has
-nowhere to form, and the `eps` becomes inert: verified on six variants, volume identical with
-and without it.
-
-**What the change costs.** The corner gains and the bulkhead loses, measured on the built
-solids:
-
-| Variant | Corner | Bulkhead |
-| --- | --- | --- |
-| 1.0 end_bolt 3/16 in | +0.0000 | +0.0000 |
-| 1.0 end_bolt 0 mm | +0.0000 | +0.0000 |
-| 0.75 end_bolt 1/16 in | +0.0065 | +0.0000 |
-| 1.5 end_bolt 1/16 in | +0.6048 | −0.0589 |
-| 1.0 end_bolt 1 mm | +10.3142 | −2.4274 |
-| 0.5 end_bolt 1 mm | +0.5000 | −0.1280 |
-
-It is a no-op wherever the mask already bound, which is the ~105 variants that never had the
-defect. All twelve solids valid, one solid each.
-
-**Three earlier readings of this question are recorded here because each looked plausible.**
-The first was that the corner's diagonal face governed and the limit should be its crossing
-with the flange face; the diagonal passes well below the flange face on most variants and its
-crossing lands outboard of everything. The second was that the outer mold line governed, with
-`clean_x0 = max(-sqrt(corner_radius^2 - clean_r^2), flat_x)`; that predicts the material loss
-correctly on all 132 variants, which is why it survived as long as it did, but it describes
-where the *tongue* ends rather than where the interface is. The third was to delete the `eps`
-alone, which makes the overhang worse.
-
-All three looked for the defect in the cleanup tool. It was in the shape the tool was cleaning.
-The general lesson is the one IP-FC-55 already records in a different form: a term that is
-*locally* irrelevant can be audited at one variant, but a term that participates in a mating
-face cannot — and neither can be understood without looking at the part it mates with.
-
-**Caveats attached to the choice.**
-
-- Both changes were made in the **OpenSCAD authority first** and then in the port, and in the
-  transcription `ref_bulkhead_cuts.scad`. `bulkhead_cuts.REF` was regenerated: the mask-overlap
-  sliver it carries is unchanged at 1.7951847, and both backends moved by the same amount
-  (−1.4697 in OpenSCAD, −1.4685 in the port).
-- **It changes the shape of two parts that have flown**, by up to 10.3 mm³ on the corner and
-  2.4 mm³ on the bulkhead — roughly fifty times the `eps` change it supersedes. It wants a
-  print check, not only a sweep. It is a no-op on the ~105 variants where the mask already
-  bound.
-- The corner grows, so anything dimensioned off the corner's outboard extent near the panel
-  seat should be re-checked. `slot_x` and the rebate are unaffected — the rebate already
-  reached well past `flat_x`.
-- With the `eps` gone the tool's underside is coplanar with the flange face. That degeneracy is
-  what the `eps` was avoiding, and it is not fatal: all 132 variants build and the six checked
-  in detail are valid single solids.
-- One loose end, outside the design range and not part of this decision: hold `eps` at 0.020
-  and raise `panel_tolerance` and the affected width tracks it to 0.500, then at 0.550 the
-  affected material vanishes rather than growing. Something else takes over that face there.
-  The design value is 0.100.
-
-Drawings of all of this, taken from the built solid rather than from the equations, are the
-IP-FC-59 working reference.
-
-
-### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis — RESOLVED 2026-08-16: alternative 6 with 5 alongside, implemented
-
-**Resolution, 2026-08-16 — Alternative 6, with Alternative 5 alongside. Implemented.**
-
-*Chosen:* the fillet center's two tangencies are now **stated as constraints** rather than
-solved into coordinates. `fillets._tangency_sketch()` builds `BffTangency`, a fully
-constrained construction sketch holding the fillet circle, the bolt boss and the flange's
-inner face, with a `Tangent` constraint against each; the CSG reads the solved center back
-through reference dimensions. The two spreadsheet rows it replaces — `bbf_cx`, a subtraction,
-and `bbf_cy`, a square root under `max(...; 0)` — are gone, along with `bbf_dx`, `bbf_dy`,
-`bbf_bx`, `bbf_r`, `bbf_ang`, `bbf_hx` and `bbf_hy`. Alternative 5 is implemented as
-`tools/bbf_analysis/report_bbf_gap.py`, which reports the gap for every variant and flags the
-band without rejecting anything.
-
-*Rationale:* both tangencies already held exactly, so this is a change of representation and
-not of geometry — every stage of the assembled bulkhead is bit-identical to the arithmetic it
-replaced, and a sampled backend comparison still agrees with OpenSCAD to 0.0016%. What it buys
-is that the relationship is now something the solver checks and a reader can see, and that an
-unsatisfiable configuration is **refused** where `max(...; 0)` used to clamp and return a
-plausible wrong center. Alternatives 1–4 were ruled out: 1 leaves the relationship unstated,
-and 2, 3 and 4 all move the finished part to fix a problem that no longer manifests.
-
-*Caveats, each checked rather than assumed —* `freecad/check_tangency.py`:
-
-- **The sketch holds the center, not the profile — a matter of scope, not of capability.**
-  An earlier draft of this resolution claimed a profile sketch was impossible here, because
-  the profile degenerates from a quad to a triangle on 18 of the 88 valid end-type variants
-  where `bbf_sx = max(flange_inner_x; bolt_c)` resolves to `bolt_c`. **That reasoning was
-  wrong**: it assumed one sketch must serve the whole parameter space, and nothing requires
-  that — a document is generated per parameter set, so the generator emits four edges or
-  three as the parameters dictate. Measured rather than argued, a four-edge profile sketch is
-  exact up to *and including* the exactly-degenerate point, and fails only past it. Moving the
-  profile too would have put a verified construction and an unverified one in one step, so it
-  was left for the `PartDesign::` conversion (IP-FC-75), where profiles have to be sketches
-  anyway.
-- **The sheet may not read the sketch back.** FreeCAD's dependency graph is per object, so a
-  `Params` cell referring to a sketch that refers to `Params` reports "The graph must be a DAG"
-  and then leaves the sketch permanently touched, never recomputed, with stale values that
-  still look correct. The solved center therefore flows sketch → geometry only.
-- **The delivered `.FCStd` stays editable.** Saved, reloaded, and a parameter moved: the sketch
-  re-solves and the octant follows.
-- **The solver stays on the correct branch.** Two circles admit more than one common tangent
-  circle, so the closed form is retained as a *test* of the solved position, over a swept
-  parameter, not as its source.
-- **`FullyConstrained` is not a sufficient check, and this is general to the port.** Driving a
-  profile past a degeneracy makes the solver return −1 from all four of its algorithms while
-  `FullyConstrained` stays True and the extrusion keeps serving the last geometry that solved
-  — 42 mm³ adrift by the end of the sweep that found it. `corner_tree._sketch()` gated on
-  `FullyConstrained` alone and now checks `solve()` first.
-
-The record of how this was reached follows, and is kept because it is the authority on what
-this fillet is and how the construction behaves near the singularity.
+## The bolt-flange fillet
 
 Each frame bulkhead carries a fillet where the flange meets the ring of material around the
 bolt hole. In the FreeCAD port this is `bolt_flange_fillet` in `freecad/fillets.py`; in the
@@ -1369,7 +559,7 @@ block's left edge, and the two shapes met at a single point instead of overlappi
 arithmetic there is nothing to remove — which had a consequence beyond the boolean, covered
 under *a second defect* below.
 
-#### Is there a near divide-by-zero as `bbf_dx` → 0?
+### Is there a near divide-by-zero as `bbf_dx` → 0?
 
 **Not in the arithmetic.** The construction is six spreadsheet cells:
 
@@ -1406,7 +596,7 @@ but a solid kernel intersecting two surfaces that shallow does, in the general s
 position of the intersection is amplified by `1 / sin θ = r_bolt_fillet / bbf_dx`: 51× at
 `U = 1.5`. **So the 1/`bbf_dx` is real, and it is inside OCCT rather than in the parameters.**
 
-#### It is a representation failure, and it appears at one identifiable stage
+### It is a representation failure, and it appears at one identifiable stage
 
 Same seed, same tree, one cell different — `bbf_bx = min(bbf_cx; bolt_c)` against
 `bbf_bx = bbf_cx` — at `1.5 end_anchor` with no panel:
@@ -1435,7 +625,7 @@ whose length is exactly twice the distance between its own endpoints. Its endpoi
 `x = bbf_cx`, `y = bbf_cy − relief_r_low`, `z = plate_thickness` — the point where the low
 relief cylinder touches that plane, at the height it steps into the cone.
 
-#### Why zero is safe and near-zero is not
+### Why zero is safe and near-zero is not
 
 The relief stack is centered on `(bbf_cx, bbf_cy)`, so its axis lies inside **any** vertical
 plane through that point — including both the block's left face and the ray plane. Measured:
@@ -1452,7 +642,7 @@ plane through that point — including both the block's left face and the ray pl
 So the neighborhood of zero is dangerous and zero itself is not — and the reason is a duplicate
 degenerate conic, not a division anywhere.
 
-#### A second defect: the pre-fix fillet was also short of material
+### A second defect: the pre-fix fillet was also short of material
 
 Because the ray half-plane removed **nothing**, the region built was the rectangle from
 `bbf_cx` to `bbf_sx`, not the trapezoid out to `bolt_c` that the OpenSCAD polygon produces.
@@ -1543,128 +733,6 @@ does not settle it, because that variation is *already represented*, as the `max
 selections and the branching in the derivation. It is being expressed; just in a form nothing
 can inspect. Alternative 6 below is the local form of that question.
 
-**Alternatives, as they were considered**
-
-1. **Leave it unconstrained and rely on the robust construction.** Nothing further to do.
-   *Benefits:* zero work; the fix is verified across the whole space and the exactly-zero case
-   is known good. *Drawbacks:* the design continues to have no stated intent about the
-   relationship, so a reviewer cannot tell whether `bbf_dx = 0.2` is intentional or accidental;
-   a future construction change re-inherits the fragility; and if the two features ever need to
-   be distinguishable in a drawing (IP-FC-21), there is no dimension to call out.
-   *Prerequisites:* none.
-
-2. **Add a validity check with a stated minimum, and reject variants that violate it.**
-   Require `|bbf_dx| >= k` for some `k` tied to a real dimension, and refuse the variant
-   otherwise, as `bulkhead_validity_check()` already does for other combinations. *Benefits:*
-   makes the relationship explicit and catches a bad parameter change at derivation time
-   rather than in a boolean. *Drawbacks:* would reject swept variants that currently build
-   correctly, including the two at exactly zero, unless zero is special-cased — which is
-   awkward to justify in a rule about a minimum distance. Choosing `k` needs a physical
-   argument this document does not currently have. *Prerequisites:* a decision about what `k`
-   means physically — a minimum wall, a print constraint, or a modeling margin.
-
-3. **Tie the flange face to the bolt so `bbf_dx` stops being free.** `bbf_dx` is a difference
-   of dimensions that are chosen independently, so the only way to stop it taking an arbitrary
-   value is to make one of them depend on the others — for instance deriving `bolt_offset`
-   from the flange stack, or `panel_offset` from the bolt position, so that `bbf_dx` holds
-   some stated value. *Benefits:* removes the degeneracy by construction rather than by
-   robustness, and puts a number on a relationship that currently has none.
-   *Drawbacks:* **this necessarily moves real interfaces.** Each of the four inputs is
-   something the part is judged on elsewhere: `panel_offset` and `panel_overlap` are the panel
-   seat, `flange_thickness` is the flange wall, and `bolt_offset` places the bolt in the
-   corner. Whichever is made to follow, the finished geometry changes on every bulkhead, must
-   be re-verified against OpenSCAD across the corpus, and puts the two backends out of
-   agreement until the OpenSCAD side changes to match. *Prerequisites:* a decision about which
-   of the four interfaces is allowed to become a dependent quantity, and what value `bbf_dx`
-   should hold.
-
-   *An earlier version of this alternative — "derive the fillet center from the bolt geometry
-   alone and let the flange follow, so the two features become genuinely one" — rested on a
-   false premise and is withdrawn.* The fillet center is **already** simultaneously tangent to
-   the flange inner face and to the bolt boss, to 3.6 × 10⁻¹⁵ mm across the corpus. There are
-   no two features to unify, and nothing about the fillet's placement to change; what is free
-   is only where that tangency solution ends up relative to the bolt axis.
-
-4. **Constrain `flange_fillet_radius` so that `bbf_cx` cannot cross `bolt_c`.** Rather than
-   check the result, choose the fillet radius from the available space:
-   `flange_fillet_radius = min(current rule; flange_inner_x - bolt_c - margin)`. *Benefits:*
-   keeps the relationship one-directional and self-satisfying; no variant is rejected.
-   *Drawbacks:* silently shrinks a fillet radius that is currently a clean function of `U`,
-   which is exactly the kind of hidden clamp `bbf_sx = max(...)` already introduced and which
-   made the pentagon-versus-quad reasoning in `fillets.py` necessary. Changes geometry on the
-   affected variants. *Prerequisites:* a decision on whether fillet radius is allowed to stop
-   tracking `U`.
-
-5. **Record the relationship as a monitored quantity without constraining it.** Export
-   `bbf_dx` in the parameter set and have `compare_backends` or a sweep report flag variants
-   inside the band. *Benefits:* cheap, changes no geometry, and makes the band visible so a
-   parameter change that moves a variant into it is noticed. *Drawbacks:* detects rather than
-   prevents; still needs someone to act on the report. *Prerequisites:* none.
-
-6. **Express the two tangencies as constraints rather than solving them.** Build the fillet
-   from a fully constrained sketch carrying **two** real `Tangent` constraints — one against
-   the bolt boss, one against the flange inner face — instead of computing `bbf_cx` from a
-   subtraction and `bbf_cy` from a clamped quadratic. Both tangencies already hold exactly, so
-   this states what the part is, and the solved position is the position it has today. This
-   is the local form of [OQ-ARCH-11](../architecture/freecad_migration.md). *Benefits:* the
-   relationship becomes a statement the solver checks and a reader can see; an unsatisfiable
-   configuration fails loudly where `max(...; 0)` currently returns a plausible wrong answer;
-   and drawings (IP-FC-21) and assemblies (IP-FC-19) gain something stable to reference.
-   *Drawbacks:* slower to build, and it changes the failure mode of
-   any variant where a tangency cannot be met, from clamp to refusal. *Prerequisites:* a
-   decision on OQ-ARCH-11, and a way to keep verifying a part whose geometry is solved rather
-   than computed. It needs **no** prior intent ruling: both tangencies already hold, so what
-   to constrain is read off the part rather than chosen.
-
-**Recommendation, as made and then adopted**
-
-**Alternative 6, with Alternative 5 in the meantime. Alternatives 1, 2, 3 and 4 are ruled
-out.**
-
-The immediate risk is gone — the construction is robust and the whole corpus is verified — so
-nothing needs to change geometry today. That rules out 2, 3 and 4, all of which move the
-finished part to solve a problem that no longer manifests, and 3 most of all, since the only
-version of it that survives scrutiny moves a panel seat or a bolt position to pin a quantity
-that is a *consequence* of them.
-
-**The intent question is answerable from the code after all, which is a change from what this
-section said before 2026-08-16.** It read: "is this fillet blending the flange into the boss,
-or is it a fillet on the flange that happens to reach the boss? That cannot be settled from
-the code." It can. The center is `flange_fillet_radius` from the flange's inner face *and*
-`flange_fillet_radius + bolt_hole_radius + bolt_thickness` from the bolt center — tangent to
-both, to floating-point exactness on all 88 variants, as algebraic identities rather than as
-a fit. That is the definition of a blend between the two, and it leaves nothing for the
-designer to choose about the fillet's placement.
-
-So what actually remains open is narrower than this question originally claimed: **not where
-the fillet goes, but whether the two-tangency solution is allowed to land on or near the bolt
-axis.** Nothing bounds `bbf_dx`, it is a difference of four dimensions each chosen for its own
-reasons, and 28 of 88 variants leave it inside 1.0 mm. That is a real gap in the design's
-stated intent even though the resulting fillet is correct at every one of them.
-
-Alternative 6 is the route, and OQ-ARCH-11's decision on 2026-08-15 toward constraints makes
-it the planned one. The reason 6 was held back in an earlier draft — that it trades away a
-closed-form parameter-to-geometry mapping the verification depends on — **was wrong**:
-`compare_backends` measures the built solid's volume and bounding box, so a constrained
-feature is checked exactly as a computed one is. Its real merit is now clearer than when it
-was written: the two tangencies **already hold exactly**, so stating them as two `Tangent`
-constraints is a pure change of representation. The part does not move, the corpus comparison
-does not shift, and the relationship stops being a subtraction and a clamped square root that
-only a reader who reconstructs the algebra can see. It also converts the `max(...; 0)` clamp —
-which returns a plausible wrong position — into a solver failure that says so.
-
-Alternative 5 remains worth doing immediately, being free: exporting `bbf_dx` and flagging the
-band would have made IP-FC-58 visible before it was a build failure rather than after, and it
-is the only thing here that addresses the remaining open part of the question, which is
-whether anyone is watching where that solution lands.
-
-**Both were implemented on 2026-08-16 — see the Resolution at the top of this question.** The
-gap is measured by `fuselage_variants.bolt_flange_fillet_gap()` and reported by
-`tools/bbf_analysis/report_bbf_gap.py`; it spans −5.0500 to +4.7500 mm across the 88 valid
-end-type variants, with 28 inside 1.0 mm of zero and none anywhere near having no solution —
-the tightest keeps 0.4500 mm of the 5.5000 mm the two tangencies can be pulled apart, at
-`U=0.5 end_bolt 1mm`.
-
 Drawings are generated by `tools/draw_bolt_flange_fillet.py` from `derived_parameters()`, so
 every dimension quoted above is the swept value rather than a typed one. The three context
 figures — the bulkhead, the octant, and panel 4 of the terms figure — are traced from the
@@ -1681,6 +749,917 @@ an old revision:
     freecadcmd src/Fuselage/tools/bbf_analysis/probe_bbf_degeneracy.py \
         --pass params.json {scan|stages|edge} [fixed|broken]
 
+## Open questions
+
+| ID | Summary | Blocking |
+| --- | --- | --- |
+| OQ-DES-B3 | Should the bulkhead's `make_web` flag stay a positional flag, or become a swept variant? | Not blocking |
+| OQ-DES-B8 | Should `BulkheadType` be split to match the frame and plate bulkhead families? | Not blocking |
+
+### OQ-DES-B1 — What sets `greeble_opening_angle = 35°`? — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+It was **arrived at experimentally**, and what it does is let the longeron snap
+into the greeble's center hole. See [the longeron snap](#the-longeron-snaps-into-the-greeble)
+above, which is written from that answer. It is a tuned value, not a derived one: do not
+replace it with a formula.
+
+**Rationale**
+
+None was recorded beyond the decision.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+[The longeron snap](#the-longeron-snaps-into-the-greeble), above, is written from this answer.
+
+### OQ-DES-B2 — Is the interconnect's relief cut dimensioned or fitted? — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+It is neither a relief nor a clearance: it is a **mass
+reduction**. The interconnect's flange is only full `2·bt` depth at the corners, where
+the longerons and the bolted joints put the load, and is narrowed to `1·bt` along the
+runs between them. See [the interconnect](#the-only-true-peers-are-the-fastener-variants) above, rewritten from that answer.
+
+**Rationale**
+
+The question was posed badly — I had guessed it was clearance for the panel to pass
+between bays, which is wrong, and described it as a "relief cut", which named it after
+the wrong purpose. The shape is a depth profile, not a clearance.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+[The interconnect](#the-only-true-peers-are-the-fastener-variants), above, is rewritten from this answer.
+
+### OQ-DES-B3 — Should the web be a variant rather than a flag? — OPEN
+
+**Problem**
+
+`make_web` is a boolean passed into the bulkhead geometry that decides whether
+a section carries its internal web — the thin span, `plate_thickness` tall, that stiffens
+the bulkhead between the bolt bosses and the flange.
+
+**Original intent is not recoverable** (2026-08-06): whether it was meant to allow lighter
+bulkhead variants, or was only ever a mechanization of the differences between bulkhead
+types, is not remembered. Recorded so nobody spends time trying to recover it. What the
+code establishes still constrains the decision:
+
+- **Nothing ever chooses it.** `make_web` is `true` for every non-interconnect bulkhead
+  and for exactly one half of every interconnect, fixed by position in
+  `bulkhead_section_octant()`. No variation table has a column for it. Functionally it is
+  a mechanization today, whatever it was intended to be.
+- **But the idea exists elsewhere in the same family.**
+  `boom_bulkhead_type_variants.csv` *does* carry `make_vert_web` and `make_lower_web` as
+  variation columns. So "web presence as a variant" is realised for the boom bulkhead and
+  not for the standard one — which is as consistent with an unfinished intent as with a
+  deliberate difference.
+- **It is not a simple on/off for one feature.** `make_web` reaches three places:
+  `bulkhead_web()` itself, `bulkhead_flange_positive()`, and `outer_corner_fillet()`. It
+  is closer to "this is the web-bearing face of the section", and the flange and fillet
+  change to suit. Promoting it to a variation axis is therefore more than exposing a
+  boolean — it changes three features at once, and the two halves of an interconnect must
+  stay complementary.
+
+The question is therefore not *what was meant* but *what it should be*.
+
+**Alternatives**
+
+1. **Leave it a positional flag**, and rename it to say so — `is_web_bearing_face` rather
+   than `make_web`.
+   *Benefits.* matches what it actually does today; no geometry change; removes the
+   implication of configurability that the current name carries.
+   *Drawbacks.* forecloses lighter bulkhead variants without deciding whether they are
+   wanted.
+   *Prerequisites.* none.
+
+2. **Promote it to a variation-table column**, following `boom_bulkhead_type_variants.csv`,
+   which already exposes `make_vert_web` and `make_lower_web`.
+   *Benefits.* precedent exists in the same part family; enables a lighter end bulkhead as
+   a swept variant; makes the two families consistent with each other.
+   *Drawbacks.* it changes three features at once (`bulkhead_web()`,
+   `bulkhead_flange_positive()`, `outer_corner_fillet()`), so it is not a simple boolean
+   exposure; the two halves of an interconnect must stay complementary, which a free
+   parameter does not guarantee; doubles the bulkhead sweep.
+   *Prerequisites.* deciding whether a webless bulkhead is structurally acceptable — this
+   is a strength question, not a plumbing one.
+
+3. **Defer to the FreeCAD port**, where the section is an object and "web-bearing" is a
+   property of it rather than an argument threaded four levels deep.
+   *Benefits.* the awkwardness is an artifact of OpenSCAD's parameter passing and largely
+   disappears; the port is rewriting this layer anyway.
+   *Drawbacks.* the misleading name survives until then.
+   *Prerequisites.* none.
+
+**Recommendation**
+
+**Recommendation: alternative 1 now, and revisit as alternative 2 only if a mass case is
+made for a webless bulkhead.** The evidence says `make_web` describes *which face of a
+section this is*, not a design choice — it is `true` everywhere except the mirrored half of
+an interconnect, and no variation table asks for anything else. Renaming makes the code
+honest at negligible cost. Promoting it to a variant is a real capability, but it should be
+motivated by a mass or stiffness requirement rather than by the observation that the flag
+exists.
+
+### OQ-DES-B4 — Have large-`U` bulkheads been printed? — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Yes. **A U=4 bulkhead section has been printed and assembled** with 16 mm
+longerons and a corner section. Both snap fits work: the longeron snaps into the greeble,
+and the corner snaps onto it.
+
+**Rationale**
+
+That is the top of the swept range, and it exercises both joints at once. It also
+confirms the parametric standard is being followed in hardware — `longeron_radius = 2·U`
+gives 8 mm at U=4, so a 16 mm tube is exactly the nominal size.
+
+**Caveats**
+
+The other end is covered by [OQ-DES-B7](#open-questions): a U=0.5 part has also been
+printed, with the tolerances working. Between them the swept range is validated in
+hardware at both extremes — which is as much as two prints can establish, and more than
+the rest of this document rests on. Everything else here is geometry that renders rather
+than hardware that fits.
+
+**Where it is recorded**
+
+Nothing changed; the result is recorded here and in OQ-DES-B7.
+
+### OQ-DES-B5 — Should insert depth be a validity check? — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+No. The question was based on a wrong assumption of mine: that the insert has to be contained
+within the bulkhead's thickness. It does not. **It is set from the interior side and may
+stand proud of that face** — the interior is free space, so the surplus goes where nothing
+lands on it, and the mating face stays clear.
+
+**Rationale**
+
+At the worst case in the swept range, U = 0.5, that surplus is 0.5 mm of a short M3
+insert. Not a defect, and no validity check is warranted. The depth columns are reference
+data for choosing a part, which is why nothing reads them.
+
+I had recorded this as the one question describing a part that could not be assembled.
+That was wrong, and there is now no such question here — everything else in this list is
+a decision that was not written down rather than something broken.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+No validity check was added; the depth columns stay reference data.
+
+### OQ-DES-B6 — `greeble_tolerance` is a dead parameter on the bulkhead side — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Drop the parameter (IP-GEO-21), rather than honor the caller's value.
+
+**Rationale**
+
+It was threaded positionally through `bulkhead_section_full` →
+`_octant` → `bulkhead_section`, and then discarded: `greeble_tolerance_local = 0` is what
+reached `corner_end()`. The value the sweep passed (`GREEBLE_TOLERANCE_BULKHEAD_MM`,
+itself zero) had no effect, and setting it non-zero would have done nothing at all.
+
+The deciding argument is that *the post is nominal* is an **invariant, not a setting**.
+All greeble fit clearance lives on the corner's bore by design, because splitting it
+across both halves makes the joint carry it twice. A module that accepts a tolerance it
+must ignore in order to stay correct is advertising control it cannot offer — and the
+person most likely to reach for it is someone whose parts do not snap together, who
+would change the number, see no difference, and conclude the geometry is at fault.
+
+Honoring the caller instead would have been behavior-identical today, since every
+caller passes zero. It was rejected because it re-opens the double-clearance failure
+mode the design deliberately closed, in exchange for a knob nobody should turn.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+Removed from three SCAD signatures and four call sites, from both GUI drivers, from
+`bulkhead_render()`, and from the Python constants. `bulkhead_section()` now passes a
+literal `0` to `corner_end()` with the invariant stated beside it.
+
+### OQ-DES-B7 — Does one snap angle work at the *small* end? — RESOLVED 2026-08-06
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Yes. **A U=0.5 part has been printed and the tolerances work.** With B4's U=4 result,
+that is both ends of the swept range validated in hardware.
+
+**Rationale**
+
+The concern was real but did not bite. Because `greeble_opening_angle` is an angle, the
+mouth is 57.4 % of the tube diameter at every scale, while the wall doing the flexing
+goes as `√U` — and below U = 1 it stops scaling at all, pinned at two extrusion widths by
+the `max()` floor. The small sizes therefore have a proportionally *thicker*, stiffer
+wall being asked to open by proportionally the same amount: 1.2 mm of wall spreading
+0.9 mm at U = 0.5. That predicted a greeble too stiff to snap, or one that cracks. It
+snaps.
+
+So a single experimentally-tuned angle does hold across an 8× span of `U`, and the
+`√U` thickness rule with its two-extrusion floor is doing the right thing at both
+extremes. Nothing here needs a formula.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+Nothing changed; the result is recorded here and in OQ-DES-B4.
+
+### OQ-DES-B8 — Should `BulkheadType` be split to match the two families? — OPEN
+
+**Problem**
+
+The enum lists
+`END`, `INTERCONNECT`, `COWLING` and `TAIL_BOOM` as peers, but the first three are frame
+bulkheads and the fourth is an interstitial plate — a different kind of part with a
+different mating vocabulary, different symmetry, its own geometry file, its own sweep
+function and its own variation table. The code has already separated them everywhere except
+in the type.
+
+This matters now rather than later because **the plate family is expected to grow**: UC-6
+names landing-gear attachment bulkheads and structural blocks, and the boom bulkhead is
+explicitly the first of a set. Each addition made against a flat enum widens the gap between
+how the parts are organized and how they are named.
+
+**Alternatives**
+
+1. **Split into two enums** — `FrameBulkheadType` and `PlateBulkheadType`.
+   *Benefits.* the type says which family a part belongs to; validity checks and geometry
+   dispatch stop needing to know that `TAIL_BOOM` is the odd one; new plate types are added
+   without touching the frame path.
+   *Drawbacks.* `derived_parameters()` and the filename scheme both branch on the single
+   enum today, so both change; the variation tables' boolean columns need rethinking.
+   *Prerequisites.* none.
+
+2. **Keep one enum, add a family attribute** — a `family` field beside `type`.
+   *Benefits.* smallest change; existing call sites keep working.
+   *Drawbacks.* two things to keep in step, which is the failure mode this project has spent
+   Phase 2 removing; nothing stops a mismatched pair.
+   *Prerequisites.* none.
+
+3. **Defer to the FreeCAD port**, and model the families as separate classes there.
+   *Benefits.* the port is rewriting the parameter layer anyway, and Phase 3's guideline is
+   not to refactor code scheduled for replacement.
+   *Drawbacks.* every plate bulkhead designed before the port lands is built against the
+   flat enum, so the cost of the eventual split grows with each one.
+   *Prerequisites.* none.
+
+**Recommendation**
+
+**Recommendation: alternative 3 for the OpenSCAD path, alternative 1 in the port — but
+decide the taxonomy now and record it here.** The naming does not need to change to make
+the *design* explicit, and this document now states the two families regardless. What must
+not happen is landing-gear bulkheads being designed as though they were peers of `COWLING`;
+that is a design error the enum would quietly encourage, and it is not fixed by renaming
+anything later.
+
+### OQ-DES-B9 — Is the morphological fillet the authority, or is a true fillet? — RESOLVED 2026-08-08
+
+**Problem**
+
+The web's inner corners were rounded by `fillet_inner`, a morphological approximation built
+from three chained 2D offsets, not a fillet. Measured 2026-08-08, the port's `Part::Offset2D`
+chain appeared to diverge from it by 19% (a premise found false on 2026-08-10: it reproduces the
+chain to 0.00456%). The question was which shape the port should build.
+
+**Alternatives**
+
+1. **A true fillet in the port.** What the feature means, exact, with a constant radius; the
+   printed part changes slightly, so IP-FC-13 needs a deviation tolerance.
+2. **Reproduce the morphological result exactly.** Comparable geometry across the migration, but
+   it preserves an approximation; it was believed impossible with `Part::Offset2D`, which was
+   later shown false.
+3. **Treat the current profile as incidental and choose the radius afresh.** No effort spent
+   matching, but it discards a flown shape and assumes it was never tuned.
+
+**Recommendation**
+
+Alternative 1, conditional on the web profile never having been tuned by experiment.
+
+**Decision**
+
+The FreeCAD version uses **real fillets that make proper use of FreeCAD's
+capabilities**. They should closely resemble the OpenSCAD version but **do not need to match
+it to hundredths of a millimeter**.
+
+**Scope, established 2026-08-09 while porting: this affects the boom bulkhead only.**
+`fillet_inner` is called exactly once in `fuselage_bulkhead_geometry.scad`, inside
+`bulkhead_web_inner_shape_octant`, and the only caller of the shape that reaches it is
+`fuselage_boom_bulkhead_geometry.scad`. The frame bulkheads — end, interconnect, cowling —
+never execute it. `bulkhead_web`, which they do use, already makes a **true fillet** by
+subtracting a cylinder of `web_fillet_radius` at the re-entrant corner; the little step out
+to `x = boss_x - web_fillet_radius` in its profile is exactly the material that cylinder
+rounds. So the frame bulkhead ports with no fillet decision at all, and this question governs
+the plate family.
+
+This settles more than the web. It applies to all four fillet modules — `greeble_to_web_
+fillet`, `bulkhead_bolt_flange_fillet`, `web_to_bolt_fillet` and `outer_corner_fillet` — and
+to any other geometry where OpenSCAD approximates a feature it cannot express directly.
+
+Two consequences follow, and both are load-bearing:
+
+- **Equivalence for filleted parts is a deviation tolerance, not volume equality.** IP-FC-13
+  cannot test the bulkhead the way it tests the corner. The corner remains strict; parts
+  with fillets need a stated tolerance and a comparison that measures deviation.
+- **The printed part changes slightly.** Parts printed before and after the port are not
+  interchangeable at the fillet, though they are at every interface, since no interface
+  dimension is set by a fillet.
+
+**Rationale**
+
+**What the geometry is for.** These are inner corners in a load-carrying web, so the radius
+is there to reduce stress concentration. A morphological closing and a true fillet both do
+that; they differ in what happens where features are closer together than `2*r` — which is
+exactly the region where the two measurements diverged.
+
+**Caveats**
+
+**The stated premise was falsified 2026-08-10, and the decision needs re-confirming before
+the boom bulkhead is built.** Alternative 2 below was rejected partly on the ground that
+"`Part::Offset2D` demonstrably will not do it". It will. The 15%/19% divergence recorded
+below was measured at a single value of a single parameter, on a test polygon that is
+degenerate at exactly that value — a limb exactly twice the offset radius, whose erosion is a
+zero-area hairline that the following dilation paints into a wide band. Swept, the two
+engines agree to **0.00456%** on the full `fillet_inner` chain, inside the faceting floor.
+OpenSCAD's own answer at the degenerate value moves 33% across 0.002 mm. See
+[freecad_migration.md §`Part::Offset2D` reproduces the whole offset
+chain](../implementation/freecad_migration.md).
+
+The decision may well stand on its own terms — it was argued from what the feature *means*,
+not only from what was reachable — and nothing already built is affected. But two of its
+inputs have changed:
+
+- **Reproducing the morphological shape is now cheap, parametric and exact**, not a
+  hand-written offset chain. It is a `Part::Offset2D` chain of document objects, so the
+  editability constraint is satisfied either way.
+- **The boom bulkhead's use of `fillet_inner` is not a corner round.** Three of its four uses
+  wrap a *whole compound region* — `boom_bulkhead` itself applies it to a multi-island
+  difference — where the operation's job is to close slivers across the region, not to round
+  a named corner. Real fillets there mean enumerating concave vertical edges whose count
+  moves with the parameters, which is the topological-naming exposure IP-FC-5 measured. That
+  is a materially worse trade than the one this question was decided on, where the targets
+  were four named corners.
+
+`boom_key_shape` is the exception and is a genuine corner round: `fillet_outer(r)
+fillet_inner(r)` over a circle unioned with a square.
+
+**The re-decision is [OQ-DES-B11](#open-questions) below**,
+decided 2026-08-10 as a split: true fillets on the key, the morphological chain for the
+region-wide remainder. This question stays decided for what it actually governed — the frame
+bulkhead's four named fillets and the chamfer, none of which reach `fillet_inner` — and B11
+governs the boom bulkhead.
+
+**Where it is recorded**
+
+[freecad_migration.md §IP-FC-9](../implementation/freecad_migration.md) records the offset measurement.
+
+### OQ-DES-B10 — `greeble_bolt_web` is called with three arguments in the wrong order — RESOLVED 2026-08-08
+
+**Problem**
+
+`greeble_bolt_web` has one call site, and its last three positional arguments were rotated
+against the signature, so the diagonal web joining the greeble to the bolt flange was built from
+the wrong parameters. Parts had been printed and flown with that geometry, so the question was
+which geometry to keep once the call was understood.
+
+**Alternatives**
+
+1. **Fix the call and port the corrected geometry.** The part follows its parameters again;
+   it changes a load path, so it wants a print and fit check.
+2. **Fix the call and re-tune the constants so the built geometry is unchanged.** Keeps a flown
+   geometry while making it explicit; needs a judgment about which dimensions were wanted.
+3. **Port it faithfully, bug included, and defer.** A pure translation, but it carries an
+   accident into a codebase where it is harder to notice.
+
+**Recommendation**
+
+Alternative 2 if the current web dimensions are wanted, otherwise 1; either way the call is
+fixed.
+
+**Decision**
+
+The matching names are the correct interface association; the old alignment was
+the accident. The call is corrected to
+`(bulkhead_thickness, bolt_offset, plate_thickness, flange_thickness, flange_chamfer)`.
+[`audit_call_args.py`](../../src/Fuselage/tools/audit_call_args.py) now reports zero
+positional mismatches across `src/Fuselage/scad`.
+
+**Rationale**
+
+**How wrong the arguments were depends on which parameters you feed it — and the hand driver
+is not the authority.** `fuselage_bulkhead.scad` sets `extrusion_width = 0.4`, which makes
+`flange_thickness = 0.8` equal to `plate_thickness = 0.8`, so one of the three slots landed
+correctly there and the defect was partly self-cancelling. **The sweep uses
+`extrusion_width = 0.6`**, giving `flange_thickness = 1.2`, and at those values *all three*
+arguments were wrong:
+
+| Parameter | Received (sweep) | Intended (sweep) |
+| --- | --- | --- |
+| `plate_thickness` | 1.2 | 0.8 |
+| `flange_thickness` | 1.0 | 1.2 |
+| `flange_chamfer` | 0.8 | 1.0 |
+
+**Measured effect — still smaller than the analysis below suggested.** The module's own
+output changes, but its material is *entirely absorbed* by the surrounding flange, web and
+bolt flange at the smaller sizes, so the assembled part is bit-identical. Checked by removing
+the call outright, at the driver's values *and* at a real swept variant:
+
+| Case | Assembled bulkhead, with vs without the module |
+| --- | --- |
+| U=1.0 `end_bolt` 3/16 in, derived (`ew=0.6`) | **unchanged**, 6922.5048968 mm³, 29000 triangles |
+| U=0.5, hand driver | **unchanged**, 1994.8939143 mm³ |
+| U=1, hand driver | **unchanged**, 5733.5689982 mm³ |
+| U=4, hand driver | changes — the module contributes 1584.75 mm³ |
+
+So **no part printed at U=1 was affected**, at the swept parameters as well as the driver's.
+At U=4 the bolt sits 32 mm out and the diagonal web is no longer covered by its neighbors,
+so the module does carry material and the correction moves roughly 0.1% of the part.
+
+So `greeble_bolt_web` is not dead code — it is dormant at small sizes and load-bearing at
+large ones, which is also why the defect survived: every part small enough to print and fly
+easily was immune to it.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+The corrected call, shown in the decision.
+
+### OQ-DES-B11 — How should the boom bulkhead's morphological rounding be built? — RESOLVED 2026-08-10
+
+**Problem**
+
+The boom bulkhead's profile is built almost entirely from 2D morphological offsets
+(`fillet_inner`, `fillet_outer`) at six sites, and OQ-DES-B9 had argued for true fillets in the
+port. Four of the sites apply the operator to a whole region whose edges move with the
+parameters; one, `boom_key_shape`, has a fixed set of corners. The question was how the port
+should build the rounding.
+
+**Alternatives**
+
+1. **`Part::Offset2D` chains throughout.** Reproduces the current geometry to 0.005%, keeping
+   strict equivalence, but carries the approximation into a kernel with real fillets.
+2. **Real `Part::Fillet` edges throughout.** Exact, but at four sites the edges must be found by
+   predicate at every variant, risking a fillet silently landing on the wrong edge.
+3. **Split by intent.** Real fillets at `boom_key_shape`, offset chains at the region-wide sites;
+   each site matches its meaning, at the cost of two mechanisms in one part.
+4. **Change the SCAD source to true fillets so both paths agree.** Removes the approximation at
+   its source, but modifies the reference mid-migration and may only work at the key.
+
+**Recommendation**
+
+Alternative 1, with alternative 3 as the principled middle if the key's corners are wanted as
+true fillets.
+
+**Decision**
+
+Alternative 3. True fillets on the key, and the morphological offset chain for
+the more complex remainder of the bulkhead.
+
+`boom_key_shape` is a named corner round — a circle unioned with a rectangular tab, four
+corners, a fixed count — and it gets real fillets. The other four sites (`boom_bulkhead`
+itself, `boom_web_outer_shape`, `boom_web_inner_shape` and `bulkhead_web_inner_shape_octant`)
+apply the operator to whole compound regions whose concave-corner set moves with the
+parameters, and they keep the morphological construction, which `Part::Offset2D` reproduces to
+0.00456%.
+
+**Rationale**
+
+**The OpenSCAD path was changed and verified first, before any porting.** Measured across all
+24 distinct swept key geometries, the direct construction and the morphological one agree to a
+worst **0.00522%** symmetric difference, inside the 0.0060% faceting floor. Both halves of the
+difference are measured separately, since equal amounts of added and removed material would
+cancel in a volume comparison. The relative error falls with `U` — 0.0052% at `U` = 0.5 down to
+0.0004% at `U` = 4 — which is fixed-angular tessellation on a growing part, not a construction
+error. The assembled part moves by **−0.00008%** and its bounding box does not move at all.
+
+Two things came out of the change that were not the point of it:
+
+- **The collet's fit surface is now exact.** `boom_key_shape`'s bounding box is ±7.2000 at
+  `U` = 1, where the morphological form gave ±7.1999. 7.2 is
+  `boom_diameter/2 + collet_thickness + tolerance`, the surface that fits the boom tube, and
+  the closing step had been eroding it by 1e-4 mm.
+- **The failure mode outside the domain got quieter, which is worse.** The morphological form
+  failed loudly: an opening removes any protrusion thinner than twice its radius, so a tab
+  below `2 * key_radius` did not round off, it *vanished* — measured at `U` = 1, the shape
+  collapses to the bare collet at 162.86 mm² against 166.86 mm² for a valid tab. The direct
+  construction instead returns a defined shape whose rounded cap is wider than the tab it
+  caps, because the two corner arcs cross over. That is a plausible-looking wrong part, which
+  is the one failure mode this migration most needs to avoid, and it is why the validity check
+  is load bearing rather than documentary.
+
+**Caveats**
+
+**The key's parameter domain is a design statement, and it
+is enforced.** Choices where the key width or depth is less than two fillet radii are invalid,
+as are extreme key widths approaching the diameter of **the hole the collet passes through** —
+`boom_diameter/2 + collet_thickness + tolerance` in radius, not the boom tube itself.
+`boom_key_validity_check()` in
+[`fuselage_variants.py`](../../src/Fuselage/tools/fuselage_variants.py) enforces all three:
+
+| Rule | Required | Tightest across the 132-variant corpus |
+| --- | --- | --- |
+| `key_width >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
+| `key_height >= 2 * key_radius` | ratio ≥ 1 | **2.000** |
+| `key_width < 2 * collet_radius` | ratio < 1 | **0.270** |
+
+**None of the three is an arbitrary threshold; each is where the construction stops existing.**
+The width limit and the geometric singularity are one statement rather than two — the junction
+fillet center sits at height `sqrt((cr + r)² − (w/2 + r)²)`, which goes imaginary at exactly
+`w = 2·cr`, where the tab spans the hole and the junctions being filleted no longer exist. The
+height rule is what holds the junction fillets clear of the cap fillets: the junction tangent
+point is at most `cr + r` and the cap starts at `cr + h − r`, and the first is below the second
+precisely when `h ≥ 2r`. Only the width-vs-radius rule is about the tab in isolation.
+
+It excludes nothing today — 132 valid variants before and after — because `key_width` and
+`key_height` are both `max(2·U, 2)` and `key_radius` is `max(U/2, 1/2)`, so width and depth are
+each exactly **four** fillet radii at every `U`. The guard states intent rather than filtering
+the current corpus.
+
+**Where it is recorded**
+
+The reasoning is recorded in [freecad_migration.md §`Part::Offset2D` reproduces the whole
+offset chain](../implementation/freecad_migration.md), and the two constructions are measured
+against each other by [`ref_boom_key.scad`](../../src/Fuselage/freecad/ref_boom_key.scad),
+which keeps the morphological form solely as the thing being compared to.
+
+### OQ-DES-B12 — The greeble-forming tool takes an accidental 0.0067 mm on the snap rib — RESOLVED 2026-08-11
+
+**Problem**
+
+The bulkhead cuts its greeble socket with the corner's own end section re-evaluated, passing
+`bulkhead_thickness` inflated by `2·eps` for cut overshoot. `corner_end` also derives the snap rib
+from that argument, so the socket's rib came out 0.0067 mm taller than the post's: an accidental
+clearance nobody chose, and a stated invariant quietly false.
+
+**Alternatives**
+
+1. **Separate the two jobs in the OpenSCAD authority.** An explicit overshoot argument fixes
+   the cause and keeps both backends identical; it changes a signature and every stored
+   reference.
+2. **Fix only the FreeCAD port.** Smallest change, but a permanent divergence between backends.
+3. **Pass the true thickness with no overshoot at this call site.** One line, but an unmeasured
+   risk on the CGAL path.
+4. **Leave it and document it.** No change, and the invariant stays false.
+
+**Recommendation**
+
+Alternative 1: only it separates the two meanings, and its regeneration cost is bounded and
+paid once.
+
+**Decision**
+
+Alternative 1. `corner_end` gains an explicit overshoot argument, defaulting to
+zero, which extends the extrusion only. `bulkhead_thickness` goes back to meaning the
+thickness and nothing else, and keeps driving the snap rib. The greeble-forming tool calls
+`corner_end` with the true thickness and an overshoot of `eps`, instead of inflating the
+thickness to buy the overshoot.
+
+**Rationale**
+
+**The defect.** The bulkhead does not model its greeble socket; it cuts it with a tool that is
+the corner's own end section re-evaluated at different arguments. One of those arguments was
+`bulkhead_thickness + 2*eps`, intended purely as cut overshoot. But `corner_end` also derives
+`greeble_nub_height = bulkhead_thickness / 3` and the four nub `z` levels from that same
+argument, so the overshoot silently inflated the snap rib as well — 2.00667 mm against the
+post's 2.00000 at U = 1.0. The `-eps` shift applied afterwards nearly canceled the
+inflation, leaving the nub band centered on mid-thickness and only 0.00667 mm too tall, which
+is why it went unnoticed. The net effect was about 0.0033 mm of gap at each end of the snap.
+
+**Why it was worth fixing at 3% of a layer height.** Nothing printed is affected and nothing
+printed will change. What was wrong is that the design states all snap clearance is carried
+once, on the corner's bore, because splitting it across both halves applies it twice — and
+the code asserts exactly that for the bore while the rib quietly carried a second clearance.
+An invariant that is asserted in one place and false in another is worse than no invariant.
+
+**Why the authority and not the port.** IP-FC-50 measured that OCCT needs no cut overshoot at
+all: a tool cap coplanar with the face it exits through cuts exactly, at every scale tested,
+and yields fewer faces than the padded version. So the FreeCAD path could have been corrected
+on its own. It was not, because the two backends are compared against each other by IP-FC-13,
+and a permanent known divergence — however small, however well documented — is how a
+comparison harness stops being trusted. The conflation is one argument carrying two meanings;
+only separating them fixes the cause rather than relocating the symptom.
+
+**Caveats**
+
+- The signature change touches every `corner_end` call site. The corner's own calls pass the
+  default and are unaffected in behavior.
+- Shipped geometry changes by 0.0067 mm on the rib, so the stored reference volumes for the
+  greeble tool, the bulkhead section and the assembled bulkhead must be regenerated. This is
+  mechanical — the values are produced by scripts already in the tree — but it is not free,
+  and until it is done the reference comparisons will show the change as a failure.
+- On the FreeCAD side, `gt_bt` becomes `bulkhead_thickness` and the `-eps` shifts in
+  `bulkhead_tree.GREEBLE_TOOL_PARAMS` go away with it. The port keeps agreeing with the
+  authority rather than diverging from it, which was the point.
+- Alternative 3 — dropping the overshoot entirely on both paths — remains available later,
+  but only after measuring whether CGAL needs it here the way IP-FC-50 measured OCCT. That
+  measurement does not exist, and this decision does not depend on it.
+
+**Where it is recorded**
+
+**Implemented the same day (IP-FC-51).** One correction to the alternative as written above:
+"extends the extrusion only" is not sufficient. `corner_end` dimensions the greeble **bore**
+from the same thickness argument, so an overshoot that moved the body and not the bore would
+have quietly left the post's ends formed flush — preserving the appearance of the old
+behavior while changing it. The argument reaches the extrusion and the bore, and nothing
+else; the four nub vertices stay dimensioned from the thickness.
+
+Outcome: socket rib 2.00667 → **2.000**, equal to the post's, and asserted equal on every run
+instead of printed beside it. The tool's z extent is unchanged. Regenerated references —
+greeble tool 557.746362 → 557.804925, octant 865.3140969 → 865.2850690, assembled part
+6922.5048968 → 6922.2726731.
+
+Two checks establish that the fix did what it claims rather than merely producing agreeable
+numbers. `ref_end` — the corner's own end section, the caller that was using the argument
+correctly — is **bit-identical** across the change at 551.815740. And OpenSCAD and FreeCAD
+agree on the *size* of the octant's change, −0.0290279 against −0.0290299, to 2e-6 mm³; that
+is the stronger evidence, because a regenerated reference can always be made to agree with
+whatever the code now does. The assembled part lost exactly eight times the octant's change,
+so the eight-way tiling was not disturbed.
+
+### OQ-DES-B13 — The outer-face cleanup tool sets a material face from `geometry_eps` — RESOLVED 2026-08-14
+
+**Problem**
+
+The tool that cleans up the bulkhead's corner cut-out was keyed to
+`clean_r = corner_radius - (panel_thickness + panel_tolerance + eps)`, where `eps` is
+`geometry_eps()`, a 0.01 mm slop constant for booleans. The term broke no tangency, yet it moved
+a material face 0.01 mm into the part on 28 of 148 bulkhead variants. The question was whether
+that recess was intended and, if so, how it should be stated.
+
+**Alternatives**
+
+1. **Delete the `eps` term.** The geometry follows its parameters; 28 parts change by up to
+   0.048 mm³, and the fit tightens if the face bears.
+2. **Keep the recess and name it as a parameter.** Bit-identical to flown parts, but a parameter
+   for a feature that may have no function.
+3. **Restate the term so retained faces stay nominal.** Needs the same fact as alternative 1.
+4. **Leave it and document it.** No change, but a slop constant keeps sizing a face.
+
+**Recommendation**
+
+Alternative 1 if the cut-out is a clearance surface, alternative 2 if it is a bearing surface,
+settled by a print check; alternative 4 rejected either way.
+
+**Decision**
+
+Two changes, in this order, both implemented 2026-08-14:
+
+1. **The corner's rectangular extension reaches `flat_x`** — `rect_w` becomes
+   `panel_overlap + panel_offset`, dropping the `- panel_tolerance`. Short, it stopped inboard
+   of the corner's own mating plane and left the bulkhead standing over the corner.
+2. **The `eps` comes out of `clean_r`**, which is a material face and not a cut overshoot.
+
+The order matters. Deleting the `eps` on its own makes the defect **worse**: the `eps` was the
+only thing trimming the bulkhead's overhang, so removing it lets the overhang grow to full
+height. That was this question's third wrong answer and it had been written up as decided.
+`clean_x0` does not change and must not — it is already the right datum.
+
+**Rationale**
+
+**The construction, as measured on the built solids rather than read off the source.** In the
+corner-local frame, corner center at the origin, lengths in mm:
+
+```
+flange_r  = corner_radius - panel_thickness - panel_tolerance   the flange's outer surface,
+                                                                sitting flush behind the panel
+flat_x    = -(panel_offset + panel_overlap)                     the corner/bulkhead interface
+rect_edge = flat_x + panel_tolerance                            the rectangular extension's edge
+```
+
+`flat_x` is the **interface between the two parts**, and it carries no tolerance. The bulkhead
+forms its side by cutting itself with the *same polygon* the corner uses for its own bulkhead
+boundary — vertices `(flat_x, corner_radius)`, `(flat_x, flat_y)`, `(flat_offset, 0)` and their
+mirror — so the two surfaces are coincident there by construction. `clean_x0` is `flat_x`,
+which is correct: the cleanup stops at the joint.
+
+**But the corner's material does not reach `flat_x` all the way up.** Tracing the corner's
+outboard face against height on the built solid, at the section that mates with the bulkhead:
+
+| Case | Height range | Face sits at | Which feature |
+| --- | --- | --- | --- |
+| 1.0 end_bolt 3/16 in | `y` 4.88 → 5.1375 | −7.2625 | the mask, at `flat_x` |
+| 1.0 end_bolt 1 mm | `y` 5.34 → 7.57 | −5.5000 | the mask, at `flat_x` |
+| | `y` 8.46 → 8.90 | −5.4000 | the rectangular extension |
+| 0.75 end_bolt 1/16 in | `y` 3.49 → 5.78 | −4.7500 | the mask, at `flat_x` |
+| | `y` 5.8125 | −4.7395 | the circle |
+
+Over almost all of its height the face is `flat_x`. Near the flange face the circle of
+`corner_radius` has curved inside, the **rectangular extension becomes the outermost feature**,
+and because it is dimensioned `panel_overlap + panel_offset - panel_tolerance` it stops one
+`panel_tolerance` short of `flat_x`. The interface therefore has a step in it, `panel_tolerance`
+deep, in a thin band below the flange face — and the bulkhead fills the notch.
+
+**The bulkhead fills that notch, and stands over the corner.** Confirmed on an OpenSCAD render
+of `1.5 end_bolt 1/16in`, probing material against void: just outboard of `flat_x` at the
+flange face is bulkhead, just inboard is void, and 0.02 mm lower the bulkhead has material
+0.044 mm *inboard* of `flat_x` — a tongue lying over the corner's shoulder, bounded by the
+corner's circle. It is in the authority, not a port artifact.
+
+**That tongue is also the only thing the `eps` was reaching.** The tool cuts `eps` below the
+flange face across it, shaving the top off: 0.0017 to 0.048 mm³ depending on the variant, on 27
+of the 132 that build. Which is why deleting the `eps` alone is backwards — it makes the tongue
+taller.
+
+**`panel_tolerance` is not the corner/bulkhead clearance** — confirmed 2026-08-14 — so its
+appearance in the interface's position was never a design intent. It was the rectangular
+extension's own dimension leaking into a mating face it was not meant to define. With the
+extension reaching `flat_x` the corner meets its mating plane at every height, the tongue has
+nowhere to form, and the `eps` becomes inert: verified on six variants, volume identical with
+and without it.
+
+**Three earlier readings of this question are recorded here because each looked plausible.**
+The first was that the corner's diagonal face governed and the limit should be its crossing
+with the flange face; the diagonal passes well below the flange face on most variants and its
+crossing lands outboard of everything. The second was that the outer mold line governed, with
+`clean_x0 = max(-sqrt(corner_radius^2 - clean_r^2), flat_x)`; that predicts the material loss
+correctly on all 132 variants, which is why it survived as long as it did, but it describes
+where the *tongue* ends rather than where the interface is. The third was to delete the `eps`
+alone, which makes the overhang worse.
+
+All three looked for the defect in the cleanup tool. It was in the shape the tool was cleaning.
+The general lesson is the one IP-FC-55 already records in a different form: a term that is
+*locally* irrelevant can be audited at one variant, but a term that participates in a mating
+face cannot — and neither can be understood without looking at the part it mates with.
+
+**Caveats**
+
+**What the change costs.** The corner gains and the bulkhead loses, measured on the built
+solids:
+
+| Variant | Corner | Bulkhead |
+| --- | --- | --- |
+| 1.0 end_bolt 3/16 in | +0.0000 | +0.0000 |
+| 1.0 end_bolt 0 mm | +0.0000 | +0.0000 |
+| 0.75 end_bolt 1/16 in | +0.0065 | +0.0000 |
+| 1.5 end_bolt 1/16 in | +0.6048 | −0.0589 |
+| 1.0 end_bolt 1 mm | +10.3142 | −2.4274 |
+| 0.5 end_bolt 1 mm | +0.5000 | −0.1280 |
+
+It is a no-op wherever the mask already bound, which is the ~105 variants that never had the
+defect. All twelve solids valid, one solid each.
+
+- Both changes were made in the **OpenSCAD authority first** and then in the port, and in the
+  transcription `ref_bulkhead_cuts.scad`. `bulkhead_cuts.REF` was regenerated: the mask-overlap
+  sliver it carries is unchanged at 1.7951847, and both backends moved by the same amount
+  (−1.4697 in OpenSCAD, −1.4685 in the port).
+- **It changes the shape of two parts that have flown**, by up to 10.3 mm³ on the corner and
+  2.4 mm³ on the bulkhead — roughly fifty times the `eps` change it supersedes. It wants a
+  print check, not only a sweep. It is a no-op on the ~105 variants where the mask already
+  bound.
+- The corner grows, so anything dimensioned off the corner's outboard extent near the panel
+  seat should be re-checked. `slot_x` and the rebate are unaffected — the rebate already
+  reached well past `flat_x`.
+- With the `eps` gone the tool's underside is coplanar with the flange face. That degeneracy is
+  what the `eps` was avoiding, and it is not fatal: all 132 variants build and the six checked
+  in detail are valid single solids.
+- One loose end, outside the design range and not part of this decision: hold `eps` at 0.020
+  and raise `panel_tolerance` and the affected width tracks it to 0.500, then at 0.550 the
+  affected material vanishes rather than growing. Something else takes over that face there.
+  The design value is 0.100.
+
+**Where it is recorded**
+
+Drawings of all of this, taken from the built solid rather than from the equations, are the
+IP-FC-59 working reference.
+
+### OQ-DES-B14 — Nothing keeps the bolt-flange fillet center off the bolt axis — RESOLVED 2026-08-16
+
+**Problem**
+
+The flange fillet's center is placed by rules written independently of the bolt's, so
+`bbf_dx`, the gap between the fillet's construction line and the bolt axis, could approach zero
+with no warning. Near zero the construction degenerated, and one swept variant failed to build
+(IP-FC-58). The construction was made robust, but the design still stated nothing about the
+relationship, and the two tangencies were solved arithmetic that clamped rather than failed.
+
+**Alternatives**
+
+1. **Leave it unconstrained and rely on the robust construction.** No work, but no stated
+   intent and nothing to dimension.
+2. **A validity check with a stated minimum.** Explicit, but it rejects variants that build, and
+   the minimum needs a physical meaning.
+3. **Tie the flange face to the bolt so `bbf_dx` is fixed.** Removes the degeneracy by
+   construction, but necessarily moves real interfaces.
+4. **Clamp `flange_fillet_radius` so the center cannot cross the bolt.** No rejections, but a
+   hidden clamp, and the radius stops tracking `U`.
+5. **Monitor `bbf_dx` without constraining it.** Cheap and changes nothing, but only detects.
+6. **Express the two tangencies as sketch constraints.** The solver checks them and an
+   impossible configuration fails loudly; slower, and it needed OQ-ARCH-11 decided.
+
+**Recommendation**
+
+Alternative 6, with alternative 5 in the meantime; alternatives 1 to 4 ruled out.
+
+**Decision**
+
+Alternative 6, with alternative 5 alongside. Implemented 2026-08-16.
+
+the fillet center's two tangencies are now **stated as constraints** rather than
+solved into coordinates. `fillets._tangency_sketch()` builds `BffTangency`, a fully
+constrained construction sketch holding the fillet circle, the bolt boss and the flange's
+inner face, with a `Tangent` constraint against each; the CSG reads the solved center back
+through reference dimensions. The two spreadsheet rows it replaces — `bbf_cx`, a subtraction,
+and `bbf_cy`, a square root under `max(...; 0)` — are gone, along with `bbf_dx`, `bbf_dy`,
+`bbf_bx`, `bbf_r`, `bbf_ang`, `bbf_hx` and `bbf_hy`. Alternative 5 is implemented as
+`tools/bbf_analysis/report_bbf_gap.py`, which reports the gap for every variant and flags the
+band without rejecting anything.
+
+**Rationale**
+
+both tangencies already held exactly, so this is a change of representation and
+not of geometry — every stage of the assembled bulkhead is bit-identical to the arithmetic it
+replaced, and a sampled backend comparison still agrees with OpenSCAD to 0.0016%. What it buys
+is that the relationship is now something the solver checks and a reader can see, and that an
+unsatisfiable configuration is **refused** where `max(...; 0)` used to clamp and return a
+plausible wrong center. Alternatives 1–4 were ruled out: 1 leaves the relationship unstated,
+and 2, 3 and 4 all move the finished part to fix a problem that no longer manifests.
+
+**Caveats**
+
+*Caveats, each checked rather than assumed —* `freecad/check_tangency.py`:
+
+- **The sketch holds the center, not the profile — a matter of scope, not of capability.**
+  An earlier draft of this resolution claimed a profile sketch was impossible here, because
+  the profile degenerates from a quad to a triangle on 18 of the 88 valid end-type variants
+  where `bbf_sx = max(flange_inner_x; bolt_c)` resolves to `bolt_c`. **That reasoning was
+  wrong**: it assumed one sketch must serve the whole parameter space, and nothing requires
+  that — a document is generated per parameter set, so the generator emits four edges or
+  three as the parameters dictate. Measured rather than argued, a four-edge profile sketch is
+  exact up to *and including* the exactly-degenerate point, and fails only past it. Moving the
+  profile too would have put a verified construction and an unverified one in one step, so it
+  was left for the `PartDesign::` conversion (IP-FC-75), where profiles have to be sketches
+  anyway.
+- **The sheet may not read the sketch back.** FreeCAD's dependency graph is per object, so a
+  `Params` cell referring to a sketch that refers to `Params` reports "The graph must be a DAG"
+  and then leaves the sketch permanently touched, never recomputed, with stale values that
+  still look correct. The solved center therefore flows sketch → geometry only.
+- **The delivered `.FCStd` stays editable.** Saved, reloaded, and a parameter moved: the sketch
+  re-solves and the octant follows.
+- **The solver stays on the correct branch.** Two circles admit more than one common tangent
+  circle, so the closed form is retained as a *test* of the solved position, over a swept
+  parameter, not as its source.
+- **`FullyConstrained` is not a sufficient check, and this is general to the port.** Driving a
+  profile past a degeneracy makes the solver return −1 from all four of its algorithms while
+  `FullyConstrained` stays True and the extrusion keeps serving the last geometry that solved
+  — 42 mm³ adrift by the end of the sweep that found it. `corner_tree._sketch()` gated on
+  `FullyConstrained` alone and now checks `solve()` first.
+
+**Where it is recorded**
+
+[The bolt-flange fillet](#the-bolt-flange-fillet), above, holds the construction and the analysis this decision rests on.
 
 ## See also
 

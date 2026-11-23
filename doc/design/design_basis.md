@@ -1161,13 +1161,6 @@ That is a filing decision and it is cheap to reverse; the deps in IP-FC-87 recor
 
 ---
 
-## Open questions
-
-**None.** DB1 through DB6 are decided, between 2026-08-29 and 2026-08-30, and DB7 was withdrawn
-on 2026-08-30 for having been filed on a false premise. Their resolution notes stay below in
-numerical order, because what each one decided is the reason several parts of this document read
-the way they do.
-
 > **This series was renamed `DV` → `DB` on 2026-08-30, 69 references across five documents and
 > three tools.** `DV` was short for `derivation.md`, the file this document used to be called.
 > After the rename to `design_basis.md` the prefix pointed at nothing, and it read one character
@@ -1181,26 +1174,22 @@ the way they do.
 
 <!-- doc_check: retired-series OQ-DES-DV -> OQ-DES-DB -->
 
-**The live questions are elsewhere.**
-[system_requirements.md](system_requirements.md#open-questions) holds OQ-DES-SR1, SR2 and SR3 —
-the printability requirement with no design-tier parent, the three requirements verified by
-nothing, and interchange being delivered but not required.
-[dimension_scheme.md](dimension_scheme.md#open-questions) holds OQ-DES-D10, D11 and D12.
+## Open questions
 
-**What is left *here* is not a question but a queue.**
-[Section 8](#8-what-could-not-be-derived) lists what still rests on something nobody wrote down,
-and under DB3's decision the way to close each of those is to **ask the person who decided it**,
-one at a time. `longeron_chamfer` came off this queue on 2026-08-30 — its reason is the snap-on
-mouth, item 3 — and it is worth recording *how*: four reconstructions were written and published
-before the question was asked, and the asking took one sentence. What remains, shortest first:
-the three of DES-11's seven floors whose reason is not on record — the bolt boss, the bulkhead
-flange wall, the boom key (item 8); why `panel_overlap` should be one panel thickness (item 6);
-why the longeron flange is built only on cowling bulkheads and on one face (item 3); and
-**DES-5's allocation** (item 5), which is the one with the most weight on it.
+No open questions.
 
-### OQ-DES-DB1 — `panel_offset`'s upper clamp never binds, and is not a bound — DECIDED 2026-08-29: it is a guard, kept as it is, and the ordering is deliberate
+### OQ-DES-DB1 — `panel_offset`'s upper clamp never binds, and is not a bound — RESOLVED 2026-08-29
 
-**Resolution note.** Alternative 3: keep it as written and mark it a guard.
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 3: keep it as written and mark it a guard.
+
+**Rationale**
 
 **It is a guard against an excessively large panel offset.** Recalled 2026-08-29 by the person
 who wrote it. That is the reason the question said was written down nowhere, and it is now on
@@ -1215,11 +1204,6 @@ last so that whatever leaves the expression sits on the 0.25 mm grid. Clamping a
 rounding would produce an off-grid offset in exactly the case the guard fires, which is worse
 than exceeding the bound by less than one quantum.
 
-**What does not change.** It still never binds — **zero of 528 non-cowling variants**, with 2.5
-against 14.14 at 1U — so it remains an untested branch, and the derivation still reproduces it
-exactly rather than ignoring it. What changes is that the branch is now a **recorded guard**
-rather than an unexplained line, and [section 8](#8-what-could-not-be-derived) item 4 says so.
-
 **Why not alternative 4, which this document recommended.** The recommendation argued for
 turning the clamp into a refusal, on the grounds that silently shortening the panel's reach
 changes a dimension somebody will build a panel to. That argument stands on its own and was
@@ -1228,12 +1212,28 @@ intended, and replacing working code to satisfy a preference about how guards sh
 is a change with a cost and no defect behind it. If a variant ever reaches the clamp, the
 refusal is the right conversation to have then, with a real case to look at.
 
+**Caveats**
+
+**What does not change.** It still never binds — **zero of 528 non-cowling variants**, with 2.5
+against 14.14 at 1U — so it remains an untested branch, and the derivation still reproduces it
+exactly rather than ignoring it. What changes is that the branch is now a **recorded guard**
+rather than an unexplained line, and [section 8](#8-what-could-not-be-derived) item 4 says so.
+
+**Where it is recorded**
+
 *Implementation: no code change. The comment in `check_derivation.py`'s `_panel_offset` and in
 `fuselage_variants.py` records the reason and the deliberate ordering.*
 
-### OQ-DES-DB2 — Two of the airframe's dimensions are tables, not rules — DECIDED 2026-08-29: the table is the design
+### OQ-DES-DB2 — Two of the airframe's dimensions are tables, not rules — RESOLVED 2026-08-29
 
-**Resolution note.** Alternative 1: declare the table the design.
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 1: declare the table the design.
 
 **`bulkhead_thickness` and `bulkhead_bolt_diameter` are design choices, made on a tradeoff of a
 number of factors and objectives.** They do not trace to a formula, and they do not decompose
@@ -1246,6 +1246,8 @@ somewhere — and the answer is that there is no such rule.
 accept any value; these two columns are the exception, and they are an exception by decision
 rather than by omission. [Section 3](#3-what-is-chosen) lists both as chosen, which was already
 right, and now carries the reason.
+
+**Rationale**
 
 **`4·U` fitting six of the eight rows is a coincidence and must not be adopted.** It reproduces
 the thickness for U ≥ 1.5 and misses 0.5, 0.75 and 1 — giving 2, 3 and 4 against the table's 4,
@@ -1265,12 +1267,25 @@ the chosen value was itself a stand-in.
 dimensions of the OML produce the family for every dimension except these two, which are
 selected per step. [Section 8](#8-what-could-not-be-derived) item 2 records it that way.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 *Implementation: no code change. `check_derivation.py`'s `GIVENS` entries for
 `bulkhead.thickness` and `bolt.diameter` carry the reason.*
 
-### OQ-DES-DB3 — May an inferred reason be adopted as intent? — DECIDED 2026-08-30: ask, one case at a time; between askings an inference stays flagged
+### OQ-DES-DB3 — May an inferred reason be adopted as intent? — RESOLVED 2026-08-30
 
-**Resolution note.** Alternative 4, with alternative 1 as the standing rule.
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 4, with alternative 1 as the standing rule.
 
 **The values were answered first, on 2026-08-29.** `longeron_tolerance` 0.05,
 `greeble_tolerance` 0.05, `panel_tolerance` 0.1 and `boom_tolerance` 0.2 were **arrived at
@@ -1287,6 +1302,8 @@ replaced by a recorded reason or by a measured one, and by nothing else. There i
 for a well-argued reconstruction, and [section 1](#how-to-read-the-source-labels) now says so
 plainly.
 
+**Rationale**
+
 **The evidence for that is this document's own record, and it is not close.**
 
 | Case | What was available by reconstruction | What the answer turned out to be |
@@ -1302,10 +1319,14 @@ reason derived from first principles — was the recommendation this document ma
 record existed; the record is the argument against it, because every one of the above would have
 qualified for the label and every one of them would have been wrong.
 
+**Caveats**
+
 **The cost is accepted and is stated rather than argued away.** Asking does not scale past the
 person who made the decisions, and it leaves this document unable to close a gap on its own. If
 asking ever stops being possible, alternative 3 becomes the question worth reopening — with the
 table above as the evidence for how strict the admissibility rule would have to be.
+
+**Where it is recorded**
 
 **What this leaves.** [Section 8](#8-what-could-not-be-derived) is now a queue rather than a
 list of defects: each entry is a question for whoever decided it, and the open-questions header
@@ -1316,9 +1337,16 @@ marked *inferred* until it is asked, not until it is argued.
 *Implementation: no code change. [Section 1](#how-to-read-the-source-labels)'s label table now
 states that an inference is never promoted, and names the two things that can replace it.*
 
-### OQ-DES-DB4 — Where the architecture/design boundary falls — DECIDED 2026-08-29: the test came from DB5, and all three proposed additions are adopted
+### OQ-DES-DB4 — Where the architecture/design boundary falls — RESOLVED 2026-08-29
 
-**Resolution note.** Answered in two parts on the same day.
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Answered in two parts on the same day.
 
 **The boundary itself came from [OQ-DES-DB5](#open-questions)**: an architectural requirement
 constrains *any* compliant implementation; a design requirement constrains *this* one. That test
@@ -1338,6 +1366,8 @@ cross section as a stated gap.
 | AP-2 | **AR-CON-1**, in a new **Construction** group | structural parts are printed; longerons, booms, panels, fasteners and inserts are bought | DES-5's parent. The whole tolerance scheme rests on knowing which parts are bought, and nothing stated it |
 | AP-3 | **AR-MOD-10** | the OML cross section is a rounded square, and the corner radius fixes the design's position on the trade between flat panel area and aerodynamic efficiency | the thing the design could not justify — its own shape — and the wiki's own `TODO` since the pages were written |
 
+**Rationale**
+
 **AP-3's answer is the one worth reading, because it is not the answer this document expected.**
 The recommendation argued that answering *why the section is square* under time pressure would
 manufacture a justification, and that a stated gap was better. The actual answer was neither: it
@@ -1355,6 +1385,12 @@ category as `greeble_opening_angle`, and it is labeled that way. That is what
 materialize: the risk was never in answering the question, it was in answering it as though the
 answer were derived.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 **Effect on this document.** Design requirements citing architecture went from six to eight;
 DES-5 gained AR-CON-1 and DES-6 gained AR-MOD-9. Three still cite nothing — DES-4, DES-7 and
 DES-9 — and [section 1](#on-the-word-derived-which-this-document-got-wrong-once) explains why
@@ -1366,9 +1402,16 @@ clearance goes wholly on the printed side rather than being split.
 Construction group, and a section on the cross-section trade; `tools/check_derivation.py` gains
 the three ids and re-cites DES-1, DES-5 and DES-6.*
 
-### OQ-DES-DB5 — Section 2 duplicates a requirements set that already exists — DECIDED 2026-08-29: adopt the architectural requirements into the repository
+### OQ-DES-DB5 — Section 2 duplicates a requirements set that already exists — RESOLVED 2026-08-29
 
-**Resolution note.** Alternative 1 in substance, with a correction to its premise that changes
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 1 in substance, with a correction to its premise that changes
 what the answer means.
 
 **The architectural requirements are adopted into this repository** as
@@ -1391,6 +1434,8 @@ architecture, five carry their own rationale.** The five were not an embarrassme
 excludes dimensional tolerances as application-dependent, so a decision about where a clearance
 sits is design work by the standard's own construction, and DES-9 cites nothing because the
 architecture says nothing about drawings at all.
+
+**Rationale**
 
 **Additions are a decision, so three were proposed rather than made** — and all three were then
 taken, later the same day, under [OQ-DES-DB4](#open-questions). The reconstruction this question
@@ -1416,20 +1461,35 @@ architecture gives is a modularity reason and aerodynamic optimization is explic
 The generalization the reconstruction made — a shared datum no joint may trade against — turned
 out to be *better* supported than the reason it gave for it, by AR-MOD-4.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 *Implementation: `doc/architecture/requirements.md` is new; section 2 here is now a pointer;
 `tools/check_derivation.py` carries `ARCHITECTURE` and `DESIGN` in place of `ORIGINATING` and
 `SYSTEM`, with `cites` optional. Those tables moved again later the same day, to
 [`tools/requirements.py`](../../src/Fuselage/tools/requirements.py) -- see IP-FC-91.*
 
-### OQ-DES-DB6 — This document is named for a job it now only half does — DECIDED 2026-08-29: rename to `design_basis.md`, and strip the restatements
+### OQ-DES-DB6 — This document is named for a job it now only half does — RESOLVED 2026-08-29
 
-**Resolution note.** Alternative 1, as recommended.
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Decision**
+
+Alternative 1, as recommended.
 
 **The file is `doc/design/design_basis.md`.** The title was `derivation.md`, after the job
 [`check_derivation.py`](../../src/Fuselage/tools/check_derivation.py) does. **The tool keeps its
 name** — it derives parameters and checks them, which is exactly what it is called. What was
 wrong was the document: *derivation* had come to mean three things in one repository, and the
 file name was the least accurate of the three.
+
+**Rationale**
 
 | Where | What *derivation* meant | Still in use |
 | --- | --- | --- |
@@ -1442,6 +1502,12 @@ restated the requirement statements that had moved to
 [system_requirements.md](system_requirements.md) three days earlier — **the same defect the
 specification split was made to fix, one level up.** They are now written as what they always
 were: the reason each requirement is what it is.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
 
 - **Section 4** is *Why each design requirement is what it is*. Each heading names the question
   the subsection answers — *DES-6 — why the corner is the part that gives way* — rather than
@@ -1465,7 +1531,14 @@ documents and three modules, two section anchors changed, and `requirements.py`'
 `source` fields now read `section 5, INT-n`. Decided open questions elsewhere still name
 `derivation.md`, and that is history rather than a broken link.
 
-### OQ-DES-DB7 — Does `longeron_chamfer` chamfer anything? — WITHDRAWN 2026-08-30: the premise was false
+### OQ-DES-DB7 — Does `longeron_chamfer` chamfer anything? — WITHDRAWN 2026-08-30
+
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
+
+**Why withdrawn**
 
 **The question asked whether `longeron_chamfer` should be renamed, because it chamfers nothing.
 It chamfers something. There was no question.**
@@ -1487,11 +1560,6 @@ that cuts the chamfer, and it is correct.
 the width. Each chamfer face measures 0.6000 at 1U — exactly the parameter — and 1.8000 at 0.5U
 with a 1 mm panel, where the panel branch governs. Both branches are drawn.
 
-**The residue is one line, not a question.** `// longeron chamfer` at
-`fuselage_bulkhead_geometry.scad:125` names a *different* chamfer on a *different* part, the cone
-sized by `flange_chamfer` at 1.0 mm. Two features on two parts sharing a name is ordinary; the
-table in [section 8](#8-what-could-not-be-derived) item 3 records it and nothing needs to move.
-
 **On the 0.5 mm, which this document also got wrong.** An earlier revision recorded 0.5 mm as a
 recollection about what dimension a feature like this would have used. **It was not a
 recollection — this document reported 0.5 mm first, in error, and the response it drew was a
@@ -1504,6 +1572,13 @@ from the other direction, which is how a mistake becomes a citation. Nothing in 
 cowling bulkheads — `if (is_cowling)` at `fuselage_bulkhead_geometry.scad:93`, verified by
 tracing the brace depth — and on one face rather than two, since `octant_to_full()` mirrors x, y
 and x↔y but not z. Under [OQ-DES-DB3](#open-questions)'s decision that is settled by asking.
+
+**Where it is recorded**
+
+**The residue is one line, not a question.** `// longeron chamfer` at
+`fuselage_bulkhead_geometry.scad:125` names a *different* chamfer on a *different* part, the cone
+sized by `flange_chamfer` at 1.0 mm. Two features on two parts sharing a name is ordinary; the
+table in [section 8](#8-what-could-not-be-derived) item 3 records it and nothing needs to move.
 
 ---
 

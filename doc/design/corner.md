@@ -356,51 +356,39 @@ recorded — [OQ-DES-C4](#open-questions).
 
 ## Open questions
 
-| ID | Status | Question |
-| --- | --- | --- |
-| C1 | resolved 2026-08-06 | Are `greeble_thickness` and `greeble_nub_thickness` meant to be independent? |
-| C2 | resolved 2026-08-06 | What is the greeble actually toleranced for? |
-| C3 | resolved 2026-08-06 | Is the corner's dependence on `bulkhead_thickness` the right interface? |
-| C4 | answered 2026-08-07 | Are the largest corners printed whole, or split? Whole — splitting is unexplored |
-| C5 | resolved 2026-08-14 | The corner/bulkhead interface carries no tolerance of its own. What should it be? |
+No open questions.
 
-C1 became one parameter plus a formula (IP-GEO-22); C2 was closed by test prints at both ends
-of the range, U=0.5 and U=4; C3 was closed by the observation that the corner and its bulkhead
-are not independent designs at all. C4 is *answered* rather than resolved — the answer is "not
-currently possible", which names a future exploration rather than closing the subject.
+### OQ-DES-C1 — Are `greeble_thickness` and `greeble_nub_thickness` intended to be independent? — RESOLVED 2026-08-06
 
-**OQ-DES-C4 — whole or split at the large sizes? — ANSWERED 2026-08-07: whole, for now.**
-There is **no current method for printing large corners or bulkheads in pieces.** Splitting
-is a future exploration rather than an existing capability, and the two parts differ sharply
-in difficulty:
+**Problem**
 
-- **A split corner would be relatively easy**, because *the corner does not carry
-  significant longitudinal loads.* A splice would not have to transmit much across the
-  joint. Untried, but not structurally fraught.
-- **A split bulkhead would likely require structural changes**, not merely a cut plane.
+They are computed by identical formulas from identical inputs and have
+never differed in any swept variant. If they are meant to be one number, the pair is a
+latent inconsistency: changing one and not the other produces a nub that does not match
+its seat, and nothing would report it. If they are meant to be independent, no variation
+table exercises that freedom. Deciding this is cheap now and expensive after the FreeCAD
+port has copied the pair forward.
 
-The first is worth recording beyond its own sake, because it independently confirms the load
-path this document infers elsewhere. §Print orientation notes that layers stack along the
-corner's length, leaving the part weakest along the axis the fuselage loads it — and what
-makes that acceptable is that **the longeron carries the longitudinal load, not the
-corner.** That same fact is what would make a splice tractable. Two different questions,
-one underlying answer, arrived at independently.
+**Alternatives**
 
-Practical position: `unit_length = 100·U·FX` is the printed height — 100 mm at U·FX = 1,
-**400 mm at U = 4**, more with `FX > 1` — so the large sizes need a printer whose Z envelope
-accommodates them. If splitting is explored, the splice is new geometry, it belongs in this
-document, and it interacts with the greeble at both ends.
+1. **One number.** The two are the same quantity, and the pair is a latent
+   inconsistency to remove.
+2. **Independent.** The freedom is intended, though no variation table exercises it.
 
-Resolved entries keep their full text below, in numerical position, with the reasoning
-that produced the answer.
+**Recommendation**
 
-**OQ-DES-C1 — Are `greeble_thickness` and `greeble_nub_thickness` intended to be
-independent? — RESOLVED 2026-08-06: no.** They are now **one parameter plus a formula
+None was recorded with the question.
+
+**Decision**
+
+No. They are now **one parameter plus a formula
 relating them** — `greeble_nub_thickness_of()` in `fuselage_variants.py`, identity today.
 Written as a formula rather than collapsed into a single value on purpose: scale problems
 may yet need the nub thicker or thinner than the seat wall, and when that happens the fix
 should be a formula update in one place, not the reintroduction of a second independent
 parameter that can drift.
+
+**Rationale**
 
 **Python owns the formula.** Both languages need the value — SCAD to build the geometry,
 Python for the panel-clearance checks — so the question was which side is authoritative.
@@ -410,30 +398,34 @@ signatures keep both arguments; the GUI drivers now read
 `greeble_nub_thickness = greeble_thickness`, which is the only place a human can still
 set them apart.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 Implemented as IP-GEO-22. Proven geometry-neutral: all 576 parts generate byte-identical
 `.scad`.
 
-The original wording follows.
+### OQ-DES-C2 — What is the greeble actually toleranced for? — RESOLVED 2026-08-06
 
----
+**Posing not recovered**
 
-**OQ-DES-C1 (as originally posed) — Are `greeble_thickness` and
-`greeble_nub_thickness` intended to be independent?** They are computed by identical formulas from identical inputs and have
-never differed in any swept variant. If they are meant to be one number, the pair is a
-latent inconsistency: changing one and not the other produces a nub that does not match
-its seat, and nothing would report it. If they are meant to be independent, no variation
-table exercises that freedom. Deciding this is cheap now and expensive after the FreeCAD
-port has copied the pair forward.
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
 
-**OQ-DES-C2 — What is the greeble actually toleranced for? — RESOLVED 2026-08-06.**
-`GREEBLE_TOLERANCE_CORNER_MM = 0.05` is a single unscaled number applied at every `U`
-from 0.5 to 4, while the engagement it governs — the bulkhead's rib in the corner's
-groove — scales with wall thickness (`√U`) and diameter (`U`). The worry was that a
-clearance right at one size could not be right across an 8× span.
+**Decision**
 
 **It is.** Both ends have been printed and assembled: U=4 with 16 mm longerons
 ([OQ-DES-B4](bulkhead.md#open-questions)) and U=0.5
 ([OQ-DES-B7](bulkhead.md#open-questions)), tolerances working in each case.
+
+**Rationale**
+
+`GREEBLE_TOLERANCE_CORNER_MM = 0.05` is a single unscaled number applied at every `U`
+from 0.5 to 4, while the engagement it governs — the bulkhead's rib in the corner's
+groove — scales with wall thickness (`√U`) and diameter (`U`). The worry was that a
+clearance right at one size could not be right across an 8× span.
 
 So a fixed 0.05 mm is the right *kind* of number here, and the instinct behind this
 question — that a clearance ought to scale with the part — was wrong. It should not.
@@ -442,13 +434,47 @@ neither of which cares how large the airframe is. That is the same reasoning tha
 `longeron_tolerance` and `panel_tolerance` unscaled, and this is the first confirmation
 of it in hardware rather than in argument.
 
-**OQ-DES-C3 — Is the corner's dependence on `bulkhead_thickness` the right
-interface? — RESOLVED 2026-08-06.** Yes, and the question was posed from a wrong
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+No change was made: `GREEBLE_TOLERANCE_CORNER_MM` stays 0.05 mm, unscaled.
+
+### OQ-DES-C3 — Is the corner's dependence on `bulkhead_thickness` the right interface? — RESOLVED 2026-08-06
+
+**Problem**
+
+Three of the corner's `z` dimensions derive from a parameter that belongs to the bulkhead.
+It is correct — they mate — but it means the corner cannot be reasoned about alone, and
+the FreeCAD port will have to decide whether the joint is a first-class object with its
+own parameters or stays as two parts that each know a dimension of the other.
+
+**Alternatives**
+
+1. **Make the joint a first-class object with its own parameters.**
+2. **Keep two parts, each knowing a dimension of the other.**
+
+**Recommendation**
+
+None was recorded with the question.
+
+**Decision**
+
+Yes, and the question was posed from a wrong
 premise. **The corner and the bulkhead it attaches to are not independent designs.**
 They are two halves of one joint, so a shared dimension is not a leak across an
 interface — there is no interface there to leak across. The three `z` dimensions in
 `corner_end()` and `corner_transition()` are not the corner borrowing a number from
 elsewhere; they are the joint's own geometry, seen from the corner's side.
+
+**For the FreeCAD port** the consequence is that the corner and bulkhead should share
+their *cross-section and joint* parameters by construction — modeling them as separate
+parts that happen to agree would need a constraint to hold them together, and constraints
+can be violated — while bay length stays a parameter of the corner only.
+
+**Rationale**
 
 **But the coupling is in the cross-section, not the length.** This is the part that
 makes the parameter set the shape it is:
@@ -467,6 +493,12 @@ The sweep already reflects this and is worth reading as evidence. `FX` lives onl
 are generated once per (panel, type, size) and reused across every bay length, while
 corners get an `FX` axis and carry it in their filenames.
 
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
 **One thing did not reflect it.** `unit_length` was threaded through
 `bulkhead_section_full` → `_octant` → `_section` and used by none of them — the same
 defect as OQ-DES-B6, but worse in kind: a dead `greeble_tolerance` merely did nothing,
@@ -476,31 +508,106 @@ the design is built to avoid. Both bulkhead drivers computed it too, and
 `FX = 1` — producing identically shaped bulkheads, which is as clean a demonstration as
 the repository contains. Removed in IP-GEO-23.
 
-**For the FreeCAD port** the consequence is that the corner and bulkhead should share
-their *cross-section and joint* parameters by construction — modeling them as separate
-parts that happen to agree would need a constraint to hold them together, and constraints
-can be violated — while bay length stays a parameter of the corner only.
+### OQ-DES-C4 — Whole or split at the large sizes? — RESOLVED 2026-08-07
 
-The original wording of this question follows.
+**Posing not recovered**
 
----
+The problem, alternatives and recommendation as decided were not recovered. Only the parts
+below record this question.
 
-**OQ-DES-C3 (as originally posed) — Is the corner's dependence on
-`bulkhead_thickness` the right interface?**
-Three of the corner's `z` dimensions derive from a parameter that belongs to the bulkhead.
-It is correct — they mate — but it means the corner cannot be reasoned about alone, and
-the FreeCAD port will have to decide whether the joint is a first-class object with its
-own parameters or stays as two parts that each know a dimension of the other.
+**Decision**
+
+Whole, for now. There is **no current method for printing large corners or bulkheads in pieces.** Splitting
+is a future exploration rather than an existing capability, and the two parts differ sharply
+in difficulty:
+
+- **A split corner would be relatively easy**, because *the corner does not carry
+  significant longitudinal loads.* A splice would not have to transmit much across the
+  joint. Untried, but not structurally fraught.
+- **A split bulkhead would likely require structural changes**, not merely a cut plane.
+
+**Rationale**
+
+The first is worth recording beyond its own sake, because it independently confirms the load
+path this document infers elsewhere. §Print orientation notes that layers stack along the
+corner's length, leaving the part weakest along the axis the fuselage loads it — and what
+makes that acceptable is that **the longeron carries the longitudinal load, not the
+corner.** That same fact is what would make a splice tractable. Two different questions,
+one underlying answer, arrived at independently.
+
+**Caveats**
+
+Practical position: `unit_length = 100·U·FX` is the printed height — 100 mm at U·FX = 1,
+**400 mm at U = 4**, more with `FX > 1` — so the large sizes need a printer whose Z envelope
+accommodates them. If splitting is explored, the splice is new geometry, it belongs in this
+document, and it interacts with the greeble at both ends.
+
+**Where it is recorded**
+
+Nothing was implemented; splitting remains a future exploration.
 
 ### OQ-DES-C5 — The corner/bulkhead interface carries no tolerance of its own — RESOLVED 2026-08-14
 
-The corner seats against the bulkhead on two surfaces: the **diagonal face**, the plane
-`x + y = flat_offset` in the corner-local frame, and the **flat face** at
-`flat_x = -(panel_overlap + panel_offset)`. Neither carries any clearance. The bulkhead forms
-its side of the joint by cutting itself with the *same polygon* the corner uses for its own
-bulkhead boundary — the vertices `(flat_x, corner_radius)`, `(flat_x, flat_y)`,
-`(flat_offset, 0)` and their mirror — so the two surfaces are coincident by construction and
-no parameter exists that could separate them.
+**Problem**
+
+The corner seats against the bulkhead on two faces, the diagonal and the flat, and neither
+carried any clearance: the bulkhead cuts itself with the same polygon the corner uses, so the
+faces were coincident by construction and no parameter could separate them. Two printed parts
+meeting on coincident planes interfere in practice, and nothing recorded whether these were
+bearing faces meant to be zero or an interface never given a tolerance.
+
+**Alternatives**
+
+1. **One scalar, `corner_tolerance`, carried on the bulkhead.** One number, the opposite hand to
+   the greeble; the two faces may not want the same value.
+2. **Two scalars, one per face.** The faces carry different loads and print differently, but
+   two parameters where the evidence for one was not yet in.
+3. **Carry it on the corner, as the greeble does.** One hand for every clearance in the joint,
+   but the corner's polygon also generates its load-bearing flat face.
+4. **Leave it at zero but name it.** Records the decision with no risk to flown parts, but
+   fixes no interference.
+
+**Recommendation**
+
+Alternative 4 first, then 1: name the parameter at 0, the only value with evidence, and move
+off 0 only after a print check.
+
+**Decision**
+
+Alternative 3, carried on the corner, implemented at 0.
+
+**The parameter.** `corner_tolerance` applies to both faces that seat against the bulkhead —
+the flat at `flat_x` and the diagonal at `x + y = flat_offset` — over the corner's **full
+height**. Each face moves inboard by the tolerance measured *normal to itself*, so:
+
+```
+flat_x      = -(panel_overlap + panel_offset) + corner_tolerance
+flat_offset = nominal_flat_offset + corner_tolerance * sqrt(2)
+```
+
+The `sqrt(2)` is not a fudge: the diagonal runs at 45°, so shifting it by `corner_tolerance`
+perpendicular moves its intercept by that times the tolerance. Dimension the two faces the same
+way and they get different gaps.
+
+**It is carried entirely on the corner**, which is alternative 3 and the same hand as the
+greeble. When the bulkhead re-evaluates this description to cut its own socket it passes 0, so
+the joint takes the clearance once. In the OpenSCAD authority that is an explicit trailing `0`
+on the `corner_end` call, beside the greeble's literal 0. In the port it is structural: the
+bulkhead's parameter set does not export the row at all, so the bulkhead's sheet holds the
+literal 0 and there is no path by which the corner's value could reach it.
+
+**Rationale**
+
+**What the tolerances at this joint are for.** Recorded 2026-08-14, and it was not written down
+anywhere before: they accommodate **manufacturing variation and adhesive bond thickness**. They
+are real, intentional spacing between surfaces — not dimensional allowances that happen to
+leave room. That is what makes a mating pair with no gap a defect rather than a style: a
+zero-gap pair has nowhere for the bond to go and nothing to absorb variation.
+
+The drawback noted against alternative 3 — that the corner's polygon also generates its flat
+*face*, so shrinking it moves a load-bearing surface — is real and is the reason the value is 0
+rather than something larger. Moving the face is exactly what the parameter does; the question
+is only how far.
 
 Measured on the built solids to confirm it is not an artifact of reading the code: sectioning
 the corner's **end** at mid-bulkhead height and the bulkhead at the same height, in the same
@@ -535,45 +642,31 @@ this same section as its greeble tool.
 The step is gone. **The question below is unchanged:** the interface still carries no clearance
 of its own. Making the face clean did not give it a tolerance.
 
-**Two printed parts meeting on coincident planes will interfere in practice.** Layer lines,
-elephant's foot at the first layer, and the corner's own printed tolerance all act in the
-direction that closes a zero gap. Nothing in the design records whether these are intended as
-bearing faces — where zero is the right number and the fit is achieved by finishing — or
-whether the interface has simply never been given a tolerance because the shared polygon made
-one impossible to express.
+**The value is 0 for the sweep.** 0 is what every flown part was built at, and it is the only
+value anything has evidence for. Verified 2026-08-14, four ways:
 
-**RESOLVED 2026-08-14: alternative 3, carried on the corner, implemented at 0.**
+| Check | Result |
+| --- | --- |
+| 0 is a true no-op | `ref_corner_full` renders at 14146.8357350 mm³, the stored reference to the last digit |
+| the parameter reaches the geometry | driving the full corner to 0.05 mm removes 55.6200845 mm³ at the driver's configuration |
+| both backends respond identically | at 0.05 mm, agreement across 3 corners, worst delta 0.00198% |
+| the bulkhead does not move | at 0.05 mm, 4 bulkheads render to the same figures as at 0, to the last digit |
 
-**What the tolerances at this joint are for.** Recorded 2026-08-14, and it was not written down
-anywhere before: they accommodate **manufacturing variation and adhesive bond thickness**. They
-are real, intentional spacing between surfaces — not dimensional allowances that happen to
-leave room. That is what makes a mating pair with no gap a defect rather than a style: a
-zero-gap pair has nowhere for the bond to go and nothing to absorb variation.
+The last row is the one that matters for "carried once": the sweep value was set to 0.05, the
+bulkheads were rebuilt, and 2166.862256, 7111.092249, 37599.974537 and 74175.840334 mm³ came
+back unchanged. The seed boundary holds, and nothing about the bulkhead depends on the corner's
+clearance.
 
-**The parameter.** `corner_tolerance` applies to both faces that seat against the bulkhead —
-the flat at `flat_x` and the diagonal at `x + y = flat_offset` — over the corner's **full
-height**. Each face moves inboard by the tolerance measured *normal to itself*, so:
+**Caveats**
 
-```
-flat_x      = -(panel_overlap + panel_offset) + corner_tolerance
-flat_offset = nominal_flat_offset + corner_tolerance * sqrt(2)
-```
+if these faces are bonded,
+0 leaves no bond line, and the right value is whatever the adhesive needs plus the print
+variation of two mating faces. A 0.05 mm test build is drawn in the IP-FC-59 working reference
+and costs the corner 27 to 217 mm³ depending on size. That the cost scales with the part while
+the tolerance does not is worth settling before the value moves off 0 — nothing currently makes
+it a function of `U`.
 
-The `sqrt(2)` is not a fudge: the diagonal runs at 45°, so shifting it by `corner_tolerance`
-perpendicular moves its intercept by that times the tolerance. Dimension the two faces the same
-way and they get different gaps.
-
-**It is carried entirely on the corner**, which is alternative 3 and the same hand as the
-greeble. When the bulkhead re-evaluates this description to cut its own socket it passes 0, so
-the joint takes the clearance once. In the OpenSCAD authority that is an explicit trailing `0`
-on the `corner_end` call, beside the greeble's literal 0. In the port it is structural: the
-bulkhead's parameter set does not export the row at all, so the bulkhead's sheet holds the
-literal 0 and there is no path by which the corner's value could reach it.
-
-The drawback noted against alternative 3 — that the corner's polygon also generates its flat
-*face*, so shrinking it moves a load-bearing surface — is real and is the reason the value is 0
-rather than something larger. Moving the face is exactly what the parameter does; the question
-is only how far.
+**Where it is recorded**
 
 **Where it is set.** The value is data, not code: `corner_tolerance` in
 [`src/Fuselage/design_constants.json`](../../src/Fuselage/design_constants.json), beside every
@@ -594,28 +687,6 @@ relying on the module default — `fuselage_corner.scad` and the six reference f
 `freecad/`. A default that nobody states is a parameter nobody can find, and `parameters.py`
 can only check an assignment that is written down: it compares the reference files line by
 line against the exported set and skips any row that is absent.
-
-**The value is 0 for the sweep.** 0 is what every flown part was built at, and it is the only
-value anything has evidence for. Verified 2026-08-14, four ways:
-
-| Check | Result |
-| --- | --- |
-| 0 is a true no-op | `ref_corner_full` renders at 14146.8357350 mm³, the stored reference to the last digit |
-| the parameter reaches the geometry | driving the full corner to 0.05 mm removes 55.6200845 mm³ at the driver's configuration |
-| both backends respond identically | at 0.05 mm, agreement across 3 corners, worst delta 0.00198% |
-| the bulkhead does not move | at 0.05 mm, 4 bulkheads render to the same figures as at 0, to the last digit |
-
-The last row is the one that matters for "carried once": the sweep value was set to 0.05, the
-bulkheads were rebuilt, and 2166.862256, 7111.092249, 37599.974537 and 74175.840334 mm³ came
-back unchanged. The seed boundary holds, and nothing about the bulkhead depends on the corner's
-clearance.
-
-**Still open, and it follows directly from the rationale above:** if these faces are bonded,
-0 leaves no bond line, and the right value is whatever the adhesive needs plus the print
-variation of two mating faces. A 0.05 mm test build is drawn in the IP-FC-59 working reference
-and costs the corner 27 to 217 mm³ depending on size. That the cost scales with the part while
-the tolerance does not is worth settling before the value moves off 0 — nothing currently makes
-it a function of `U`.
 
 ## See also
 

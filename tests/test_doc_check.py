@@ -636,3 +636,146 @@ def test_a_license_may_name_its_copyright_holder():
 def test_the_real_documentation_tree_carries_no_personal_name():
     found = dc.check_identities(dc.read_pages())
     assert not found, '%d finding(s):\n%s' % (len(found), '\n'.join(repr(f) for f in found))
+
+
+# ------------------------------------------------------------
+# the fixed open-question format
+# ------------------------------------------------------------
+
+EM = chr(0x2014)
+
+OPEN_BODY = """
+**Problem**
+
+What is wrong.
+
+**Alternatives**
+
+1. **One.** It.
+   *Benefits.* Some. *Drawbacks.* Some. *Prerequisites.* None.
+2. **Two.** It.
+   *Benefits.* Some. *Drawbacks.* Some. *Prerequisites.* None.
+
+**Recommendation**
+
+One.
+"""
+
+CLOSED_BODY = OPEN_BODY + """
+**Decision**
+
+One.
+
+**Rationale**
+
+Because.
+
+**Caveats**
+
+None.
+
+**Where it is recorded**
+
+Here.
+"""
+
+
+def fixed_page(table, *questions, extra=''):
+    text = '# Doc\n\n## Open questions\n\n' + table + '\n'
+    for oq_id, title, status, body in questions:
+        text += '\n### %s %s %s %s %s\n%s' % (oq_id, EM, title, EM, status, body)
+    return pages_of(('design/thing.md', text + '\n## After\n' + extra))
+
+
+def fmt(pgs):
+    return [f.detail for f in dc.check_oq_format(pgs)]
+
+
+def test_a_compliant_section_passes():
+    table = '| ID | Summary | Blocking |\n| --- | --- | --- |\n| OQ-DES-X1 | What. | Not blocking |'
+    assert fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', OPEN_BODY),
+                          ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', CLOSED_BODY))) == []
+
+
+def test_no_open_questions_line_stands_in_for_the_table():
+    assert fmt(fixed_page('No open questions.',
+                          ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', CLOSED_BODY))) == []
+
+
+def test_a_heading_without_a_status_is_reported():
+    out = fmt(pages_of(('design/thing.md', '## Open questions\n\nNo open questions.\n\n'
+                        '### OQ-DES-X1 %s Q\n%s' % (EM, OPEN_BODY))))
+    assert any('the heading is not' in d for d in out)
+
+
+def test_an_unknown_status_word_is_reported():
+    out = fmt(fixed_page('No open questions.', ('OQ-DES-X1', 'Q', 'DECIDED 2026-11-23',
+                                                CLOSED_BODY)))
+    assert any('the heading is not' in d for d in out)
+
+
+def test_an_open_heading_needs_a_row_and_a_row_needs_an_open_heading():
+    table = '| ID | Summary | Blocking |\n| --- | --- | --- |\n| OQ-DES-X2 | What. | Not blocking |'
+    out = fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', OPEN_BODY),
+                         ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', CLOSED_BODY)))
+    assert 'OQ-DES-X1 is OPEN but has no summary row' in out
+    assert 'OQ-DES-X2 has a summary row but is not OPEN' in out
+
+
+def test_the_blocking_cell_is_ids_or_not_blocking():
+    table = ('| ID | Summary | Blocking |\n| --- | --- | --- |\n'
+             '| OQ-DES-X1 | What. | Not blocking (nothing ships) |')
+    out = fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', OPEN_BODY)))
+    assert any('Blocking is' in d for d in out)
+    table = ('| ID | Summary | Blocking |\n| --- | --- | --- |\n'
+             '| OQ-DES-X1 | What. | Blocking IP-FC-12, OQ-DES-X3 |')
+    assert fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', OPEN_BODY))) == []
+
+
+def test_labels_must_be_in_order_and_alone():
+    body = OPEN_BODY.replace('**Recommendation**', '**Recommendation:**')
+    table = '| ID | Summary | Blocking |\n| --- | --- | --- |\n| OQ-DES-X1 | What. | Not blocking |'
+    out = fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', body)))
+    assert any('parts are' in d for d in out)
+
+
+def test_an_alternative_needs_its_three_lead_ins():
+    body = OPEN_BODY.replace('*Prerequisites.* None.\n2.', '\n2.')
+    table = '| ID | Summary | Blocking |\n| --- | --- | --- |\n| OQ-DES-X1 | What. | Not blocking |'
+    out = fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', body)))
+    assert any('alternative 1 lacks' in d for d in out)
+
+
+def test_a_link_to_a_question_anchor_is_reported():
+    out = fmt(fixed_page('No open questions.',
+                         ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', CLOSED_BODY),
+                         extra='See [it](#oq-des-x2--r--resolved-2026-11-23).\n'))
+    assert any('own anchor' in d for d in out)
+
+
+def test_a_closed_question_keeps_its_problem_alternatives_and_recommendation():
+    stripped = CLOSED_BODY.replace(OPEN_BODY, '')
+    out = fmt(fixed_page('No open questions.',
+                         ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', stripped)))
+    assert any('parts are' in d for d in out)
+
+
+def test_a_closed_question_may_say_its_posing_was_not_recovered():
+    body = CLOSED_BODY.replace(OPEN_BODY, """
+**Posing not recovered**
+
+The problem, alternatives and recommendation as decided were not recovered.
+""")
+    assert fmt(fixed_page('No open questions.',
+                          ('OQ-DES-X2', 'R', 'RESOLVED 2026-11-23', body))) == []
+
+
+def test_an_open_question_may_not():
+    body = """
+**Posing not recovered**
+
+Gone.
+"""
+    table = '| ID | Summary | Blocking |\n| --- | --- | --- |\n| OQ-DES-X1 | What. | Not blocking |'
+    out = fmt(fixed_page(table, ('OQ-DES-X1', 'Q', 'OPEN', body)))
+    assert any('parts are' in d for d in out)

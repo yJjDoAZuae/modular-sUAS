@@ -8,7 +8,7 @@ library itself is verified. It does not cover which geometry tests get written; 
 business of the design documents those tests check.
 
 **Status.** Written 2026-10-06, resolving
-[OQ-ARCH-22](freecad_migration.md#oq-arch-22--how-does-the-pytest-tier-reach-freecad--decided-2026-10-06-alternative-7)
+[OQ-ARCH-22](freecad_migration.md#open-questions)
 in favor of its alternative 7. A throwaway prototype of every mechanism below was built and measured first;
 every number in this document was taken on this machine, and the measurements that contradicted
 the first draft of the design are called out where they did.
@@ -450,7 +450,7 @@ forward to the vendor and face what comes out, so nothing is read until it is as
 in the facade set, and for none of `Part.Shape`'s.** `Base.Vector`, `Base.BoundBox` and
 `Base.Placement` document every method with a signature line (17 of 17); `Part.Shape`'s 35 methods
 have none in the first line, though most carry one on the second. This is the measurement
-[OQ-GB-1](#oq-gb-1--typed-facades-generated-stubs-or-neither--decided-2026-10-06-alternative-2)
+[OQ-GB-1](#open-questions)
 named as the prerequisite for alternative 3 and recorded as unmeasured. It does not change the
 decision — the signatures are in prose, not in a form a stub generator could trust, and the shape
 side where the geometry work happens is the side with none — but it is no longer an expectation.
@@ -639,18 +639,44 @@ that justification. Asserted with generous margins so the suite is not flaky: a 
 is one round trip; a handle operation stays under 5 ms; `project` over N elements is one round
 trip; a method call allocates no handle.
 
-## 8. Open questions
+## Open questions
 
-| ID | Status | Question |
-| --- | --- | --- |
-| GB-1 | decided 2026-10-06 | Typed facades, scoped by a survey of which vendor types the project actually uses. The survey is §4.10 and names the set |
-| GB-2 | decided 2026-10-06 | Bridge-first: a new geometry test is a bridge test unless its purpose is a whole-build report for a person to read. Needs writing into the guidelines' two-tier section |
+No open questions.
 
-### OQ-GB-1 — Typed facades, generated stubs, or neither? — DECIDED 2026-10-06: alternative 2
+### OQ-GB-1 — Typed facades, generated stubs, or neither? — RESOLVED 2026-10-06
 
-**Decision.** Alternative 2, typed facades, with the prerequisite survey carried out before
+**Problem**
+
+A proxy forwards attributes dynamically, so an editor cannot offer completions on `shape.` and a
+type checker cannot verify that `shape.Volum` is a typo. In-process imports do not have this
+problem, so this is a real regression introduced by the boundary, and it affects every geometry
+test written from here on. It is not fully solvable, because the vendor API is itself only
+partly typed.
+
+**Alternatives**
+
+1. **Neither.** Document that geometry proxies are dynamic. No work, but a misspelled attribute
+   is found only by running the suite, and completion is lost on every test.
+2. **Typed facades for the types the project actually uses.** Hand-written classes with real
+   signatures, delegating to the proxy. Full completion where it matters most, at the cost of a
+   second surface to maintain and uneven coverage; it needed a survey of which types the tests
+   touch.
+3. **Generated stub files for the vendor API.** Broad coverage without hand maintenance, but
+   introspecting a C extension was expected to yield `(*args, **kwargs)` signatures, which was
+   unmeasured.
+
+**Recommendation**
+
+Alternative 2, scoped by the survey: typing pays off in a handful of types, and alternative 3
+could not be recommended until its signature quality was measured.
+
+**Decision**
+
+Alternative 2, typed facades, with the prerequisite survey carried out before
 anything was written. **The survey and the resulting facade set are [§4.10](#410-the-typed-facade-set)**,
 which is the authority; it is design content and does not belong in an open question.
+
+**Rationale**
 
 **The survey confirmed the decision and changed its content.** Five types cover 90.5% of
 unambiguous member uses and eight cover 99.9%, so the head is short enough for facades to be worth
@@ -659,10 +685,6 @@ unambiguous uses, every member being shared across the `Part.Shape` subclasses, 
 per-shape-type decomposition this document first assumed is wrong; there is one shared `Shape`
 facade instead. And the types that dominate are the document ones, not the geometry ones, led by
 `DocumentObject` at 361 uses with `setExpression` alone at 93.
-
-**Caveat attached to the choice.** Coverage is deliberately uneven: a type outside the facade set
-falls back to the dynamic proxy, which always works but offers no completion. The fallback is what
-keeps the facade set small.
 
 **The measurement alternative 3's rejection was waiting on has since been taken, and it supports
 the decision.** Alternative 3 was set aside on the *expectation* that introspecting a C extension
@@ -674,45 +696,48 @@ rather than anything a generator could rely on, and it is absent exactly on the 
 the geometry work happens. Alternative 3 stays rejected, now on a measurement instead of an
 expectation. Revisit it only if the facades prove inadequate.
 
-A proxy forwards attributes dynamically, so an editor cannot offer completions on `shape.` and a
-type checker cannot verify that `shape.Volum` is a typo. In-process imports do not have this
-problem, so this is a real regression introduced by the boundary, and it affects every geometry
-test written from here on. It is not fully solvable, because the vendor API is itself only
-partly typed.
+**Caveats**
+
+Coverage is deliberately uneven: a type outside the facade set
+falls back to the dynamic proxy, which always works but offers no completion. The fallback is what
+keeps the facade set small.
+
+**Where it is recorded**
+
+[§4.10](#410-the-typed-facade-set) holds the survey and the facade set.
+
+### OQ-GB-2 — Where does a new geometry test go? — RESOLVED 2026-10-06
+
+**Problem**
+
+Once the bridge library existed, a geometry test could live in two places: a `pytest` bridge
+test (named cases, fixtures, one build serving many assertions) or a standalone `check_*.py`
+script run by `freecadcmd`, which prints a report. §6 kept both tiers but did not say where a
+*new* test goes, and with 29 scripts to copy and no bridge tests, the default would have kept the
+slow tier growing. Measured: startup amortization saves only about nine seconds across the
+corpus; the bridge's value is granularity and build reuse, and 19 of the 29 scripts are
+document-driven builds.
 
 **Alternatives**
 
-1. **Neither.** Document that geometry proxies are dynamic. *Benefits:* no work, nothing to keep
-   in sync. *Drawbacks:* a misspelled attribute is a run-time failure found by running the suite,
-   and the completion loss is felt on every test written. *Prerequisites:* none.
-2. **Typed facades for the types the project actually uses.** Hand-written classes wrapping the
-   small set — `Shape`, `Solid`, `Face`, `Wire`, `Edge`, `Vertex`, `Vector`, `BoundBox`, the
-   document object — with real signatures, delegating to the proxy. *Benefits:* full completion
-   and checking where it is used most; the facade is also the natural place for project-level
-   convenience; a facade's own surface is small enough to test. *Drawbacks:* every facade is a
-   second surface to maintain and can drift from the vendor API; anything outside the facade set
-   falls back to the dynamic proxy, so coverage is uneven in a way a reader must learn.
-   *Prerequisites:* a survey of which vendor types the project's tests actually touch.
-3. **Generated stub files for the vendor API.** Produce `.pyi` stubs by introspecting the vendor
-   modules in the worker. *Benefits:* broad coverage without hand-maintenance; regenerated when
-   the vendor version changes. *Drawbacks:* introspection of a C extension yields poor signatures
-   — most FreeCAD methods would come out as `(*args, **kwargs)` — so the completion is shallow
-   and the type checking close to worthless; a generated artifact must be committed and kept
-   current. *Prerequisites:* measuring how much real signature information FreeCAD's extension
-   modules actually expose, which is unknown.
+1. **Bridge-first, with one exception stated by purpose.** A new test is a bridge test unless it
+   is a whole-build report for a person to read. A clear default, but "purpose" is a judgment at
+   the boundary.
+2. **Split by what is built: shapes to the bridge, document builds to scripts.** Mechanical, but
+   only one of 29 scripts is shape-only, and it forbids the document-driven bridge tests §4.3 was
+   built to allow.
+3. **Bridge only, converting the 19 document-driven scripts.** One idiom, but 4,959 lines
+   rewritten for a nine-second saving, and the human-read reports would need replacing.
+4. **No rule.** Nothing to enforce, but in practice it resolves to "keep writing scripts".
 
 **Recommendation**
 
-**Alternative 2, scoped by a measurement.** The dynamic fallback is adequate for breadth and the
-value of typing is concentrated in a handful of types, so hand-writing those few is the best
-return. It should not be started before the survey its prerequisite names: if the project's tests
-turn out to touch a wide spread of vendor types, 2 degrades into 3's maintenance problem without
-3's breadth, and alternative 1 becomes the honest choice. Alternative 3 cannot be recommended
-without first measuring the signature quality available, and the expectation is that it is poor.
+Alternative 1, with the exception written in terms of purpose rather than mechanism; each of the
+others fails on a measurement.
 
-### OQ-GB-2 — Where does a new geometry test go? — DECIDED 2026-10-06: alternative 1
+**Decision**
 
-**Decision. Bridge-first, with one exception stated in terms of purpose:** a new geometry test is a
+**Bridge-first, with one exception stated in terms of purpose:** a new geometry test is a
 bridge test unless its purpose is a whole-build report for a person to read, which stays a
 `check_*.py` script. No existing file changes, and the rule binds only tests written from here on.
 
@@ -723,7 +748,9 @@ minutes and print a table. The test being document-driven is **not** a reason to
 §4.3 makes `setattr` a first-class operation precisely so document-driven tests can be bridge
 tests.
 
-**Rationale.** Alternative 1 is the only option that points new work at the tier this design
+**Rationale**
+
+Alternative 1 is the only option that points new work at the tier this design
 exists to create while leaving the 19 expensive builds where they are well served. The three
 rejected options each failed on a measurement rather than on taste: alternative 2 would route one
 script of 29 and would forbid exactly the document-driven tests `setattr` was built for;
@@ -731,107 +758,24 @@ alternative 3 pays 4,959 lines of rewriting for a nine-second saving, startup be
 the bridge saves; alternative 4's real outcome is the status quo, since the script tier has 29
 examples to copy and the bridge tier none, which would make this whole design a waste.
 
-**Caveat attached to the choice.** "Purpose" is a judgment, so the boundary case — a test needing
+**Caveats**
+
+"Purpose" is a judgment, so the boundary case — a test needing
 most of a build to assert one number — is decided per test rather than by rule. That was accepted
 deliberately: the alternative is a mechanical rule, and the mechanical rule available here was
 measured to be near-vacuous.
 
-**Outstanding.** This decision is a convention and does nothing until it is written into
+This decision is a convention and does nothing until it is written into
 [general.md](../guidelines/general.md)'s two-tier section — the same section whose stated
 justification OQ-ARCH-22 found to be false. Both corrections belong in one edit.
 
-**What is being decided.** After this library exists there are two places a geometry test can
-live, and they are not interchangeable. The question is which one a *new* test goes in by default.
-It is a convention, not a capability: both will work, and the cost of getting it wrong is paid
-slowly, in a test suite that is harder to run than it needed to be.
+**Where it is recorded**
 
-**The two destinations, concretely.**
-
-A **bridge test** is an ordinary `pytest` function in the project's own interpreter. It is
-collected by name, reports as a named case, can use fixtures and `@pytest.mark.parametrize`, and
-asserts with `assert` and `pytest.raises`. It holds vendor objects by reference and measures them,
-and an expensive build held in a fixture is paid once for the whole session. It runs under a
-liveness deadline (§4.7) and inside the handle-lifetime machinery (§4.6).
-
-A **`check_*.py` script** is a standalone program run by `freecadcmd`. It builds what it needs,
-prints a line per check, counts failures in a `bad` counter and returns it as an exit code — an
-exit code the project does not trust, because `freecadcmd` exits 0 on an uncaught exception. Its
-output is a report a person reads. It has no collection, no fixtures, no parametrization, and one
-uncaught exception ends the whole report.
-
-**What the existing corpus looks like**, surveyed in [§6.1](#61-what-the-existing-check-script-tier-actually-contains):
-29 scripts, 7,395 lines, **45 assertion sites** — about one per 164 lines. Nine of the 29 import no
-FreeCAD at all; **exactly one** is FreeCAD-but-shape-only; **19 are document-driven parametric
-builds**.
-
-**Two quantities that bound the argument, both measured and both inconvenient.**
-
-*Startup amortization is worth almost nothing.* `freecadcmd` starts in 0.27–0.37 s and a shape-only
-check runs end to end in 1.05 s, so running 29 scripts as 29 processes costs about nine seconds of
-overhead in total. Any claim that the bridge is faster because it starts the vendor once is false
-at this corpus size. The tier's run time is dominated by the document builds, and the bridge does
-not make a build faster.
-
-*What the bridge does buy is granularity and build reuse.* A named case instead of a printed line,
-at a density far above one per 164 lines; and one build serving many assertions, which applies
-only to the 19 document-driven scripts and is worth a great deal there — `check_cowl_interior.py`
-spends 990 s on a single cavity construction and then makes roughly a dozen checks against it.
-
-**Why this is not already settled by §6.** §6 says both tiers stay, which disposes of the existing
-scripts. It does not say where a new test goes. Left unstated, the default is whichever a person
-already knows, and the realistic outcome is that the slow tier keeps growing: it is the one with 29
-examples to copy from.
-
-**Who is affected and when it binds.** Only tests written from here on. The decision is a
-convention in the guidelines, reversible at any time, and no existing file changes under any
-alternative below.
-
-**Alternatives**
-
-1. **Bridge-first, with one stated exception.** A new geometry test is a bridge test unless its
-   purpose is a whole-build report for a person to read, which stays a `check_*.py`.
-   *Benefits:* a clear default that points new work at the tier with names, fixtures and
-   assertions; the exception is stated in terms of the test's purpose, which is the thing that
-   actually differs. *Drawbacks:* purpose is a judgment, so the boundary case — a test needing
-   most of a build to assert one number — is decided per test rather than by rule; a reader must
-   understand both tiers to apply it. *Prerequisites:* none.
-2. **Split by what is built: constructed shape to the bridge, document build to a script.**
-   *Benefits:* mechanical, no judgment required. *Drawbacks:* **measurably near-vacuous** — the
-   survey found exactly one of 29 existing scripts is shape-only, so this rule routes almost
-   everything to the script tier and the bridge would accumulate only the narrow class of tests
-   that build geometry from primitives. It also forbids document-driven tests from the bridge
-   although §4.3 makes `setattr` a first-class operation specifically to enable them, so the rule
-   would prohibit what the design deliberately built. *Prerequisites:* none.
-3. **Bridge only; convert the 19 document-driven scripts over time.** *Benefits:* one place, one
-   idiom, and every check becomes a named case. *Drawbacks:* 4,959 lines rewritten for no run-time
-   gain, since startup is the only thing the bridge saves and that is nine seconds; it puts every
-   quarter-hour build behind a liveness deadline and the handle-lifetime machinery, which is
-   additional failure surface for a job whose output is a human-read report; and the reports
-   themselves would need replacing, since `pytest` output is not a report.
-   *Prerequisites:* a replacement for the printed reports.
-4. **No rule; each test goes where its author prefers.** *Benefits:* no convention to write,
-   enforce or argue about; the person writing the test knows most about it. *Drawbacks:* with 29
-   examples in one tier and none in the other, "no rule" resolves in practice to "keep using
-   scripts", so the library gets built and then goes unused — the failure mode worth naming
-   explicitly, because it is what happens by default rather than by decision.
-   *Prerequisites:* none.
-
-**Recommendation**
-
-**Alternative 1.** It is the only option that routes new work to the tier this design exists to
-create while leaving the 19 expensive builds where they are well served. Alternative 2 is rejected
-on its own measurement: one script in 29, and it forbids precisely the document-driven tests
-§4.3 was built for. Alternative 3 pays 4,959 lines for a nine-second saving. Alternative 4 is
-rejected because its real outcome is the status quo, which is the one result that would make this
-whole design a waste.
-
-The exception should be written in terms of purpose — *a report a person reads* stays a script —
-rather than in terms of mechanism, because mechanism is exactly what §4.3 stopped being a
-distinction.
+[§6.1](#61-what-the-existing-check-script-tier-actually-contains) holds the survey of the existing scripts.
 
 ---
 
-## 9. References
+## 8. References
 
 - [freecad_migration.md](freecad_migration.md) — OQ-ARCH-22, which this document resolves, with
   the version-lock measurements and the five rejected alternatives; OQ-ARCH-19 and OQ-ARCH-21 on

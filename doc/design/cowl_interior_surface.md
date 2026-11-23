@@ -1116,7 +1116,7 @@ Three convergences run between a candidate surface and a verdict on the part, an
 off across a change of quantity**. Written out because the individual facts are recorded above and
 in §6.1 but the chain they form is not, and most of the confusion about this construction has been
 confusion about which link is which — including in
-[OQ-DES-CW23](cowl.md#oq-des-cw23--cavitys-post-cut-check-predicts-the-finished-walls-thickness-rather-than-measuring-the-real-cut--withdrawn-2026-10-10-not-a-design-choice),
+[OQ-DES-CW23](cowl.md#open-questions),
 which was withdrawn once the links were measured separately. §6.4 and §6.5 carry those
 measurements.
 
@@ -1950,7 +1950,7 @@ particular it is not a wall thickness. That description was withdrawn under
 [OQ-DES-CW24](cowl.md#open-questions), and §6.3.4 refutes it.
 
 The metric is not kept.
-[OQ-DES-CW25](cowl.md#oq-des-cw25--metric-a-measures-a-clearance-that-does-not-exist--resolved-2026-10-25)
+[OQ-DES-CW25](cowl.md#open-questions)
 closed on 2026-10-25 by retiring it, along with the `clearance_check` path that runs it. This
 section is kept as the record of what it measured and why that was nothing.
 
@@ -5188,7 +5188,7 @@ every station measured, and `n` = 400 works least often.
   went under OQ-DES-CW24 alternative 3: it compares each tool's distance to the *surface* and never
   the tools' positions, so it cannot represent crowding, and at one reproduced failure both metrics
   pass. **Metric A went under
-  [OQ-DES-CW25](cowl.md#oq-des-cw25--metric-a-measures-a-clearance-that-does-not-exist--resolved-2026-10-25),
+  [OQ-DES-CW25](cowl.md#open-questions),
   closed 2026-10-25, on a stronger finding than the one that question was opened to settle**: the
   clearance it reports is zero at every station by construction, 160 of 160 across a tool's whole
   run, so the thin points above are not measurements of anything and the 15 it flags are the 15
