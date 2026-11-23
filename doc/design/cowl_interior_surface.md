@@ -4003,7 +4003,14 @@ methods above.
 **What any detector must show before it is used.** These are the qualification criteria, and a
 detector is accepted only when it meets all of them:
 
-- it flags the saved dosed cavity, naming ribs 3, 5, 7, 8, 9 and 10;
+- it flags a failure made on purpose in a real cavity, judged against the inner offset of the
+  full tool. A cavity cut with chosen ribs left out is flagged at those ribs and no others. A
+  cavity cut with chosen ribs grown by `t − δ` instead of `t`, at δ either side of ε, is flagged
+  exactly where the residue reaches ε past the full tool's boundary; on a face whose normal is
+  inclined, that residue is thinner than δ. Any real failed cut that planar ribs produce is also
+  judged, against the tool that made it. ([OQ-DES-CW42](cowl.md#open-questions), decided
+  2026-11-23. This replaced flagging the saved dosed cavity, ribs 3, 5, 7, 8, 9 and 10, which the
+  shipped ribs cut, and which can only be judged against their inner offset.);
 - it passes the δ = 0 control built in the same run;
 - it flags synthetic residues of known size at and above `WALL_TOL_M` and passes ones within the
   cut's fuzz;
@@ -4225,9 +4232,12 @@ many operands meet in one cut, and checks every result:
   cut one operand at a time, then split into eight down to 1.25 mm, and last tried in a box grown
   by half its size. A cell that never passes raises an error. It is never dropped, because dropping
   it could hide residue.
-- *A cut that never returns cannot be caught.* A kernel cut cannot be interrupted from inside the
-  program. Only a time limit set by a separate process can stop one. No cut hung with planar ribs,
-  but `inner_offset` as written would wait on one forever.
+- *A cut that never returns is bounded from outside.* A kernel cut cannot be interrupted from
+  inside the program. Only a time limit set by a separate process can stop one. No cut hung with
+  planar ribs, but `inner_offset` as written would wait on one forever. So the build builds the
+  inner offset in a separate process, and refuses the part, naming the cause, if that process
+  runs past its time limit ([OQ-DES-CW41](cowl.md#open-questions), decided 2026-11-23). The
+  limit is set from the measured cost of the offset, with a stated margin; it is not chosen yet.
 
 **The detector.** `rib_hull.reaches` measures the distance from the cavity to the tool's inner
 offset. A distance within 1e-7 mm (`TOUCH_TOL_MM`) means the cut failed. Residue shallower than ε
