@@ -243,7 +243,7 @@ class TestCases:
         """**`cowl_n_perimeters` = 0 is not a wall.** A screen that generated the low case anyway
         would spend a build refusing an input nobody would ask for, and would then report that
         refusal beside the two that mean something -- `buttress_cut_thickness` and
-        `extrusion_width`, where `RIB_FACETS`' floor is the thing being measured."""
+        `extrusion_width`, where the retired 48-gon's facet floor was the thing being measured."""
         for kind in inputs.EXCURSIONS:
             assert inputs.find(kind, 1.0, 'cowl_n_perimeters_hi') is not None
             assert inputs.find(kind, 1.0, 'cowl_n_perimeters_lo') is None

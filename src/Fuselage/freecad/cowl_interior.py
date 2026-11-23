@@ -64,6 +64,8 @@ import numpy as np
 import FreeCAD as App
 import Part
 
+import rib_geometry
+import rib_offset_worker
 import si
 
 
@@ -244,35 +246,6 @@ FIT_MAX = 1200
 CHECK_ARC_M = 2.0e-4                         # 0.20 mm
 CHECK_MIN = 480
 CHECK_MAX = 6000
-
-#: How many sides the dilation's structuring element has. See `dilated_notches`: the element is a
-#: horizontal disc of radius `t`, approximated by an inscribed regular polygon with this many
-#: sides, so a dilated slab's end cap is that polygon rather than a round end.
-#:
-#: **Chosen against the rib gap, which is the thing it has to get right.** Measured 2026-09-03
-#: on the tail's first side slab at U = 1, whose 0.1004 mm section the exact 2-D offset dilates
-#: to a 1.3004 mm gap:
-#:
-#:     n = 32    gap 0.3670 mm    volume 10543.589    <- wrong shape, not merely coarse
-#:     n = 48    gap 1.3004 mm    volume 11096.319    4.0 s a tool
-#:     n = 64    gap 1.3004 mm    volume 11097.462    8.6 s a tool
-#:     n = 96    gap 1.3004 mm    volume 11098.575   23.6 s a tool
-#:
-#: 48 is the first count that reproduces the exact offset's gap, and going further buys three
-#: parts in ten thousand of volume for twice the time.
-#: **48 is a floor, not a tuning knob.** The copies sit on a circle of radius `t`, so adjacent
-#: ones are `2*t*sin(pi/N)` apart, and their union is a solid only while that is smaller than
-#: the slab's in-plane thickness. The thinnest cut here is 0.1 mm, which needs
-#: `N > pi / asin(0.1 / 1.2)` = 37.6, so **38 facets minimum and 48 leaves 26 % headroom**.
-#: Below the floor the union is a comb and the wall comes out with material missing -- measured
-#: at N = 24, where the tail lost 1332 mm3 and two stations reported 0.1035 mm of wall. The
-#: check in `dilated_notches` derives this per tool rather than trusting the number here.
-#:
-#: The count is also what makes the polygon approximate a disc: inscribed, it under-dilates by
-#: `t * (1 - cos(pi/N))` at the facet midpoints, which is 0.0013 mm at 48 against a 0.05 mm wall
-#: tolerance. That error is negligible at any N the floor above permits, so it is the floor and
-#: not the accuracy that decides the count.
-RIB_FACETS = 48
 
 #: Below this, a cutting slab's plane is horizontal and P4 is violated.
 #:
@@ -1302,32 +1275,38 @@ def dilated_notches(notches, t_m, report=None):
     is a 2-D one -- which is what `eroded_body` already computes with `makeOffset2D`. Dilating
     by the same element keeps the identity's two halves consistent.
 
-    **And the dilation is a union of translates, not a loft through offset sections.** Both
-    reproduce the geometry; only one of them does it without introducing features that break
-    the boolean afterwards. Lofting the offset sections needs the sections taken a hair inside
+    **Each rib is grown with flat faces, convex part by convex part (IP-FC-170, OQ-DES-CW40).**
+    The slab is split at its bends into convex parts, and each part's face planes move out by
+    `t` times the horizontal length of their unit normals, with a bevel plane on any convex edge
+    sharper than 90 degrees (`rib_geometry.dilate_planar`). That is exactly as far as the disc
+    moves each face, so the result contains the disc dilation and no wall is thinner than `t`;
+    a corner comes out square or beveled, up to `t * sqrt(2)` from the slab, instead of round.
+    The design allows that: a rib's corners need not be round, provided the wall is never
+    thinner than the extrusion width (algorithm document section 7.2.1).
+
+    It replaced a union of 48 translated copies of each slab. That union approximated a round
+    end with a 48-gon, needed a facet count that a thin slab could defeat -- below
+    `pi / asin(w / 2t)` facets the copies stopped touching and the tool was a comb -- and gave
+    a tool of 2,740 faces whose inner offset the kernel could not build. The planar tool has
+    125 faces on the tail at `U` = 3.0, has no facet count to defeat, and its inner offset is
+    built exactly (`rib_geometry.inner_offset`). The 48-gon's own record is in `rib_hull.py`.
+
+    **Not a loft through offset sections**, which reproduces the geometry but introduces
+    features that break the boolean afterwards. Lofting needs the sections taken a hair inside
     each end -- slicing a polyhedron on one of its own vertex planes returns that face's edges
     rather than a section, measured on the tail as zero closed loops at z = -98.0120 and again
     at z = -94.8136 -- and the slivers that have to be extruded back on to close the gap leave
-    edges 1e-4 mm long. Measured 2026-09-03 on the tail's two congruent side slabs, same volume
-    and same z range:
-
-        loft with sliver caps   4 short edges   cut valid on one slab, INVALID on the other
-        loft without the caps   0 short edges   cut valid on both, but the spans no longer meet
-        union of translates     0 short edges   cut valid on both
-
-    The invalid one reported "Bad orientation of sub-shape", and no fuzzy tolerance rescues it
-    honestly: at fuzz 1e-3 the cut returns *valid* and the cavity comes out 588610 mm3 from a
-    588454 mm3 interior -- larger after a cut than before it.
-
-    A union of translates has none of that. Every piece is the original polyhedron, so nothing
-    can be degenerate that was not degenerate already, and `RIB_FACETS` records how the count
-    was chosen against the 1.3 mm rib gap.
+    edges 1e-4 mm long. Measured 2026-09-03 on the tail's two congruent side slabs, one cut came
+    back invalid ("Bad orientation of sub-shape"), and no fuzzy tolerance rescues it honestly:
+    at fuzz 1e-3 the cut returns *valid* and the cavity comes out 588610 mm3 from a 588454 mm3
+    interior -- larger after a cut than before it.
 
     `Part.makeOffsetShape`, the obvious alternative, is not usable either: it dilates the
     nose's slab correctly (424.570 -> 5702.021 mm3) and returns a null shape on the first tail
     tool.
 
-    Returned as a list, which `cavity` then fuses into a single tool before cutting with it.
+    Returned as a list, one solid per convex part, which `cavity` then fuses into a single tool
+    before cutting with it.
     An earlier version of this note said fusing "bought nothing" because it cost 260 s and the
     cut looked the same; that was wrong, and `cavity`'s own comment records what it buys --
     cutting with twenty-two separate tools succeeds on some and fails on others, silently, and
@@ -1368,50 +1347,19 @@ def dilated_notches(notches, t_m, report=None):
                 % (si.mm(si.bbox_m(tool).ZMin), si.mm(si.bbox_m(tool).ZMax), flat))
         angles_rad.append(math.asin(min(1.0, flat)))
 
-        # **The facet count has a floor set by this tool, and below it the dilation is a comb.**
-        # The copies sit on a circle of radius `t`, so adjacent ones are `2*t*sin(pi/N)` apart.
-        # Their union is a solid only while that spacing is smaller than the slab's own in-plane
-        # thickness; once it is larger the copies stop touching and the "dilated" tool has gaps
-        # in it. Nothing downstream notices -- the tool is still a valid solid, the rib gaps it
-        # leaves still measure correctly, and the wall simply comes out with material missing
-        # where the gaps fell.
-        #
-        # Measured 2026-09-05 on the tail at `U` = 1 with `RIB_FACETS` = 24: spacing 0.157 mm
-        # against a 0.1 mm axial cut, wall 22348.60 mm3 instead of ~23680, and two stations
-        # reporting 0.1035 mm of wall where 0.6 is wanted. The 0.2 mm diagonal cuts passed --
-        # they need only 19 facets -- which is why the failure appeared at some stations and not
-        # others. At 48 the spacing is 0.0785 mm and every tool overlaps.
-        # A vertex position dotted with a unit normal is a distance, so the span crosses
-        # into SI where it is read and the comparison against `t_m` is a meters-to-meters one.
-        span_m = [p[0] * normal.x + p[1] * normal.y + p[2] * normal.z
-                  for p in si.vertexes_m(tool)]
-        in_plane_m = (max(span_m) - min(span_m)) / flat
-        spacing_m = 2.0 * t_m * math.sin(math.pi / RIB_FACETS)
+        # No facet-count floor any more: a planar rib has no copies to fall apart, so a slab of
+        # any in-plane thickness dilates to a solid. The 48-gon's floor refused three design
+        # inputs for that reason alone (OQ-DES-CW32), and it goes with the construction.
         box = si.bbox_m(tool)
-        if spacing_m >= in_plane_m:
-            raise PreconditionFailed(
-                'RIB_FACETS = %d puts adjacent copies %.4f mm apart while this tool is only '
-                '%.4f mm thick in the layer plane, so the copies do not overlap and their '
-                'union has gaps in it. The tool spans z %.4f..%.4f mm. It needs at least %d '
-                'facets: N > pi / asin(w / 2t) with w = %.4f mm and t = %.4f mm.'
-                % (RIB_FACETS, si.mm(spacing_m), si.mm(in_plane_m),
-                   si.mm(box.ZMin), si.mm(box.ZMax),
-                   int(math.ceil(math.pi / math.asin(
-                       min(1.0, in_plane_m / (2.0 * t_m))))) + 1,
-                   si.mm(in_plane_m), si.mm(t_m)))
-
-        copies = [tool.translated(si.vec_m(t_m * math.cos(2.0 * math.pi * i / RIB_FACETS),
-                                           t_m * math.sin(2.0 * math.pi * i / RIB_FACETS),
-                                           0.0))
-                  for i in range(RIB_FACETS)]
-        solid = copies[0].fuse(copies[1:]).removeSplitter()
-        if not solid.isValid() or not solid.Solids:
-            raise PreconditionFailed(
-                'dilating a cutting tool by %.4f mm produced %d solids, valid=%s. The tool '
-                'spans z %.4f..%.4f mm with %d faces.'
-                % (si.mm(t_m), len(solid.Solids), solid.isValid(),
-                   si.mm(box.ZMin), si.mm(box.ZMax), len(tool.Faces)))
-        grown.append(solid)
+        for part in rib_geometry.convex_parts(tool):
+            rib, _hull_mm3 = rib_geometry.dilate_planar(part, t_m)
+            if not rib.isValid() or len(rib.Solids) != 1:
+                raise PreconditionFailed(
+                    'dilating a convex part of a cutting tool by %.4f mm produced %d solids, '
+                    'valid=%s. The tool spans z %.4f..%.4f mm with %d faces.'
+                    % (si.mm(t_m), len(rib.Solids), rib.isValid(),
+                       si.mm(box.ZMin), si.mm(box.ZMax), len(tool.Faces)))
+            grown.append(rib)
 
     if report is not None:
         report.update(dilated_tools=len(grown),
@@ -1420,12 +1368,9 @@ def dilated_notches(notches, t_m, report=None):
     # The shallowest angle is reported, not bounded -- see `FLAT_TOL`. A cut at theta leaves a
     # rib of `2*n_p*w + t_cut / sin(theta)`, so this number is the one to look at if a rib ever
     # measures wider than expected.
-    # "in %d directions" was the wording here, and it misread as a smoothness setting on a round
-    # end. The %d translates are how a horizontal disc of radius t is approximated; the end cap
-    # they produce is a %d-gon, not an arc. Say polygon, so the number reads as what it is.
-    note('ribs: %d tools dilated by %.4f mm, as a %d-gon approximation of the disc; '
+    note('ribs: %d tools dilated by %.4f mm as %d planar parts, square or beveled corners; '
          'shallowest cut plane %.2f deg from the layer plane'
-         % (len(grown), si.mm(t_m), RIB_FACETS,
+         % (len(notches.Solids), si.mm(t_m), len(grown),
             math.degrees(min(angles_rad)) if angles_rad else float('nan')))
     return grown
 
@@ -2624,6 +2569,22 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     ribs = _probe_ribs(notches, t_m, report)
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
 
+    # **The exact rib-cut check needs the tool's inner offset, built once, here** (IP-FC-171,
+    # section 7.2.1). A cut leaves rib material `WALL_TOL_M` deep exactly when the cavity reaches
+    # the inner offset of the tool that cut it, and that tool does not change between the cuts
+    # below. The offset is built in a child process with a time limit, because a kernel cut in it
+    # can fail to return and nothing in this process could stop it (OQ-DES-CW41).
+    at = time.time()
+    try:
+        cores, offset_report = rib_offset_worker.bounded_inner_offset(tool, WALL_TOL_M)
+    except rib_offset_worker.OffsetNotBuilt as exc:
+        raise Unconverged('the rib cut cannot be checked: %s' % exc) from exc
+    note('rib tool inner offset: %d solid(s), %d cell retries, %.0f s (limit %.0f s)'
+         % (len(cores), sum(s['retries'] for s in offset_report['solids']), time.time() - at,
+            offset_report['limit_s']))
+    if report is not None:
+        report.update(rib_offset_s=time.time() - at, rib_offset_limit_s=offset_report['limit_s'])
+
     def cut_and_check(smooth_shape):
         """One rib cut plus its two existing identity checks (section 4.2's residue, and the
         cavity's own connectivity), factored out so the post-cut refinement loop below can
@@ -2661,8 +2622,26 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                 'not a volume one, and a disconnected result is refused at any `U`, never '
                 'accepted as one more shape mirroring has to handle.' % len(cut.Solids),
                 shape=cut)
-        note('ribs cut in %.0f s, %.6f mm3 left inside'
-             % (time.time() - at, si.volume_m3(left) * si.MM3_PER_M3))
+        # **The exact check, after the two above** (IP-FC-171). The residue check reads a
+        # boolean, and measured 2026-11-15 that boolean returned an empty shape on a cavity holding
+        # at least 8641.5 mm3 of uncut rib (section 7.2). This one reads the cavity's distance to
+        # the tool's inner offset, which is zero exactly when rib material at least `WALL_TOL_M`
+        # deep was left behind; it has no sample and no clearance in it. The two above stay: they
+        # are cheaper, and each refuses with its own account of what went wrong.
+        judged = rib_geometry.judge_cut(cut, cores)
+        reached = [k for k, d in judged if d is not None and d <= rib_geometry.TOUCH_TOL_M]
+        if report is not None:
+            report.update(rib_cut_distances_m=[d for _k, d in judged])
+        if reached:
+            raise Unconverged(
+                'rib material at least %.4f mm deep is left inside the cavity, in tool solid(s) %s '
+                'of %d: the cavity reaches those solids\' inner offset. The cut failed there, and '
+                'the wall would be missing material where the rib should be.'
+                % (si.mm(WALL_TOL_M), ', '.join(str(k) for k in reached), len(judged)),
+                shape=cut)
+        note('ribs cut in %.0f s, %.6f mm3 left inside, nearest the inner offset %.6f mm'
+             % (time.time() - at, si.volume_m3(left) * si.MM3_PER_M3,
+                si.mm(min((d for _k, d in judged if d is not None), default=float('nan')))))
         return cut, si.volume_m3(left)
 
     solid, rib_residue_m3 = cut_and_check(smooth)

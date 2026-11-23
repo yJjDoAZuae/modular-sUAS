@@ -339,9 +339,6 @@
   "cowl_interior.REFIT_TOL_M": {
    "unit": "m"
   },
-  "cowl_interior.RIB_FACETS": {
-   "unit": "none"
-  },
   "cowl_interior.RIB_RESIDUE_M3": {
    "unit": "m3"
   },
@@ -1038,6 +1035,60 @@
   "rib_edge_check.PATCH_PROBES": {
    "unit": "none"
   },
+  "rib_cut_qualify.CONTACT_M2": {
+   "unit": "m2"
+  },
+  "rib_cut_qualify.INSIDE_TOL_M": {
+   "unit": "m"
+  },
+  "rib_cut_qualify.NORMAL_TOL": {
+   "unit": "none"
+  },
+  "rib_cut_qualify.PLANE_TOL_M": {
+   "unit": "m"
+  },
+  "rib_geometry.ARTIFACT_TOL_M": {
+   "unit": "m"
+  },
+  "rib_geometry.BATCH_GAP_M": {
+   "unit": "m"
+  },
+  "rib_geometry.BEVEL_RAD": {
+   "unit": "rad"
+  },
+  "rib_geometry.CONVEX_TOL_M": {
+   "unit": "m"
+  },
+  "rib_geometry.COPLANAR_TOL": {
+   "unit": "none"
+  },
+  "rib_geometry.MIN_CELL_M": {
+   "unit": "m"
+  },
+  "rib_geometry.REACH_PROBES": {
+   "unit": "none"
+  },
+  "rib_geometry.SHATTER_SOLIDS": {
+   "unit": "none"
+  },
+  "rib_geometry.TOUCH_TOL_M": {
+   "unit": "m"
+  },
+  "rib_hull.HULL_FACETS": {
+   "unit": "none"
+  },
+  "rib_offset_worker.CELL_M": {
+   "unit": "m"
+  },
+  "rib_offset_worker.OFFSET_CELL_S": {
+   "unit": "s"
+  },
+  "rib_offset_worker.OFFSET_MARGIN": {
+   "unit": "none"
+  },
+  "rib_offset_worker.OFFSET_START_S": {
+   "unit": "s"
+  },
   "rib_proximity.FAR_IN_T": {
    "unit": "none"
   },
@@ -1576,7 +1627,7 @@
    "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
   },
   "cowl_interior": {
-   "allowed": 7,
+   "allowed": 5,
    "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
   },
   "draw_bolt_flange_fillet": {
@@ -1658,6 +1709,10 @@
   "pd_end": {
    "allowed": 1,
    "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
+  },
+  "rib_geometry": {
+   "allowed": 6,
+   "reason": "kernel geometry in the kernel's own millimeters: three probe steps beside an edge in bends_out and a box margin in convex_parts, plus two unit signs the classifier cannot tell from a dimension (IP-FC-170). Lower this if any is named"
   },
   "render_variant": {
    "allowed": 1,

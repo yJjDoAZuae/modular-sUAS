@@ -54,6 +54,10 @@ MODULE_NAMES = (
     ('rib_cut_detector', 'rib_cut_detector'),
     # OQ-DES-CW40: ribs dilated as exact Minkowski sums, measured against closed forms.
     ('rib_hull', 'rib_hull'),
+    # IP-FC-170: the production planar rib tools and their exact inner offset.
+    ('rib_geometry', 'rib_geometry'),
+    # OQ-DES-CW41: the inner offset built in a child process with a time limit.
+    ('rib_offset_worker', 'rib_offset_worker'),
 )
 
 

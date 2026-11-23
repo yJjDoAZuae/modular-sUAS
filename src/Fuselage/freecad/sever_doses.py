@@ -469,20 +469,35 @@ def thickness_at(wall, z_m, t_m):
             'worst_low': worst_low, 'median': median, 'worst_high': worst_high}
 
 
-#: The rib dilations a run can be made with. `None` is the construction as it ships; `hull` is
-#: OQ-DES-CW40's alternative, each convex part of each slab dilated as an exact Minkowski sum;
-#: `planar` is the same split with flat faces and square or beveled corners
-#: (`rib_hull.dilate_planar`).
-DILATIONS = ('hull', 'planar')
+#: The rib dilations a run can be made with. `None` is the construction as it ships, which since
+#: IP-FC-170 is planar; `hull` is each convex part of each slab dilated as the exact Minkowski sum
+#: with the retired 48-gon; `planar` is the shipped planar construction through the harness.
+#: `failed:omit=2+7` and `failed:thinner=4@0.010249235+6@0.0101` cut with the planar tool made
+#: smaller on purpose, for IP-FC-169: the notches after `omit=` left out, and each `i@delta` grown by
+#: `t - delta`, delta in millimeters like every figure on this command line.
+DILATIONS = ('hull', 'planar', 'failed:...')
 
 
 def _dilation(name):
     """The `Probe(dilate=...)` hook for `--dilate=name`, or `None` for the shipped dilation."""
     if name is None:
         return None
+    import rib_hull
+    if name.startswith('failed:'):
+        omit, thinner_m = (), {}
+        for term in name[len('failed:'):].split(','):
+            key, _, value = term.partition('=')
+            items = [v for v in value.split('+') if v]
+            if key == 'omit':
+                omit = tuple(int(v) for v in items)
+            elif key == 'thinner':
+                thinner_m = {int(i): si.m(float(d))
+                             for i, _, d in (v.partition('@') for v in items)}
+            else:
+                raise ValueError('--dilate=%s: a failed dilation takes omit= and thinner=' % name)
+        return rib_hull.failed_planar_tools(omit=omit, thinner_m=thinner_m)
     if name not in DILATIONS:
         raise ValueError('--dilate=%s: known dilations are %s' % (name, ', '.join(DILATIONS)))
-    import rib_hull
     return rib_hull.planar_tools if name == 'planar' else rib_hull.tools
 
 
@@ -655,6 +670,13 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None, dilate=None):
             kept = wm_refusals.save(exc, out_dir, kind, u, _export_brep,
                                     delta_m=si.m(delta))
             rec['rounds'] = _rounds(exc)
+            # The cavity too, where the build got that far: a cut failed on purpose (IP-FC-169)
+            # may be refused downstream of the cut, by a check on the wall, and the cavity is what
+            # the rib-cut detector is qualified on. Written here, inside the `except`, for the
+            # reason the refusal's own shape is.
+            if report.get('cavity_shape') is not None:
+                rec['cavity_path'] = _save_wall(report['cavity_shape'], out_dir,
+                                                kind + '_cavity', u, delta)
             if kept is not None:
                 rec['refusal_artifact'] = kept
                 if kept.get('error'):

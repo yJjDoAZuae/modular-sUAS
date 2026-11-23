@@ -1512,8 +1512,8 @@ ring at all; IP-WTM-41 rebuilt that axis through `shell_solid`, saved the walls 
 in `cowl.md` OQ-DES-CW26. So the probe's failure mode still has no counterpart in any legitimate
 configuration that has been built.
 
-**Six of the 42 cases did fail to build, and the failure is nothing like this probe's.** They are
-refused by `dilated_notches`' facet precondition — `RIB_FACETS` = 48 cannot tile a dilation once
+**Six of the 42 cases did fail to build, and the failure is nothing like this probe's.** They were
+refused by the 48-gon's facet precondition — `RIB_FACETS` = 48 could not tile a dilation once
 `in_plane / t` falls below `2·sin(π/48)` — which is a named, correct check on the *cutting tools*
 before any fit is involved, and the construction declining a configuration rather than shipping a
 wall with a hole in it. That is `cowl.md` OQ-DES-CW32, since resolved: planar ribs have no facet
@@ -2484,13 +2484,14 @@ that `dilate(B, t)` is wrong where the diagonals cluster: a disc dilation rounds
 
 **Two parts of that are ruled out by arithmetic, before any measurement.**
 
-- **Faceting is 0.0013 mm.** `dilated_notches` builds the dilation as a union of `RIB_FACETS` = 48
-  translates on a circle of radius `t` (§9.2), so a true offset point whose direction falls between
-  two translates is still covered unless the tool's own boundary turns away from it; at a sharp
-  convex corner the chord sags by `t(1 - cos(π/48))` = 0.00128 mm. That is twenty-five times smaller than
-  the thinning. The *gross* faceting mode is a different thing and is guarded: at `RIB_FACETS` = 24
-  adjacent copies stop overlapping, and the measured result was 0.1035 mm of wall where 0.6 was
-  wanted, which `dilated_notches` now refuses with `PreconditionFailed`.
+- **Faceting is 0.0013 mm.** `dilated_notches` then built the dilation as a union of
+  `RIB_FACETS` = 48 translates on a circle of radius `t` (§9.2), so a true offset point whose
+  direction falls between two translates is still covered unless the tool's own boundary turns away
+  from it; at a sharp convex corner the chord sags by `t(1 - cos(π/48))` = 0.00128 mm. That is
+  twenty-five times smaller than the thinning. The *gross* faceting mode was a different thing and
+  was guarded: at `RIB_FACETS` = 24 adjacent copies stop overlapping, and the measured result was
+  0.1035 mm of wall where 0.6 was wanted, which `dilated_notches` refused with `PreconditionFailed`.
+  Planar ribs (IP-FC-170) have no facets, so neither mode exists in the construction as built.
 - **Merging introduces nothing.** A Minkowski sum distributes over union --
   `dilate(A ∪ B, t)` = `dilate(A, t) ∪ dilate(B, t)` exactly -- so two dilated envelopes meeting is
   the exact dilation of both, however tight the cluster.
@@ -4163,11 +4164,12 @@ as a fail would flag the correctly cut control. Closing it is the remaining work
 
 **Decided in [OQ-DES-CW40](cowl.md#open-questions), 2026-11-23.** Each rib tool is built from flat
 faces, with square or beveled corners. A failed cut is detected exactly by the cavity's distance to
-the tool's inner offset by ε. Both are built in `freecad/rib_hull.py` and measured in a harness.
-Production builds neither yet: `cowl_interior.dilated_notches` still builds the 48-gon union of
-§9.2, and `cut_and_check` still checks the volume residue.
+the tool's inner offset by ε. Both are in `freecad/rib_geometry.py`, and production builds both:
+`cowl_interior.dilated_notches` builds the planar ribs (IP-FC-170), and `cut_and_check` refuses a
+cavity that reaches the inner offset of the tool that cut it (IP-FC-171), after the volume residue
+and connectivity checks, which stay.
 
-**Why the corners need not be round.** The 48-gon of §9.2 exists only to approximate a round
+**Why the corners need not be round.** The 48-gon §9.2 records existed only to approximate a round
 corner. The user stated on 2026-11-22 that a rib's corners need not be round. A chamfer or a square
 corner is acceptable, as long as no wall of the U-shaped rib is thinner than the extrusion width,
 because the slicer renders the wall correctly while that holds.
@@ -4237,7 +4239,9 @@ many operands meet in one cut, and checks every result:
   planar ribs, but `inner_offset` as written would wait on one forever. So the build builds the
   inner offset in a separate process, and refuses the part, naming the cause, if that process
   runs past its time limit ([OQ-DES-CW41](cowl.md#open-questions), decided 2026-11-23). The
-  limit is set from the measured cost of the offset, with a stated margin; it is not chosen yet.
+  limit is 60 s plus ten times the measured cost of the cells cut, `0.05 s` a cell, so it grows
+  with the part: 3,472 s for the 6,824 cells of the `U` = 3.0 tail, against about 330 s measured
+  (`freecad/rib_offset_worker.py`). The 60 s covers starting `freecadcmd` and reading the tool.
 
 **The detector.** `rib_hull.reaches` measures the distance from the cavity to the tool's inner
 offset. A distance within 1e-7 mm (`TOUCH_TOL_MM`) means the cut failed. Residue shallower than ε
@@ -4383,38 +4387,29 @@ circle** of radius `t`, so the growth is in the layer plane and nowhere else. Pe
 an in-plane measurement, so both halves of the identity have to be in-plane — this is the same
 requirement §6's first row states for the wall, applied to the tool.
 
-**The circle is sampled, not swept.** `dilated_notches` builds the dilated tool as the union of
-`RIB_FACETS` = 48 copies of the notch solid, each translated by `t` in a horizontal direction, at
-2π/48 intervals. Two consequences follow, and both are visible in §6.3's figures.
+**The tool is planar, with square or beveled corners (IP-FC-170, 2026-11-23).**
+`dilated_notches` builds each rib as §7.2.1 sets out, with `rib_geometry.convex_parts` and
+`rib_geometry.dilate_planar`. The slab is split at its bends into convex parts. Each part's face
+with outward normal `n` moves out by exactly `t·hypot(n.x, n.y)`, which is as far as the
+horizontal circle moves it and is the prediction §6.3.3 checks each contact against. A convex
+edge whose faces turn by more than 90 degrees also gets a bevel plane. The part is the
+intersection of those half-spaces, so it contains the circle's dilation and no wall is thinner
+than `t`. Where the circle would round a corner, the tool is square or beveled instead, reaching
+at most `t·√2` from the slab.
 
-Where the tool's boundary is flat, the copies overlap heavily and the union's boundary is simply
-the outermost translate. A face with outward normal `n` therefore moves out by exactly
-`t·hypot(n.x, n.y)`, which is the prediction §6.3.3 checks each contact against.
-
-Where the boundary turns through a sharp edge — the end of a slab, which is a derivative
-discontinuity — no single copy reaches past the corner. Each of the 48 copies instead puts its own
-corner at a different point on a circle of radius `t`, and the union's boundary runs through those
-48 points. **So the rounded end that a dilation is expected to produce comes out as a 48-sided
-polygon rather than an arc.** That is why the tool's end cap is visibly faceted in §6.3's detail
-view, and why a tool section carries about 49 sub-0.2 mm edges at each end against two cheeks of
-104.65 mm. The chord sags `t(1 − cos(π/48))` = 0.00128 mm inside the true arc.
-
-**48 is a solidity floor, not a smoothness setting.** Adjacent copies sit `2·t·sin(π/48)` =
-0.0785 mm apart, and their union is a connected solid only while that spacing is smaller than the
-slab's own in-plane thickness, which is 0.100 mm for an axial cut. At `RIB_FACETS` = 24 the
-spacing is 0.157 mm, the copies stop touching, and the dilated tool is a comb with gaps in it.
-Measured on the tail at `U` = 1, that built a wall of 22 348.60 mm³ against about 23 680, with two
-stations reporting 0.1035 mm of wall where 0.6 mm was wanted. `dilated_notches` now refuses that
-case with `PreconditionFailed` instead of building it. That refusal is what §6.2 and §10 mean when
-they say a configuration is unreachable: three of §10's own screening cases are turned away by it.
-
-**Decided to change, 2026-11-23.** [OQ-DES-CW40](cowl.md#open-questions) adopted planar ribs: each
-convex part of a slab is grown by intersecting half-spaces, every face moved out by
-`t·hypot(n.x, n.y)` and sharp convex edges beveled, so a rib's corners come out square or beveled
-instead of as a 48-gon. The growth is still in the layer plane only, as this section requires, and
-no wall is thinner than `t`. There is no facet count, so the solidity floor above goes with it.
-This section describes the construction as it is built today, until that change is implemented;
-§7.2.1 has the planar construction and the measurements behind it.
+**What it replaced.** Until 2026-11-23 the dilated tool was the union of `RIB_FACETS` = 48 copies
+of the notch solid, each translated by `t` in a horizontal direction, at 2π/48 intervals. Two
+consequences of that are still visible in §6.3's figures, which were drawn from it.
+- *The end of a slab was a 48-sided polygon, not an arc.* Each copy put its own corner at a
+  different point on the circle, so a tool section carried about 49 sub-0.2 mm edges at each end,
+  against two cheeks of 104.65 mm.
+- *48 was a solidity floor, not a smoothness setting.* Adjacent copies sat `2·t·sin(π/48)` =
+  0.0785 mm apart, and their union was a connected solid only while that was smaller than the
+  slab's in-plane thickness, 0.100 mm for an axial cut. At 24 copies the tool was a comb: on the
+  tail at `U` = 1 that built a wall of 22 348.60 mm³ against about 23 680. `dilated_notches`
+  refused that case, and the refusal turned three of §10's screening cases away. Planar ribs have
+  no facet count, so that floor and its refusal are gone
+  ([OQ-DES-CW32](cowl.md#open-questions), superseded by [OQ-DES-CW40](cowl.md#open-questions)).
 
 ### 9.3 Fitting spacing and checking spacing are two different numbers
 
@@ -5087,11 +5082,11 @@ every station measured, and `n` = 400 works least often.
   `nose_cowl_shell` at `U` = 1.0 and `tail_shell` at `U` = 0.5, which is what 6 h 56 min of machine
   time bought. What that leaves untested is **interactions between two inputs**, and **any input
   moved at a large `U`**, where the part is biggest and the 0.6 mm wall proportionally thinnest. The
-  screen also cannot reach three of its own cases at all: `buttress_cut_thickness` = 0.07 mm,
-  `extrusion_width` = 0.8 mm and `cowl_n_perimeters` = 2 are each refused by `RIB_FACETS` = 48's
+  screen also could not reach three of its own cases at all: `buttress_cut_thickness` = 0.07 mm,
+  `extrusion_width` = 0.8 mm and `cowl_n_perimeters` = 2 were each refused by `RIB_FACETS` = 48's
   solidity precondition. [OQ-DES-CW32](cowl.md#open-questions) was resolved by adopting planar
-  ribs, which have no facet count, so all three become reachable once planar ribs are built in
-  production. Because the cost scales with
+  ribs, which have no facet count, and IP-FC-170 built them in production, so all three are now
+  reachable; they have not been rerun. Because the cost scales with
   the build, closing either gap is a decision about machine time rather than a matter of writing
   more cases: the `tail_shell` population alone was 6 h 16 min of that run at the *cheapest* `U`.
 

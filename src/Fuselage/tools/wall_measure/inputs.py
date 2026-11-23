@@ -34,11 +34,13 @@ is what IP-FC-137's follow-up reproduced a pathological topology from, and those
 crowding of all eleven. A case per placement would add eleven tail builds at about 1 000 s each to
 cover the same axis one rib at a time.
 
-**What bounds the input space is `RIB_FACETS`, and the screen found it in its first two cases.**
-`cowl_interior.dilated_notches` builds a tool's dilation as the union of `RIB_FACETS` = 48 translated
-copies on a circle of radius `t`, so adjacent copies sit `2 t sin(pi / N)` apart and the union is a
-solid only while that is smaller than the slab's own in-plane thickness. The buildable region is
-therefore
+**What bounded the input space was the 48-gon's facet count, and the screen found it in its first two
+cases. Planar ribs retired that bound (IP-FC-170, OQ-DES-CW40), so the cases it refused can now be
+built; the rest of this paragraph is the record of the 2026-10-14 screen.**
+`cowl_interior.dilated_notches` then built a tool's dilation as the union of `RIB_FACETS` = 48
+translated copies on a circle of radius `t`, so adjacent copies sat `2 t sin(pi / N)` apart and the
+union was a solid only while that was smaller than the slab's own in-plane thickness. The buildable
+region was therefore
 
     in_plane / t  >  2 sin(pi / RIB_FACETS)  =  0.130806
 
@@ -267,9 +269,10 @@ EXCURSIONS = {
                   "the dilation ramp's lean, which sets how far each comb reaches"),
         Excursion('extrusion_width', 0.2, 'mm',
                   'the wall thickness itself; absolute, because a nozzle does not scale'),
-        # **One-sided, and added to test a prediction rather than to explore.** The screen's first
-        # two refusals -- `buttress_cut_thickness` down to 0.07 mm and `extrusion_width` up to
-        # 0.8 mm -- are both `dilated_notches`' facet precondition, which builds only while
+        # **One-sided, and added to test a prediction rather than to explore.** The 2026-10-14
+        # screen's first two refusals -- `buttress_cut_thickness` down to 0.07 mm and
+        # `extrusion_width` up to 0.8 mm -- were both the retired 48-gon's facet precondition
+        # (planar ribs have none since IP-FC-170), which built only while
         # `in_plane > 2 t sin(pi / RIB_FACETS)`, i.e. `in_plane / t > 0.130806` at `RIB_FACETS` =
         # 48. `Inset` is `cowl_n_perimeters * extrusion_width`, so 2 perimeters puts `t` at
         # 1.2 mm and the ratio at 0.0833, which that inequality says must be refused. A second
@@ -418,11 +421,12 @@ def pair_cases(kind, u, excursions=None, include_baseline=True, members=None):
     screen's own measured 48 s and 629 s a case that is about **1.7 hours** and about **42 hours**,
     which is why the tail is reported rather than run.
 
-    **`members` is what makes the result readable, and it is not an optimization.** Three of the
-    nose's single-row cases are already refused by the construction on their own
-    (`buttress_cut_thickness_lo`, `cowl_n_perimeters_hi`, `extrusion_width_hi` -- the facet floor
-    of [OQ-DES-CW32](../../../doc/design/cowl.md#open-questions)), and a pair containing one of
-    them is refused for that inherited reason whatever the other row does. Counting those among
+    **`members` is what makes the result readable, and it is not an optimization.** In the
+    2026-10-14 screen three of the nose's single-row cases were refused by the construction on
+    their own (`buttress_cut_thickness_lo`, `cowl_n_perimeters_hi`, `extrusion_width_hi` -- the
+    48-gon's facet floor of [OQ-DES-CW32](../../../doc/design/cowl.md#open-questions), retired with
+    it by IP-FC-170), and a pair containing a refused case is refused for that inherited reason
+    whatever the other row does. Counting those among
     the pair screen's refusals would report an interaction that is not there. Given a collection
     of single-case names -- `built_single_names` reads them from the screen's own records -- only
     pairs whose *both* members build alone are generated, so every refusal the pair run reports

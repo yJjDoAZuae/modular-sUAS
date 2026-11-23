@@ -463,7 +463,7 @@ def build(kind, u, out_dir):
 
     facts = dict(kind=kind, u=float(u), t=t, penetration_mm3=penetration,
                  cut_thickness=float(doc.getObject('Params').get('buttress_cut_thickness')),
-                 rib_facets=ci.RIB_FACETS, stations=[],
+                 stations=[],
                  census=dict(step_mm=CENSUS_STEP_MM, crossing=crossing, apart=apart,
                              absent=absent, gaps=gaps))
 
@@ -759,9 +759,8 @@ def build(kind, u, out_dir):
             '2. The surface left of the tool is this cell mirrored, as the build makes it.',
             '3. Wall t = %.3f mm. The buttress slab is %.3f mm thick.'
             % (t, facts['cut_thickness']),
-            '4. The dilation is %d copies of the slab, each shifted t horizontally and'
-            % facts['rib_facets'],
-            '   fused. At the slab\'s end they trace the polygon drawn here, not a round end.',
+            '4. The dilation moves each face of the slab out by t in the layer plane. Its',
+            '   corners are square or beveled, as drawn here, not round.',
             rib,
         ] + dil + [
             # Planar, and about this section: how much of the drawn tool outline is inside
