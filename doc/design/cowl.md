@@ -3190,7 +3190,6 @@ No separate record; this subsection holds the decision.
 
 **Problem**
 
-**Problem.**
 [OQ-DES-CW21](#open-questions)
 decided that `cavity()` (or, per that item's later correction, `shell_solid()`) needs a second
 refinement pass: after the rib cut, measure the *finished* wall's own thickness near every notch
@@ -3423,8 +3422,6 @@ catch. Reproducing or withdrawing it is IP-FC-145.
 
 **Caveats**
 
-**Caveats attached to this closure.**
-
 - Both reproduced failures *are* caught by `shell_solid()`'s existing solid-count and partition
   checks, and no variation of a real design parameter has ever produced one. This closure assumes
   that remains true; it is not a finding that the construction is robust.
@@ -3495,8 +3492,6 @@ a quantity with no geometric meaning is sound* — now with a census behind it r
 argument.
 
 **Caveats**
-
-**Caveats attached to the choice.**
 
 - **Alternative 4 is not foreclosed, but it is a separate question.** A direct cut-floor-to-outer-
   surface measurement is the quantity the metric was reaching for, and §6.3.2 identifies the cut
@@ -4624,7 +4619,6 @@ left to derive, raise or document. The user closed this question on that basis.
 
 **Caveats**
 
-**Caveats.**
 - *Until planar ribs are built in production, the floor still applies.* `dilated_notches` still
   builds the 48-gon and still refuses configurations below the floor. That refusal stays correct
   for the construction as built: below the floor the tool is a comb, and the wall would ship with
@@ -5520,10 +5514,10 @@ shallower.
    depth and the cut needs requalifying.
 2. **Keep the tool and build its inner offset in project code.** That means the tool minus the
    union of every face's ε-neighborhood: a prism for each face, a cylinder for each edge and a sphere
-   for each vertex. -. Benefit: No production change. -. Drawback: 2,740 faces means thousands of
+   for each vertex. Benefit: No production change. Drawback: 2,740 faces means thousands of
    boolean operands, on the tool whose booleans are the failures this question started from.
 3. **Restate the requirement as a band.** Keep "no false positive below ε" and allow false
-   negatives up to `ε + β`. Benefit: No construction work beyond what exists. -. Drawback: `β` is not
+   negatives up to `ε + β`. Benefit: No construction work beyond what exists. Drawback: `β` is not
    bounded today.
 
 **Recommendation**
@@ -5532,11 +5526,12 @@ shallower.
 on geometry that can be built exactly, rather than on a kernel operation already measured failing
 on this tool: the tool minus a prism ε deep under every face, a cylinder of radius ε along every
 concave edge, and a ball of radius ε at each end of one. (This was first written as each convex
-part's planes moved in by ε plus cylinders at the creases.
+part's planes moved in by ε plus cylinders at the creases, which misses a slab 2ε thick wherever
+two parts abut.)
 
 **Decision**
 
-**Decision: Alternative 1, with planar ribs.** The user adopted planar ribs on 2026-11-23. Each rib
+**Alternative 1, with planar ribs.** The user adopted planar ribs on 2026-11-23. Each rib
 tool is to be built as `rib_hull.dilate_planar` builds it, in place of today's union of 48 copies
 of its slab moved around a circle of radius `t`:
 - each slab is split at its bends into convex parts;
@@ -5555,7 +5550,6 @@ cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a
 
 **Rationale**
 
-**Why.**
 - The user's design input: a rib's inner corners need not be round. A chamfer or a square corner
   is acceptable, so long as no wall of the U-shaped rib gets thinner than the extrusion width,
   because the slicer renders the wall correctly as long as that holds. The 48-gon existed only to
@@ -5569,7 +5563,6 @@ cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a
 
 **Caveats**
 
-**Caveats.**
 - *The wall must match the slicer's line width.* The shell's wall is
   `cowl_n_perimeters × extrusion_width`, 0.6 mm by default. OrcaSlicer lays a 0.62 mm line for a
   0.6 mm nozzle, and with that nozzle the 0.6 mm walls did not survive slicing. The user is
@@ -5589,7 +5582,9 @@ cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a
 **Where it is recorded**
 
 The construction, the measurements behind the decision, and the qualification are in
-[cowl_interior_surface.md §7.2.1](cowl_interior_surface.md).
+[cowl_interior_surface.md §7.2.1](cowl_interior_surface.md). The raw data for the inner offset
+and the detector is in [planar_rib_inner_offset.csv](../data/planar_rib_inner_offset.csv) and
+[planar_rib_detector_cases.csv](../data/planar_rib_detector_cases.csv).
 
 ## See also
 

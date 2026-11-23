@@ -1,0 +1,69 @@
+case,where,tool_solid,depth_mm,expected,verdict,distance_mm
+synthetic residue,face,0,0.0099,clear,clear,0.0001000
+synthetic residue,face,0,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 90.0 deg,0,0.0099,clear,clear,0.0001414
+synthetic residue,convex edge 90.0 deg,0,0.0101,flag,flag,0.0000000
+synthetic residue,concave edge,0,0.0099,clear,clear,0.0001000
+synthetic residue,concave edge,0,0.0101,flag,flag,0.0000000
+synthetic residue,face,1,0.0099,clear,clear,0.0001000
+synthetic residue,face,1,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 85.7 deg,1,0.0099,clear,clear,0.0001470
+synthetic residue,convex edge 85.7 deg,1,0.0101,flag,flag,0.0000000
+synthetic residue,concave edge,1,0.0099,clear,clear,0.0001000
+synthetic residue,concave edge,1,0.0101,flag,flag,0.0000000
+synthetic residue,face,2,0.0099,clear,clear,0.0001000
+synthetic residue,face,2,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 79.4 deg,2,0.0099,clear,clear,0.0001566
+synthetic residue,convex edge 79.4 deg,2,0.0101,flag,flag,0.0000000
+synthetic residue,concave edge,2,0.0099,clear,clear,0.0001000
+synthetic residue,concave edge,2,0.0101,flag,flag,0.0000000
+synthetic residue,face,3,0.0099,clear,clear,0.0001000
+synthetic residue,face,3,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 90.0 deg,3,0.0099,clear,clear,0.0001414
+synthetic residue,convex edge 90.0 deg,3,0.0101,flag,flag,0.0000000
+synthetic residue,concave edge,3,0.0099,clear,clear,0.0001000
+synthetic residue,concave edge,3,0.0101,flag,flag,0.0000000
+synthetic residue,face,4,0.0099,clear,clear,0.0001000
+synthetic residue,face,4,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 90.0 deg,4,0.0099,clear,clear,0.0001414
+synthetic residue,convex edge 90.0 deg,4,0.0101,flag,flag,0.0000000
+synthetic residue,face,5,0.0099,clear,clear,0.0001000
+synthetic residue,face,5,0.0101,flag,flag,0.0000000
+synthetic residue,convex edge 90.0 deg,5,0.0099,clear,clear,0.0001414
+synthetic residue,convex edge 90.0 deg,5,0.0101,flag,flag,0.0000000
+30-degree wedge,apex,,0.0099,clear,clear,0.0003864
+30-degree wedge,apex,,0.0101,flag,flag,0.0000000
+30-degree wedge,apex,,0.0110,flag,flag,0.0000000
+30-degree wedge,apex,,0.0120,flag,flag,0.0000000
+30-degree wedge,apex,,0.0140,flag,flag,0.0000000
+30-degree wedge,apex,,0.0160,flag,flag,0.0000000
+planar control cavity,whole cavity,0,,clear,clear,0.009999
+planar control cavity,whole cavity,1,,clear,clear,0.010000
+planar control cavity,whole cavity,2,,clear,clear,0.010000
+planar control cavity,whole cavity,3,,clear,clear,0.010000
+planar control cavity,whole cavity,4,,clear,clear,0.010000
+planar control cavity,whole cavity,5,,clear,clear,0.010000
+planar cavity dosed 0.03 mm,whole cavity,0,,clear,clear,0.009999
+planar cavity dosed 0.03 mm,whole cavity,1,,clear,clear,0.010000
+planar cavity dosed 0.03 mm,whole cavity,2,,clear,clear,0.010000
+planar cavity dosed 0.03 mm,whole cavity,3,,clear,clear,0.010000
+planar cavity dosed 0.03 mm,whole cavity,4,,clear,clear,0.010000
+planar cavity dosed 0.03 mm,whole cavity,5,,clear,clear,0.010000
+shipped-rib control cut again by the planar tool,whole cavity,0,,clear,clear,0.0074335
+shipped-rib control cut again by the planar tool,whole cavity,1,,clear,clear,0.0099913
+shipped-rib control cut again by the planar tool,whole cavity,2,,clear,clear,0.0100000
+shipped-rib control cut again by the planar tool,whole cavity,3,,clear,clear,0.0100000
+shipped-rib control cut again by the planar tool,whole cavity,4,,clear,clear,0.0100000
+shipped-rib control cut again by the planar tool,whole cavity,5,,clear,clear,0.0100000
+shipped-rib control as built (mismatched reference),whole cavity,0,,not a case,flag,0.0000000
+shipped-rib control as built (mismatched reference),whole cavity,1,,not a case,flag,0.0000000
+shipped-rib control as built (mismatched reference),whole cavity,2,,not a case,flag,0.0000000
+shipped-rib control as built (mismatched reference),whole cavity,3,,not a case,flag,0.0000000
+shipped-rib control as built (mismatched reference),whole cavity,4,,not a case,flag,0.0000000
+shipped-rib control as built (mismatched reference),whole cavity,5,,not a case,flag,0.0000000
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,0,,not a case,flag,0.0000000
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,1,,not a case,flag,0.0000000
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,2,,not a case,clear,0.0049886
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,3,,not a case,clear,0.0051765
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,4,,not a case,clear,0.0084397
+shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,5,,not a case,clear,0.0070558
