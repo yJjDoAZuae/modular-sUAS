@@ -469,7 +469,24 @@ def thickness_at(wall, z_m, t_m):
             'worst_low': worst_low, 'median': median, 'worst_high': worst_high}
 
 
-def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
+#: The rib dilations a run can be made with. `None` is the construction as it ships; `hull` is
+#: OQ-DES-CW40's alternative, each convex part of each slab dilated as an exact Minkowski sum;
+#: `planar` is the same split with flat faces and square or beveled corners
+#: (`rib_hull.dilate_planar`).
+DILATIONS = ('hull', 'planar')
+
+
+def _dilation(name):
+    """The `Probe(dilate=...)` hook for `--dilate=name`, or `None` for the shipped dilation."""
+    if name is None:
+        return None
+    if name not in DILATIONS:
+        raise ValueError('--dilate=%s: known dilations are %s' % (name, ', '.join(DILATIONS)))
+    import rib_hull
+    return rib_hull.planar_tools if name == 'planar' else rib_hull.tools
+
+
+def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None, dilate=None):
     started = time.time()
     print('')
     print('%s at U = %g: the booleans after the fit, under a row displacement.' % (kind, u))
@@ -545,7 +562,9 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
             # meter default and uses whatever comes back (IP-FC-163).
             probe = wm_probe.Probe(contour=probe_for(delta, target, normals),
                                    station_floor_m=(None if floor_mm is None
-                                                    else si.m(float(floor_mm))))
+                                                    else si.m(float(floor_mm))),
+                                   dilate=_dilation(dilate))
+            rec['dilate'] = dilate
             # `notches` is read for its vertices by `feature_stations`, so it must be one shape.
             # Handing over the list `pieces()` returns raises `'list' object has no attribute
             # 'Vertexes'` -- after the tree has already been built, so the cost is paid first.
@@ -575,11 +594,12 @@ def run(kind, u, doses, out_dir, floor_mm=None, want_z_m=None):
             flag = ''
             if delta == 0.0:
                 rec['shape_path'] = _save_wall(wall, out_dir, kind, u, delta)
-                # The control's cavity is the known-good case a rib-cut detector is qualified
-                # against (IP-FC-169); the wall alone cannot be turned back into it.
-                if report.get('cavity_shape') is not None:
-                    rec['cavity_path'] = _save_wall(report['cavity_shape'], out_dir,
-                                                    kind + '_cavity', u, delta)
+            # Every built dose's cavity is kept, not only the control's: a rib-cut detector is
+            # qualified against both (IP-FC-169), the dosed one being the case IP-FC-146 is
+            # about, and the wall alone cannot be turned back into either. About 4 MB each.
+            if report.get('cavity_shape') is not None:
+                rec['cavity_path'] = _save_wall(report['cavity_shape'], out_dir,
+                                                kind + '_cavity', u, delta)
             if broken:
                 flag = '   RING BROKEN'
                 # **Measured here, on the wall already in memory.** Recovering this later would
@@ -689,7 +709,8 @@ def main():
         floor_mm=None if floor is None else float(floor),
         # `--target` is millimeters, like `--floor` and like every z this harness prints;
         # `target_station` compares against the SI station set, so it converts here.
-        want_z_m=None if target is None else si.m(float(target)))
+        want_z_m=None if target is None else si.m(float(target)),
+        dilate=_opt('dilate'))
 
 
 if is_entry_point(__name__):

@@ -784,7 +784,6 @@ a deliberately aggressive value that modern printers hold comfortably in PLA.
 | OQ-DES-CW29 | The acceptance gate now reports two wall-thickness measures side by side, and on a real `nose_cowl_shell` build they disagree about whether the part complies: the incumbent nearest-point minimum reads 0.0376 mm under nominal at 9 of 12 stations and fails the build, while the measure selected against five pre-committed gates reads 0.0031 mm and passes it with three times the margin. The incumbent is known not to converge; the selected measure is known to exclude samples near concave corners, which is where the incumbent's minima sit on a nose. Which of the two gates a build — and therefore whether a nose cowl is shippable today — is the decision | **Blocking** for any pass/fail verdict on a `nose_cowl_shell`; not blocking a `tail_shell`, where both measures agree the wall is over tolerance |
 | OQ-DES-CW30 | `cavity`'s output carries an **open boundary** — one edge of 3 164, 1.0587 mm long, adjacent to exactly one face, confirmed by the kernel's own adjacency and not a seam, a pole, a stray face or an artifact of the measurement. `Shape.isValid()` passes it and the construction reports `1 solids, valid=True`, so the existing check does not establish that the cavity's shell is closed. The finished walls are unaffected: all twelve carry zero such edges, so a later step resolves it. Whether the construction should refuse an open cavity shell — which would fail every `tail_shell` build today while the parts they produce are sound — is the decision | Not blocking (no shipped wall is affected; the question is what the construction should refuse) |
 | OQ-DES-CW31 | The interior fit's axial seed is a fixed **count** — `SEED_MAX` = 6 stations for any stretch over 3 mm — while a `nose_cowl_shell`'s stretch runs 22 mm at `U` = 0.5 and 176 mm at `U` = 4.0, so the axial spacing grows from 2.44 to 17.60 mm and the finished wall's error tracks it to within ±13 %, from 0.00189 to **0.01530 mm** against `WALL_TOL` = 0.01. **This is why `U` = 4.0 is the only failing nose configuration**, confirmed by its converse: raising `SEED_MAX` to 12 at fixed `U` = 4 takes the wall to 0.00733 mm, passing, at no measurable build cost. **Two premises corrected 2026-10-14.** The apparent 0.0071 mm "floor" is `TAU`, not the construction: `_refine` stops at the first subdivision inside it, and at `TAU` = 0.02 the same nose reaches 0.00268 mm — so **either lever alone makes the nose compliant** and the real floor under both is 0.00268 mm, 3.7x inside tolerance. And the 23-minutes-a-part cost objection prices the superseded 60-patch construction; every current build is `patch 1/1`, and generous seeding measures **+23 % on a nose and +33 % on a tail**. The tail prerequisite is measured too: it buys 12 %, leaving the tail 3.3x over tolerance while pass 1 improves 4.9x. So the decision is no longer a build-time trade — it is whether to adopt a correct seeding rule that fixes the nose knowing it does nothing for the tail, and whether `TAU` should do that job instead | **Blocking** a compliant `nose_cowl_shell` at `U` = 4.0; not blocking any tail, which fails for separate reasons |
-| OQ-DES-CW32 | The rib dilation is a union of `RIB_FACETS` = 48 translated copies on a circle of radius `t`, so it is a solid only while `in_plane / t > 2·sin(π/48)` = 0.130806 — a fixed **count** standing against a ratio that two design rows move. The parameter sheet sits at 0.16667, **1.274× the floor**, and a single-parameter excursion crosses it in either direction: measured 2026-10-14, `buttress_cut_thickness` 0.1 → 0.07 mm, `extrusion_width` 0.6 → 0.8 mm and `cowl_n_perimeters` 1 → 2 are each refused by the precondition, needing 55, 52 and 77 facets. So the bounds are `buttress_cut_thickness` > 0.0785 mm and `cowl_n_perimeters × extrusion_width` < 0.7644 mm, and **a two-perimeter cowl does not build at all**. The same three are refused on a `tail_shell` at `U` = 0.5, where the binding tool is an axial slab reading 0.1004 mm in-plane rather than the nose's exact 0.1000. Whether to derive the count per tool, raise it to one larger fixed value, or document the region and leave it, is the decision | Not blocking any shipped wall — every value on the parameter sheet builds, with 27 % margin in the ratio; it blocks a two-perimeter cowl and bounds how far IP-WTM-41's input screen can reach |
 | OQ-DES-CW33 | Every wall-thickness measure in this subsystem is **in-plane**, and a plane cutting a slab inclined at θ reads `thickness / cos θ` — always thicker than the slab is. Measured with a new 3-D normal-distance measure verified first against closed-form fixtures: across four saved walls, **66 readings on the fitted interior surface, every one confirmed thin and thinner than the plane said, none exonerated**. Real worst deficits **0.0943 mm (tail `U` = 0.5), 0.0790 (nose `U` = 4.0) and 0.0645 (tail `U` = 1.0) — six to nine times `WALL_TOL`** — where the in-plane figures at those same samples read 0.0135, 0.0140 and 0.0226, understating by 2.9–7.0×. The surface is inclined 21.5–30.8° there and `normal / cos θ` reproduces every in-plane figure to 0.0037 mm; the in-plane column independently reproduces IP-WTM-45's 0.01345 and OQ-DES-CW28's 0.01403. **Not localized**: on the tail at `U` = 1.0, 1 954 of one station's 4 267 samples are thin on the fitted surface, 46 % of the circumference. **No measure the gate has or is choosing between can see any of it**, and in-plane severity is measured to rank the real readings *last*, so a cheap worst-`N` confirmation pass selects against the defect. Whether to filter by face class and measure, document the bias and leave the gate in-plane, or something else, is the decision | **Blocking** any claim that an in-plane pass means a wall meets `WALL_TOL`; not blocking a build, and an in-plane *failure* is still evidence of a defect |
 | OQ-DES-CW35 | `cowl_interior.py` carries a **test-only seam in production code**. A module-level `_probe`, `None` in every build, is read at two call sites through two identity accessors, so a measurement can reach the two decisions `cavity` makes for itself and nothing outside can otherwise touch: the eroded cross-section each fit row is built from, and the minimum station separation `station_floor(t)` = 0.600 mm at the current wall. It is about **eight lines of a 3 541-line module**, neither entry point's signature mentions measurement, and `_probe is None` is the only state any build has had — so no shipped geometry depends on the answer. What it costs is a reader of the construction seeing two calls that do nothing, one further accessor per future question asked, and a later edit being able to route *around* the accessor and silently disable a measurement rather than fail it, which is the exact fault that has already produced two convincing null results in this subsystem. Removing it means decomposing `cavity`: **847 lines, eight named nested functions, 21 captured names**, and the kernel's reproducibility floor makes a passing regression weak evidence that a decomposition changed nothing. Whether to keep the seam, decompose, substitute the production functions by name instead, or promote the seam to a designed extension point, is the decision | Not blocking (the seam is inert — no build, measurement or recorded figure changes whichever way this goes) |
 | OQ-DES-CW37 | The interior construction samples each station's cross-section at `n` points, clamped to `[SAMPLE_MIN, SAMPLE_MAX]` = [400, 3000], and hands those samples in as a cubic B-spline's **poles** — so **one integer sets both where the arc is observed and how many degrees of freedom describe it**, and the curve does not pass through its own samples (measured: 0.177923 mm off them on a 12-point circle, where `interpolate` is exact and tracks the circle 69x closer). When `makeOffset2D` refuses the offset the construction doubles `n` over a three-rung ladder, and that ladder is measured to point the wrong way: the curve's minimum radius falls as `n` rises (5.35 to 0.70 mm across five rungs) and failure is **not monotonic in `n`**. Walked with both constructions over identical samples, **`n` = 200 — half the shipped floor — offset 10 of 10 stations under both, while the shipped `SAMPLE_MIN` = 400 measured worst under both at 8 and 9 of 10**; interpolating buys 2.9x accuracy but **no reliability** (47 of 50 rungs against 46). Whether to add a coarser rung, lower the floor, separate the sampling from the fit, or leave it, is the decision | Not blocking (no build fails on this, and no figure in the corpus is wrong today); what it governs is the 1e-5 reproducibility floor OQ-DES-CW36 was resolved to state |
@@ -4209,172 +4208,34 @@ tolerance and fails nothing. And it does not help the `tail_shell`, which gains 
 over tolerance; the tail's residual resists this lever and `TAU` both, and is IP-WTM-26's remaining
 subject.
 
-### OQ-DES-CW32 — The rib dilation's facet count is fixed, and it is what bounds the design inputs
+### OQ-DES-CW32 — The rib dilation's facet count is fixed, and it is what bounds the design inputs — RESOLVED 2026-11-23
 
-**The problem**
+**Resolved by removing the facet count.** The question was what to do about the rib dilation's
+solidity floor. Each rib tool is the union of `RIB_FACETS` = 48 copies of its slab on a circle of
+radius `t`, and that union is one solid only while `in_plane / t > 2·sin(π/48)` = 0.130806. Here
+`in_plane` is the slab's thickness in the layer plane, and `t` is
+`cowl_n_perimeters × extrusion_width`. The parameter sheet's values left 27 % margin. Three
+single-row excursions crossed the floor and were refused: `buttress_cut_thickness` 0.07 mm,
+`extrusion_width` 0.8 mm and `cowl_n_perimeters` 2. Those refusals also put 43 of the nose's 128
+two-input pairs out of reach.
 
-Each buttress cutting tool is a thin slab. Before the interior cavity is cut, `cowl_interior`
-**dilates** every slab by the wall thickness `t`, so that the cavity it carves out stops `t` short of
-the rib and the finished wall keeps its full thickness where a rib passes through it. The dilation is
-not an exact offset — `Part.makeOffsetShape` returns a null shape on the first tail tool — but a
-union of `RIB_FACETS` = 48 translated copies of the slab, placed at equal angles on a circle of
-radius `t` lying in the layer plane.
+OQ-DES-CW40 then adopted planar ribs, on 2026-11-23. Each convex part of a slab is grown by
+intersecting half-spaces, so it is one solid for any `in_plane` and `t`. There is no facet count
+left to derive, raise or document. The user closed this question on that basis.
 
-That construction has a floor, and `cowl_interior.dilated_notches` enforces it per tool. Adjacent
-copies sit `2·t·sin(π/N)` apart, so their union is a single solid only while that spacing is smaller
-than the slab's own thickness **measured in the layer plane**. Below the floor the copies stop
-touching and the "dilated" tool is a comb: nothing downstream notices, because the tool is still a
-valid solid and the rib gaps still measure correctly, and the wall simply comes out with material
-missing where the gaps fell. That was measured on 2026-09-05 at `RIB_FACETS` = 24, where a
-`tail_shell` at `U` = 1 lost 1 332 mm³ of wall and two stations reported 0.1035 mm of wall where
-0.6 mm was wanted. The precondition that refuses it is therefore correct, and is not a guard on an
-unfixed bug.
+**The written recommendation is not what was adopted.** It was Alternative 1, deriving the count
+per tool, with Alternative 4, checking the floor before the interior fit, alongside it and
+Alternative 3's documentation either way. All three concern the 48-gon construction that planar
+ribs replace, so none of them is to be implemented.
 
-The buildable region it defines is
-
-    in_plane / t  >  2·sin(π / RIB_FACETS)  =  0.130806   at RIB_FACETS = 48
-
-where `in_plane` is the slab's thickness in the layer plane — `buttress_cut_thickness / sin θ` for a
-tool whose cut plane sits θ from the layer plane — and `t` is `cowl_n_perimeters × extrusion_width`,
-the one dimension on this part that does not scale with `U`. On a `nose_cowl_shell` every tool is
-θ = 90°, so `in_plane` is `buttress_cut_thickness` itself and the parameter sheet sits at
-`0.1 / 0.6` = 0.166667, which is **1.274× the floor**.
-
-**That margin is consumed by a single-parameter excursion in either direction.** Measured
-2026-10-14 on a `nose_cowl_shell` at `U` = 1.0, through
-[wall_thickness_measure.md](../implementation/wall_thickness_measure.md) IP-WTM-41's design-input
-screen, one row moved off the sheet at a time:
-
-| case | row | from | to | `in_plane`/`t` | outcome |
-| --- | --- | --- | --- | --- | --- |
-| `base` | — | — | — | 0.16667 | builds; wall hash identical to all five 2026-10-06 soak repeats |
-| `buttress_cut_thickness_lo` | `buttress_cut_thickness` | 0.1 mm | 0.07 mm | 0.11667 | **refused**, needs 55 facets |
-| `extrusion_width_hi` | `extrusion_width` | 0.6 mm | 0.8 mm | 0.12500 | **refused**, needs 52 facets |
-| `cowl_n_perimeters_hi` | `cowl_n_perimeters` | 1 | 2 | 0.08333 | **refused**, needs 77 facets |
-
-Read along the design inputs rather than in facets, the bounds are `buttress_cut_thickness` >
-**0.0785 mm** at one perimeter of 0.6 mm, and `cowl_n_perimeters × extrusion_width` < **0.7644 mm**
-at `buttress_cut_thickness` = 0.1 mm. So a 21 % reduction in the cut thickness, or a 28 % increase in
-the wall, crosses it — and **a two-perimeter cowl does not build at all** at the sheet's cut
-thickness. The third row above was run specifically to test the inequality where it is not
-interpolating between the two failures either side of the sheet, and it predicted the refusal and the
-required facet count exactly.
-
-`RIB_FACETS`' own note already states the arithmetic and prices the headroom as "38 facets minimum
-and 48 leaves 26 % headroom". That is correct, and it is the same fact read in the facet count at one
-configuration. What was not on record is that the margin is a property of **that point in the input
-space** rather than of the design, and that two of the parameter sheet's own rows cross it within an
-ordinary excursion. It is a fixed count standing against a ratio that two design inputs move, which
-is the sixth place in this subsystem where that pattern has appeared and the first where it bounds
-what can be **built** rather than biasing what is measured.
-
-**The same three cases were run on a `tail_shell` at `U` = 0.5 and the inequality holds there too,
-where it is not merely arithmetic already done.** A tail's slabs are tilted, so `in_plane` is
-`buttress_cut_thickness / sin θ` rather than the cut thickness itself, and which of the eleven tools
-trips the precondition first is a fact about the design rather than a prediction. All three are
-refused, and the tool that refuses is a side slab reading **0.1004 mm** in the layer plane — not the
-nose's exact 0.1000 — needing 52 facets at `t` = 0.8 mm and 55 at the reduced cut thickness. The
-30° diagonals have twice an axial slab's in-plane thickness and are nowhere near the floor, so it is
-the axial slabs that bound the tail.
-
-**What those three refused rows cost in coverage is larger than three points, measured 2026-10-25.**
-[OQ-DES-CW26](#open-questions)'s two-input interaction screen pairs the nose's nine design rows at
-every sign each one screens at, which gives 128 pairs. **43 of the 128 contain one of the three rows
-above**, and a pair containing a row the construction refuses on its own is refused for that
-inherited reason whatever the other row does — the build never gets far enough to say whether the
-two inputs interact. So 85 pairs were buildable and were scanned, and the other 43 are unreachable
-while this question stays open. The facet floor therefore bounds the interaction evidence on the nose
-at a third of its pairs, not at the three single excursions the table above shows, and that is the
-measured cost of leaving it unanswered rather than an argument for any particular alternative below.
-
-**That direction is worth stating because the diagnostic runs the other way.** `in_plane` is
-`buttress_cut_thickness / sin θ`, so a *shallower* cut is a *thicker* slab in the layer plane and
-therefore has **more** headroom, not less — the precondition binds on the steepest tools. What
-`dilated_notches` reports alongside it is `min(angles)`, the shallowest cut it saw, printed as
-"shallowest cut plane 30.00 deg from the layer plane" on a tail. That is the tool with the most
-margin. On a nose it happens to be the binding one, every tool being at 90°; on a tail it is not,
-and a reader watching that figure for a warning is watching the wrong tool. Reporting
-`max(angles)`, or the smallest `in_plane / t` ratio outright, would point at the tool that fails
-first — a one-line change, listed here rather than made, because it belongs with whichever
-alternative below is chosen.
-
-**One further observation, and it refutes the reason first given for it.** The precondition needs
-only the notch solids and `t`, both of which exist before `cavity` begins fitting, and it currently
-runs *after* the interior fit — so a configuration that will be refused pays for pass 1 first. That
-looked like a large saving and it is not. **Measured 2026-10-14 on all six refused cases, in
-process:** a refusal costs **83–99 s** on a `tail_shell` at `U` = 0.5 against 525–856 s for a build
-that completes, and **36–38 s** on a `nose_cowl_shell` at `U` = 1.0 against 37–54 s. The hoistable
-part is pass 1 alone, which the tail's log times at **25.3 s** plus 1 s to fuse; the remaining
-55–75 s is the OML import and the body and notch construction, all of which the check consumes as
-inputs. On the nose a refusal already costs essentially what a whole build costs, so there is
-nothing to hoist at all. The reordering is still correct, but it buys about 26 s on a tail at
-`U` = 0.5, not the 700 s first claimed here — pass 1's share of a build does grow with `U`, and that
-is unmeasured above `U` = 0.5.
-
-**Alternatives**
-
-1. **Derive `N` per tool from its own `in_plane` and `t`.** `N = ceil(π / asin(in_plane / 2t)) + 1`,
-   clamped below by the 38 the gap-accuracy measurement already requires and above by a stated
-   ceiling. *Benefits:* the construction builds every configuration whose geometry is sound instead
-   of refusing it; removes a fixed count standing against a varying ratio, which is the same defect
-   as `SEED_MAX` in OQ-DES-CW31 and the four before it; the arithmetic is already written — it is the
-   expression inside the error message that currently refuses the build; accuracy improves rather
-   than degrades, since the inscribed polygon's under-dilation `t·(1 − cos(π/N))` falls as `N` rises.
-   *Drawbacks:* build time becomes a function of the design inputs, and `N` would differ per tool on
-   a tail, where the 30° diagonals have twice the in-plane thickness of an axial slab; no build has
-   been measured at a derived `N`, and the count drives the boolean cost directly — `RIB_FACETS`' own
-   note measures 4.0 s a tool at 48, 8.6 s at 64 and 23.6 s at 96; an unclamped derivation would let
-   a pathological input ask for an arbitrarily large `N`. *Prerequisites:* a ceiling, and one build at
-   a derived `N` to price it — 727 s on the cheapest tail, and nothing blocks it.
-2. **Raise `RIB_FACETS` to a single larger fixed count.** 80 would cover `cowl_n_perimeters` = 2 at
-   the sheet's cut thickness. *Benefits:* one constant, no per-tool variation, no new arithmetic, and
-   the dilation accuracy only improves. *Drawbacks:* **every** build pays for the worst case, and the
-   measured cost is steep — at 96 facets, 23.6 s a tool against 4.0 s at 48, which on a tail's eleven
-   tools is minutes a build spent for configurations nobody is using; and it is still a count, so a
-   thin enough cut or a thick enough wall crosses the new floor in exactly the same way.
-   *Prerequisites:* measure the build cost at the chosen count on a tail.
-3. **Leave the count and document the buildable region.** Put the inequality and the two numeric
-   bounds in this document and in `RIB_FACETS`' note, so a configuration that will be refused is
-   known before a build is started. *Benefits:* free; the refusal is already correct and already
-   named, and `dilated_notches`' message computes the facet count the configuration would need, so a
-   user is told what to change rather than only that something is wrong. *Drawbacks:* leaves
-   `cowl_n_perimeters` = 2 unbuildable and leaves the construction refusing configurations whose
-   geometry is sound; leaves the input screen's coverage of those three cases permanently empty.
-   *Prerequisites:* none.
-4. **Hoist the precondition above pass 1.** Independent of 1–3 and compatible with all of them: move
-   the per-tool check to before the interior fit, where its two inputs already exist. *Benefits:*
-   a refused configuration stops before paying for a fit it will discard. *Drawbacks:* **the saving
-   is small, and that is measured rather than assumed** — about 26 s on a `tail_shell` at `U` = 0.5
-   and less on a nose, because a refusal already costs only 83–99 s on a tail and 36–38 s on a nose,
-   and most of that is the OML import and the body and notch construction, which the check consumes
-   as inputs; it also changes which exception a doubly-bad configuration reports, since pass 1 could
-   have raised first. *Prerequisites:* none. Pass 1's share of a build grows with `U` and is
-   unmeasured above `U` = 0.5, so the saving on a large tail is not known.
-
-**Recommendation**
-
-**Alternative 1, with alternative 4 taken alongside it, and alternative 3's documentation written
-either way.** Deriving the count is the same correction this subsystem has now made five times for a
-fixed count standing against a quantity that varies, the expression needed is already in the code —
-in the error message that currently refuses the build — and a clamp bounds the cost at both ends.
-What it needs first is one tail build at a derived `N`, because the count drives the boolean cost and
-77 facets on eleven tools is unpriced; that is 727 s and nothing blocks it.
-
-Alternative 2 should be rejected rather than left as the cheap option: it makes every build pay for a
-configuration nobody uses, and it leaves a count in place, so the same question returns the next time
-a design input moves.
-
-**Alternative 4 is a correct reordering and a weak one, and the measurement is what demoted it.** It
-was written here on the expectation that a refused tail configuration was paying ~700 s for a fit it
-would throw away; the three refused tail cases then measured the refusal at 83–99 s, of which about
-26 s is the fit. So take it if `dilated_notches` is being edited anyway, and do not take it for the
-time.
-
-One thing this recommendation does **not** claim: that any of it changes a wall that ships today. The
-parameter sheet's own values build, with 27 % margin in the ratio, and the three refusals above are
-the construction declining to build a neighbor of the design rather than shipping a bad part. What
-is at stake is how much of the design space is reachable, and how long it takes to find out that a
-given point is not.
+**Caveats.**
+- *Until planar ribs are built in production, the floor still applies.* `dilated_notches` still
+  builds the 48-gon and still refuses configurations below the floor. That refusal stays correct
+  for the construction as built: below the floor the tool is a comb, and the wall would ship with
+  material missing ([cowl_interior_surface.md §9.2](cowl_interior_surface.md)).
+- *The refused inputs have not been built with planar ribs.* That a two-perimeter cowl, or one at
+  `buttress_cut_thickness` 0.07 mm, builds with a correct wall is expected from the construction
+  but not measured.
 
 ### OQ-DES-CW33 — Every measure the gate has is in-plane, and the wall is inclined to the layer plane
 
@@ -5098,6 +4959,57 @@ qualifying one is IP-FC-169 against the criteria in §7.2.
 investigation at station density". The refusal's message already says that a gap approaching `t` is
 material absent and that more stations will not close it. The diagnosis went astray for other
 reasons, chiefly the dose harness's unit defects (IP-FC-146).
+
+### OQ-DES-CW40 — An exact rib-cut detector needs an inner offset the kernel cannot build — RESOLVED 2026-11-23
+
+**Decision: Alternative 1, with planar ribs.** The user adopted planar ribs on 2026-11-23. Each rib
+tool is to be built as `rib_hull.dilate_planar` builds it, in place of today's union of 48 copies
+of its slab moved around a circle of radius `t`:
+- each slab is split at its bends into convex parts;
+- each part is an intersection of half-spaces: every face plane moved out by `t` times the
+  horizontal length of its unit normal, plus a bevel plane along the bisector of any convex edge
+  whose face normals differ by more than 90 degrees.
+
+The result contains the round dilation in the layer plane, so no wall is thinner than `t`. Some
+corners are thicker: a right-angle corner stays square and reaches at most `t·√2` from the slab.
+This takes the place of the exact Minkowski sum with the 48-gon that Alternative 1 first proposed.
+
+The failed-cut detector is the one Alternative 1 called for. It measures the cavity's distance to
+the tool's inner offset by ε (`WALL_TOL_M`, 0.01 mm), built exactly from the tool's own planes,
+cylinders and balls (`rib_hull.inner_offset`). A distance within 1e-7 mm flags a failed cut
+(`rib_hull.reaches`).
+
+**Why.**
+- The user's design input: a rib's inner corners need not be round. A chamfer or a square corner
+  is acceptable, so long as no wall of the U-shaped rib gets thinner than the extrusion width,
+  because the slicer renders the wall correctly as long as that holds. The 48-gon existed only to
+  approximate a round corner.
+- The user sliced planar shells of the `U` = 1.0 nose and tail, and judged the geometry correct
+  and compatible with the slicer when the wall thickness matches the slicer's extrusion width.
+- On the `U` = 3.0 tail, planar ribs cut the dose that fails the shipped ribs in 5 of 5 runs. The
+  tool has 125 faces against 2,122 for the hull tool. Its inner offset is built and qualified, and
+  the detector gave no wrong verdict in 41 cases with a known answer. The tail shell built in
+  21 minutes, against 91 to 102 with the shipped ribs.
+
+**Caveats.**
+- *The wall must match the slicer's line width.* The shell's wall is
+  `cowl_n_perimeters × extrusion_width`, 0.6 mm by default. OrcaSlicer lays a 0.62 mm line for a
+  0.6 mm nozzle, and with that nozzle the 0.6 mm walls did not survive slicing. The user is
+  bringing the model's setting into line with the slicer's.
+- *The detector must use the inner offset of the tool that cut the cavity.* Against a larger
+  tool's offset, a correct cut is flagged.
+- *It has not been shown on a real failed cut.* With planar ribs no failure has been produced. It
+  was qualified on synthetic residues, the 30-degree apex and three real clean cavities.
+- *A kernel cut can hang while the inner offset is built.* None did with planar ribs, but only a
+  time limit set by a separate process can stop one.
+- *Production is unchanged by this decision.* `cowl_interior.dilated_notches` still builds the
+  48-gon union, and `cut_and_check` still checks the volume residue. Implementing the decision is
+  separate work.
+- *OQ-DES-CW32 was closed on this decision.* Planar ribs have no facet count, so once they are built
+  in production the 48-gon's solidity floor no longer applies.
+
+The construction, the measurements behind the decision, and the qualification are in
+[cowl_interior_surface.md §7.2.1](cowl_interior_surface.md).
 
 - [cowl_interior_surface.md](cowl_interior_surface.md) — the interior-surface algorithm §6.2
   calls for, in full

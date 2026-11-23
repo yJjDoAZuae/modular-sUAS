@@ -240,3 +240,18 @@ class TestTheConstructionHasNoMeasurementInItsInterface:
                 imported.append(node.module or '')
         offenders = [m for m in imported if 'wall_measure' in m or m.endswith('probe')]
         assert not offenders, 'the construction imports its own measurement interface: %s' % offenders
+
+
+class TestDilateHook(object):
+    """OQ-DES-CW40: the rib tools the cavity is cut with can be replaced, and only on request."""
+
+    def test_without_a_hook_the_construction_dilates_as_it_ships(self):
+        p = wm_probe.Probe()
+        got = p.dilate(lambda n, t, r: ('default', n, t, r), 'notches', 0.0006, None)
+        assert got == ('default', 'notches', 0.0006, None)
+        assert p.dilations == 0
+
+    def test_a_hook_replaces_the_tools_and_is_counted(self):
+        p = wm_probe.Probe(dilate=lambda n, t, r: ['hull'])
+        assert p.dilate(lambda n, t, r: ['union'], 'notches', 0.0006, None) == ['hull']
+        assert p.dilations == 1

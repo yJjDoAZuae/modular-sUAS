@@ -2116,8 +2116,8 @@ def _finished_wall_gap(solid, z_m, t_m, outer_at, planes, n_check,
 #: in the signature of this subsystem's production entry point. A reader of `cavity` should see the
 #: construction and nothing else.
 #:
-#: Read through `_probe_contour` and `_probe_floor` rather than directly, so the two places the
-#: construction consults it are one line each and greppable.
+#: Read through `_probe_contour`, `_probe_floor` and `_probe_ribs` rather than directly, so the
+#: three places the construction consults it are short and greppable.
 _probe = None
 
 
@@ -2132,6 +2132,13 @@ def _probe_contour(z_m, pts):
 def _probe_floor(default):
     """The floor to thin a per-patch union with. `default` in every build."""
     return default if _probe is None else _probe.station_floor(default)
+
+
+def _probe_ribs(notches, t_m, report):
+    """The dilated rib tools to cut with. `dilated_notches(notches, t_m, report)` in every build."""
+    if _probe is None:
+        return dilated_notches(notches, t_m, report)
+    return _probe.dilate(dilated_notches, notches, t_m, report)
 
 
 def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, report=None,
@@ -2614,7 +2621,7 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     # smooth surface it cuts does -- so re-dilating and re-fusing it on every round would repeat
     # the single most expensive step in the whole build (IP-FC-116: ~72 s dilating, ~260 s
     # fusing at `U` = 1, both growing with `U`) for no reason.
-    ribs = dilated_notches(notches, t_m, report)
+    ribs = _probe_ribs(notches, t_m, report)
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
 
     def cut_and_check(smooth_shape):

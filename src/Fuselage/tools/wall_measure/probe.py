@@ -2,14 +2,16 @@
 
 **Why this module exists.** Driving the booleans after the fit needs two things the construction
 does not otherwise offer: a way to perturb the eroded contour every row is built from, and a way to
-seed a station set the production floor would thin. Both were first built as **parameters on
-`cavity` and `shell_solid`** -- `contour_probe` and `station_floor_mm` as it was then named
+seed a station set the production floor would thin. (A third, replacing the rib tools the
+cavity is cut with, was added later for OQ-DES-CW40, on the same seam.) Both were first built as
+**parameters on `cavity` and `shell_solid`** -- `contour_probe` and `station_floor_mm` as it was
+then named
 ([OQ-DES-CW34](../../../../doc/design/cowl.md#open-questions)) -- which put measurement-only
 features in the signature of the subsystem's production entry point. That was judged unacceptable,
 which the decision itself had recorded as reversible, and this module is the replacement.
 
 **What the construction keeps.** One private module-level seam, `cowl_interior._probe`, inert when
-`None`, read through two one-line accessors. Nothing in `cavity`'s or `shell_solid`'s signature
+`None`, read through three short accessors. Nothing in `cavity`'s or `shell_solid`'s signature
 mentions measurement, and a reader of either sees the production interface only.
 
 **What this module adds.** The whole measurement vocabulary: what a probe is, what it may change,
@@ -59,15 +61,22 @@ class Probe(object):
     restores the unfiltered union the construction seeded before IP-FC-144 -- it declines to *drop*
     stations the construction derived for itself, and is not a way to force one in.
 
+    `dilate(notches, t_m, report)` replaces `dilated_notches` as the source of the rib tools the
+    cavity is cut with, and must return a list of solids as it does. OQ-DES-CW40 measures ribs built
+    as exact Minkowski sums through it; `dilations` counts the times it was used, for the same
+    reason `calls` exists.
+
     `calls` counts how many rows the contour hook actually transformed, so a reading is never
     quoted without evidence that something moved.
     """
 
-    __slots__ = ('contour_fn', 'station_floor_m', 'calls', 'stations_m')
+    __slots__ = ('contour_fn', 'station_floor_m', 'dilate_fn', 'calls', 'stations_m', 'dilations')
 
-    def __init__(self, contour=None, station_floor_m=None):
+    def __init__(self, contour=None, station_floor_m=None, dilate=None):
         self.contour_fn = contour
         self.station_floor_m = None if station_floor_m is None else float(station_floor_m)
+        self.dilate_fn = dilate
+        self.dilations = 0
         self.calls = 0
         #: Every `z_m` the contour hook transformed, in order, so the station actually moved is on
         #: record rather than assumed from the request.
@@ -87,14 +96,22 @@ class Probe(object):
         """The floor to thin the per-patch union with. `default_m` when none is set."""
         return default_m if self.station_floor_m is None else self.station_floor_m
 
+    def dilate(self, default, notches, t_m, report):
+        """The rib tools to cut with: `default(notches, t_m, report)` when no hook is set."""
+        if self.dilate_fn is None:
+            return default(notches, t_m, report)
+        self.dilations += 1
+        return self.dilate_fn(notches, t_m, report)
+
     @property
     def moved(self):
         """Did the contour hook change anything? The `inputs.unmoved` discipline, in one place."""
         return self.calls > 0
 
     def __repr__(self):
-        return '<Probe contour=%s floor_m=%s calls=%d>' % (
-            self.contour_fn is not None, self.station_floor_m, self.calls)
+        return '<Probe contour=%s floor_m=%s dilate=%s calls=%d>' % (
+            self.contour_fn is not None, self.station_floor_m, self.dilate_fn is not None,
+            self.calls)
 
 
 class Installed(object):

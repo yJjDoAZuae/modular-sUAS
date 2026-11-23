@@ -52,6 +52,8 @@ MODULE_NAMES = (
     # IP-FC-169: the rib-cut detector is qualified on residues of known depth, which only a
     # synthetic fixture can supply.
     ('rib_cut_detector', 'rib_cut_detector'),
+    # OQ-DES-CW40: ribs dilated as exact Minkowski sums, measured against closed forms.
+    ('rib_hull', 'rib_hull'),
 )
 
 

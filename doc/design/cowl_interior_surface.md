@@ -1516,7 +1516,8 @@ configuration that has been built.
 refused by `dilated_notches`' facet precondition — `RIB_FACETS` = 48 cannot tile a dilation once
 `in_plane / t` falls below `2·sin(π/48)` — which is a named, correct check on the *cutting tools*
 before any fit is involved, and the construction declining a configuration rather than shipping a
-wall with a hole in it. That is `cowl.md` OQ-DES-CW32. The distinction matters here precisely because
+wall with a hole in it. That is `cowl.md` OQ-DES-CW32, since resolved: planar ribs have no facet
+count (§7.2.1). The distinction matters here precisely because
 this section is about what a *failure* is evidence of: a precondition that refuses the inputs is not
 the same kind of event as the probe's `Unconverged`, and neither is the same kind of event as the
 probe's silent sign-reversed swing.
@@ -4034,7 +4035,7 @@ rule in `wall_measure/rib_cut.py`. It rests on four facts, each of which can be 
   and a point of it lies outside the cavity. Anything else, including a failed computation, is a
   flag. Any part of a face that could not be placed is reported as unexamined area, never as a pass.
 
-**Why the threshold is exactly the wall tolerance, at any angle between faces.** Residue shallower
+**Why the threshold is the wall tolerance behind a face, and not at a convex edge.** Residue shallower
 than `ε` lies within `ε` of the tool boundary. Every copy is at least `ε + c` from that boundary, so
 such residue stays at least `c` from every copy and every face clears. Residue reaching more than `ε`
 past a face comes within `c` of that face's copy, so the face flags. The first version certified
@@ -4042,6 +4043,35 @@ copies only `c` from the tool boundary. A synthetic 0.009 mm residue then flagge
 the one it was behind, a false positive the angle-free argument above removes. Measured on synthetic
 residues of known depth, 0.0095 mm clears and 0.0105 mm flags, on a square edge and on a 30-degree
 one (`tests/test_geometry_bridge_rib_cut_detector.py`).
+
+**That argument holds only where the residue's deepest point lies behind a copy.** An earlier
+version of this section said it held at any angle between faces. That is false, and it was never
+tested: both fixtures above put the residue in a layer along a face. A residue confined to the tip
+of a convex edge was measured on 2026-11-20, at the apex of the same 30-degree wedge. Depths of
+0.011, 0.012, 0.013 and 0.014 mm all cleared, and the first depth to flag was 0.016 mm. Those are
+false negatives at up to 1.4 times the tolerance.
+
+The cause is geometric, not a tuning error. Near a convex edge with angle `α` between its faces,
+depth grows along the edge's bisector at only `sin(α/2)` per unit of distance. So a residue point
+on the bisector at depth `d` is `(ε + c − d) / sin(α/2)` from the nearest copy, not `ε + c − d`.
+At 30 degrees that factor is 3.9. The inset margins and unplaced faces then widen the gap. **No
+positive clearance `c` avoids this.** Even copies extended exactly to the bisector leave a band of
+missed depths at every convex edge, `c (1 − sin(α/2))` wide.
+
+**What would be exact is a clearance of zero against the tool's inner offset.** The inner offset is
+the set of points exactly `ε` inside the tool. The cavity reaches deeper than `ε` exactly when it
+touches or crosses that surface, so the test is the cavity's distance to it. A correct cut sits a
+full `ε` away from the offset, so this does not bring back the coincident geometry the copies were
+built to avoid. On the 30-degree wedge, built with the kernel's offset, the threshold landed exactly
+on `ε` at the apex and along the long face alike: 0.0099 mm cleared and 0.0101 mm flagged. At an
+apex residue of 0.0095 mm, the distance read 0.0019319 mm, which is `(ε − d) / sin 15°`
+analytically.
+
+**The kernel cannot build that offset for the real tool.** Measured 2026-11-20 on the `U` = 3.0
+tail, `makeOffsetShape` inward by ε returned an invalid zero-volume shape for five of the tool's six
+solids and a null shape for the sixth. [OQ-DES-CW40](cowl.md#open-questions) decided how to get
+an exact detector from here: build the ribs from flat faces, and build their inner offset exactly
+in project code. §7.2.1 sets that out.
 
 **Containment is read from the boundary's normals, not by casting a ray.** Both certificates need
 to know which side of a boundary a copy is on. The first versions asked `isInside`, which casts a
@@ -4100,9 +4130,12 @@ Against the criteria:
   the cavity than the clearance, and 154 are copies certified clear of the cavity's boundary and
   read inside it.
 - **The control raises no flag.**
-- **The synthetic residues behave at the threshold.** On a square edge and a 30-degree edge,
-  0.0095 mm clears and 0.0105 mm flags.
-- **The error direction is argued from how the detector computes**, earlier in this section.
+- **The synthetic residues: not met.** A residue in a layer along a face behaves at the
+  threshold: 0.0095 mm clears and 0.0105 mm flags. A residue at the tip of a 30-degree edge
+  does not: it is missed from 0.011 through 0.014 mm. This was found on 2026-11-20, after this
+  table was first recorded.
+- **The error direction: not met.** The argument holds behind a face but fails at convex edges,
+  as set out above.
 
 The ten contradictions are all on the dosed cavity, and eight of them are on faces the detector
 cleared. Had ray casting decided containment, those would have been false flags.
@@ -4119,8 +4152,343 @@ That area is reported as untestable, never passed. But the requirement is not me
 remains. Counting it as a pass would let a residue confined to those facets through. Counting it
 as a fail would flag the correctly cut control. Closing it is the remaining work of IP-FC-169.
 
-**If no exact detector can be found,** the requirement cannot be met with these operations, and
-whether to relax it is a requirements question to be filed then, with the evidence from IP-FC-169.
+#### 7.2.1 Planar ribs and their exact inner offset
+
+**Decided in OQ-DES-CW40, 2026-11-23.** Each rib tool is built from flat faces, with square or
+beveled corners (`rib_hull.dilate_planar`). A failed cut is detected exactly by the cavity's
+distance to the tool's inner offset by ε (`rib_hull.inner_offset`, `rib_hull.reaches`). Production
+does not build either yet.
+
+*The inner offset.* It is the tool minus a prism ε deep under every face, with coplanar faces
+grouped into one prism; a cylinder of radius ε along every concave edge; and a ball of radius ε at
+each end of one. Every operand comes from the tool's own boundary, so the result is exact. Moving
+each convex part's planes in by ε, plus cylinders at the creases, is not enough: where two parts
+abut, it misses a slab 2ε thick along the whole face they share.
+
+The rest of this section is the record of how the decision was reached. It was measured in a
+harness on the `U` = 3.0 tail under IP-FC-169, first with ribs built as the convex hull of their
+48 copies ("hull ribs"), then with planar ribs.
+
+**Evidence so far, 2026-11-20.** The harness can now cut the cavity with hull ribs
+(`sever_doses.py --dilate=hull`) without changing any production build.
+
+*The hull ribs themselves.* All 11 notches were dilated both ways and compared.
+
+- Every hull rib is a valid solid, about 46 faces smaller than the union rib it replaces.
+- Every union rib lies wholly inside its hull rib: 0 mm3 of it is outside.
+- The hull adds 11 to 19 mm3 per rib, 0.010 to 0.026 percent of the rib's volume.
+- The five non-convex slabs split into exactly two convex parts each, 16 parts in all.
+  Where the two hulls of a slab meet there are 29 concave crease edges.
+
+*The cut that fails today.* The configuration IP-FC-146 is about is the `U` = 3.0 tail with the
+station floor at 0 and the station at z = -283.9951339 mm nudged by 0.03 mm. With the shipped union
+ribs it came back Unconverged in all five runs made of it. With hull ribs it built, as did the
+undisturbed control:
+
+| Dose | Ribs | Outcome | Solids | Rib residue | Annular stations |
+| --- | --- | --- | --- | --- | --- |
+| 0 | union (shipped) | built | 1 | 0 mm3 | 151 of 151 |
+| 0.03 mm | union (shipped) | Unconverged, 5 of 5 runs | -- | -- | -- |
+| 0 | hull | built | 1 | 0 mm3 | 151 of 151 |
+| 0.03 mm | hull | built | 1 | 0 mm3 | 151 of 151 |
+
+This is one failing configuration turned into a passing one, not a proof that hull ribs cure
+IP-FC-146 everywhere. It does settle the first open risk: the cut does not get worse on hull ribs,
+and here it gets better.
+
+*The kernel's own offset still fails.* `makeOffsetShape` inward by ε was tried again on the hull
+ribs. A plain box and a single convex slab offset correctly. A valid, convex, all-planar hull rib of
+154 faces does not: it returns a null shape with arc joins, and an invalid sliver of 0.11 mm3 with
+intersection joins, at tolerances from 1e-7 to 1e-3 mm. All six solids of the fused hull tool fail
+the same way. So hull ribs cannot lean on it either, and their inner offset has to be built
+(`rib_hull.inner_offset`).
+
+*The kernel's many-operand cut is wrong on these ribs.* Removing all the prisms in one cut, or fusing
+them first and cutting once, was compared with the exact answer on two convex hull ribs. On a
+154-face rib, both left 1,673 mm3 or more uncut, and the single cut split the result into 5 to 13
+pieces. On a 104-face rib both were 0.59 mm3 off. Cutting one prism at a time matched the exact
+answer to 0 mm3 on both, whether the prisms sat on the faces or straddled them, so coincident faces
+are not the cause. So `inner_offset` never removes many operands in one cut. How it does cut is
+set out below.
+
+**Evidence, 2026-11-21: building the inner offset of a whole hull tool.**
+
+*Why the cut is made cell by cell.* Cutting one operand at a time also broke down on a whole solid
+of the hull tool. Solid 0 has 1,240 faces and was cut with 2,459 operands, and its result went
+wrong as the cuts piled up. (2,381 of those operands are needed; the correction to the concave-edge
+count below explains the rest.) So `inner_offset` divides the solid into 20 mm cubes. It cuts
+each cube's share of the solid with only the operands that reach that cube, and then adds the
+shares back together. This is still exact, because every operand comes from the solid's own boundary.
+
+*The operands.* There is one prism per plane, with all coplanar faces grouped into one operand.
+There is one cylinder along each concave edge. There is one ball at each distinct end of a concave
+edge. On solid 0, 1,714 edge ends reduce to 845 distinct points. The duplicates had to go: two
+coincident balls made a cut shatter into dozens of pieces.
+
+*The kernel's cuts go wrong without saying so.* Each cell's result is therefore checked. A result is
+suspect if it is invalid, if it has shattered, if it lost a point that lies at least ε inside the
+solid, or if any piece of it comes nearer the boundary than ε while reaching deeper. Every check
+caught real errors. One cell kept a 303 mm3 piece reaching 0.35 mm deep, and another kept a 527 mm3
+piece reaching 4.06 mm deep. Neither cut reported a problem.
+
+*How a suspect cell is redone.* It is cut again in four ways, in order. First with its operands in
+batches, then one operand at a time, then split into eight smaller cells down to 1.25 mm, and last
+in a box grown by half its size on every side. Separately, the shares of all cells must add up to
+the solid's volume.
+
+*The survey of solid 0.* All 3,584 cells of solid 0 were cut and checked, each in a separate
+record. The cells that finished took 95 minutes in all.
+
+| Outcome | Cells |
+| --- | --- |
+| Trusted at the first cut | 3,569 |
+| Trusted after a retry | 9 |
+| Unresolved: 4 sub-cells of 1.25 mm each failed every retry, after 26 to 27 minutes | 2 |
+| Hung: no result after 30 minutes, and after over an hour for two of them | 4 |
+
+*All six failures are at one feature.* Solid 0 ends at x = -134.4 mm. There is a flat plane at
+x = -143.4 mm, where the rib end caps lie. All six failed cells contain that plane, and all eight
+unresolved sub-cells straddle it. Every other cell of the solid cut correctly.
+
+*What fails there, measured 2026-11-22.* Every rib of solid 0 runs along x and ends at
+x = -144 mm. Dilating it by `t` = 0.6 mm gives that end a rounded cap: a fan of 48-gon facets, each
+about 0.078 mm wide, reaching out to x = -143.4 mm. Solid 0 is the solid where ribs cross. Where
+one rib crosses another, the crossing line runs the length of the ribs and ends in the cap. There
+the cap's facets meet the other rib's face, one concave edge per facet. Each such place has two of
+these fans, one on each side of the crossed rib. Each fan has 25 to 48 concave edges, 0.04 to
+0.08 mm long; the shortest is 0.0098 mm, shorter than ε. Every one of those edges gets a cylinder
+of radius ε, and every vertex a ball, so dozens of operands crowd into a fraction of a millimeter.
+
+*That feature accounts for every failure.* Solid 0 has seven places where a cap meets a crossed
+rib.
+
+| Crossing near (y, z), mm | Concave edges | Cell outcome |
+| --- | --- | --- |
+| (±0.65, -240.0) | 2 × 48 | hung |
+| (73.3 and 74.4, -197.3) | 2 × 25 | hung |
+| (129.9, -165.0) | 24 | hung |
+| (-129.9, -165.0) | 24 | trusted after one retry |
+| (52.6 and 54.1, -120.8) | 2 × 25 | unresolved |
+| (±0.65, -90.0) | 2 × 48 | unresolved |
+| (38.5 and 39.6, -67.4) | 2 × 25 | hung |
+
+Six of the seven are in failed cells. The seventh is the mirror image, across y = 0, of one that
+hung, and it was trusted after a retry. So the feature does not always fail, but every failed cell
+contains one, and every cell without one was trusted.
+
+*Two leads this rules out.* Some concave edges of this tool turn very little: the smallest turn is
+1.78 degrees, and 10 edges turn less than 5 degrees. At least 7 of those 10 lie in trusted cells,
+so a small turn is not the cause. (The first count, before the correction below, was 33 edges with
+30 in trusted cells; the 23 dropped were convex.) Enlarging every cylinder and ball by a factor
+of 1.0001 or 1.001 was also tried on one failed sub-cell. It made the cell worse, not better: the
+result shattered into 21 to 50 pieces, or came out invalid.
+
+*A hang is a different kind of failure.* The checks catch an unresolved cell and report it. A cut
+that never returns cannot be caught from inside the program, because a kernel cut cannot be
+interrupted. Only a time limit set by a separate process can stop it. As written, `inner_offset`
+would wait on such a cell forever.
+
+*The other five solids, surveyed 2026-11-22.* Solids 1 to 5 are much smaller: 104 to 210 faces
+and 252 to 1,008 cells each. Every cell of all five was trusted, and only two needed a retry.
+Together they took 6 minutes. Their cell shares add up to each solid's volume to within
+1e-6 mm3. Solid 0's shares fall 1,609.5 mm3 short, which is the material inside its four hung
+cells.
+
+| Solid | Faces | Cells | Retried and trusted | Failed |
+| --- | --- | --- | --- | --- |
+| 0 | 1,240 | 3,584 | 9 | 6 |
+| 1 | 206 | 440 | 1 | 0 |
+| 2 | 208 | 660 | 1 | 0 |
+| 3 | 210 | 880 | 0 | 0 |
+| 4 | 154 | 1,008 | 0 | 0 |
+| 5 | 104 | 252 | 0 | 0 |
+
+*What this does and does not establish.*
+- The inner offset is built and checked on all of solids 1 to 5, and on 99.83 percent of
+  solid 0's cells.
+- The construction does not yet produce the inner offset of the whole tool. Six cells of solid 0
+  fail, all at its rib end caps on the plane x = -143.4 mm.
+- The detector has therefore not yet been run on the real dosed cavity.
+
+The per-cell records are in `freecad/out/hull_offset/survey_sN/cells.jsonl`, one folder per solid.
+
+**Design input, 2026-11-22: rib corners need not be round.** The user stated that a rib's corners
+do not have to be rounded to represent the offset from the rib cavity. A chamfer, or a square
+corner, is acceptable. The one constraint is that the U-shaped rib wall must never get thinner than
+the extrusion width, because the slicer renders the wall correctly as long as that holds. The
+48-gon exists only to approximate a round corner, so this removes the reason for it.
+
+*A dilation with flat faces and square corners.* `rib_hull.dilate_planar` builds each convex part
+of a slab this way:
+- Each face plane moves out by `t` times the horizontal length of its unit normal. That is exactly
+  as far as the round dilation in the layer plane moves it.
+- A convex edge whose face normals differ by more than 90 degrees also gets one bevel plane along
+  its bisector, at the same kind of distance. Without it, a sharp edge would grow a long spike.
+- The rib part is the intersection of those half-spaces.
+
+Every one of those planes touches the round dilation, so the result contains it. No wall is
+thinner than `t`; some corners are thicker. A right-angle corner stays square, and reaches at most
+`t` times the square root of 2 from the slab.
+
+*The planar tool against the hull tool,* both built from the same notches of the `U` = 3.0 tail:
+
+| | Hull tool (48-gon) | Planar tool |
+| --- | --- | --- |
+| Faces | 2,122 | 125 |
+| Solid 0: faces | 1,240 | 69 |
+| Solid 0: concave edges | 804 | 52 |
+| Shortest concave edge | 0.0098 mm | 0.186 mm |
+| Operands for solid 0's inner offset | 2,381 | 168 |
+| Volume added over the hull tool | -- | 1,728 mm3, 0.17 percent |
+
+None of the hull tool lies outside the planar tool. The facet fans at rib crossings are gone.
+
+*Its inner offset, surveyed the same way.* All 7,824 cells of the six solids were cut and checked
+in 7 minutes, against about 100 minutes for the hull tool. No cell hung. Three cells needed a
+retry and were then trusted. One 1.25 mm sub-cell of solid 0 failed every retry: the kernel left a
+3.9 mm3 piece in it that reaches 0.33 mm deep.
+
+*That failure belongs to the geometry, not the grid.* Solid 0 was surveyed again with 17 mm cells
+instead of 20 mm. The same place failed the same way, leaving a piece 0.34 mm deep, and every other
+cell was trusted. The place is a corner at about (-149.4, -93.9, -293.8) mm. Four planes meet there:
+a rib's square tip, a 1.5 mm2 bevel face, a short end face and a large rib face. Three concave
+edges meet at one vertex, turning 48 to 90 degrees. The shortest is 0.186 mm, 19 times ε, so this
+is neither a facet fan nor a sub-ε edge.
+
+*Why that corner miscut, found 2026-11-22.* Cutting that corner's cell directly showed the kernel
+leaving a needle of about 7e-6 mm3 along the 0.186 mm concave edge. The cylinder on that edge
+should have removed it, and the check caught it. Building the operands in another order did not
+remove it, and neither did fusing the cylinder with its end balls. Cutting the same operands a
+second time from the result did remove it.
+
+That second cut is still exact. In exact arithmetic a second cut by the same operands removes
+nothing more, so it can only complete a cut the kernel left short. `rib_hull._cut_cell` now makes
+that second cut whenever a cell's first result fails its checks, and still records the failed
+first attempt. Making the cylinder slightly larger also removed the needle, but that is not exact,
+so it was not used.
+
+With the second cut, every cell of solid 0 was trusted on both the 20 mm and the 17 mm grid. Solids
+1 to 5 were already clean. The inner offset of the whole planar tool is therefore built. For each
+solid, the cells' shares of the solid add up to its volume to the last digit printed, 1e-6 mm3.
+
+*The inner offset, qualified.* Two checks, each run on all six solids:
+- *Its surface sits at ε.* At 73,389 points sampled across the offset's faces, the distance to
+  the tool's boundary was 0.010000000 mm at every point, to the nine digits printed. Faces on cell
+  walls were left out, because they are cuts between cells and not part of the offset's surface.
+- *It holds exactly the points deeper than ε.* 2,400 random points inside the tool, 400 per
+  solid, were each tested against the offset. 1,941 of them lay deeper than ε. None was on the
+  wrong side.
+
+*The cavity, built with planar ribs.* The harness built the failing configuration, the `U` = 3.0
+tail with the 0.03 mm dose, with planar ribs in place of the shipped ones:
+
+| Dose | Outcome | Solids | Rib residue | Annular stations | Build time |
+| --- | --- | --- | --- | --- | --- |
+| 0 (control) | built | 1 | 0 mm3 | 151 of 151 | 1,794 s |
+| 0.03 mm | built | 1 | 0 mm3 | 151 of 151 | 1,946 s |
+
+The shipped ribs fail this dose in 5 of 5 runs. The wall at the incumbent station was
+0.591418 mm in the control and 0.591251 mm with the dose. The shapes are in
+`freecad/out/planar_dosed/shapes/`.
+
+*A correction to the concave-edge counts, 2026-11-22.* `rib_hull.concave_edges` called an edge
+concave when any vertex of one face lay outside the other face's plane. That tests a whole face,
+not the edge. A face that is not convex, as fused rib faces often are, can reach past the other
+plane far from the edge, so some convex edges were counted as concave. No concave edge was missed:
+a face that bends outward at an edge must have a vertex outside.
+
+The extra edges did not make any inner offset wrong. A cylinder on a convex edge removes nothing
+that the two face prisms do not already remove, so every inner offset built so far is still exact.
+Only the counts were wrong. The test now steps from the edge's midpoint into one face and asks
+which side of the other face's plane the step goes (`rib_hull.bends_out`). The counts in the tables
+above are the corrected ones. For the planar tool the correction is large: 52 concave edges on
+solid 0, not 142, and its shortest is the 0.186 mm edge where the corner miscut. Solid 0 was
+surveyed again with the corrected 168 operands, in 5 minutes. All 3,584 cells were trusted, one
+after the same corner's second cut, and their shares add up to the solid's volume.
+
+*The detector, run 2026-11-22.* `rib_hull.reaches`, against the planar tool's inner offset:
+
+| Case | Expected | Result |
+| --- | --- | --- |
+| Planar control cavity | not flagged | not flagged; nearest 0.009999 mm |
+| Planar cavity with the 0.03 mm dose | not flagged | not flagged; nearest 0.009999 mm |
+| Shipped-rib control, cut again by the planar tool | not flagged | not flagged; nearest 0.0074 mm |
+| Residues 1 percent short of ε | not flagged | 16 of 16 not flagged |
+| Residues 1 percent past ε | flagged | 16 of 16 flagged |
+| 30-degree apex, 0.0099 mm deep | not flagged | not flagged |
+| 30-degree apex, 0.0101 to 0.016 mm deep | flagged | 5 of 5 flagged |
+
+The residues sit on a face, a convex edge and a concave edge of each solid; solids 4 and 5 have no
+concave edge. A residue is the tool's material within a ball around the point, sized to reach the
+stated depth. The 30-degree apex is the case that disqualified the detector built from face copies.
+That makes 41 cases with a known answer, and no wrong verdict.
+
+*The reference must be the tool that made the cut.* The shipped-rib control cavity, judged as
+built against the planar offset, is flagged on all six solids. That is correct, not a false alarm.
+The planar tool is larger than the shipped one by up to (√2 − 1)·`t`, about 0.25 mm, at its square
+corners. A correct cut by the smaller tool leaves cavity there, far deeper than ε inside the larger
+tool. So a cavity can only be judged against the inner offset of the tool that cut it.
+
+That rules out the one real failure on record. The failed cut of the dosed `U` = 3.0 tail was made
+by the shipped ribs, and their inner offset has not been built. Judged against the planar offset,
+it is flagged on all six solids, which says nothing. One attempt to make it judgeable was to cut
+solids 1 to 5 again with the planar tool, leaving solid 0's uncut ribs alone. The kernel's cut
+failed: the shape's volume rose by 99,281 mm3, about the volume of tool solid 1, and the result was
+invalid. The detector flagged that shape on solids 0 and 1, and it was right to: the shape fills
+tool solid 1.
+
+*Where the kernel's distance stalls.* On that failed cut, the kernel's distance gave no answer in
+90 minutes. It answers in about 70 seconds when the two shapes are apart. It stalls when they
+overlap widely, which is exactly the case to flag. So `reaches` now first tests up to 64 points of
+the inner offset, one vertex from each of its largest pieces, for lying strictly inside the shape.
+A point strictly inside is an overlap, so a hit cannot be a false positive. With no hit, the
+kernel's distance decides, as before. On the failed cut, the first hit came within 40 seconds on
+solid 0 and under a second on the other five. With no hit, the points cost about 13 seconds.
+
+*Examples for the slicer, 2026-11-23.* To decide on planar ribs, the user asked for cowls built
+with them to run through the slicer. `freecad/rib_examples.py` builds a cowl kind at a chosen `U`
+through its production builder, with only the rib dilation swapped, and meshes it at the export
+deflection. Planar ribs change only the shelled kinds. The print blanks, `tail` and `nose_cowl`,
+have no rib dilation in them and are the same either way. The files are in
+`freecad/out/rib_examples/`.
+
+| Shell | Planar ribs | Shipped ribs |
+| --- | --- | --- |
+| Tail, `U` = 1.0 | 23,806 mm3, built in 5 min | 23,617 mm3, built in 19 min |
+| Nose, `U` = 1.0 | 9,751 mm3, built in 29 s | 9,722 mm3, built in 40 s |
+| Tail, `U` = 3.0 | 215,219 mm3, built in 21 min | took 91 to 102 min in earlier runs |
+
+Every shell built as one valid solid. The planar shells are slightly larger, because square and
+beveled corners hold a little more material than round ones.
+
+The user sliced the `U` = 1.0 nose and tail shells on 2026-11-23. Nothing was printed.
+- With a 0.4 mm nozzle, both sliced correctly: scanning through the layers showed contiguous loops.
+- With a 0.6 mm nozzle, none of the walls survived. The shells' walls are 0.6 mm, one perimeter
+  of the model's `extrusion_width` of 0.6 mm. The slicer most likely uses a wider line than the
+  nozzle for a 0.6 mm nozzle, so every wall is thinner than one line and is dropped.
+
+So the shelled model is only right when its `extrusion_width` is the width the slicer actually
+lays down. The user is finding the slicer's extrusion width setting, to bring the model's value
+into line with it. OrcaSlicer was found to use a 0.62 mm line for a 0.6 mm nozzle, and up to
+0.5 mm for a 0.4 mm nozzle.
+
+The user's assessment, 2026-11-23: from the planar shells seen so far, the geometry is correct,
+and compatible with the slicer when the wall thickness is chosen to match the slicer's extrusion
+width setting. On that basis the user adopted planar ribs, closing OQ-DES-CW40.
+
+*What this does and does not establish.*
+- Square and beveled corners reduce the tool to about a seventeenth of its faces. Its inner offset
+  is built and qualified.
+- With planar ribs, the dose that defeats the shipped ribs cuts cleanly.
+- The detector gave no wrong verdict in 41 cases with a known answer: three real cavities, 32
+  residues 1 percent either side of ε, and the 30-degree apex.
+- It has not been shown flagging a real failed cut, judged against the tool that made the cut.
+  No such failure exists with planar ribs, and the shipped ribs' inner offset is not built.
+- Planar ribs change Alternative 1's construction: the rib is no longer the exact Minkowski sum
+  with the 48-gon, but a superset of the round dilation. The user adopted them on 2026-11-23.
+
+The planar survey records are in `freecad/out/hull_offset/survey_planar_sN/` and, for the 17 mm
+grid, `survey_planar17_s0/`.
 
 ## 8. Deliberately not specified here
 
@@ -4190,6 +4558,14 @@ Measured on the tail at `U` = 1, that built a wall of 22 348.60 mm³ against abo
 stations reporting 0.1035 mm of wall where 0.6 mm was wanted. `dilated_notches` now refuses that
 case with `PreconditionFailed` instead of building it. That refusal is what §6.2 and §10 mean when
 they say a configuration is unreachable: three of §10's own screening cases are turned away by it.
+
+**Decided to change, 2026-11-23.** [OQ-DES-CW40](cowl.md#open-questions) adopted planar ribs: each
+convex part of a slab is grown by intersecting half-spaces, every face moved out by
+`t·hypot(n.x, n.y)` and sharp convex edges beveled, so a rib's corners come out square or beveled
+instead of as a 48-gon. The growth is still in the layer plane only, as this section requires, and
+no wall is thinner than `t`. There is no facet count, so the solidity floor above goes with it.
+This section describes the construction as it is built today, until that change is implemented;
+§7.2.1 has the planar construction and the measurements behind it.
 
 ### 9.3 Fitting spacing and checking spacing are two different numbers
 
@@ -4864,8 +5240,9 @@ every station measured, and `n` = 400 works least often.
   moved at a large `U`**, where the part is biggest and the 0.6 mm wall proportionally thinnest. The
   screen also cannot reach three of its own cases at all: `buttress_cut_thickness` = 0.07 mm,
   `extrusion_width` = 0.8 mm and `cowl_n_perimeters` = 2 are each refused by `RIB_FACETS` = 48's
-  solidity precondition, which is [OQ-DES-CW32](cowl.md#open-questions) and
-  [IP-WTM-47](../implementation/wall_thickness_measure.md#work-items). Because the cost scales with
+  solidity precondition. [OQ-DES-CW32](cowl.md#open-questions) was resolved by adopting planar
+  ribs, which have no facet count, so all three become reachable once planar ribs are built in
+  production. Because the cost scales with
   the build, closing either gap is a decision about machine time rather than a matter of writing
   more cases: the `tail_shell` population alone was 6 h 16 min of that run at the *cheapest* `U`.
 

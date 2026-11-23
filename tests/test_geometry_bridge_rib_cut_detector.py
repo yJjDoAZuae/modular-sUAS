@@ -115,8 +115,33 @@ def _wedge_cavity(Part, App, residue_mm):
     return cavity, tool
 
 
+def _apex_cavity(Part, App, residue_mm):
+    """The body cut by the wedge with its sharp tip left uncut, so residue sits only at the apex.
+
+    The uncut tip is the part of the wedge within `s` of the apex along its bisector. Its deepest
+    point relative to the tool is on the bisector at `s`, at depth `s sin(15 deg)`, so `s` is chosen
+    to make that depth `residue_mm`. Returns `(cavity, tool)`; the tool is always the whole wedge.
+    """
+    import math
+    half = math.radians(15.0)
+    body = Part.makeBox(BODY[0], BODY[1] + 3.0, BODY[2], App.Vector(*BODY_ORIGIN))
+    corners = [App.Vector(0.0, 0.0, 0.0), App.Vector(WEDGE_LEG, 0.0, 0.0),
+               App.Vector(WEDGE_LEG, WEDGE_RISE, 0.0), App.Vector(0.0, 0.0, 0.0)]
+    tool = Part.Face(Part.makePolygon(corners)).extrude(App.Vector(0.0, 0.0, TOOL[2]))
+    reach = residue_mm / math.sin(half) / math.cos(half)
+    cutter = Part.Face(Part.makePolygon([
+        App.Vector(reach, 0.0, 0.0), App.Vector(WEDGE_LEG, 0.0, 0.0),
+        App.Vector(WEDGE_LEG, WEDGE_RISE, 0.0),
+        App.Vector(reach * math.cos(2 * half), reach * math.sin(2 * half), 0.0),
+        App.Vector(reach, 0.0, 0.0)])).extrude(App.Vector(0.0, 0.0, TOOL[2]))
+    cavity = body.cut(cutter)
+    assert len(cavity.Solids) == 1
+    return cavity, tool
+
+
 class TestTheThresholdIsExact(object):
-    """A twentieth of the tolerance either side of it, on a square edge and on a 30-degree one."""
+    """A twentieth of the tolerance either side of it, on a square edge and on a 30-degree one --
+    and at that edge's apex, where the face-copy method does not meet it."""
 
     def test_box_just_below(self, det, Part, App):
         cavity, tool = _cavity(Part, App, 0.0095)
@@ -136,6 +161,18 @@ class TestTheThresholdIsExact(object):
 
     def test_wedge_just_above(self, det, Part, App):
         cavity, tool = _wedge_cavity(Part, App, 0.0105)
+        assert det.examine(cavity, tool)['counts']['flagged'] >= 1
+
+    @pytest.mark.xfail(strict=True, reason=(
+        'IP-FC-169, measured 2026-11-20: the face-copy method misses residue confined to a '
+        'convex edge, 0.011 to 0.014 mm at this 30-degree apex; any positive clearance leaves '
+        'such a band (cowl_interior_surface.md section 7.2, OQ-DES-CW40)'))
+    def test_wedge_apex_just_above(self, det, Part, App):
+        cavity, tool = _apex_cavity(Part, App, 0.012)
+        assert det.examine(cavity, tool)['counts']['flagged'] >= 1
+
+    def test_wedge_apex_far_above_is_flagged(self, det, Part, App):
+        cavity, tool = _apex_cavity(Part, App, 0.02)
         assert det.examine(cavity, tool)['counts']['flagged'] >= 1
 
 
