@@ -4164,10 +4164,10 @@ as a fail would flag the correctly cut control. Closing it is the remaining work
 
 **Decided in [OQ-DES-CW40](cowl.md#open-questions), 2026-11-23.** Each rib tool is built from flat
 faces, with square or beveled corners. A failed cut is detected exactly by the cavity's distance to
-the tool's inner offset by ε. Both are in `freecad/rib_geometry.py`, and production builds both:
-`cowl_interior.dilated_notches` builds the planar ribs (IP-FC-170), and `cut_and_check` refuses a
-cavity that reaches the inner offset of the tool that cut it (IP-FC-171), after the volume residue
-and connectivity checks, which stay.
+the tool's inner offset by ε. Both are in `freecad/rib_geometry.py`. Production builds the planar
+ribs (`cowl_interior.dilated_notches`, IP-FC-170). It does not yet run the exact check: wired into
+`cut_and_check`, the inner offset of a live `U` = 3.0 tail's tool could not be built, so every such
+build was refused (IP-FC-171, "The offset fails on the tool of a live build" below).
 
 **Why the corners need not be round.** The 48-gon §9.2 records existed only to approximate a round
 corner. The user stated on 2026-11-22 that a rib's corners need not be round. A chamfer or a square
@@ -4341,7 +4341,25 @@ than the slicer's 0.62 mm line.
   built. The one recorded real failure was cut by shipped ribs. Cutting it again with the planar
   tool failed in the kernel: the result was invalid, and its volume rose by 99,281 mm³.
 - Everything above was measured on one tail at `U` = 3.0, and the slicing on `U` = 1.0.
-- Production is unchanged.
+- The inner offset is not robust on the tool of a live build. See below.
+
+**The offset fails on the tool of a live build, measured 2026-11-23.** With the exact check wired
+into `cut_and_check`, a production `tail_shell` build at `U` = 3.0, with nothing done to it, was
+refused: the inner offset could not be built. One 1.25 mm cell of the largest tool solid, at about
+(-144.35, 38.22, -69.31) mm, failed every retry, the second cut included, and the kernel left a
+piece of 8.77 mm³ reaching 0.46 mm deep. The two deliberate-failure builds of IP-FC-169 were refused
+at the same cell. The check was taken back out of `cut_and_check`, so production builds the planar
+ribs without it.
+- *The tool the build made fails; every reconstruction of it does not.* The same tool, built from
+  the saved notches, gave a trusted offset in every cell, with 4 retries in the largest solid
+  against the live tool's 29. It has the same 125 faces and the same volume to the sixth decimal.
+  Writing it to BREP and reading it back, as the child process does, moves no vertex more than
+  7e-13 mm and changes nothing. So differences in the last digits decide whether the cell can be cut.
+- *The failure belongs to the geometry, not the grid.* The live tool's largest solid fails at the
+  same place on 17 mm and 23 mm grids, leaving pieces of 28.7 and 12.4 mm³ about 0.44 to 0.49 mm
+  deep. Why the kernel miscuts there is not known.
+- The live tool is kept at `freecad/out/ip_fc_171/plain/refusals/tail_shell_U3_d0mm.brep`, which is
+  output and not committed.
 
 ## 8. Deliberately not specified here
 

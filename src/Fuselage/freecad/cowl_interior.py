@@ -65,7 +65,6 @@ import FreeCAD as App
 import Part
 
 import rib_geometry
-import rib_offset_worker
 import si
 
 
@@ -2569,22 +2568,6 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     ribs = _probe_ribs(notches, t_m, report)
     tool = ribs[0] if len(ribs) == 1 else ribs[0].fuse(ribs[1:]).removeSplitter()
 
-    # **The exact rib-cut check needs the tool's inner offset, built once, here** (IP-FC-171,
-    # section 7.2.1). A cut leaves rib material `WALL_TOL_M` deep exactly when the cavity reaches
-    # the inner offset of the tool that cut it, and that tool does not change between the cuts
-    # below. The offset is built in a child process with a time limit, because a kernel cut in it
-    # can fail to return and nothing in this process could stop it (OQ-DES-CW41).
-    at = time.time()
-    try:
-        cores, offset_report = rib_offset_worker.bounded_inner_offset(tool, WALL_TOL_M)
-    except rib_offset_worker.OffsetNotBuilt as exc:
-        raise Unconverged('the rib cut cannot be checked: %s' % exc) from exc
-    note('rib tool inner offset: %d solid(s), %d cell retries, %.0f s (limit %.0f s)'
-         % (len(cores), sum(s['retries'] for s in offset_report['solids']), time.time() - at,
-            offset_report['limit_s']))
-    if report is not None:
-        report.update(rib_offset_s=time.time() - at, rib_offset_limit_s=offset_report['limit_s'])
-
     def cut_and_check(smooth_shape):
         """One rib cut plus its two existing identity checks (section 4.2's residue, and the
         cavity's own connectivity), factored out so the post-cut refinement loop below can
@@ -2622,26 +2605,8 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
                 'not a volume one, and a disconnected result is refused at any `U`, never '
                 'accepted as one more shape mirroring has to handle.' % len(cut.Solids),
                 shape=cut)
-        # **The exact check, after the two above** (IP-FC-171). The residue check reads a
-        # boolean, and measured 2026-11-15 that boolean returned an empty shape on a cavity holding
-        # at least 8641.5 mm3 of uncut rib (section 7.2). This one reads the cavity's distance to
-        # the tool's inner offset, which is zero exactly when rib material at least `WALL_TOL_M`
-        # deep was left behind; it has no sample and no clearance in it. The two above stay: they
-        # are cheaper, and each refuses with its own account of what went wrong.
-        judged = rib_geometry.judge_cut(cut, cores)
-        reached = [k for k, d in judged if d is not None and d <= rib_geometry.TOUCH_TOL_M]
-        if report is not None:
-            report.update(rib_cut_distances_m=[d for _k, d in judged])
-        if reached:
-            raise Unconverged(
-                'rib material at least %.4f mm deep is left inside the cavity, in tool solid(s) %s '
-                'of %d: the cavity reaches those solids\' inner offset. The cut failed there, and '
-                'the wall would be missing material where the rib should be.'
-                % (si.mm(WALL_TOL_M), ', '.join(str(k) for k in reached), len(judged)),
-                shape=cut)
-        note('ribs cut in %.0f s, %.6f mm3 left inside, nearest the inner offset %.6f mm'
-             % (time.time() - at, si.volume_m3(left) * si.MM3_PER_M3,
-                si.mm(min((d for _k, d in judged if d is not None), default=float('nan')))))
+        note('ribs cut in %.0f s, %.6f mm3 left inside'
+             % (time.time() - at, si.volume_m3(left) * si.MM3_PER_M3))
         return cut, si.volume_m3(left)
 
     solid, rib_residue_m3 = cut_and_check(smooth)
