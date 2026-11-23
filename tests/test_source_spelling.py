@@ -102,6 +102,16 @@ def test_fix_text_renames_then_corrects_prose():
     assert leftover == []
 
 
+def test_changes_names_each_word_and_its_line():
+    text = 'first line\n    centre = part.centre\nbehaviour and colour\n'
+    assert ss.changes(text) == [(2, 'centre', 'center'), (2, 'centre', 'center'),
+                                (3, 'behaviour', 'behavior'), (3, 'colour', 'color')]
+
+
+def test_changes_is_empty_on_american_text():
+    assert ss.changes('center and behavior\n') == []
+
+
 def test_fix_text_is_idempotent():
     once, _r, _w, _l = ss.fix_text('# the behaviour of artefact_fraction\n')
     twice, renamed, worded, leftover = ss.fix_text(once)

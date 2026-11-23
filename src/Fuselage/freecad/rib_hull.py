@@ -216,8 +216,8 @@ def dilate_planar(part, t_m, bevel_deg=BEVEL_DEG):
         na, nb = _plane(faces[0])[0], _plane(faces[1])[0]
         if na.dot(nb) < limit:
             rows.append(row([na.x + nb.x, na.y + nb.y, na.z + nb.z]))
-    centre = part.CenterOfMass
-    hs = HalfspaceIntersection(np.array(rows), np.array([centre.x, centre.y, centre.z]))
+    center = part.CenterOfMass
+    hs = HalfspaceIntersection(np.array(rows), np.array([center.x, center.y, center.z]))
     return _solid_from_hull(hs.intersections)
 
 
@@ -232,8 +232,8 @@ def shrink(convex, eps_mm):
         n, d = _plane(f)
         rows.append([n.x, n.y, n.z, -(d - eps_mm)])
     halfspaces = np.array(rows)
-    centre = convex.CenterOfMass
-    inside = np.array([centre.x, centre.y, centre.z])
+    center = convex.CenterOfMass
+    inside = np.array([center.x, center.y, center.z])
     if np.max(halfspaces[:, :3].dot(inside) + halfspaces[:, 3]) >= 0.0:
         return None
     hs = HalfspaceIntersection(halfspaces, inside)

@@ -214,6 +214,30 @@ def fix_text(text):
     return text, renamed, worded, leftover
 
 
+#: A run of identifier or word characters, for pairing a line's words before and after repair.
+_TOKEN = re.compile(r'[A-Za-z0-9_]+')
+
+
+def changes(text):
+    """`[(line, old, new)]`: each word the repair would change, with its 1-based line number.
+
+    The repair works on whole words and tokens and never adds or removes a line, so a line's
+    words before and after it pair one to one, and a pair that differs is a change. This is what
+    lets a failed check name the word and the line instead of only counting them.
+    """
+    new = fix_text(text)[0]
+    out = []
+    for i, (a, b) in enumerate(zip(text.split('\n'), new.split('\n')), 1):
+        if a == b:
+            continue
+        old_words, new_words = _TOKEN.findall(a), _TOKEN.findall(b)
+        if len(old_words) == len(new_words):
+            out += [(i, o, n) for o, n in zip(old_words, new_words) if o != n]
+        else:
+            out.append((i, a.strip(), b.strip()))
+    return out
+
+
 def _wanted(rel, name):
     """Is this tracked path one this module should correct?"""
     if any(frag in os.sep + rel for frag in SKIP):
@@ -332,6 +356,11 @@ def main(argv=None):
     for path, worded, renamed, _ls in rows:
         print('    %-58s %3d word(s)  %2d rename(s)'
               % (os.path.relpath(path, ROOT), worded, renamed))
+        if '--fix' not in argv:
+            with io.open(path, 'rb') as fh:
+                text = fh.read().decode('utf-8')
+            for line, old, new in changes(text):
+                print('        line %-6d %s -> %s' % (line, old, new))
     print('')
     print('%d file(s), %d word(s), %d identifier rename(s)' % (len(rows), words, renames))
     if leftover:
@@ -370,7 +399,24 @@ def main(argv=None):
     else:
         print('embedded paths in tracked files: 0')
 
-    return 1 if ((rows and '--fix' not in argv) or identities or embedded) else 0
+    # **The last line is the verdict, stated in words.** A failure used to end on a count, or on
+    # "embedded paths in tracked files: 0" when only the spelling half failed, which reads like a
+    # pass. A tool showing only the end of the output must still show which way this went.
+    failed = []
+    if rows and '--fix' not in argv:
+        failed.append('%d British spelling(s) in %d file(s), listed above; '
+                      '`python src/Fuselage/tools/source_spelling.py --fix` repairs them'
+                      % (words + renames, len(rows)))
+    if identities:
+        failed.append('%d personal name(s), listed above' % len(identities))
+    if embedded:
+        failed.append('%d embedded path(s), listed above' % len(embedded))
+    print('')
+    if failed:
+        print('FAILED: American spellings and no names in source -- ' + '; '.join(failed) + '.')
+        return 1
+    print('PASSED: American spellings and no names in source.')
+    return 0
 
 
 if __name__ == '__main__':

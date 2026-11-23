@@ -37,8 +37,9 @@ distinction the original wording was reaching for still holds and is worth keepi
 measure was decidable from requirements, while *what the acceptance gate should do about what the
 measure found* is not.
 
-**Status, 2026-10-25: 44 items done, 1 `todo`, 7 blocked on open questions, 0 `active`.** The one
-`todo` is IP-WTM-49, which is a measurement and needs no decision. The two newest items close the
+**Status, 2026-11-23: 44 items done, 1 `todo`, 6 blocked on open questions, 0 `active`,
+1 superseded.** The one `todo` is IP-WTM-49, which is a measurement and needs no decision.
+The two newest items close the
 testing work OQ-DES-CW26 named as outstanding in its alternatives 1 and 3: IP-WTM-50 surveys the
 selected measure's convergence at the breadth that rejected the incumbent, and IP-WTM-51 builds and
 scans the two-input interaction corpus.

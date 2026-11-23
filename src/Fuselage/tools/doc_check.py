@@ -1049,6 +1049,10 @@ def main(argv=None):
         ran = [n for n, _f in CHECKS if not only or n in only]
         print('%d finding(s) from %d check(s): %s'
               % (len(found), len(ran), ', '.join(ran)))
+        # The verdict in words, last, so a tool that shows only the end of the output still
+        # says which way it went.
+        print('FAILED: documentation invariants -- %d finding(s), listed above.' % len(found)
+              if found else 'PASSED: documentation invariants.')
     return 1 if found else 0
 
 
