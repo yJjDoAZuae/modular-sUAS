@@ -1311,6 +1311,8 @@ This affects nobody in the project's own toolchain: the sweep and `build_part.py
 | OQ-DES-CW35 | Should the interior-surface construction carry a test-only seam at all? | Blocking IP-FC-156 |
 | OQ-DES-CW37 | The refit's sample density is a floor, and the one density measured below it was the only one that never failed. | Not blocking |
 | OQ-DES-CW38 | A tail wall's volume moves while every operand the instrument can see is identical. | Not blocking |
+| OQ-DES-CW41 | A kernel cut that never returns would stall a build that checks its rib cut exactly; how is that bounded? | Blocking IP-FC-171 |
+| OQ-DES-CW42 | The rib-cut detector's first qualification criterion needs a cavity that planar ribs cannot produce. | Blocking IP-FC-169 |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
 
@@ -5585,6 +5587,138 @@ The construction, the measurements behind the decision, and the qualification ar
 [cowl_interior_surface.md §7.2.1](cowl_interior_surface.md). The raw data for the inner offset
 and the detector is in [planar_rib_inner_offset.csv](../data/planar_rib_inner_offset.csv) and
 [planar_rib_detector_cases.csv](../data/planar_rib_detector_cases.csv).
+
+### OQ-DES-CW41 — A kernel cut that never returns would stall a build that checks its rib cut exactly — OPEN
+
+**Problem**
+
+This is an implementation-planning question, raised by `/impl update` on 2026-11-23.
+
+Each shelled cowl's interior cavity is cut by rib tools, and a failed cut leaves rib material in
+the cavity. OQ-DES-CW40 decided that the cut is to be checked exactly: build the rib tool's inner
+offset by ε = `WALL_TOL_M` (0.01 mm), the set of points of the tool at least ε from its boundary,
+and refuse the cavity if it comes within 1e-7 mm of that offset. `rib_hull.inner_offset` builds
+the offset by cutting the tool with thousands of small operands, one 20 mm cube of the tool at a
+time ([cowl_interior_surface.md §7.2.1](cowl_interior_surface.md)).
+
+A cut by the geometry kernel (OpenCASCADE) can fail to return at all. It cannot be interrupted from
+inside the program that called it. Only a separate process that kills the caller can stop it. Today
+the build checks the rib cut in-process, inside `cowl_interior.cavity`, and the entry points that
+run builds have no time limit on a build. The OpenSCAD sweep calls `subprocess.check_call` with no
+timeout, and `tools/run_input_screen.py` calls `subprocess.run` with none either. The geometry
+bridge used by the tests catches a wedged call by its silence, not by its duration (`wire.py`).
+
+How often this happens, measured on the `U` = 3.0 tail:
+
+| Tool | Cells cut | Cells that never returned |
+| --- | --- | --- |
+| 48-gon ribs (exact hull), largest solid | 3,584 | 4, each still running after 30 minutes or more |
+| Planar ribs, all six solids at 20 mm, and the largest again at 17 mm | 12,600 | 0 |
+
+The hangs were at a feature planar ribs do not have, a fan of facets shorter than ε. So none is
+expected, but none is excluded either. If one happens in production, the build waits forever,
+and a sweep stalls with no message. The cost of the offset is known: about 5.5 minutes of cutting
+for the `U` = 3.0 tail, whose planar build takes about 21 minutes.
+
+This affects every build that runs the exact check (IP-FC-171), and nothing else: the volume
+residue check and the rest of the build make single kernel calls, as they do today.
+
+**Alternatives**
+
+1. **Build the inner offset in a separate process with a time limit.** The build writes the rib
+   tool to a BREP file, a child process builds the offset and writes it back, and the build refuses
+   the part if the child exceeds the limit.
+   *Benefits.* A hang becomes a refusal with a message, and the build cannot stall on it.
+   *Drawbacks.* A process boundary and a file round trip in the build. A limit has to be chosen,
+   and too tight a limit refuses a slow but healthy build.
+   *Prerequisites.* A limit, set from the measured cost per cell with a stated margin.
+2. **Give each cell its own time limit, in a pool of worker processes.** A cell that runs past
+   the limit is treated like any other suspect cell: retried smaller, and refused if it never
+   passes.
+   *Benefits.* A hang costs one cell, not the build, and the retries already in `inner_offset`
+   may then finish the offset anyway. The cells could run in parallel.
+   *Drawbacks.* The most machinery: a persistent pool, since starting `freecadcmd` per cell would
+   cost far more than the 6,824 cells' cutting. It also changes `inner_offset`'s structure.
+   *Prerequisites.* A worker pool for FreeCAD calls; the geometry bridge is the nearest existing
+   piece.
+3. **Put the time limit on the whole build.** The build runner kills and reports any build that
+   runs past a limit, whatever the cause.
+   *Benefits.* Covers every hang, in any stage, not only this one. No change inside the build.
+   *Drawbacks.* A cowl build takes from under a minute to about 100 minutes depending on `U` and
+   the kind, so one limit is either loose or wrong. The report names the build, not the cut.
+   *Prerequisites.* A per-build limit in each runner, scaled by kind and `U`.
+4. **No limit.** Rely on planar ribs not hanging.
+   *Benefits.* No work.
+   *Drawbacks.* A hang, if one ever happens, is a silent stall of a batch job on the user's machine.
+   *Prerequisites.* None.
+
+**Recommendation**
+
+Alternative 1. It turns the one known source of an unbounded wait into a refusal, with the least
+machinery, and the limit can be generous: a healthy offset of the largest tail measured is under 6
+minutes. Alternative 3 is worth having for its own sake, but it does not say what hung.
+
+### OQ-DES-CW42 — The rib-cut detector's first qualification criterion needs a cavity that planar ribs cannot produce — OPEN
+
+**Problem**
+
+This is an implementation-planning question, raised by `/impl update` on 2026-11-23.
+
+A rib-cut detector decides whether cutting the rib tools out of a cowl's interior cavity left rib
+material behind. [cowl_interior_surface.md §7.2](cowl_interior_surface.md) sets four criteria a
+detector must meet before it is used. The first is that it flags the saved dosed cavity, a real
+failed cut of the `U` = 3.0 tail in which ribs 3, 5, 7, 8, 9 and 10 were left uncut. IP-FC-169,
+which qualifies the detector, cannot reach `done` until all four are met.
+
+OQ-DES-CW40 adopted planar ribs and a detector that measures the cavity's distance to the rib
+tool's inner offset by ε. That detector has to be given the inner offset of the tool that made the
+cut. Against a larger tool's offset, a correct cut is flagged: the planar tool is larger than the
+shipped one by up to about 0.25 mm at its square corners. So it cannot be run on the saved dosed
+cavity against the planar offset.
+- **The saved cavity was cut by the shipped 48-gon ribs.** Their inner offset has not been built.
+  Even the exact-hull version of that tool, which is simpler than the shipped union, left 6 of the
+  3,584 cells of its largest solid unbuilt, 4 of them by never returning.
+- **Planar ribs have produced no failed cut.** The configuration that left the shipped ribs
+  Unconverged in 5 of 5 runs cut cleanly with planar ribs.
+
+So the first criterion cannot be met as written. The other three are met for the planar
+detector: the control passes, 32 synthetic residues 1 percent either side of ε and 6 cases at a
+30-degree apex give no wrong verdict, and its exactness is argued from its construction in §7.2.1.
+
+**Alternatives**
+
+1. **Replace the criterion with a failure made on purpose in a real cavity.** Cut a real planar
+   cavity with the planar tool minus chosen ribs, or with chosen ribs dilated by `t − δ` instead of
+   `t`, and judge the result against the full tool's offset. The expected verdict is known exactly:
+   the left-out ribs flagged, and a residue layer δ thick flagged exactly when δ ≥ ε.
+   *Benefits.* Real geometry at full scale, with a known answer, including the threshold on a
+   real rib. A few builds' cost.
+   *Drawbacks.* The residue is made by a clean cut of a smaller tool, not by the kernel failing,
+   so it does not have the shape a real failure has.
+   *Prerequisites.* A harness option to cut with a subset of the tool, or a thinner rib.
+2. **Search for a real failure with planar ribs.** Dose the fit's stations, as IP-FC-146 did for
+   the shipped ribs, until a planar cut fails.
+   *Benefits.* Tests the detector on the failure it exists to catch.
+   *Drawbacks.* Unbounded cost, and it may never find one. Not finding one would be good news about
+   the cut, but leaves the criterion unmet.
+   *Prerequisites.* None beyond the existing dose harness.
+3. **Build the shipped ribs' inner offset, and judge the saved cavity.**
+   *Benefits.* Meets the criterion as written, on the recorded failure.
+   *Drawbacks.* Measured to fail on a simpler version of the same tool, with cuts that never
+   returned. The shipped ribs are also being replaced, so the work serves only this test.
+   *Prerequisites.* A way past the facet fans, which is unknown.
+4. **Drop the criterion.** Treat OQ-DES-CW40's 41 cases as the qualification.
+   *Benefits.* No work; IP-FC-169 is done.
+   *Drawbacks.* The detector is never shown flagging a whole real cavity, only local synthetic
+   residues and a wedge.
+   *Prerequisites.* None.
+
+**Recommendation**
+
+Alternative 1, and judge any real planar failure that alternative 2's work, or production, ever
+produces. Alternative 1 is cheap and gives a known answer on real geometry at the threshold. The
+criterion exists to show the detector on a whole cavity, and a residue left by a smaller tool does
+that, even though it is not shaped like a kernel failure.
 
 ## See also
 
