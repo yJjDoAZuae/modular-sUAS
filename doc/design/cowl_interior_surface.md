@@ -4165,9 +4165,10 @@ as a fail would flag the correctly cut control. Closing it is the remaining work
 **Decided in [OQ-DES-CW40](cowl.md#open-questions), 2026-11-23.** Each rib tool is built from flat
 faces, with square or beveled corners. A failed cut is detected exactly by the cavity's distance to
 the tool's inner offset by ε. Both are in `freecad/rib_geometry.py`. Production builds the planar
-ribs (`cowl_interior.dilated_notches`, IP-FC-170). It does not yet run the exact check: wired into
-`cut_and_check`, the inner offset of a live `U` = 3.0 tail's tool could not be built, so every such
-build was refused (IP-FC-171, "The offset fails on the tool of a live build" below).
+ribs (`cowl_interior.dilated_notches`, IP-FC-170) and, since 2026-11-24, runs the exact check in
+`cut_and_check` (`cowl_interior.refuse_uncut_ribs`, IP-FC-171). It was first wired in on
+2026-11-23 and taken back out, because the inner offset of a live `U` = 3.0 tail's tool could not
+be built. IP-FC-172 fixed that; see "The offset fails on the tool of a live build" below.
 
 **Why the corners need not be round.** The 48-gon §9.2 records existed only to approximate a round
 corner. The user stated on 2026-11-22 that a rib's corners need not be round. A chamfer or a square
@@ -4353,18 +4354,23 @@ than the slicer's 0.62 mm line.
 
 **What is not established.**
 - The detector has been shown flagging only failures made on purpose. No real failure has been
-  produced with planar ribs, and the shipped ribs' inner offset is not built. The one recorded real failure was cut by shipped ribs. Cutting it again with the planar
-  tool failed in the kernel: the result was invalid, and its volume rose by 99,281 mm³.
+  produced with planar ribs, and the shipped ribs' inner offset is not built. The one recorded
+  real failure was cut by shipped ribs. Cutting it again with the planar tool failed in the
+  kernel: the result was invalid, and its volume rose by 99,281 mm³.
 - Everything above was measured on one tail at `U` = 3.0, and the slicing on `U` = 1.0.
-- The inner offset is not robust on the tool of a live build. See below.
+- Production's check cannot catch a tool built wrong. It judges the cut against the offset of the
+  tool that made it, and against that offset a too-thin tool's cut is clean. Built again with the
+  check, the IP-FC-169 thinner-notch tail passed it at 0.009999 mm. The judgments above were made
+  against the full tool's offset, which production does not have.
+- The inner offset's fuzzy retry (below) is shown on one live tool and five fresh builds.
 
 **The offset fails on the tool of a live build, measured 2026-11-23.** With the exact check wired
 into `cut_and_check`, a production `tail_shell` build at `U` = 3.0, with nothing done to it, was
 refused: the inner offset could not be built. One 1.25 mm cell of the largest tool solid, at about
 (-144.35, 38.22, -69.31) mm, failed every retry, the second cut included, and the kernel left a
-piece of 8.77 mm³ reaching 0.46 mm deep. The first runs of IP-FC-169's two deliberate-failure builds,
-made with the check wired in, were refused at the same cell. The check was taken back out of `cut_and_check`, so production builds the planar
-ribs without it.
+piece of 8.77 mm³ reaching 0.46 mm deep. The first runs of IP-FC-169's two deliberate-failure
+builds, made with the check wired in, were refused at the same cell. The check was taken back out
+of `cut_and_check` that day, and restored on 2026-11-24 with the fix below.
 - *The tool the build made fails; every reconstruction of it does not.* The same tool, built from
   the saved notches, gave a trusted offset in every cell, with 4 retries in the largest solid
   against the live tool's 29. It has the same 125 faces and the same volume to the sixth decimal.
@@ -4372,9 +4378,46 @@ ribs without it.
   7e-13 mm and changes nothing. So differences in the last digits decide whether the cell can be cut.
 - *The failure belongs to the geometry, not the grid.* The live tool's largest solid fails at the
   same place on 17 mm and 23 mm grids, leaving pieces of 28.7 and 12.4 mm³ about 0.44 to 0.49 mm
-  deep. Why the kernel miscuts there is not known.
+  deep.
 - The live tool is kept at `freecad/out/ip_fc_171/plain/refusals/tail_shell_U3_d0mm.brep`, which is
   output and not committed.
+
+**Why, and the fix, measured 2026-11-24 (IP-FC-172).** The kernel left a sliver at a tangency, and
+a retry with the kernel's fuzzy value at the tool's own tolerance cuts it correctly.
+- *The piece was not 8.77 mm³ of uncut rib.* The correct share of the inner offset in the failing
+  grown cell is 8.769125 mm³. The live cut left 8.769180 mm³, so 5.5e-5 mm³ was left uncut. That
+  sliver lies at the end of a 0.72 mm concave edge on the end face at x = -143.4 mm. There the
+  edge's cylinder meets its faces' prisms tangentially. The sliver joined the correct piece, so the
+  whole piece touched the boundary while reaching 0.46 mm deep, and the check read it as uncut.
+- *The operands decide, not the piece.* The live piece cut by the rebuilt tool's operands came out
+  correct. The rebuilt piece cut by the live operands left the sliver. The two tools agree in every
+  printed digit. They differ only in topology: in the rebuilt tool, one collinear edge of the
+  end face is split in two by an extra vertex, 38 mm from the corner. The live tool's tolerances
+  are also larger, 5.8e-7 mm against 2.1e-7 mm. Tightening its tolerances and `removeSplitter`
+  changed nothing.
+- *Cutting in another order is not a fix.* Balls and cylinders first, or the reverse order, left
+  2.1e-6 mm³ too much, still joined to the piece.
+- *The fuzzy retry.* Cut one operand at a time with the fuzzy value set to the tool solid's largest
+  tolerance, the cell came out within 1e-8 mm³ of the correct share. That holds for the 1.25 mm cell
+  and the grown one. The fuzzy value merges only what the solid's own tolerance already treats as
+  one point. So the retry adds no approximation beyond the kernel's, and its result is checked like
+  any other cut. It is the third retry in `rib_geometry.inner_offset`, after the batched and the
+  one-at-a-time cuts. No operand is enlarged and the grid is unchanged.
+- *On the kept live tool,* every solid's offset now builds with no unresolved cell: 7 retries in
+  the largest solid, against 29 before. The rebuilt tool also builds with no unresolved cell.
+- *Fresh builds with the check back in `cut_and_check`.* Every cavity sat 0.009999 to 0.010000 mm
+  from its tool's offset, so the check passed where it should.
+
+  | Build | Result | Offset | Volume |
+  | --- | --- | --- | --- |
+  | Tail, `U` = 3.0, dose 0 | built | 292 s of 3,472, 8 retries | 215,352.067 mm³ |
+  | Tail, `U` = 3.0, dose 0.03 mm | built | 296 s of 3,472, 8 retries | 211,212.374 mm³ |
+  | Tail, `U` = 1.0 | built | 49 s of 248, 3 retries | 23,806.441 mm³ |
+  | Nose, `U` = 1.0 | built | 1 s of 66 | 9,751.480 mm³ |
+  | Tail, `U` = 3.0, notches 4 and 6 thinner | built | 305 s of 3,472 | as IP-FC-169 |
+  | Tail, `U` = 3.0, notches 2 and 7 left out | refused by section 5's second pass | 217 s of 3,032 | none |
+
+  The volumes match the builds without the check to the last printed digit.
 
 ## 8. Deliberately not specified here
 

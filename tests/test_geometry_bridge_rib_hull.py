@@ -12,6 +12,7 @@ import math
 import pytest
 
 from conftest import requires_freecad                                       # noqa: E402
+from geometry_bridge.remote_errors import Unconverged                       # noqa: E402
 
 pytestmark = requires_freecad
 
@@ -290,6 +291,26 @@ class TestInnerOffset(object):
     def test_too_thin_gives_none(self, geo, Part):
         assert geo.inner_offset(Part.makeBox(10.0, 0.5, 3.0), 0.0003) is None
 
+    def test_the_tolerance_is_the_largest_on_the_shape(self, geo, Part):
+        box = Part.makeBox(1.0, 1.0, 1.0)
+        assert geo.shape_tol_mm(box) == max(s.Tolerance for s in box.Vertexes + box.Edges
+                                            + box.Faces)
+        box.Edges[0].fixTolerance(1e-5)
+        assert geo.shape_tol_mm(box) >= 1e-5
+
+    def test_the_fuzzy_retry_is_exact_on_the_ell(self, geo, Part, App):
+        """The retry that cleared the live `U` = 3.0 tool's failing cell (IP-FC-172) cuts with the
+        fuzzy value at the solid's own tolerance; on the ell it still gives the closed form, quarter
+        round included. The live cell itself depends on the last digits of a built tool, which is
+        output and not committed, so it is not reproduced here."""
+        eps = 0.5
+        ell = _ell(Part, App)
+        core = geo._cut(ell, geo.operands(ell, eps / 1000.0), False, geo.shape_tol_mm(ell))
+        plan = (2.0 * (10.0 - 2 * eps) * (5.0 - 2 * eps) - (5.0 - 2 * eps) ** 2
+                + eps * eps * (1.0 - math.pi / 4.0))
+        assert core.isValid()
+        assert abs(core.Volume - plan * (10.0 - 2 * eps)) < 1e-6
+
 
 class TestReaches(object):
     """Residues of known depth. Material of a tool within a ball of radius `r` around a boundary
@@ -341,6 +362,31 @@ class TestReaches(object):
         core = geo.inner_offset(box, self.EPS / 1000.0)
         outside = Part.makeBox(10.0, 4.0, 3.0, App.Vector(0.0, 0.0, 3.0))
         assert abs(geo.reaches(outside, core) * 1000.0 - self.EPS) < 1e-9
+
+
+class TestRefuseUncutRibs(object):
+    """Production's refusal (IP-FC-171), on `TestJudgeCut`'s two-slot block: a clean cut passes
+    with both distances `eps`, and a cut with the second slot too narrow is refused, naming only
+    that tool solid."""
+
+    EPS = 0.01
+
+    def test_a_clean_cut_passes_and_an_uncut_rib_is_refused(self, geo, fc, Part, App):
+        ci = fc.module('cowl_interior')
+        tool = Part.Compound([Part.makeBox(2.0, 10.0, 5.0, App.Vector(2.0, 0.0, 0.0)),
+                              Part.makeBox(2.0, 10.0, 5.0, App.Vector(6.0, 0.0, 0.0))])
+        cores = [geo.inner_offset(s, self.EPS / 1000.0) for s in tool.Solids]
+        block = Part.makeBox(10.0, 10.0, 5.0)
+        report = {}
+        judged = ci.refuse_uncut_ribs(block.cut(tool), cores, report)
+        assert [k for k, _d in judged] == [0, 1]
+        assert all(abs(d * 1000.0 - self.EPS) < 1e-9 for _k, d in judged)
+        short = Part.Compound([tool.Solids[0],
+                               Part.makeBox(2.0 - 2.0 * 1.01 * self.EPS, 10.0, 5.0,
+                                            App.Vector(6.0 + 1.01 * self.EPS, 0.0, 0.0))])
+        with pytest.raises(Unconverged) as caught:
+            ci.refuse_uncut_ribs(block.cut(short), cores)
+        assert 'tool solid(s) 1 of 2' in str(caught.value)
 
 
 class TestJudgeCut(object):

@@ -277,10 +277,16 @@ def _deep_points(piece, boundary, eps_mm):
             and boundary.distToShape(Part.Vertex(p))[0] >= eps_mm + si.mm(ARTIFACT_TOL_M)]
 
 
-def _cut(piece, operands, batched):
+def shape_tol_mm(shape):
+    """The largest tolerance on any vertex, edge or face of `shape`, in the kernel's millimeters:
+    how far apart the kernel already treats two of its points as one."""
+    return max(s.Tolerance for s in shape.Vertexes + shape.Edges + shape.Faces)
+
+
+def _cut(piece, operands, batched, fuzzy_mm=None):
     core = piece
     for batch in (_disjoint_batches(operands) if batched else operands):
-        core = core.cut(batch)
+        core = core.cut(batch) if fuzzy_mm is None else core.cut(batch, fuzzy_mm)
         if not core.Solids or len(core.Solids) > SHATTER_SOLIDS:
             break
     return core
@@ -333,10 +339,12 @@ def _cut_cell(solid, tools, boundary, eps_mm, origin, size, report, grown=False)
     mine = [t for t in tools if t.BoundBox.intersect(reach)]
     deep = _deep_points(piece, boundary, eps_mm)
     why = None
-    for batched in (True, False):
+    for batched, fuzzy_mm in ((True, None), (False, None), (False, shape_tol_mm(solid))):
         core = None
+        if fuzzy_mm is not None:
+            batched = 'fuzzy %.3g mm' % fuzzy_mm
         try:
-            core = _cut(piece, mine, batched)
+            core = _cut(piece, mine, batched is True, fuzzy_mm)
             why = _suspect(core, deep, boundary, eps_mm)
         except Exception as e:  # the kernel's failures arrive as bare exceptions
             why = 'failed: %r' % e
@@ -349,7 +357,7 @@ def _cut_cell(solid, tools, boundary, eps_mm, origin, size, report, grown=False)
         # nothing more, so the result is still exact; it only completes a cut the kernel left
         # short, such as a needle along a concave edge that its cylinder silently missed.
         try:
-            again = _cut(core, mine, False)
+            again = _cut(core, mine, False, fuzzy_mm)
             why = _suspect(again, deep, boundary, eps_mm)
         except Exception as e:
             why = 'failed: %r' % e
@@ -457,8 +465,9 @@ def inner_offset(solid, eps_m, report=None, cell_m=None, keep_going=False):
     remove: one such piece of 303 mm3 reached 0.35 mm deep. A suspect result is first cut again by
     the same operands, which removes nothing more in exact arithmetic and so stays exact: it cleared
     a needle of 7e-6 mm3 that a cylinder left along a 0.19 mm concave edge. A suspect cell is then
-    cut again one operand at a time, which cleared a cell that failed in batches, then split into
-    eight, down to
+    cut again one operand at a time, which cleared a cell that failed in batches, then one operand
+    at a time with the kernel's fuzzy value set to the solid's own largest tolerance
+    (`shape_tol_mm`), then split into eight, down to
     `MIN_CELL_M`; at that size it is tried once more in a grown box, because a sliver of 0.0004 mm3
     clipped off by the cube's own walls broke one cut. A cell that never passes raises: dropping it
     could hide residue. With `keep_going`, it is instead listed under `report['unresolved']` as
@@ -466,6 +475,19 @@ def inner_offset(solid, eps_m, report=None, cell_m=None, keep_going=False):
     run; a result with any unresolved cell is not the inner offset and must not be used as one.
     The retries are reported under `report['retries']`, and the shares of the
     solid the cells cut must add up to its volume.
+
+    **The fuzzy retry, and why it is still exact.** A cylinder of radius `eps` meets the prisms of
+    its edge's two faces tangentially, and at a tangency the kernel can leave a sliver, which joins
+    the true piece and makes it come nearer the boundary than `eps`. On the tool of a live `U` = 3.0
+    tail, measured 2026-11-24, one cell left 5.5e-5 mm3 too much at the end of a 0.72 mm concave
+    edge in every unfuzzed order: the sliver made a correct 8.769 mm3 piece read as 0.46 mm of uncut
+    material. A tool built again from the same notches, the same geometry to every printed digit but
+    with one face's collinear edge split in two, cut the cell correctly; its operands cut the live
+    piece correctly, and the live operands left the sliver in the rebuilt piece. Cut with the fuzzy
+    value set to the solid's own largest tolerance, 5.8e-7 mm there, the live cell came out within
+    1e-8 mm3 of the correct piece. The fuzzy value only merges what the solid's tolerance already
+    says is one point, so it adds no approximation beyond the kernel's own, and the result is
+    still checked like any other.
 
     **Cut artifacts are dropped, and checked first.** On a non-convex rib the cuts also left pieces
     lying on the boundary: a sliver 300 mm long and 0.0009 mm thick, a whole ball, a speck. Each
