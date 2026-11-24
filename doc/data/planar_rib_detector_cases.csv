@@ -67,3 +67,15 @@ shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity
 shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,3,,not a case,clear,0.0051765
 shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,4,,not a case,clear,0.0084397
 shipped-rib failed cut with solids 1 to 5 cut again (invalid recut),whole cavity,5,,not a case,clear,0.0070558
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,0,,clear,clear,0.0100000
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,1,,clear,clear,0.0100000
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,2,,flag,flag,0.0000000
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,3,,flag,flag,0.0000000
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,4,,clear,clear,0.0100000
+U = 3.0 tail built with notches 2 and 7 left out,whole cavity,5,,clear,clear,0.0100000
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,0,,clear,clear,0.0100000
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,1,,clear,clear,0.0100000
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,2,,clear,clear,0.0100000
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,3,,clear,clear,0.0099992
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,4,0.0099,clear,clear,0.0001000
+U = 3.0 tail built with notches 4 and 6 thinner,whole cavity,5,0.0101,flag,flag,0.0000000

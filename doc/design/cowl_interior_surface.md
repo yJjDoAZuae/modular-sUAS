@@ -4320,6 +4320,22 @@ is in [planar_rib_detector_cases.csv](../data/planar_rib_detector_cases.csv). Th
 holds two runs that are not cases: the shipped-rib control judged against the planar offset, and
 the recut described below.
 
+*Failures made on purpose, measured 2026-11-23.* Two `U` = 3.0 tails were built with a planar tool
+failed on purpose. Each cavity was judged against the full tool's inner offset, and all 12
+verdicts were right. The volume check read 0.000000 mm³ left inside on both builds.
+
+| Build | Tool solid | Expected | Verdict | Distance |
+| --- | --- | --- | --- | --- |
+| Notches 2 and 7 left out | 2 and 3, holding them | flagged | flagged | 0 mm |
+| Notches 2 and 7 left out | the other 4 | clear | clear | 0.0100 mm |
+| Notch 6 thinner by 0.0101 mm, `\|n_xy\|` = 1.0 | 5 | flagged | flagged | 0 mm |
+| Notch 4 thinner by 0.010249235 mm, `\|n_xy\|` = 0.966, residue 0.0099 mm deep | 4 | clear | clear | 0.0001 mm |
+| Thinner notches | the other 4 | clear | clear | 0.0100 mm |
+
+Section 5's second pass refused the build with notches left out. It found a finished-wall gap of
+0.5999 mm at `z` = -281.7070 mm, so wall was missing where the ribs should have been. The cavity
+judged is the shape that refusal saved.
+
 *The slicer.* `freecad/rib_examples.py` builds a cowl kind at a chosen `U` through its production
 builder, with only the rib dilation swapped. Planar ribs change only the shelled kinds; the print
 blanks, `tail` and `nose_cowl`, have no rib dilation in them.
@@ -4336,9 +4352,8 @@ loops on every layer. With a 0.6 mm nozzle no wall survived, because the 0.6 mm 
 than the slicer's 0.62 mm line.
 
 **What is not established.**
-- The detector has not been shown flagging a real failed cut, judged against the tool that made
-  it. No failure has been produced with planar ribs, and the shipped ribs' inner offset is not
-  built. The one recorded real failure was cut by shipped ribs. Cutting it again with the planar
+- The detector has been shown flagging only failures made on purpose. No real failure has been
+  produced with planar ribs, and the shipped ribs' inner offset is not built. The one recorded real failure was cut by shipped ribs. Cutting it again with the planar
   tool failed in the kernel: the result was invalid, and its volume rose by 99,281 mm³.
 - Everything above was measured on one tail at `U` = 3.0, and the slicing on `U` = 1.0.
 - The inner offset is not robust on the tool of a live build. See below.
@@ -4347,8 +4362,8 @@ than the slicer's 0.62 mm line.
 into `cut_and_check`, a production `tail_shell` build at `U` = 3.0, with nothing done to it, was
 refused: the inner offset could not be built. One 1.25 mm cell of the largest tool solid, at about
 (-144.35, 38.22, -69.31) mm, failed every retry, the second cut included, and the kernel left a
-piece of 8.77 mm³ reaching 0.46 mm deep. The two deliberate-failure builds of IP-FC-169 were refused
-at the same cell. The check was taken back out of `cut_and_check`, so production builds the planar
+piece of 8.77 mm³ reaching 0.46 mm deep. The first runs of IP-FC-169's two deliberate-failure builds,
+made with the check wired in, were refused at the same cell. The check was taken back out of `cut_and_check`, so production builds the planar
 ribs without it.
 - *The tool the build made fails; every reconstruction of it does not.* The same tool, built from
   the saved notches, gave a trusted offset in every cell, with 4 retries in the largest solid
