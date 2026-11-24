@@ -299,9 +299,10 @@ class TestTheConstructionHandsOverItsShape(object):
     def test_the_post_cut_refusals_also_hand_over_the_station(self):
         # `shape` alone would make the artifact findable but not interpretable: the whole reason
         # the post-cut pass is instrumented is that a 0.5999 mm reading means nothing without the
-        # `z` it was taken at. These are the only two sites that have one.
+        # `z` it was taken at. These two sites have one, and so does `shell_solid`'s broken-ring
+        # refusal (IP-FC-152), whose station is where the hole is.
         with_z = [line for line, kwargs in _unconverged_raises() if 'z_m' in kwargs]
-        assert len(with_z) == 2
+        assert len(with_z) == 3
 
 
 class TestThisModuleDoesNotNeedTheKernel(object):

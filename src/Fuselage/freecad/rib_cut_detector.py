@@ -96,9 +96,9 @@ SHRINK_STEPS = (1.0, 1.5, 2.0, 4.0, 8.0)
 #: sits inside the tool; it cannot go below the clearance the certificate demands.
 TRIANGLE_INSETS = (1.0, 0.6)
 
-#: Containment tolerance for `isInside`, in kernel millimeters. The point tested is certified to
+#: Containment tolerance for `isInside`, 1e-7 mm. The point tested is certified to
 #: be at least `CLEARANCE_M` from the boundary, so this only has to be smaller than that.
-INSIDE_TOL_MM = 1.0e-7
+INSIDE_TOL_M = 1.0e-10
 
 
 def _opt(name, default=None):
@@ -303,7 +303,7 @@ def inward_normal(face, tool):
     n = face.normalAt(u, v)
     step = si.mm(EPS_M)
     for sign in (-1.0, 1.0):
-        if tool.isInside(p0 + n * (sign * step), INSIDE_TOL_MM, False):
+        if tool.isInside(p0 + n * (sign * step), si.mm(INSIDE_TOL_M), False):
             return n * sign, None
     return None, 'neither side is inside the tool at depth eps'
 
@@ -368,7 +368,7 @@ def triangle_copies(face, tool, tool_shells, margin_m=None):
         nn.normalize()
         centroid = (a + b + c) * (1.0 / 3.0)
         for sign in (-1.0, 1.0):
-            if tool.isInside(centroid + nn * (sign * si.mm(EPS_M)), INSIDE_TOL_MM, False):
+            if tool.isInside(centroid + nn * (sign * si.mm(EPS_M)), si.mm(INSIDE_TOL_M), False):
                 n = nn * sign
                 break
         if n is not None:
@@ -460,7 +460,7 @@ def examine(cavity, tool, ribs=None):
                 in_cav = (side(cav_shells, c) if d_cav_m is not None
                           and d_cav_m >= VERDICT_CLEARANCE_M else None)
                 try:
-                    ray = bool(cavity.isInside(p, INSIDE_TOL_MM, False))
+                    ray = bool(cavity.isInside(p, si.mm(INSIDE_TOL_M), False))
                 except Exception:                                         # noqa: BLE001
                     ray = None
                 # Only a decided reading can be contradicted; undecided ones are counted apart.
@@ -477,7 +477,7 @@ def examine(cavity, tool, ribs=None):
             item['verdict'] = FLAGGED
             if ribs is not None and hit is not None:
                 item['ribs'] = [k for k, r in enumerate(ribs)
-                                if r.isInside(hit, INSIDE_TOL_MM, True)]
+                                if r.isInside(hit, si.mm(INSIDE_TOL_M), True)]
         elif verdicts and unplaced == 0.0:
             item['verdict'] = CLEAR
         else:
@@ -536,7 +536,7 @@ def profile(cavity, tool, face):
     for k in PROFILE_STEPS:
         q = p0 + n * si.mm(k * EPS_M)
         v = Part.Vertex(q)
-        rows.append((si.mm(k * EPS_M), bool(cavity.isInside(q, INSIDE_TOL_MM, True)),
+        rows.append((si.mm(k * EPS_M), bool(cavity.isInside(q, si.mm(INSIDE_TOL_M), True)),
                      v.distToShape(cav_shells)[0], v.distToShape(tool_shells)[0]))
     return {'point_mm': [p0.x, p0.y, p0.z], 'rows': rows}
 
@@ -557,8 +557,8 @@ def explain(cavity, tool, face):
     for c in copies:
         corner = c.Vertexes[0].Point
         center = c.CenterOfMass
-        rows.append((bool(cavity.isInside(corner, INSIDE_TOL_MM, False)),
-                     bool(cavity.isInside(center, INSIDE_TOL_MM, False)),
+        rows.append((bool(cavity.isInside(corner, si.mm(INSIDE_TOL_M), False)),
+                     bool(cavity.isInside(center, si.mm(INSIDE_TOL_M), False)),
                      Part.Vertex(corner).distToShape(cav_shells)[0],
                      c.distToShape(cav_shells)[0],
                      normal_side(cav_shells, corner), normal_side(cav_shells, center)))

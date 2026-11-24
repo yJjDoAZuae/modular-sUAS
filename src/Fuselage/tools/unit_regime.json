@@ -451,6 +451,10 @@
    "reason": "a page-space zero test for TechDraw geometry",
    "unit": "mm"
   },
+  "doc_check.EM": {
+   "reason": "the em dash character, built from its code point",
+   "unit": "none"
+  },
   "doc_check.IDENTITY_MIN": {
    "reason": "a minimum token length in characters, below which a word is too short to be a name",
    "unit": "none"
@@ -977,6 +981,18 @@
   "preview.VIEWS": {
    "unit": "none"
   },
+  "refused_surface.COARSE_STEP_M": {
+   "reason": "the part-wide station step",
+   "unit": "m"
+  },
+  "refused_surface.REFINE_COUNT": {
+   "reason": "how many worst readings are refined",
+   "unit": "none"
+  },
+  "refused_surface.REFINE_STEP_M": {
+   "reason": "the refined station step",
+   "unit": "m"
+  },
   "refused_wall.LOCAL_HALF_M": {
    "unit": "m"
   },
@@ -1023,17 +1039,37 @@
   "render_sheets.TIMEOUT_PER_SHEET": {
    "unit": "s"
   },
-  "rib_edge_check.CREASE_SAMPLES": {
+  "rib_cut_detector.BALL_FRACTION": {
+   "reason": "measurement only (IP-FC-169): a fraction of a distance",
    "unit": "none"
   },
-  "rib_edge_check.KERNEL_CHECK": {
+  "rib_cut_detector.CLEARANCE_M": {
+   "reason": "measurement only (IP-FC-169): the separation both certificates require",
+   "unit": "m"
+  },
+  "rib_cut_detector.INSIDE_TOL_M": {
+   "reason": "measurement only (IP-FC-169): an isInside tolerance, converted where the kernel reads it",
+   "unit": "m"
+  },
+  "rib_cut_detector.PROFILE_STEPS": {
+   "reason": "measurement only (IP-FC-169): multiples of EPS_M",
    "unit": "none"
   },
-  "rib_edge_check.NORMAL_PROBES": {
+  "rib_cut_detector.SHRINK_STEPS": {
+   "reason": "measurement only (IP-FC-169): multiples of EPS_M",
    "unit": "none"
   },
-  "rib_edge_check.PATCH_PROBES": {
+  "rib_cut_detector.SLACK_M": {
+   "reason": "measurement only (IP-FC-169): floating-point allowance on the certificates",
+   "unit": "m"
+  },
+  "rib_cut_detector.TRIANGLE_INSETS": {
+   "reason": "measurement only (IP-FC-169): multiples of EPS_M",
    "unit": "none"
+  },
+  "rib_cut_detector.VERDICT_CLEARANCE_M": {
+   "reason": "measurement only (IP-FC-169): the clearance a cleared face keeps",
+   "unit": "m"
   },
   "rib_cut_qualify.CONTACT_M2": {
    "unit": "m2"
@@ -1046,6 +1082,18 @@
   },
   "rib_cut_qualify.PLANE_TOL_M": {
    "unit": "m"
+  },
+  "rib_edge_check.CREASE_SAMPLES": {
+   "unit": "none"
+  },
+  "rib_edge_check.KERNEL_CHECK": {
+   "unit": "none"
+  },
+  "rib_edge_check.NORMAL_PROBES": {
+   "unit": "none"
+  },
+  "rib_edge_check.PATCH_PROBES": {
+   "unit": "none"
   },
   "rib_geometry.ARTIFACT_TOL_M": {
    "unit": "m"
@@ -1225,6 +1273,30 @@
   "stl_preview.FACE_FRONT": {
    "reason": "an RGB triple",
    "unit": "none"
+  },
+  "strip_ligament.END_MARGIN_M": {
+   "reason": "stations skipped this close to a strip end",
+   "unit": "m"
+  },
+  "strip_ligament.HALF_PLANE_M": {
+   "reason": "a half-plane far larger than the part",
+   "unit": "m"
+  },
+  "strip_ligament.REGION_MIN_M2": {
+   "reason": "regions below this are counted, not listed",
+   "unit": "m2"
+  },
+  "strip_ligament.SAMPLE_M": {
+   "reason": "sample spacing along a section outline",
+   "unit": "m"
+  },
+  "strip_ligament.SEAM_TOL_M": {
+   "reason": "a sample this close to the main body is on the seam",
+   "unit": "m"
+  },
+  "strip_ligament.STEP_M": {
+   "reason": "station spacing along a strip",
+   "unit": "m"
   },
   "surface_distance.CHUNK": {
    "reason": "sample points per vectorized block",
@@ -1710,13 +1782,17 @@
    "allowed": 1,
    "reason": "not yet converted (IP-FC-160). Lower this as the module is converted; it may never rise"
   },
-  "rib_geometry": {
-   "allowed": 6,
-   "reason": "kernel geometry in the kernel's own millimeters: three probe steps beside an edge in bends_out and a box margin in convex_parts, plus two unit signs the classifier cannot tell from a dimension (IP-FC-170). Lower this if any is named"
-  },
   "render_variant": {
    "allowed": 1,
    "reason": "page lengths in a declared presentation module -- a stroke width, a block size, a margin. Millimeters and points are the reader of a printed part's own units, so this is a cap on new ones rather than a conversion backlog (IP-FC-167 made this module visible to the sweep for the first time)"
+  },
+  "rib_cut_detector": {
+   "allowed": 14,
+   "reason": "measurement only (IP-FC-169), superseded by rib_geometry: unit signs, the cube-corner and sign loops, a 1/3 centroid weight and a 1.0 dot-product bound the classifier cannot tell from a dimension, and one tessellation tolerance in kernel millimeters. It may never rise"
+  },
+  "rib_geometry": {
+   "allowed": 6,
+   "reason": "kernel geometry in the kernel's own millimeters: three probe steps beside an edge in bends_out and a box margin in convex_parts, plus two unit signs the classifier cannot tell from a dimension (IP-FC-170). Lower this if any is named"
   },
   "scan_octant_micro": {
    "allowed": 1,
@@ -1777,6 +1853,10 @@
   "wall_measure.normal_distance": {
    "allowed": 3,
    "reason": "the classifier's own residue in SI code: a clamp bound, a 2.0 * pi, a unit-vector component. Each is structurally incapable of being a dimension and none is distinguishable from one by value, which is why this tool holds a ceiling rather than a verdict. Converted by IP-FC-163; lower this if any of them is named"
+  },
+  "wall_measure.rib_cut": {
+   "allowed": 1,
+   "reason": "the 2 in a disc's inscribed radius, 2 * area / perimeter, which the classifier cannot tell from a dimension. It may never rise"
   },
   "wall_measure.truth": {
    "allowed": 4,

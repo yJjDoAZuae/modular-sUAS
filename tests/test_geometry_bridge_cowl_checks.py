@@ -111,6 +111,32 @@ class TestIsAnnulus:
         assert cci._is_annulus(wires) is False
 
 
+class TestBrokenRingStations:
+    """IP-FC-152's build-time scan. Two windows cut through opposite sides of the tube between
+    z = 8 and 12 leave it one solid whose section at z = 10 is two arcs: broken. Below them it is
+    an annulus. One window alone leaves a single C-shaped arc, whose wall is sound, and is not
+    counted."""
+
+    def _windows(self, tube, Part, App, sides):
+        cut = tube
+        for x in sides:
+            cut = cut.cut(Part.makeBox(4.0, 4.0, 4.0, App.Vector(x, -2.0, 8.0)))
+        assert len(cut.Solids) == 1
+        return cut
+
+    def test_two_arcs_are_broken_and_an_annulus_is_not(self, ci, tube, Part, App):
+        wall = self._windows(tube, Part, App, (R_OUTER - 2.0, -R_OUTER - 2.0))
+        got = ci.broken_ring_stations(wall, [si_m(2.0), si_m(10.0)])
+        assert [(round(z * MM_PER_M, 6), f, w) for z, f, w in got] == [(10.0, 2, [1, 1])]
+
+    def test_one_arc_is_not_counted(self, ci, tube, Part, App):
+        wall = self._windows(tube, Part, App, (R_OUTER - 2.0,))
+        assert ci.broken_ring_stations(wall, [si_m(10.0)]) == []
+
+    def test_a_sound_tube_has_no_breaks(self, ci, tube):
+        assert ci.broken_ring_stations(tube, [si_m(z) for z in (1.0, 10.0, 19.0)]) == []
+
+
 class TestWallThickness:
     """A tube's wall is exactly `WALL` everywhere, so every sample has a known right answer."""
 

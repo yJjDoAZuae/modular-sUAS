@@ -2102,6 +2102,81 @@ def refuse_uncut_ribs(cut, cores, report=None):
     return judged
 
 
+#: The face maker that resolves a section's closed wires into faces, nesting and all.
+#: **Bullseye, because it is the one that handles a hole.** Given the two wires of a wall section,
+#: `Part::FaceMakerBullseye` returns one face with two wires -- an outer boundary and one hole --
+#: and `Part::FaceMakerCheese` agrees with it exactly (958.819 mm2 on the reference station, both).
+#: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totaling
+#: 150914 mm2, the sum of the two enclosed areas rather than the material between them.
+RING_FACE_MAKER = 'Part::FaceMakerBullseye'
+
+#: Whether `shell_solid` refuses a wall whose section ring is broken at one of its stations, or
+#: only reports it (IP-FC-152). Off until the false-positive survey across both kinds and the
+#: swept `U` range says the test fires on nothing that is not a defect (cowl.md OQ-DES-CW26).
+REFUSE_BROKEN_RING = False
+
+
+def section_regions(wires):
+    """Classify a section's closed wires into material regions, letting the kernel do the nesting.
+
+    `Part.makeFace` resolves the whole set at once in about 0.6 s and reports the structure:
+
+        one face with two wires        the ring is continuous
+        several faces with one wire    the ring is broken into that many arcs
+
+    It replaced a pairwise containment vote, which answered the same question for two wires
+    (200 of 200 points inside on a healthy section, 0 of 200 on a broken one) but could not
+    describe more. `Face.Area` on the result is the material area directly, rather than a
+    difference of two wire areas near 75000 mm2 that carries both their discretization errors.
+
+    Returns `(faces, wire_counts, area_m2)`, or `None` if the maker will not build. Failing to
+    build is reported as unclassifiable rather than as an annulus, so a caller declines to
+    measure something it cannot interpret. Moved here from `check_cowl_interior` by IP-FC-152 so
+    the build can run it.
+    """
+    if not wires:
+        return None
+    try:
+        built = Part.makeFace(wires, RING_FACE_MAKER)
+    except Part.OCCError:
+        return None
+    if not built.Faces:
+        return None
+    return (len(built.Faces), sorted(len(f.Wires) for f in built.Faces),
+            sum(si.area_m2(f) for f in built.Faces))
+
+
+def is_annulus(wires):
+    """Is this section one closed ring of material, as a wall section must be?
+
+    True only for a single region with a single hole. **Not a defect test on its own:** a ring
+    broken into a single C-shaped arc is also not an annulus, and that arc's wall is sound. The
+    defect is two or more loops that do not nest, which is what `broken_ring_stations` asks."""
+    got = section_regions(wires)
+    if got is None:
+        return False
+    faces, counts, _area = got
+    return faces == 1 and counts == [2]
+
+
+def broken_ring_stations(wall, zs_m):
+    """The stations of `zs_m` where a solid of `wall` has two or more closed section loops that
+    are not one annulus: the ring has come apart into arcs (cowl.md OQ-DES-CW26).
+
+    Returns `[(z_m, faces, wire_counts)]`, empty for a sound wall. One slice and one face build
+    per solid per station. A station with fewer than two loops is not counted here: it misses
+    the part, or the ring is one C-shaped arc whose wall is sound (`is_annulus`)."""
+    broken = []
+    for z_m in zs_m:
+        for solid in wall.Solids:
+            loops = [w for w in solid.slice(App.Vector(0, 0, 1), si.mm(z_m)) if w.isClosed()]
+            if len(loops) >= 2 and not is_annulus(loops):
+                got = section_regions(loops)
+                broken.append((z_m,) + ((None, None) if got is None else (got[0], got[1])))
+                break
+    return broken
+
+
 def _probe_ribs(notches, t_m, report):
     """The dilated rib tools to cut with. `dilated_notches(notches, t_m, report)` in every build."""
     if _probe is None:
@@ -2601,7 +2676,9 @@ def cavity(body, notched, notches, t_m, overhang_rad, tau_m=TAU_M, budget=64, re
     try:
         cores, offset_report = rib_offset_worker.bounded_inner_offset(tool, WALL_TOL_M)
     except rib_offset_worker.OffsetNotBuilt as exc:
-        raise Unconverged('the rib cut cannot be checked: %s' % exc) from exc
+        # The tool is the evidence: the offset that failed is of this shape, and IP-FC-172's
+        # diagnosis needed exactly it, saved by a refusal.
+        raise Unconverged('the rib cut cannot be checked: %s' % exc, shape=tool) from exc
     note('rib tool inner offset: %d solid(s), %d cell retries, %.0f s (limit %.0f s)'
          % (len(cores), sum(s['retries'] for s in offset_report['solids']), time.time() - at,
             offset_report['limit_s']))
@@ -3237,8 +3314,11 @@ def shell_solid(notched, body, notches, t_m, overhang_rad, mirrors, tau_m=TAU_M,
     # Nothing about measurement is passed down: the seam is a module-level one that `cavity` reads
     # for itself, so this function neither forwards nor mentions it (OQ-DES-CW34, revised
     # 2026-10-28). What a measurement installs, and how, is `wall_measure.probe`.
+    # A record of its own when the caller passes none: the ring test below needs `cavity`'s
+    # station positions, and `cavity` hands them out only through its report.
+    rec = report if report is not None else {}
     inside = cavity(body, notched, notches, t_m, overhang_rad, tau_m=tau_m,
-                     report=report, exterior_split=exterior_split)
+                     report=rec, exterior_split=exterior_split)
     # **`stages`, opt-in, off by default (IP-WTM-38).** IP-WTM-37 established that the rib cut
     # inside `cavity` only trims -- identical control nets -- so no boundary-value error can enter
     # there. The three booleans *after* it were never covered, and they cannot be checked from a
@@ -3292,4 +3372,25 @@ def shell_solid(notched, body, notches, t_m, overhang_rad, mirrors, tau_m=TAU_M,
                       wall_solids=len(wall.Solids))
     note('wall: %.4f mm3 in %d solid(s) after %d mirror step(s)'
          % (si.volume_m3(wall) * si.MM3_PER_M3, len(wall.Solids), len(mirrors)))
+
+    # **The section ring, on the finished wall at the stations `cavity` fitted and checked**
+    # (IP-FC-152, cowl.md OQ-DES-CW26 alternative 2). A hole in the wall was once caught only by
+    # section 5's gap reaching `t`, under a message about station budgets; a break narrower than
+    # that would pass. One closed loop pair or not is a topological fact with no threshold. Run on
+    # the mirrored wall because a ring is a property of the whole section, not of the cell.
+    at = time.time()
+    zs_m = rec.get('station_positions', [])
+    breaks = broken_ring_stations(wall, zs_m)
+    if report is not None:
+        report.update(ring_stations=len(zs_m), ring_breaks=breaks)
+    note('section ring: %d of %d stations broken, %.0f s%s'
+         % (len(breaks), len(zs_m), time.time() - at,
+            ''.join('; z = %.4f mm: %s face(s), wires %s' % (si.mm(z_m), f, w)
+                    for z_m, f, w in breaks)))
+    if breaks and REFUSE_BROKEN_RING:
+        raise Unconverged(
+            'the wall\'s section ring is broken into arcs at %d of %d stations, first at '
+            'z = %.4f mm: the wall has a hole through it there.'
+            % (len(breaks), len(zs_m), si.mm(breaks[0][0])),
+            shape=wall, z_m=breaks[0][0])
     return wall

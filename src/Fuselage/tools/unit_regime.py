@@ -941,6 +941,23 @@ COUNT_ALLOWED = {
             'inside a `PreconditionFailed` message, computing the facet count it suggests; no '
             'geometry reads it',
     },
+    'rib_geometry': {
+        'int(math.ceil(length / cell_mm))':
+            'a kernel bounding-box length over the cell edge, both in the kernel\'s millimeters; '
+            'the edge is converted once before the division, so no unit crosses at it',
+    },
+    'rib_offset_worker': {
+        'int(math.ceil(bb.XLength / edge))':
+            'a kernel bounding-box length over the cell edge, both in the kernel\'s millimeters',
+        'int(math.ceil(bb.YLength / edge))':
+            'a kernel bounding-box length over the cell edge, both in the kernel\'s millimeters',
+        'int(math.ceil(bb.ZLength / edge))':
+            'a kernel bounding-box length over the cell edge, both in the kernel\'s millimeters',
+    },
+    'strip_ligament': {
+        'int(wire.Length / si.mm(sample_m))':
+            'a kernel wire length over the sample spacing, both in the kernel\'s millimeters',
+    },
     'check_table_width': {
         'int((block_b[1] - frame_b[1]) // (ds.TABLE_ROW_PITCH_HEIGHTS * ds.TEXT_HEIGHT_MM))':
             'page geometry, millimeters on both sides, in a declared presentation module',

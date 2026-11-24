@@ -92,14 +92,9 @@ def _opt(name, default=None):
     return default
 
 
-#: The face maker that resolves a set of section wires into faces, nesting and all.
-#:
-#: **Bullseye, because it is the one that handles a hole.** Given the two wires of a wall section,
-#: `Part::FaceMakerBullseye` returns one face with two wires -- an outer boundary and one hole --
-#: and `Part::FaceMakerCheese` agrees with it exactly (958.819 mm2 on the reference station, both).
-#: `Part::FaceMakerSimple` does not resolve nesting at all: it returns two separate faces totaling
-#: 150914 mm2, the sum of the two enclosed areas rather than the material between them.
-FACE_MAKER = 'Part::FaceMakerBullseye'
+#: The face maker that resolves a set of section wires into faces; see
+#: `cowl_interior.RING_FACE_MAKER`, where it moved with the classifier (IP-FC-152).
+FACE_MAKER = ci.RING_FACE_MAKER
 
 
 # ------------------------------------------------------------------------------------------
@@ -149,52 +144,10 @@ def wall_samples(perimeter_m, arc_m=WALL_ARC_M):
     return max(WALL_MIN, min(WALL_MAX, int(round(float(perimeter_m) / float(arc_m)))))
 
 
-def section_regions(wires):
-    """Classify a section's closed wires into material regions, letting the kernel do the nesting.
-
-    **Replaces a hand-rolled containment vote, and the kernel's answer is both cheaper and more
-    general.** The question is whether a section is the annulus a wall section must be, or a ring
-    broken into arcs; an earlier version answered it by building a face from the largest wire and
-    testing how many points of the next wire fell inside. That works -- measured 200 of 200 on a
-    healthy section against 0 of 200 on a broken one -- but it is pairwise, so it cannot describe a
-    section with more than two wires, and it costs a face build plus a sampled point test.
-    `Part.makeFace` resolves the whole set at once in about 0.6 s and reports the structure directly:
-
-        one face with two wires        the ring is continuous
-        several faces with one wire    the ring is broken into that many arcs
-
-    `Face.Area` on the result is then the material area directly, rather than a difference of two
-    separately-integrated wire areas -- which matters, because that difference is of two numbers
-    near 75000 mm2 and carries both their discretization errors.
-
-    Returns `(faces, wire_counts, area)`, or `None` if the maker will not build. Failing to build
-    is reported as unclassifiable rather than as an annulus, so a caller declines to measure
-    something it cannot interpret.
-    """
-    if not wires:
-        return None
-    try:
-        built = Part.makeFace(wires, FACE_MAKER)
-    except Exception:                                                   # noqa: BLE001
-        return None
-    if not built.Faces:
-        return None
-    return (len(built.Faces), sorted(len(f.Wires) for f in built.Faces),
-            sum(si.area_m2(f) for f in built.Faces))
-
-
-def _is_annulus(wires):
-    """Is this section one closed ring of material, as a wall section must be?
-
-    True only for a single region with a single hole. Anything else -- arcs with no hole, several
-    regions, or a set the face maker will not resolve -- is not a wall section and has no thickness
-    to report.
-    """
-    got = section_regions(wires)
-    if got is None:
-        return False
-    faces, counts, _area = got
-    return faces == 1 and counts == [2]
+#: The ring classifier, moved to `cowl_interior` by IP-FC-152 so the build can run it; kept under
+#: these names because the check, `sever_doses`, `strip_ligament` and their tests call them here.
+section_regions = ci.section_regions
+_is_annulus = ci.is_annulus
 
 
 def wall_thickness(wall, z_m, expect_m, tol_m, arc_m=WALL_ARC_M):

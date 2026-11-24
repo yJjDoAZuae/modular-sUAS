@@ -150,7 +150,7 @@ def healthy_reading(loops, p):
 REGION_MIN_M2 = 1.0e-6
 
 #: A half-plane far larger than the part, used to keep the healthy wall's cell side (`y >= 0`).
-HALF_PLANE_MM = 2000.0
+HALF_PLANE_M = 2.0
 
 
 def _section_face(shape, z_m):
@@ -216,7 +216,8 @@ def removed_at(healthy, dosed, z_m):
     if h is None or d is None:
         return None
     z = si.mm(z_m)
-    half = Part.makePlane(HALF_PLANE_MM, HALF_PLANE_MM, App.Vector(-HALF_PLANE_MM / 2, 0.0, z))
+    side = si.mm(HALF_PLANE_M)
+    half = Part.makePlane(side, side, App.Vector(-side / 2, 0.0, z))
     h_cell = h.common(half)
     gone, gone_n, gone_small = _regions(h_cell.cut(d))
     extra, extra_n, extra_small = _regions(d.cut(h_cell))
@@ -283,7 +284,9 @@ def run(brep, healthy_path, kind, u, out_dir, step_m=STEP_M):
         # not the picture. This reads the material itself.
         z_lo_m = si.m(wall.BoundBox.ZMin) + END_MARGIN_M
         z_hi_m = si.m(wall.BoundBox.ZMax) - END_MARGIN_M
-        n_all = int((z_hi_m - z_lo_m) / step_m) + 1
+        # Through `_steps`: a ratio of two meter figures converted from the kernel can land an ulp
+        # under a whole number and drop a station (cowl_interior._steps records one that did).
+        n_all = ci._steps(z_hi_m - z_lo_m, step_m, 0) + 1
         rec['removed'] = []
         say('')
         say('  what the nudge removed: %d stations' % n_all)
@@ -309,7 +312,7 @@ def run(brep, healthy_path, kind, u, out_dir, step_m=STEP_M):
             bb = strip.BoundBox
             lo_m = si.m(bb.ZMin) + END_MARGIN_M
             hi_m = si.m(bb.ZMax) - END_MARGIN_M
-            n = int((hi_m - lo_m) / step_m) + 1
+            n = ci._steps(hi_m - lo_m, step_m, 0) + 1
             entry = {'volume_mm3': strip.Volume, 'stations': []}
             rec['strips'].append(entry)
             say('')

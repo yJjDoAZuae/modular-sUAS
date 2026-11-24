@@ -7,8 +7,23 @@ here -- a CPython ABI version lock, not a property of the tools -- but they can 
 `freecadcmd` check_*.py tier remains for whole-part builds whose output is a report a person reads.
 """
 import os
+import sys
 
 import pytest
+
+#: Windows' extended-length form of a UNC path, `\\?\UNC\server\share\...`.
+_EXTENDED_UNC = '\\\\?\\UNC\\'
+
+# **`uv run pytest` starts Python from an extended-length path, and NumPy cannot load from one.**
+# The `pytest.exe` launcher in the venv resolves its own location canonically, so on this share the
+# interpreter runs from under the extended prefix and every `sys.path` entry carries it. NumPy
+# registers its DLL directory from its package path, and Windows refuses an extended path there:
+# `DLL load failed while importing _multiarray_umath: The parameter is incorrect`, at collection,
+# measured 2026-11-24 on `test_wall_measure_truth.py`. `uv run python -m pytest` was
+# unaffected. Rewritten here, before any test module imports NumPy, to the plain UNC form, which
+# is the same files; with it the same interpreter imported NumPy cleanly.
+sys.path[:] = ['\\\\' + p[len(_EXTENDED_UNC):] if p.startswith(_EXTENDED_UNC) else p
+               for p in sys.path]
 
 
 @pytest.fixture
