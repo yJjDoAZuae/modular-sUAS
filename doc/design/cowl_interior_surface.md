@@ -803,7 +803,10 @@ some stations, so the false-positive rate across both kinds and the swept `U` ra
 surveyed before it can refuse a build. The external half is built: `section_regions` classifies the
 wires and `wall_thickness` returns `None` for a section that is not an annulus, which both its
 callers already count as a failure. The build-time half is
-[IP-FC-152](../implementation/freecad_migration.md#work-items).
+[IP-FC-152](../implementation/freecad_migration.md#work-items), built and refusing since
+2026-11-24. The survey found no end cap breaking the annulus. It found instead that a slice exactly
+on a small horizontal face of the wall reads as broken, so a station on such a face is sliced 1 µm
+either side of it. With that, 16 builds over both kinds and the swept `U` range showed no break.
 
 **Patch boundaries are hard stops.** Patches are split at the *body's* own creases, each is fit
 separately, and adjacent patches are made to pass through their shared station exactly — which is
@@ -4362,7 +4365,8 @@ than the slicer's 0.62 mm line.
   tool that made it, and against that offset a too-thin tool's cut is clean. Built again with the
   check, the IP-FC-169 thinner-notch tail passed it at 0.009999 mm. The judgments above were made
   against the full tool's offset, which production does not have.
-- The inner offset's fuzzy retry (below) is shown on one live tool and five fresh builds.
+- The inner offset's fuzzy retry (below) is shown on two live tools, `U` = 3.0 and 2.5, and six
+  fresh builds.
 
 **The offset fails on the tool of a live build, measured 2026-11-23.** With the exact check wired
 into `cut_and_check`, a production `tail_shell` build at `U` = 3.0, with nothing done to it, was
@@ -4418,6 +4422,28 @@ a retry with the kernel's fuzzy value at the tool's own tolerance cuts it correc
   | Tail, `U` = 3.0, notches 2 and 7 left out | refused by section 5's second pass | 217 s of 3,032 | none |
 
   The volumes match the builds without the check to the last printed digit.
+
+**The solid's own tolerance is not always enough, measured 2026-11-24.** IP-FC-152's survey found
+`tail_shell` at `U` = 2.5 refused with the fix above in place. One 1.25 mm cell, at about
+(72.72, 123.63, -245.70) mm, left the same kind of sliver in the cell and in its grown box.
+- *The same mechanism.* A sliver of 1.5e-5 mm³ joined a correct 0.772 mm³ piece. The piece went
+  from 12 faces to 19 and read as 0.37 mm of uncut material.
+- *A larger fuzzy value cuts it.* The solid's tolerance there is 1.5e-7 mm, and that fuzzy value
+  left the sliver.
+
+  | Fuzzy value | Cell |
+  | --- | --- |
+  | 1.5e-7 mm, the solid's tolerance | sliver left |
+  | 1.5e-6, 1.5e-5, 1e-4 mm | trusted, the same piece within 1e-6 mm³ |
+  | 1e-3 mm | broken into invalid solids |
+
+- *The fix.* The fuzzy retry climbs. `rib_geometry.fuzzy_ladder` starts at the solid's tolerance
+  and multiplies by 10, up to a thousandth of `eps`, which is 1e-5 mm. Above the solid's tolerance
+  the fuzzy value is an approximation, so it has a ceiling, and every result still passes the
+  checks. The `U` = 3.0 cell is still cleared by the first rung.
+- *Verified.* The `U` = 2.5 tail builds: 148,351.6365 mm³, offset 283 s of 2,022 with 11 retries,
+  the cut 0.009999 mm from its offset. The failing tool is kept at
+  `freecad/out/u25_offset/refusals/tail_shell_U2.5_d0mm.brep`, which is output and not committed.
 
 ## 8. Deliberately not specified here
 

@@ -342,6 +342,10 @@
   "cowl_interior.RIB_RESIDUE_M3": {
    "unit": "m3"
   },
+  "cowl_interior.RING_OFF_PLANE_M": {
+   "reason": "how far off a horizontal face the section-ring scan slices (IP-FC-152)",
+   "unit": "m"
+  },
   "cowl_interior.SAMPLE_MAX": {
    "unit": "none"
   },
@@ -1108,6 +1112,14 @@
    "unit": "m"
   },
   "rib_geometry.COPLANAR_TOL": {
+   "unit": "none"
+  },
+  "rib_geometry.FUZZY_MAX_FRACTION": {
+   "reason": "the fuzzy ceiling as a fraction of eps",
+   "unit": "none"
+  },
+  "rib_geometry.FUZZY_STEP": {
+   "reason": "the ratio between successive fuzzy retries",
    "unit": "none"
   },
   "rib_geometry.MIN_CELL_M": {

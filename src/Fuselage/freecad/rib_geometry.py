@@ -283,6 +283,28 @@ def shape_tol_mm(shape):
     return max(s.Tolerance for s in shape.Vertexes + shape.Edges + shape.Faces)
 
 
+#: Each fuzzy retry's value is this many times the last one's.
+FUZZY_STEP = 10.0
+
+#: The fuzzy value never exceeds this fraction of `eps`. Measured 2026-11-24 on the failing cell of
+#: a `U` = 2.5 tail: every value from 1.5e-6 to 1e-4 mm gave the same trusted piece to 1e-6 mm3,
+#: and 1e-3 mm broke it into invalid solids. A thousandth of the 0.01 mm `eps` is 1e-5 mm, a
+#: decade inside the values that worked and two below the one that broke.
+FUZZY_MAX_FRACTION = 1.0e-3
+
+
+def fuzzy_ladder(solid, eps_mm):
+    """The fuzzy values a suspect cell is retried with, in the kernel's millimeters: the solid's
+    own largest tolerance first, then `FUZZY_STEP` times larger, up to `FUZZY_MAX_FRACTION` of
+    `eps_mm`. Empty if the tolerance alone is above that ceiling."""
+    ladder = []
+    f = shape_tol_mm(solid)
+    while f <= eps_mm * FUZZY_MAX_FRACTION:
+        ladder.append(f)
+        f *= FUZZY_STEP
+    return ladder
+
+
 def _cut(piece, operands, batched, fuzzy_mm=None):
     core = piece
     for batch in (_disjoint_batches(operands) if batched else operands):
@@ -339,7 +361,8 @@ def _cut_cell(solid, tools, boundary, eps_mm, origin, size, report, grown=False)
     mine = [t for t in tools if t.BoundBox.intersect(reach)]
     deep = _deep_points(piece, boundary, eps_mm)
     why = None
-    for batched, fuzzy_mm in ((True, None), (False, None), (False, shape_tol_mm(solid))):
+    stages = [(True, None), (False, None)] + [(False, f) for f in fuzzy_ladder(solid, eps_mm)]
+    for batched, fuzzy_mm in stages:
         core = None
         if fuzzy_mm is not None:
             batched = 'fuzzy %.3g mm' % fuzzy_mm
@@ -467,7 +490,7 @@ def inner_offset(solid, eps_m, report=None, cell_m=None, keep_going=False):
     a needle of 7e-6 mm3 that a cylinder left along a 0.19 mm concave edge. A suspect cell is then
     cut again one operand at a time, which cleared a cell that failed in batches, then one operand
     at a time with the kernel's fuzzy value set to the solid's own largest tolerance
-    (`shape_tol_mm`), then split into eight, down to
+    (`shape_tol_mm`) and then decades above it (`fuzzy_ladder`), then split into eight, down to
     `MIN_CELL_M`; at that size it is tried once more in a grown box, because a sliver of 0.0004 mm3
     clipped off by the cube's own walls broke one cut. A cell that never passes raises: dropping it
     could hide residue. With `keep_going`, it is instead listed under `report['unresolved']` as
@@ -488,6 +511,16 @@ def inner_offset(solid, eps_m, report=None, cell_m=None, keep_going=False):
     1e-8 mm3 of the correct piece. The fuzzy value only merges what the solid's tolerance already
     says is one point, so it adds no approximation beyond the kernel's own, and the result is
     still checked like any other.
+
+    **The solid's own tolerance is not always enough, so the fuzzy value climbs, with a ceiling.**
+    On a live `U` = 2.5 tail, measured 2026-11-24, one 1.25 mm cell left the same kind of sliver,
+    1.5e-5 mm3, which made a correct 0.772 mm3 piece of 12 faces into one of 19 that read as
+    0.37 mm of uncut material, in the cell and in its grown box alike. The solid's tolerance there
+    is 1.5e-7 mm, and that fuzzy value left the sliver; 1.5e-6 mm cleared it, as did every value up
+    to 1e-4 mm, all to the same piece within 1e-6 mm3, while 1e-3 mm broke the cut into invalid
+    solids. Above the solid's tolerance the fuzzy value is an approximation, so it is held to
+    `FUZZY_MAX_FRACTION` of `eps`, a thousandth of the distance the offset is measured at, and the
+    result still has to pass every check above.
 
     **Cut artifacts are dropped, and checked first.** On a non-convex rib the cuts also left pieces
     lying on the boundary: a sliver 300 mm long and 0.0009 mm thick, a whole ball, a speck. Each

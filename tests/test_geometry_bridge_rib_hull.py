@@ -311,6 +311,35 @@ class TestInnerOffset(object):
         assert core.isValid()
         assert abs(core.Volume - plan * (10.0 - 2 * eps)) < 1e-6
 
+    def test_the_fuzzy_ladder_climbs_by_decades_to_its_ceiling(self, geo, Part):
+        """The `U` = 2.5 tool's failing cell needed ten times its solid's tolerance (2026-11-24),
+        so the retry climbs; a value at 1e-3 mm broke that cell, so it stops."""
+        box = Part.makeBox(1.0, 1.0, 1.0)
+        box.Edges[0].fixTolerance(1.5e-7)
+        eps_mm = 0.01
+        ladder = geo.fuzzy_ladder(box, eps_mm)
+        ceiling = eps_mm * geo.FUZZY_MAX_FRACTION
+        assert ladder[0] == geo.shape_tol_mm(box)
+        assert all(b == a * geo.FUZZY_STEP for a, b in zip(ladder, ladder[1:], strict=False))
+        assert ladder[-1] <= ceiling < ladder[-1] * geo.FUZZY_STEP
+        assert len(ladder) == 2
+
+    def test_a_tolerance_above_the_ceiling_gives_no_fuzzy_retry(self, geo, Part):
+        box = Part.makeBox(1.0, 1.0, 1.0)
+        box.Edges[0].fixTolerance(1e-4)
+        assert geo.fuzzy_ladder(box, 0.01) == []
+
+    def test_the_top_of_the_ladder_is_still_exact_on_the_ell(self, geo, Part, App):
+        """The approximation the ladder allows at its ceiling, measured against the closed form."""
+        eps = 0.5
+        ell = _ell(Part, App)
+        top = geo.fuzzy_ladder(ell, eps)[-1]
+        core = geo._cut(ell, geo.operands(ell, eps / 1000.0), False, top)
+        plan = (2.0 * (10.0 - 2 * eps) * (5.0 - 2 * eps) - (5.0 - 2 * eps) ** 2
+                + eps * eps * (1.0 - math.pi / 4.0))
+        assert core.isValid()
+        assert abs(core.Volume - plan * (10.0 - 2 * eps)) < 1e-6
+
 
 class TestReaches(object):
     """Residues of known depth. Material of a tool within a ball of radius `r` around a boundary

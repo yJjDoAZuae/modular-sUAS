@@ -2111,9 +2111,21 @@ def refuse_uncut_ribs(cut, cores, report=None):
 RING_FACE_MAKER = 'Part::FaceMakerBullseye'
 
 #: Whether `shell_solid` refuses a wall whose section ring is broken at one of its stations, or
-#: only reports it (IP-FC-152). Off until the false-positive survey across both kinds and the
-#: swept `U` range says the test fires on nothing that is not a defect (cowl.md OQ-DES-CW26).
-REFUSE_BROKEN_RING = False
+#: only reports it (IP-FC-152, cowl.md OQ-DES-CW26). **On since 2026-11-24, after the survey.**
+#: Both kinds at all eight swept `U`, 16 builds and 357 stations, reported no break once a station
+#: on a horizontal face was sliced off its plane (`RING_OFF_PLANE_M`); before that, every build
+#: had exactly one false positive, all of them on-plane slices. Kept as a switch so a future
+#: survey that finds a legitimate break can turn the refusal back into a report.
+REFUSE_BROKEN_RING = True
+
+#: How far off a horizontal face's plane `broken_ring_stations` slices when a station lies on
+#: one. **A section exactly on a face of the wall is not a section of the ring.** The fit places
+#: stations on feature planes, and the nose's rib floor has 16 small faces (0.561 mm2 in all) at
+#: such a plane: the slice there returned 10 loops and read as broken at every swept U, while one
+#: micrometer either side returned a clean two-loop annulus (measured 2026-11-24, nose at U = 1,
+#: z = -8.0000 mm). A micrometer is three orders above the kernel's own tolerances on these
+#: solids and two below the smallest feature height.
+RING_OFF_PLANE_M = 1.0e-6
 
 
 def section_regions(wires):
@@ -2165,16 +2177,43 @@ def broken_ring_stations(wall, zs_m):
 
     Returns `[(z_m, faces, wire_counts)]`, empty for a sound wall. One slice and one face build
     per solid per station. A station with fewer than two loops is not counted here: it misses
-    the part, or the ring is one C-shaped arc whose wall is sound (`is_annulus`)."""
+    the part, or the ring is one C-shaped arc whose wall is sound (`is_annulus`).
+
+    A station on the plane of a horizontal face is sliced `RING_OFF_PLANE_M` above and below that
+    plane instead, and is broken if either side is: a hole that ends at the plane still shows on
+    its own side. A face is horizontal when it is planar and its box is thinner than the offset,
+    which a tilted face of any printable size is not."""
+    off_mm = si.mm(RING_OFF_PLANE_M)
     broken = []
-    for z_m in zs_m:
-        for solid in wall.Solids:
-            loops = [w for w in solid.slice(App.Vector(0, 0, 1), si.mm(z_m)) if w.isClosed()]
-            if len(loops) >= 2 and not is_annulus(loops):
-                got = section_regions(loops)
-                broken.append((z_m,) + ((None, None) if got is None else (got[0], got[1])))
-                break
-    return broken
+    for solid in wall.Solids:
+        planes_mm = [f.BoundBox.Center.z for f in solid.Faces
+                     if isinstance(f.Surface, Part.Plane) and f.BoundBox.ZLength < off_mm]
+        for z_m in zs_m:
+            z_mm = si.mm(z_m)
+            on = [p for p in planes_mm if abs(p - z_mm) < off_mm]
+            for at_mm in ((on[0] - off_mm, on[0] + off_mm) if on else (z_mm,)):
+                loops = [w for w in solid.slice(App.Vector(0, 0, 1), at_mm) if w.isClosed()]
+                if len(loops) >= 2 and not is_annulus(loops):
+                    got = section_regions(loops)
+                    broken.append((z_m,) + ((None, None) if got is None else (got[0], got[1])))
+                    break
+    # A station is counted once however many solids or sides break it, and in station order.
+    seen = {}
+    for entry in broken:
+        seen.setdefault(entry[0], entry)
+    return [seen[z_m] for z_m in zs_m if z_m in seen]
+
+
+def refuse_broken_ring(wall, zs_m, breaks):
+    """Raise `Unconverged` on the first of `breaks`, as `broken_ring_stations` returns them for
+    `zs_m`, when `REFUSE_BROKEN_RING` is set. Separate from `shell_solid` so the refusal can be
+    tested on a small solid rather than only on a build of several hundred seconds."""
+    if breaks and REFUSE_BROKEN_RING:
+        raise Unconverged(
+            'the wall\'s section ring is broken into arcs at %d of %d stations, first at '
+            'z = %.4f mm: the wall has a hole through it there.'
+            % (len(breaks), len(zs_m), si.mm(breaks[0][0])),
+            shape=wall, z_m=breaks[0][0])
 
 
 def _probe_ribs(notches, t_m, report):
@@ -3387,10 +3426,5 @@ def shell_solid(notched, body, notches, t_m, overhang_rad, mirrors, tau_m=TAU_M,
          % (len(breaks), len(zs_m), time.time() - at,
             ''.join('; z = %.4f mm: %s face(s), wires %s' % (si.mm(z_m), f, w)
                     for z_m, f, w in breaks)))
-    if breaks and REFUSE_BROKEN_RING:
-        raise Unconverged(
-            'the wall\'s section ring is broken into arcs at %d of %d stations, first at '
-            'z = %.4f mm: the wall has a hole through it there.'
-            % (len(breaks), len(zs_m), si.mm(breaks[0][0])),
-            shape=wall, z_m=breaks[0][0])
+    refuse_broken_ring(wall, zs_m, breaks)
     return wall

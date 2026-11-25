@@ -28,7 +28,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 'src', 'Fuselage', 'tools'))
 
-from geometry_bridge.remote_errors import PreconditionFailed                # noqa: E402
+from geometry_bridge.remote_errors import PreconditionFailed, Unconverged   # noqa: E402
 
 from conftest import requires_freecad                                       # noqa: E402
 
@@ -135,6 +135,47 @@ class TestBrokenRingStations:
 
     def test_a_sound_tube_has_no_breaks(self, ci, tube):
         assert ci.broken_ring_stations(tube, [si_m(z) for z in (1.0, 10.0, 19.0)]) == []
+
+    def _pocketed(self, tube, Part, App):
+        """A sound tube with a 0.3 mm deep pocket in its outside whose floor is at z = 10: a
+        small horizontal face there, standing in for the nose's rib notch floor. (A plain step
+        in the outer radius does not reproduce it -- the kernel slices a step cleanly.)"""
+        wall = tube.cut(Part.makeBox(1.0, 1.3, 5.0, App.Vector(-0.5, R_OUTER - 0.3, 10.0)))
+        assert len(wall.Solids) == 1
+        return wall
+
+    def test_a_station_on_a_horizontal_face_is_not_broken(self, ci, tube, Part, App):
+        """The 2026-11-24 false positive. A slice exactly on the pocket floor is not an annulus
+        -- the precondition below pins that, so the test cannot pass vacuously -- yet the wall is
+        sound, and slicing just off the plane says so."""
+        wall = self._pocketed(tube, Part, App)
+        on = [w for w in wall.slice(App.Vector(0, 0, 1), 10.0) if w.isClosed()]
+        assert len(on) >= 2 and not ci.is_annulus(on)
+        assert ci.broken_ring_stations(wall, [si_m(5.0), si_m(10.0), si_m(15.0)]) == []
+
+    def test_a_hole_ending_on_a_horizontal_face_is_still_broken(self, ci, tube, Part, App):
+        """Off the plane on *both* sides, because a hole may end exactly at it: two windows from
+        z = 6 up to the pocket floor at 10 break the ring below the plane and not above it."""
+        wall = self._pocketed(tube, Part, App)
+        for x in (R_OUTER - 2.0, -R_OUTER - 2.0):
+            wall = wall.cut(Part.makeBox(4.0, 4.0, 4.0, App.Vector(x, -2.0, 6.0)))
+        assert len(wall.Solids) == 1
+        got = ci.broken_ring_stations(wall, [si_m(10.0)])
+        assert [(round(z * MM_PER_M, 6), f) for z, f, _w in got] == [(10.0, 2)]
+
+    def test_a_broken_ring_is_refused_at_its_first_station(self, ci, tube, Part, App):
+        """The build-time refusal, on by default since the 2026-11-24 survey found no false
+        positive across both kinds and the swept `U` range."""
+        assert ci.REFUSE_BROKEN_RING
+        wall = self._windows(tube, Part, App, (R_OUTER - 2.0, -R_OUTER - 2.0))
+        zs = [si_m(2.0), si_m(10.0)]
+        with pytest.raises(Unconverged) as caught:
+            ci.refuse_broken_ring(wall, zs, ci.broken_ring_stations(wall, zs))
+        assert 'at 1 of 2 stations, first at z = 10.0000 mm' in str(caught.value)
+
+    def test_a_sound_ring_is_not_refused(self, ci, tube):
+        zs = [si_m(z) for z in (1.0, 10.0, 19.0)]
+        assert ci.refuse_broken_ring(tube, zs, ci.broken_ring_stations(tube, zs)) is None
 
 
 class TestWallThickness:
