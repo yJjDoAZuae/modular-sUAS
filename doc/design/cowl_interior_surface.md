@@ -4955,6 +4955,16 @@ rather than on this project's geometry, which is why the question was resolved t
 consequence instead. What is left is two reliable observations and no theory: `n` = 200 works at
 every station measured, and `n` = 400 works least often.
 
+**The ladder has now run out, so the limit is on reliability as well as reproducibility.** Measured
+2026-11-26: on a `nose_cowl_shell` at `U` = 3, `eroded_arc` was refused at all three rungs at
+z = −83.9998 mm, raising P3 in the wall check's rib-gap measurement, and at three more stations
+within 0.1 mm of it. Both retries in the `U` = 4 nose build landed on the last rung. The refusal is
+deterministic but chaotic in the station's position — a 1e-12 mm move of the slice flips it — so the
+nose's build passing is a draw, not a margin. The tail is not exposed: none of its 202 build
+stations across seven `U` has ever retried. Scans of three parts, the candidate ladders replayed
+over them, and the recommended change — a half-count rung tried second — are in
+**[OQ-DES-CW37](cowl.md)**, which now blocks IP-FC-173.
+
 - **Both candidate constructions have now run, and the one in use is the better of the two**
   (IP-FC-115, measured 2026-09-05). The cavity is assembled by cutting the dilated ribs out of
   the smooth interior and then cutting that out of the blank. The same set can be had by

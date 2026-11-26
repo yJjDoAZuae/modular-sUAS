@@ -1309,7 +1309,7 @@ This affects nobody in the project's own toolchain: the sweep and `build_part.py
 | OQ-DES-CW31 | The fit's axial seed is a fixed count, and it is why a large nose cowl fails its wall tolerance. | Blocking IP-WTM-46 |
 | OQ-DES-CW33 | Every measure the gate has is in-plane, and the wall is inclined to the layer plane. | Blocking IP-WTM-48, IP-WTM-52 |
 | OQ-DES-CW35 | Should the interior-surface construction carry a test-only seam at all? | Blocking IP-FC-156 |
-| OQ-DES-CW37 | The refit's sample density is a floor, and the one density measured below it was the only one that never failed. | Not blocking |
+| OQ-DES-CW37 | The refit's sample density is a floor, the one density measured below it was the only one that never failed, and the ladder above it has now run out on a nose at `U` = 3. | Blocking IP-FC-173 |
 | OQ-DES-CW38 | A tail wall's volume moves while every operand the instrument can see is identical. | Not blocking |
 
 ### OQ-DES-CW1 — Unit suffixes on the OML fields — RESOLVED 2026-08-09
@@ -5134,7 +5134,7 @@ No separate record; this subsection holds the decision.
 
 **Problem**
 
-Each cowl is built by fitting an interior surface inside the outer mould line at a
+Each cowl is built by fitting an interior surface inside the outer mold line at a
 constant wall thickness `t`. The surface is built station by station along the part's axis. At a
 station, `eroded_arc` takes that station's cross-section arc, samples it at `n` evenly spaced
 points, builds a cubic B-spline from those points, and then asks OpenCASCADE for a copy of that
@@ -5231,19 +5231,69 @@ the name, so the poles construction is not the cause of the failure either — t
 this question has refuted. What interpolation does buy is accuracy: 2.9 times closer to the arc at
 the worst rung and 28 times closer at the best, from the same observations.
 
-**Impact.** Nothing is wrong today: every figure in the corpus was built from a contour that passed
-its own refit check, and 2.0e-4 mm of rung-to-rung difference is 50 times inside `WALL_TOL`. What
-is at stake is the reproducibility floor. A density at which no station retries has no ladder, and
-therefore no 1e-5 floor on a wall volume — a unit conversion, a FreeCAD point release or a
-different processor would stop being able to move a recorded figure.
+**2026-11-26: the ladder ran out.** The IP-FC-152 survey (16 builds, both kinds, every swept `U`)
+raised P3 once: on a `nose_cowl_shell` at `U` = 3, the wall check's rib-gap measurement at
+z = −83.9998 mm, which calls `eroded_arc` exactly as the build does, was refused at all three rungs
+— 524, 1048 and 2096 points — on a 131.097 mm arc. The build itself passed, on the strength of not
+happening to place a station there. Three further measurements followed, on the same code:
 
-**What is not measured, and must be before any change is adopted.** The evidence is one cowl kind,
-one `U`, ten stations. A `tail_shell` has 23 stations, a different cross-section family and
-corners the nose does not have. Nothing has been measured at `n` below 200, so 200 is the coarsest
-point sampled and not a located boundary. And the effect of a lower density on the **fitted
-surface's** accuracy — as opposed to a single station's curve against a single station's arc, which
-is all `REFIT_TOL_M` governs — has not been measured at all. Those are different quantities, and §6
-judges the first.
+*A station-by-station scan.* Every 0.5 mm along the cell body, each of eight counts was refit and
+offset — `n₀/2`, `n₀−1` through `n₀+2`, `2n₀`, `4n₀` and `8n₀` — where `n₀` is the shipped first
+count. Offset success, out of the stations where the refit stayed inside `REFIT_TOL_M`:
+
+| count | nose `U` = 1, 168 stations | nose `U` = 3, 264 stations | tail `U` = 1, 49 stations (2 mm apart) |
+| --- | --- | --- | --- |
+| `n₀/2` | 164 of 168 | 255 of 257; 7 over `REFIT_TOL_M`, worst 0.005255 mm | 18 of 18; **31 over `REFIT_TOL_M`**, worst 0.011275 mm |
+| `n₀` — the shipped first rung | 127 | 241 | **49** |
+| `n₀+1` | 153 | 238 | 49 |
+| `2n₀` | 167 | 225 | 48 |
+| `4n₀` | 154 | 227 | 49 |
+| `8n₀` | 155 | 237 | not run — too slow on the tail's long arcs |
+
+and, replaying candidate ladders over those outcomes, the stations at which every rung failed:
+
+| ladder | nose `U` = 1 | nose `U` = 3 | tail `U` = 1 |
+| --- | --- | --- | --- |
+| shipped: `n₀`, `2n₀`, `4n₀` | 0 | **4**, all within 0.1 mm of z = −84 | 0 |
+| `n₀`, `n₀/2`, `2n₀`, `4n₀` — alternative 3 below | 0 | 0 | 0 |
+| `n₀`, `n₀+1`, `n₀+2`, `2n₀`, `4n₀` | 0 | 2 | 0 |
+| `n₀`, `2n₀`, `4n₀`, `8n₀` | 0 | 0 | 0 |
+
+*A repeatability test.* Four stations, four counts each, four repeats in one process and the whole
+run in a second process: all 128 outcomes repeated exactly. The refusal is **deterministic**.
+
+*And a sensitivity test, which is what the scan's counts have to be read through.* Moving the slice
+height by 1e-12 mm — a picometer, at the limit of a double — flips `n₀`, `2n₀` and `4n₀` between
+success and refusal at both stations tried, consistent with the 7.1e-15 mm flip recorded under
+OQ-DES-CW36. So which rung a station lands on is **deterministic but chaotic**: a property of the
+station's last bits, not of the section's shape. The four exhausted stations are one draw from that
+lottery, and a station a millimeter away is a fresh draw; what the scans measure is the rate. Two
+observations held across every perturbation: `n₀/2` succeeded in all 12 of its jittered trials and
+at all 4 exhausted stations, and refusals cluster — near z = −84 the neighbors `n₀−1` to `n₀+2`
+were refused together, so attempts at adjacent counts are not independent draws.
+
+*The production build logs agree.* Across the seven `tail_shell` builds of the survey, 202 build
+stations, **no station retried**: `n₀` was accepted every time. Across the eight
+`nose_cowl_shell` builds, 10 of 82 retried — and both retries at `U` = 4, z = −129.5995 and
+−28.0011 mm, **landed on `4n₀`, the last rung**. Two nose build stations were one refusal from P3.
+
+**Impact.** No recorded figure is wrong — every one was built from a contour that passed its own
+refit check, and 2.0e-4 mm of rung-to-rung difference is 50 times inside `WALL_TOL`. But "nothing is
+wrong today" no longer holds. **The ladder is a reliability limit and not only a reproducibility
+one**: at a nose `U` = 3 station the construction cannot build at all, the same exhaustion is
+reachable from any build station of a large nose, and because the outcome is chaotic in the
+station's position, a build that passes is not evidence that a neighboring parameter value will.
+The tail, which has never retried, is not affected. The reproducibility floor of 1e-5 on a wall
+volume stands as before.
+
+**What is not measured, and must be before a density change is adopted.** The evidence is now three
+scans and fifteen builds, and it is enough for a change confined to stations where `n₀` is refused;
+it is not enough for changing `n₀` itself. Nothing has been measured at `n` below `n₀/2`. On the
+tail, `n₀/2` is **over `REFIT_TOL_M` at 31 of 49 stations**, so a lower floor would not even be
+admissible there — the refit would be rejected and the ladder would climb straight back to today's
+count. And the effect of a lower density on the **fitted surface's** accuracy — as opposed to a
+single station's curve against a single station's arc, which is all `REFIT_TOL_M` governs — has not
+been measured at all. Those are different quantities, and §6 judges the first.
 
 **Alternatives**
 
@@ -5251,17 +5301,22 @@ judges the first.
    refusal. *Benefits.* no figure in the corpus moves, nothing needs re-measuring, and the
    consequence is already bounded, logged and documented. The measurement above is preserved as a
    finding without being acted on. *Drawbacks.* the construction keeps a retry rule that is
-   measured to climb in the wrong direction, so a future part may exhaust all three rungs at a
-   station a coarser attempt would have cleared. The 1e-5 floor stays. *Prerequisites.* none.
+   measured to climb in the wrong direction, and the failure this drawback predicted has now
+   happened: a nose at `U` = 3 cannot be checked at z = −83.9998 mm, and two `U` = 4 build stations
+   reached the last rung. Leaving it means accepting a P3 refusal on a large nose as a chance event.
+   The 1e-5 floor stays. *Prerequisites.* none.
 
 2. **Lower `SAMPLE_MIN` to 200.** Change the floor so most stations sample coarser, leaving the
    doubling ladder in place above it. *Benefits.* applies the measurement directly; likely removes
    most or all retries and with them the floor. *Drawbacks.* every wall figure in the corpus moves
    at once, so every recorded number in `cowl_interior_surface.md` and every gate verdict must be
    re-measured and re-stated. The evidence supporting it is one nose at one `U`, and this is the
-   largest change the evidence could be used to justify. *Prerequisites.* the same ladder study on
-   a `tail_shell` and across the `U` range, plus a measurement of the **fitted surface's** accuracy
-   at the lower density, not only the refit's.
+   largest change the evidence could be used to justify. And on the tail it is **measured not to be
+   admissible**: half the count is over `REFIT_TOL_M` at 31 of 49 stations, so the floor would be
+   rejected and the ladder would climb back to today's count — the change would move the nose's
+   figures and buy the tail nothing. *Prerequisites.* a measurement of the **fitted surface's**
+   accuracy at the lower density, not only the refit's, and a decision on what the tail's floor
+   should be.
 
 3. **Add a coarser rung below the current one.** Leave `SAMPLE_MIN` at 400, and on refusal try
    `n/2` first, before `2n` and `4n`. *Benefits.* changes nothing at any station that succeeds
@@ -5270,7 +5325,19 @@ judges the first.
    betting the corpus on it, and it is the smallest change that uses what was measured.
    *Drawbacks.* keeps the ladder and therefore keeps a floor, only a smaller one; and it adds a
    rung to a mechanism whose selection rule is still "whichever the kernel happens to accept".
-   *Prerequisites.* one nose and one tail build to confirm which stations move and by how much.
+   The new rung is not universally available: it is over `REFIT_TOL_M` at 7 of 264 nose `U` = 3
+   stations and 31 of 49 tail stations, where the existing tolerance check skips it and the ladder
+   is today's. A station whose first count is refused also changes rung, so the nose `U` = 0.5 to
+   `U` = 4 builds' 10 retried stations would move wherever `n₀/2` is admissible, each by no more
+   than the bounded 2.0e-4 mm.
+   *Measured 2026-11-26:* it cleared every exhausted station in all three scans, including the
+   four at z = −84 on the nose at `U` = 3, and since no tail build station has ever retried it moves
+   no tail figure. The full wall check of that nose was then rerun with the ladder patched in
+   memory: the P3 at z = −83.9998 mm is gone, the wall is **87790.1477 mm3, identical to the
+   shipped build's**, and the only failure left is the check's own rung cross-check, which assumes
+   `n = n₀ · 2^rung` and so reads the new rung's `n` = 202 as a disagreement — the change it
+   predicts, not a defect. *Prerequisites.* met for the scans and the nose `U` = 3 check; a build of
+   each kind with the change, to confirm the stations that move are the ones the logs predict.
 
 4. **Stop building a curve before offsetting.** Offset the station's own arc, or its discretized
    polyline, rather than a B-spline derived from samples of it. *Benefits.* removes `n` from the
@@ -5308,15 +5375,37 @@ judges the first.
    a build-time measurement on both kinds, not only a per-station one; and a decision on whether
    `REFIT_TOL_M` should then be tightened, since the measured headroom would otherwise go unused.
 
+6. **Lengthen the ladder upward.** Keep `n₀`, `2n₀`, `4n₀` and add `8n₀` as a fourth rung.
+   *Benefits.* changes nothing at any station a current rung clears, so no recorded figure moves;
+   measured 2026-11-26 to clear all four exhausted nose `U` = 3 stations and to leave the other two
+   scans unchanged. *Drawbacks.* it climbs further in the direction this question found to be
+   wrong — the curve's tightest radius falls as `n` rises — and the rung is expensive where arcs are
+   long: `n₀` reaches 1370 on a tail at `U` = 4, so `8n₀` is about 11 000 poles, and the tail scan
+   had to drop the rung to finish. It is reached only after three refusals, so the cost is rare,
+   but a build that reaches it is the slowest kind of build there is. *Prerequisites.* a timing of
+   one `8n₀` refit and offset on the longest arc any swept part produces.
+
+7. **Retry at neighboring counts.** On refusal try `n₀+1`, `n₀+2`, and so on, treating the
+   chaotic outcome as a lottery and buying more tickets near the first count. *Benefits.* each
+   neighbor's refit is as accurate as the first, so a retry moves the contour by less than a
+   doubling does. *Drawbacks.* **measured not to work**: refusals cluster, and near z = −84 on the
+   nose at `U` = 3 the neighbors were refused together, leaving 2 stations exhausted where the
+   shipped ladder left 4. Adjacent counts are not independent draws. *Prerequisites.* none; it is
+   recorded so that it is not tried again.
+
 **Recommendation**
 
-**Recommendation.** Alternative 3 now, alternative 5 next, and not alternative 2 yet.
+**Recommendation.** Alternative 3 now, alternative 5 next, and not alternative 2.
 
-Alternative 3 is the only change that uses the measurement without resting the whole corpus on ten
-stations of one part. It changes figures only where a retry already happens, at those stations the
-difference is bounded by a figure already stated, and it puts the best-measured density — 200, which
-succeeded 10 of 10 under both constructions — in front of the two rungs that measured worst. It
-also produces the tail evidence the other alternatives need as a by-product of running normally.
+Alternative 3 is now measured, not only reasoned. It cleared every exhausted station in three scans,
+it is the only measured ladder that does so without climbing further into the density that measured
+worst, and its reach is exactly where it is needed: it acts only when `n₀` has been refused, which on
+the tail has not happened once in 202 build stations, so it moves no tail figure, while on the nose
+it moves only the stations that already retried, by an amount bounded by a figure already stated.
+Alternative 6 works as well on the evidence but in the wrong direction and at the highest cost;
+alternative 7 is measured not to work. The change belongs in `eroded_arc` alone, where it serves the
+build and the check at once — the `rung` field it records then stops being a power of two, and the
+check that reads it must change with it.
 
 Alternative 5 is the one that addresses what is actually wrong rather than routing around it, and
 its accuracy gain is large and already measured. It is second only because it moves every recorded
@@ -5324,15 +5413,16 @@ figure and because its benefit is accuracy, not the reliability this question st
 should be adopted deliberately, with the corpus re-measured in one pass, rather than folded into a
 retry change.
 
-Alternative 2 is where the density should probably end up, since 400 measured worst and 200 measured
-best under both constructions, but adopting it now would re-state every number in the
-interior-surface document on the strength of one cowl kind at one `U`. Alternative 3 is the cheap way
-to collect what it needs.
+Alternative 2 was where the density seemed to be heading, since 400 measured worst and 200 best on
+the nose. The tail scan argues against it: half the count is outside `REFIT_TOL_M` at most tail
+stations, so a lower floor is a nose-only change dressed as a general one, and it would re-state every
+nose figure to fix what alternative 3 fixes at the stations that need it.
 
 One caution for whoever takes this: the refusals have now survived four refutations — not duplicate
 samples, not curve accuracy, not curvature, and not the poles construction. Nothing here is a
-diagnosis of `makeOffset2D`, and the two reliable observations are only that 200 works everywhere
-measured and 400 works least often. Choose on that basis and not on a mechanism.
+diagnosis of `makeOffset2D`, and the reliable observations are only that half the first count works
+most often wherever it is admissible, that the outcome is deterministic but chaotic in the station's
+position, and that adjacent counts fail together. Choose on that basis and not on a mechanism.
 
 ### OQ-DES-CW38 — A tail wall's volume moves while every operand the instrument can see is identical — OPEN
 
