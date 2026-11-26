@@ -762,7 +762,7 @@ def smoothed(wire, n, tol_m=REFIT_TOL_M):
     to 0.002571 mm -- 69x closer from identical observations. That is why this is named
     *smoothed* and why the deviation returned below has to be measured rather than assumed zero.
     It also means `n` is one knob driving two separate things -- where the arc is observed, and
-    how many degrees of freedom the fit gets -- which is OQ-DES-CW37's subject.
+    how many degrees of freedom the fit gets -- which is OQ-DES-CW43's subject.
 
     **This is what makes the erosion possible at all, and it is not a nudge.** Sectioning the
     conditioned blank returns the section as one edge per surface patch -- 64 of them on the
@@ -1131,7 +1131,7 @@ def eroded_arc(arc, t_m, z_m, p_start, p_end, flip, tol_m=REFIT_TOL_M, record=No
     points and uses those samples as a cubic B-spline's poles, so the curve approximates the arc
     rather than passing through the observations -- and `REFIT_TOL_M` bounds how far it may sit
     from the arc, which is the only sense in which it is a fit. `n` therefore sets the sampling
-    and the fit's degrees of freedom at once; see `smoothed` and OQ-DES-CW37.
+    and the fit's degrees of freedom at once; see `smoothed` and OQ-DES-CW43.
 
     **`record`, when given a dict, is filled with which rung of the ladder below succeeded**, and
     that is not diagnostic decoration -- it is the one thing that makes a changed wall volume

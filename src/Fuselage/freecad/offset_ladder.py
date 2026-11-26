@@ -14,7 +14,7 @@ the arc; a fit is a parameterization of it. The shipped construction uses the sa
 fit's control points, so one integer `n` sets both how often the arc is observed and how many
 degrees of freedom the curve gets, and the ladder cannot move one without the other. `CONSTRUCTIONS`
 runs `poles` (as shipped) and `interpolate` (the curve honors every sample) over identical
-observations so the two can be told apart. OQ-DES-CW37 is the decision this measurement informs. Measured 2026-11-01, two of the nose's ten fit stations sit
+observations so the two can be told apart. OQ-DES-CW37 (the retry ladder) and OQ-DES-CW43 (separating the sample from the fit) are the decisions this measurement informs. Measured 2026-11-01, two of the nose's ten fit stations sit
 exactly on that failure boundary: a station position differing by one unit in the last place --
 7.1e-15 mm -- flips which rung succeeds, and the rungs produce contours up to 2.0e-4 mm apart.
 That is inside every stated tolerance and is still a part whose recorded volume depends on a last
@@ -81,14 +81,14 @@ sampled at 150 points -- the synthetic arc `check_offset_ladder.py` uses -- `mak
 *interpolated* curve did not return in several minutes, while the poles curve over the same samples
 offset in 0.261 s. Unexplained, and absent from every real section measured. It is why the
 regression pins row structure at `n` = 4 and 8 rather than at production densities, and it is a
-drawback recorded against OQ-DES-CW37's alternative 5.
+drawback recorded against OQ-DES-CW43's alternative 2.
 
 Three readings. `n` = 200 offset every station under **both** constructions, so that lead is a
 property of the density and not of the curve-building. The shipped floor of 400 is the **worst**
 density measured, under both. And **interpolating does not fix the refusals** -- 47 of 50 against 46
 -- so the poles construction is not the cause either, which is the fourth refuted mechanism. What
 interpolation buys is accuracy: 2.9x closer to the arc at the worst rung, 28x at the best, from the
-same observations. OQ-DES-CW37 carries the decision.
+same observations. OQ-DES-CW37 carries the ladder decision, OQ-DES-CW43 the construction one.
 
 **The ladder's doubling does not alias the sample positions**, which was worth checking because a
 shared periodicity between rungs would make any comparison across them meaningless.
@@ -140,7 +140,7 @@ DUPLICATE_TOL_M = 1.0e-9
 #: The two ways of turning `n` samples of an arc into one curve, measured side by side at equal
 #: observations. `poles` is what the construction ships -- the samples become the curve's control
 #: points, so the curve does not pass through them. `interpolate` makes the curve honor every
-#: sample. The distinction is the subject of OQ-DES-CW37: a sample is an observation of the arc,
+#: sample. The distinction is the subject of OQ-DES-CW43: a sample is an observation of the arc,
 #: a fit is a parameterization of it, and `poles` conflates the two by making one integer set
 #: both the observation count and the fit's degrees of freedom.
 CONSTRUCTIONS = ('poles', 'interpolate')
@@ -311,7 +311,7 @@ def main():
     failures = 0
     first_rung_failed = []
     #: Per construction: rungs attempted, rungs whose offset succeeded, rungs whose curve stayed
-    #: inside `REFIT_TOL_M`, and the deviation band. These are what decide OQ-DES-CW37.
+    #: inside `REFIT_TOL_M`, and the deviation band. These inform OQ-DES-CW37 and OQ-DES-CW43.
     tally = dict((how, {'tried': 0, 'offset_ok': 0, 'within': 0,
                         'dev_lo_m': float('inf'), 'dev_hi_m': 0.0,
                         'first_rung_ok': 0, 'first_rung_tried': 0})

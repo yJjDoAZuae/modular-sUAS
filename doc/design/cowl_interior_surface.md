@@ -4907,7 +4907,7 @@ than the one still open:
   at the construction's own first rung 9 of 10 against 8 of 10. That is no improvement worth the
   name, so the poles construction is not the cause either. It is, however, **2.9 times more
   accurate at the worst rung and 28 times at the best** — worst deviation from the arc 5.985e-04 mm
-  against 1.710e-03 mm — which is a separate finding, carried by OQ-DES-CW37 rather than here.
+  against 1.710e-03 mm — which is a separate finding, carried by OQ-DES-CW43 rather than here.
 
 **Two findings do stand, and both bear on what to do next.**
 
@@ -4944,9 +4944,11 @@ offset 10 of 10 under **each** of them, while **the shipped floor of 400 measure
 at 8 and 9 of 10. So a coarser observation of the arc is reliable here, still verified-accurate, and
 the preference is not an artifact of how the curve is built. Adopting it would change every wall
 figure in this document at once, so it is a design decision and not a repair, and it is filed as
-**[OQ-DES-CW37](cowl.md)** — together with the findings above, which are what make the ladder's
-direction, and the sample/fit conflation underneath it, the question rather than only its
-reproducibility.
+**[OQ-DES-CW37](cowl.md#open-questions)** — together with the findings above, which are what make
+the ladder's direction the question rather than only its reproducibility. The sample/fit
+conflation underneath it was split out on 2026-11-26 as
+**[OQ-DES-CW43](cowl.md#open-questions)**, because it is an accuracy question that does not change
+the refusal rate.
 
 **What remains unknown is what inside OpenCASCADE's offset decides the outcome.** Four mechanisms
 have now been refuted — duplicate samples, curve accuracy, curvature, and the poles construction —

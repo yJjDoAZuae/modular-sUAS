@@ -707,7 +707,9 @@ conversion one. **Two questions that resolution left open are filed in their own
 than carried inside a closed item: [OQ-DES-CW37](../design/cowl.md), whether the refit's sample
 density should come down given that the coarsest density measured was the only one that never
 failed, and [OQ-DES-CW38](../design/cowl.md), a `tail_shell` wall volume that moves while every
-operand the instrument can see is identical.
+operand the instrument can see is identical. CW37 was re-posed on 2026-11-26 as the choice of retry
+ladder, after the ladder ran out on a nose at `U` = 3, and its sample/fit question was split out as
+[OQ-DES-CW43](../design/cowl.md#open-questions).
 
 **One more thing did move, and it is a latent defect the conversion exposed rather than one it
 introduced.** `int(span / step)` is **not unit-invariant**: a scan window of exactly two margins

@@ -349,7 +349,7 @@ fit points -- at one `U`). Sampling density (fixed fine grid vs. coarse-then-ref
 > **IP-FC-173 blocked reason:** [OQ-DES-CW37](../design/cowl.md#open-questions) is open, and it
 > is the decision this item implements: which retry ladder `eroded_arc` uses. The candidates move
 > different figures -- alternative 3 moves only nose stations that already retry, alternative 2
-> moves every nose figure and is measured inadmissible on the tail, alternative 6 moves none but
+> moves every nose figure and is measured inadmissible on the tail, alternative 5 moves none but
 > climbs to about 11 000 poles on a large tail -- so choosing among them is a design call about
 > which recorded numbers may change, not an implementation detail. The verification is not
 > blocked and is already written: the strict-xfail regression pins the four exhausted stations, so

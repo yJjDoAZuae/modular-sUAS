@@ -1,6 +1,6 @@
 """Unit-level regression for offset_ladder.py's measurement primitives.
 
-`offset_ladder.py` is the study tool behind OQ-DES-CW36 and OQ-DES-CW37, and until now it had no
+`offset_ladder.py` is the study tool behind OQ-DES-CW36, OQ-DES-CW37 and OQ-DES-CW43, and until now it had no
 coverage at all -- its findings were read straight off a run against a real cowl, where a wrong
 primitive and a real geometric effect look identical. These cases exercise it against a circular
 arc, whose radius of curvature, arc length and sample spacing all have closed forms, so a wrong
@@ -87,7 +87,7 @@ def main():
     check('poles does not pass through its samples',
           poles_miss > 1.0e-3, '%.6f mm' % poles_miss)
 
-    # And the accuracy ordering, which is what OQ-DES-CW37's alternative 5 rests on. Stated as an
+    # And the accuracy ordering, which is what OQ-DES-CW43's alternatives 2 and 3 rest on. Stated as an
     # ordering rather than as the measured ratio: the ratio is geometry-dependent, the ordering is
     # the property being relied on.
     check('interpolate sits closer to the arc than poles does',
@@ -156,7 +156,7 @@ def main():
     # return in several minutes, while the poles curve at the same n offset in 0.261 s. That
     # asymmetry is real and unexplained, it does not appear on real cowl sections (the study run
     # offsets both constructions at n = 200 to 3200 across fifty rungs), and it is noted in
-    # OQ-DES-CW37 as a cost that alternative 5 has to measure rather than assume. A regression
+    # OQ-DES-CW43 as a cost that its interpolating alternative has to measure rather than assume. A regression
     # has no business reproducing it, so the factors below put `n` at 4 and 8.
     rungs = (0.01, 0.02)
     n0, rows = ol.probe_station(arc, False, si.m(0.6), si.m(-1.0), rungs=rungs)
