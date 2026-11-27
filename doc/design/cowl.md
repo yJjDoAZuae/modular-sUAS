@@ -5135,169 +5135,282 @@ No separate record; this subsection holds the decision.
 
 **Problem**
 
-Each cowl's interior surface is built station by station along the part's axis, so that the wall
-between the outer mold line and the interior is a constant thickness `t` (0.6 mm on the shipped
-parts). At each station `eroded_arc` slices the cell body, takes the open arc of the outer surface
-in that slice, replaces the arc with one smooth cubic B-spline built from `n` evenly spaced points
-on it (the *refit*), and asks OpenCASCADE for that curve offset inward by `t` — `makeOffset2D(-t)`.
-The offset curve is what the interior surface is lofted through, so it is what sets the wall.
-`n` is the arc's length divided by `SAMPLE_SPACING_M` = 0.25 mm, clamped to
-`[SAMPLE_MIN, SAMPLE_MAX]` = [400, 3000]; call that first count `n₀`. A refit is only used if it
-stays within `REFIT_TOL_M` = 0.005 mm of the arc.
+*What is being decided.* While building a cowl's interior surface, the construction asks
+OpenCASCADE to offset a curve inward by the wall thickness, and the kernel sometimes refuses. The
+construction then retries with the curve rebuilt from a different number of points. This question
+is which numbers it should retry with, and in what order. The current retry sequence has run out
+on a real part: a `nose_cowl_shell` at `U` = 3 cannot be checked, and the `U` = 4 nose build
+survived only on its last attempt.
 
-`makeOffset2D` sometimes refuses a refit, answering *result of offsetting is null*. When it does,
-the construction retries on a **ladder** of counts — today `n₀`, then `2n₀`, then `4n₀` — and uses
-the first that offsets. When all three are refused it raises **P3** and the build or check stops.
-Both the build (through `cavity`'s fit) and the wall check (through its rib-gap measurement) call
-this one function, so they share the ladder.
+*Why the construction offsets a curve at all.* A cowl is printed in spiral vase mode, so the part
+that is printed is a solid blank and the printer makes the wall. Every other use — mass properties,
+assembly, structural analysis — needs the wall modeled, so the construction builds the cowl's
+**interior surface**: the outer surface moved inward by the wall thickness `t` (0.6 mm on the
+shipped parts), the way the slicer moves each layer's perimeter inward. It does this one horizontal
+slice at a time and lofts a surface through the results. The terms used below:
 
-Three properties of the refusal, all measured (see Evidence), decide what a ladder can achieve:
+- A **station** is one height `z` at which the part is sliced. A build uses 10 to 32 stations; the
+  wall check slices at its own stations, independently of the build's.
+- The **cell** is the part of the cowl the construction actually builds — one eighth of a nose,
+  one half of a tail — before mirroring it into the whole part. Slicing the cell gives an open
+  **arc** of the outer surface whose two ends lie on the cell's mirror planes.
+- The **offset** is OpenCASCADE's `makeOffset2D(-t)`: the curve moved inward by `t` everywhere
+  along its length. The offset curve is what the interior surface passes through, so it sets the
+  wall.
 
-- **It is deterministic but chaotic in the station's position.** Rerunning a station reproduces its
-  outcome exactly; moving the slice by 1e-12 mm can flip it. So whether a given station is refused
-  is effectively a draw, and what can be measured is a *rate* per count.
-- **It is not monotonic in `n`.** A count can fail where both a coarser and a finer one succeed, so
-  the ladder is a sequence of independent attempts, not a refinement — and the doubling ladder
-  climbs toward denser counts, which measured worse.
-- **Adjacent counts fail together.** Where `n₀` is refused, `n₀ ± 1` and `n₀ + 2` usually are too.
+*Why the arc is rebuilt before it is offset.* Slicing returns each arc as a chain of edges, one
+per surface patch the plane crosses. Each edge is a B-spline curve that OpenCASCADE computes to
+approximate that patch's intersection with the plane, because the outer surface is made of
+B-spline patches and a plane cuts them along no exact closed-form curve. How many edges there
+are, and how short, depends on the part:
 
-**The ladder now runs out.** On a `nose_cowl_shell` at `U` = 3, every rung was refused at
-z = −83.9998 mm in the wall check and at three more stations within 0.1 mm of it; in the `U` = 4
-nose build two stations succeeded only on the last rung, `4n₀`. A large nose can therefore raise P3
-in a build today, and a build that passes says nothing about the neighboring parameter values. The
-tail is not exposed: no tail build station has ever needed a retry. Whatever rung succeeds, the
-contours differ by at most 2.0e-4 mm (OQ-DES-CW36), 50 times inside `WALL_TOL` = 0.010 mm, so the
-question is reliability and which recorded figures a change would move, not accuracy.
+| Part | Edges in a cell's arc | Shortest edge | The raw arc, offset as it is |
+| --- | --- | --- | --- |
+| Tail | 32 (64 around the full section) | under 0.05 mm at the front | Refused at 19 of 81 stations of the full section (2026-09-02); a cell's arc comes back in 2 to 5 pieces at 20 of 49 stations (2026-11-27) |
+| Nose | 4 | 0.42 mm at `U` = 1, 1.25 mm at `U` = 3 | Offsets correctly at 94 % (`U` = 1) to over 99 % (`U` = 3) of stations (2026-11-27) |
 
-Not part of this question: whether the refit should keep using its samples as its control points.
-That changes the curve's accuracy, not the refusal rate, and is OQ-DES-CW43.
+The rebuild was introduced for the tail's short-edge chain and applied to both kinds. Whether the
+nose needed it was not measured until 2026-11-27, and it largely does not; see alternative 4. So
+`eroded_arc` replaces the arc with one smooth cubic B-spline built from `n` evenly spaced points
+along it, called the **refit**, and offsets that. The first
+count tried, written `n₀`, is the arc's length divided by 0.25 mm (`SAMPLE_SPACING_M`), clamped to
+400 – 3000 points; on the nose at `U` = 3, `n₀` is about 524. A refit is used only if it stays
+within 0.005 mm (`REFIT_TOL_M`) of the true arc, half the 0.010 mm tolerance the finished wall must
+meet. How the refit is built from its points is a separate question, OQ-DES-CW43; it does not
+change anything below.
+
+*What fails, and what the construction does about it.* The kernel sometimes refuses to offset a
+refit, answering *result of offsetting is null*. No cause has been found: duplicate points, curve
+accuracy, tight curvature and the way the curve is built have each been tested and ruled out. The
+construction responds with a **retry ladder**: it rebuilds the refit at `2n₀` points and tries
+again, then at `4n₀`, and uses the first offset that succeeds. Each attempt is a **rung**. If all
+three are refused, it raises `PreconditionFailed` and the build or check stops. (The message labels
+this "P3", which is not the precondition P3 of
+[cowl_interior_surface.md](cowl_interior_surface.md) — that one concerns the exterior being a
+surface — so the label should not be followed there.) The build and the wall check call the same
+function, so they share the ladder.
+
+*What is known about the refusals.* Three properties, each measured (see Evidence), set what any
+ladder can achieve:
+
+| Property | What it means for a ladder |
+| --- | --- |
+| **Deterministic but chaotic.** Rerunning a station gives the same answer every time, but moving it by 1e-12 mm can change the answer. | Whether one particular station is refused is effectively a coin toss. A ladder can only be judged by its rate over many stations, and a build that passes says nothing about the next parameter value. |
+| **Not monotonic in the point count.** A count can be refused where both a smaller and a larger count succeed. | Retrying is a fresh toss, not a refinement. The current ladder only ever climbs to more points, and higher counts measured *less* reliable, not more. |
+| **Neighboring counts fail together.** Where `n₀` is refused, `n₀ + 1` and `n₀ + 2` usually are too. | A retry has to change the count by a lot to be a new toss. |
+
+*Why it matters now.* Until 2026-11-26 no station had used up the ladder. The IP-FC-152 survey then
+found one: the wall check of a nose at `U` = 3 was refused at every rung at z = −83.9998 mm, and a
+scan found three more such stations within 0.1 mm of it. In the nose build at `U` = 4, two stations
+succeeded only on the third rung. **A large nose can therefore fail to build or to check, by chance,
+today.** The tail is not exposed: across 202 tail build stations no first attempt has ever been
+refused.
+
+*What is not at stake.* Accuracy. Whichever rung succeeds, the offset curves differ by at most
+0.0002 mm — 50 times inside the wall tolerance (OQ-DES-CW36) — so every alternative below produces
+a correct wall. What differs between them is whether they stop the failures, which recorded wall
+figures they would move, and how much time a retry can cost.
 
 *Re-posed 2026-11-26: narrowed from "should the sample density come down" to the choice of retry
 ladder, after the ladder ran out on a nose at `U` = 3; the sample/fit question it also carried was
-split out as OQ-DES-CW43.*
+split out as OQ-DES-CW43. Rewritten the same day for a reader new to the construction.*
+
+*Re-posed 2026-11-27: the reason for the rebuild corrected per kind (the short-edge chain it was
+introduced for is the tail's; a nose cell's arc has four edges), and alternative 4 restated from a
+measurement of offsetting the raw nose arc.*
 
 **Alternatives**
 
-1. **Leave the ladder as it is.** Keep `n₀`, `2n₀`, `4n₀`.
-   *Benefits.* No recorded figure moves and nothing needs re-measuring.
-   *Drawbacks.* A large nose can raise P3 in a build or a check, as a chance event: four nose
-   `U` = 3 stations already exhaust it, and two `U` = 4 build stations reached the last rung.
+1. **Keep the ladder as it is: `n₀`, then `2n₀`, then `4n₀`.**
+   *Benefits.* Nothing changes and no recorded figure moves.
+   *Drawbacks.* Leaves the failure in place: four nose `U` = 3 stations already exhaust it, and two
+   `U` = 4 build stations reached the last rung. A large nose build or check can stop, by chance.
    *Prerequisites.* None.
 
-2. **Lower `SAMPLE_MIN`, so most stations start coarser.** Keep the doubling ladder above a lower
-   floor such as 200.
-   *Benefits.* Uses the coarse counts that measured most reliable on the nose, and would remove
-   most nose retries.
-   *Drawbacks.* Moves every nose wall figure at once, so every recorded number and gate verdict must
-   be re-stated. On the tail it is not admissible: half the count is over `REFIT_TOL_M` at 31 of 49
-   stations, so the refit would be rejected and the ladder would climb back to today's count.
-   *Prerequisites.* A measurement of the fitted surface's accuracy at the lower count, and a
-   decision on what the tail's floor should be.
+2. **Start from fewer points everywhere.** Lower the 400-point floor (`SAMPLE_MIN`) to about 200, so
+   most stations start coarser, and keep doubling above it.
+   *Benefits.* Coarse counts measured most reliable on the nose, so this would remove most nose
+   retries rather than handle them.
+   *Drawbacks.* Changes the first attempt at every nose station, so every recorded nose wall figure
+   and gate verdict moves and must be re-stated. It does not work on the tail: at half the count
+   the refit misses the 0.005 mm tolerance at 31 of 49 tail stations, so the tail would be rejected
+   and climb straight back to today's count.
+   *Prerequisites.* A measurement of the interior surface's accuracy at the lower count, and a
+   separate decision for the tail.
 
-3. **Try half the count second.** On refusal try `n₀/2`, then `2n₀`, then `4n₀`.
-   *Benefits.* Changes nothing at a station whose first count succeeds, so it moves no tail figure
-   and only the nose stations that already retry, each by at most 2.0e-4 mm. It cleared every
-   exhausted station in all three scans, and the patched nose `U` = 3 wall check ran clean with a
-   wall volume identical to the shipped build's.
-   *Drawbacks.* Keeps a ladder whose selection rule is still "whichever the kernel accepts". The new
-   rung is skipped where it is over `REFIT_TOL_M` (7 of 264 nose `U` = 3 stations, 31 of 49 tail
-   stations), so there the ladder is today's. The check's rung cross-check assumes
-   `n = n₀ · 2^rung` and must change with it.
-   *Prerequisites.* A build and wall check of each kind with the change, confirming that the
-   stations which move are the ones the survey logs show retrying.
+3. **Try half the points second: `n₀`, then `n₀/2`, then `2n₀`, then `4n₀`.**
+   *Benefits.* Acts only after the first attempt is refused, so no station that builds today
+   changes. On the tail, where no first attempt has been refused, nothing moves; on the nose only
+   the stations that already retry move, each by at most 0.0002 mm. It cleared every exhausted
+   station in all three scans, and the nose `U` = 3 wall check, rerun with it, passed with a wall
+   volume identical to today's.
+   *Drawbacks.* Still a retry rule, with the outcome still decided by whichever count the kernel
+   accepts. Where the half-count refit misses the 0.005 mm tolerance (7 of 264 nose `U` = 3
+   stations, 31 of 49 tail stations) that rung is skipped and the ladder is today's. The wall
+   check's own cross-check of the recorded rung assumes the count doubles at every rung, and must
+   be changed with it.
+   *Prerequisites.* One build and one wall check of each kind, confirming that the stations which
+   move are the ones the survey logs show retrying.
 
-4. **Stop building a curve before offsetting.** Offset the station's own arc, or a polyline of it,
-   rather than a refit.
-   *Benefits.* Removes `n` from the offset's success condition, and the ladder with it.
-   *Drawbacks.* The refit exists because the raw arc is a chain of up to 64 fragments that
-   `makeOffset2D` refuses outright — 19 of 81 stations in 2026-09-02's measurement, and a
-   1600-point polygon did not help — so this is a redesign of the construction, and it moves every
-   figure in the corpus.
-   *Prerequisites.* Establishing what `makeOffset2D` will accept directly.
+4. **On the nose, offset the raw arc, and rebuild only when that fails.** Offset the arc exactly
+   as sliced. If the kernel refuses it, or returns it in more than one piece, fall back to the
+   rebuild and its ladder. The tail keeps the rebuild, unchanged.
+   *Benefits.* Takes the rebuild, and the rebuild's own error, out of almost every nose station.
+   The raw offset lies within 0.00016 mm of the exact wall everywhere it succeeded, against up to
+   0.0024 mm for the rebuild, and costs about a tenth of the time. The raw arc and the rebuild are
+   refused at almost entirely different stations, so the fallback cleared every station in three
+   nose scans, including the four that exhaust today's ladder; it needed the ladder's second rung
+   at two. On the nose, it also makes OQ-DES-CW43 moot, since no curve is rebuilt there.
+   *Drawbacks.* Moves every recorded nose wall figure, by up to 0.0024 mm. The rebuild sits inside
+   the true surface (see OQ-DES-CW43), so removing it moves the nose interior outward and the
+   modeled wall gets slightly thinner, toward the nominal `t`. Puts two constructions in one stack
+   of nose contours. Where the fallback is taken (1 to 6 % of stations), a contour can differ from
+   its neighbors by up to 0.0024 mm: ten times today's 0.0002 mm between rungs, though still a
+   quarter of the wall tolerance. It is still a retry rule underneath, because the raw offset is
+   also refused, unpredictably, at some stations. About half the raw nose offsets carry one
+   degenerate join edge about 1e-8 mm long. The wire stays valid and `eroded_arc`'s discretization
+   handles it, but any code that walks its edges one at a time would have to tolerate it. It does
+   nothing for the tail, where the raw offset is unusable, and it means two rules, one per kind,
+   instead of one.
+   *Prerequisites.* A build and a wall check of the nose at `U` = 1, 3 and 4 with the change. A
+   judgment on whether the larger step at fallback stations is acceptable (OQ-DES-CW36 records
+   today's steps between rungs). It is compatible with alternatives 3, 5 and 6, which would set the
+   fallback's ladder.
 
-5. **Lengthen the ladder upward.** Add `8n₀` after `4n₀`.
-   *Benefits.* Changes nothing at any station a current rung clears, so no recorded figure moves;
-   it cleared all four exhausted nose stations.
-   *Drawbacks.* Climbs further toward the dense counts that measured worse, and is expensive on
-   long arcs: `n₀` reaches 1370 on a tail at `U` = 4, so `8n₀` is about 11 000 poles, and the tail
-   scan had to drop the rung to finish.
-   *Prerequisites.* A timing of one `8n₀` refit and offset on the longest arc any swept part
-   produces.
+5. **Add a fourth rung at eight times the points: `n₀`, `2n₀`, `4n₀`, `8n₀`.**
+   *Benefits.* Acts only after three refusals, so no recorded figure moves; it cleared all four
+   exhausted nose stations.
+   *Drawbacks.* Goes further toward high counts, which measured less reliable, and is slow on long
+   arcs: on a tail at `U` = 4 the first count is 1370, so the fourth rung is about 11 000 points,
+   and the tail scan had to leave it out to finish.
+   *Prerequisites.* The time one such rung takes on the longest arc any swept part produces.
 
-6. **Retry at neighboring counts.** On refusal try `n₀ + 1`, `n₀ + 2`, and so on.
-   *Benefits.* Each retry's curve is as accurate as the first, so it moves the contour less than a
-   doubling.
-   *Drawbacks.* Measured not to work: adjacent counts fail together, leaving 2 nose `U` = 3 stations
-   exhausted where the shipped ladder left 4.
+6. **Retry with slightly different counts: `n₀`, then `n₀ + 1`, `n₀ + 2`, and so on.**
+   *Benefits.* Each retry is as accurate as the first attempt, so a retried station moves less than
+   under a doubling.
+   *Drawbacks.* Measured not to work, because neighboring counts fail together: it left 2 nose
+   `U` = 3 stations exhausted where today's ladder left 4.
    *Prerequisites.* None.
+
+The alternatives side by side, as measured:
+
+| Alternative | Stations left exhausted (nose `U` = 1 / nose `U` = 3 / tail `U` = 1) | Recorded figures that move | Cost of a retry |
+| --- | --- | --- | --- |
+| 1. Keep as is | 0 / 4 / 0 | None | As today |
+| 2. Lower the floor | Not measured as a ladder; inadmissible on the tail | Every nose figure | Lower |
+| 3. Half the points second | 0 / 0 / 0 | Nose stations that already retry, by ≤ 0.0002 mm | Lower than a doubling |
+| 4. Raw arc on the nose | 0 / 0 / 0 (tail unchanged); also 0 of 348 at nose `U` = 4 | Every nose figure, by ≤ 0.0024 mm | First attempt about a tenth of today's on the nose; fallback as today |
+| 5. Fourth rung at 8× | 0 / 0 / 0 | None | Up to about 11 000 points |
+| 6. Neighboring counts | 0 / 2 / 0 | Nose stations that already retry | As today |
 
 **Recommendation**
 
-Alternative 3. It is the only measured ladder that clears every exhausted station without climbing
-further toward the dense counts that measured worst, and it acts exactly where it is needed: only
-when `n₀` has been refused, which no tail build station has ever needed, so it moves no tail figure
-and only the nose stations that already retry, by an amount already bounded. Alternative 5 also
-clears the evidence but in the wrong direction and at the highest cost; alternative 6 is measured
-not to work; alternative 2 is a nose-only change that would re-state every nose figure. The change
-belongs in `eroded_arc` alone, so the build and the check keep sharing it.
+Alternative 3. It is the only measured option that stops every observed failure without going
+further toward the high counts that measured least reliable, and it changes only what is already
+failing: no station that succeeds on its first attempt changes, so no tail figure moves, and the
+nose stations that do move were already retrying and move by at most 0.0002 mm. Alternative 5 also
+stops the observed failures, but by adding the slowest and least reliable kind of attempt;
+alternative 6 is measured not to work; alternative 2 changes every nose figure and does not apply
+to the tail. The change belongs in `eroded_arc`, so that the build and the wall check keep sharing
+one ladder.
 
-Nothing here diagnoses `makeOffset2D`: the refusals have survived four refuted mechanisms — not
-duplicate samples, not curve accuracy, not curvature, and not the poles construction. Choose on the
-measured rates, not on a mechanism.
+Alternative 4 is the better construction for the nose: more accurate, faster, and it removes a
+whole error source rather than managing it. But it moves every recorded nose figure, and nothing
+here needs it urgently. It should be weighed alongside OQ-DES-CW43 when the wall corpus is next
+re-measured, so the figures are restated once. It does not replace alternative 3: the tail, and
+the nose's fallback, still need a ladder, and alternative 3 is the one recommended for it.
+
+This is a choice made on measured rates, not on an understanding of the kernel: why
+`makeOffset2D` refuses is still unknown.
 
 **Evidence**
 
-*2026-11-02.* `offset_ladder.py` walked five counts per station (`0.5n₀` to `8n₀`) at ten fit
-stations of a `nose_cowl_shell` at `U` = 1, offsetting both the shipped refit and an interpolating
-one over identical samples. Offset success by count, out of 10 stations each:
+*2026-11-02.* A first study of the ladder, before it had ever run out. `offset_ladder.py` rebuilt
+and offset the arc at five counts at each of ten build stations of a `nose_cowl_shell` at `U` = 1,
+once with the shipped refit and once with a curve that passes through its points, so that the
+effect of the count could be separated from the effect of how the curve is built. Offsets that
+succeeded, out of 10 stations:
 
-| `n` | shipped refit | interpolating refit |
+| Points | Shipped refit | Curve through its points |
 | --- | --- | --- |
 | 200 | 10 | 10 |
-| 400 — `SAMPLE_MIN` | 8 | 9 |
+| 400 — the floor | 8 | 9 |
 | 800 | 9 | 9 |
 | 1600 | 9 | 10 |
 | 3200 | 10 | 9 |
 
-Half the floor never failed under either construction, the floor itself measured worst, and the
-construction made no difference to reliability (46 against 47 of 50). At z = −23.6001 mm the offset
-succeeded at 200, failed at 400, succeeded at 800, failed at 1600 and succeeded at 3200 — the
-non-monotonic pattern. The curve's minimum radius of curvature fell as `n` rose (5.35 to 0.70 mm
-over the five counts, against `t` = 0.6 mm), and the doubling does not alias sample positions:
-the rungs' interval counts are pairwise coprime.
+Half the floor never failed; the floor itself did worst; how the curve is built made no difference
+(46 and 47 of 50). At z = −23.6001 mm the offset succeeded at 200 points, failed at 400, succeeded
+at 800, failed at 1600 and succeeded at 3200 — the non-monotonic pattern. The curve's tightest
+radius fell from 5.35 to 0.70 mm as the count rose, below the 0.6 mm wall at the top. The doubling
+does not reuse sample positions in any way that would make the rungs alike.
 
-*2026-11-26.* The IP-FC-152 survey (16 builds, both kinds, every swept `U`) raised P3 once, in the
-nose `U` = 3 wall check at z = −83.9998 mm: 524, 1048 and 2096 points all refused on a 131.097 mm
-arc. A scan of every 0.5 mm along three cell bodies then refit and offset eight counts per station.
-Offset successes, out of the stations where the refit was inside `REFIT_TOL_M`:
+*2026-11-26.* The ladder ran out, and three measurements followed. The IP-FC-152 survey (16 builds,
+both kinds, every swept `U`) had stopped once: in the wall check of a nose at `U` = 3, at
+z = −83.9998 mm, 524, 1048 and 2096 points were all refused on a 131.097 mm arc.
 
-| count | nose `U` = 1, 168 stations | nose `U` = 3, 264 stations | tail `U` = 1, 49 stations (2 mm apart) |
+*A scan.* Every 0.5 mm along three cell bodies, the arc was rebuilt and offset at eight counts.
+Offsets that succeeded, out of the stations where the rebuilt curve was within the 0.005 mm
+tolerance:
+
+| Points | Nose `U` = 1, 168 stations | Nose `U` = 3, 264 stations | Tail `U` = 1, 49 stations (every 2 mm) |
 | --- | --- | --- | --- |
-| `n₀/2` | 164 | 255 of 257; 7 over tolerance | 18 of 18; 31 over tolerance, worst 0.011275 mm |
+| `n₀/2` | 164 | 255 of 257; 7 outside tolerance | 18 of 18; 31 outside tolerance |
 | `n₀` | 127 | 241 | 49 |
 | `n₀ + 1` | 153 | 238 | 49 |
 | `2n₀` | 167 | 225 | 48 |
 | `4n₀` | 154 | 227 | 49 |
 | `8n₀` | 155 | 237 | not run |
 
-Replaying candidate ladders over those outcomes, the stations where every rung failed:
+Replaying each alternative's sequence over those outcomes gives the "stations left exhausted"
+column of the comparison table above.
 
-| ladder | nose `U` = 1 | nose `U` = 3 | tail `U` = 1 |
-| --- | --- | --- | --- |
-| shipped: `n₀`, `2n₀`, `4n₀` | 0 | 4, all within 0.1 mm of z = −84 | 0 |
-| alternative 3: `n₀`, `n₀/2`, `2n₀`, `4n₀` | 0 | 0 | 0 |
-| alternative 5: `n₀`, `2n₀`, `4n₀`, `8n₀` | 0 | 0 | 0 |
-| alternative 6: `n₀`, `n₀ + 1`, `n₀ + 2`, `2n₀`, `4n₀` | 0 | 2 | 0 |
+*Repeatability and sensitivity.* Four stations at four counts, each repeated four times in one
+process and again in a second process, gave the same 128 answers. Moving the slice height by
+1e-12 mm at two stations changed the answer at `n₀`, `2n₀` and `4n₀`, while `n₀/2` succeeded in all
+12 of those trials — matching a 7.1e-15 mm change recorded under OQ-DES-CW36.
 
-Four stations at four counts, repeated four times in one process and again in a second process,
-reproduced all 128 outcomes. Moving the slice by 1e-12 mm at two stations flipped `n₀`, `2n₀` and
-`4n₀` between success and refusal, while `n₀/2` succeeded in all 12 jittered trials, consistent
-with the 7.1e-15 mm flip recorded under OQ-DES-CW36. The survey's build logs show no retry at any of
-202 tail build stations across seven `U`, and 10 retries at 82 nose build stations, both `U` = 4
-retries landing on `4n₀`. Finally the nose `U` = 3 wall check was rerun with alternative 3 patched
-in memory: the P3 was gone, the wall was 87 790.1477 mm³ — identical to the shipped build — and the
-only failure was the rung cross-check reading `n` = 202 against its power-of-two assumption.
-`tests/test_geometry_bridge_eroded_arc.py` pins the four exhausted stations as a strict xfail.
+*The survey's build logs.* None of 202 tail build stations, across seven `U`, needed a retry. Of 82
+nose build stations, 10 retried, and both retries at `U` = 4 succeeded only on `4n₀`.
+
+*Alternative 3, tried.* The nose `U` = 3 wall check was rerun with alternative 3 patched in memory.
+It no longer stopped; the wall came out at 87 790.1477 mm³, identical to today's build; and its
+only failed check was the rung cross-check, which expects the count to double at every rung.
+`tests/test_geometry_bridge_eroded_arc.py` pins the four exhausted stations and is marked as an
+expected failure until a ladder is chosen.
+
+*2026-11-27.* Whether the nose needs the rebuild at all, measured because the reason recorded for
+it, a chain of up to 64 edges some under 0.05 mm, turned out to describe only the tail. At every
+station of four cell bodies (every 0.5 mm on the noses, every 2 mm on the tail), the raw arc and
+the shipped refit at `n₀` were each offset with the call `eroded_arc` makes. Each result was then
+checked both ways: every point of the offset must lie `t` from the arc, and every point of the arc
+must lie `t` from the offset. The second check catches an offset that comes back short or in
+pieces.
+
+| | Nose `U` = 1 | Nose `U` = 3 | Nose `U` = 4 | Tail `U` = 1 |
+| --- | --- | --- | --- | --- |
+| Stations | 84 | 264 | 348 | 49 |
+| Edges in the arc (shortest) | 4 (0.42 mm) | 4 (1.25 mm) | 4 (1.67 mm) | 32 (0.045 mm) |
+| Raw arc: refused | 3 | 1 | 10 | 0 |
+| Raw arc: returned in pieces | 2 | 0 | 0 | 20 |
+| Raw arc: usable, worst error | 79, 0.00016 mm | 263, 0.00001 mm | 338, 0.00001 mm | 29, 0.0017 mm |
+| Refit at `n₀`: refused | 21 | 24 | 51 | 0 |
+| Refit: worst error | 0.00098 mm | 0.0024 mm | 0.0023 mm | 0.0041 mm |
+| Neither usable | 1 | 1 | 0 | 0 |
+| Mean time per offset, raw / refit | 0.03 / 0.24 s | 0.02 / 0.18 s | 0.03 / 0.57 s | 0.19 / 0.29 s |
+
+At the four nose `U` = 3 stations that exhaust today's ladder, the raw arc offset correctly to
+0.000006 mm. At the two stations where neither offset was usable, today's ladder succeeded on its
+second rung (`2n₀`) in the 2026-11-26 scan. Every raw nose offset that succeeded lay inside the arc
+and in one piece, except two at `U` = 1 that came back in two pieces. About half the raw nose
+offsets (141 at `U` = 3, 137 at `U` = 4) contain one degenerate edge, a circular join about 1e-8 mm
+long that the kernel cannot discretize on its own. The wire is still valid, and discretizing the
+whole wire, as `eroded_arc` does, succeeded at all five such stations tried, including the four
+exhausted ones. On the tail, the pieces miss up to 1.15 mm of the arc, and one offset lay on the
+wrong side of it. One refit offset at `U` = 4 took 102 s, against under 2 s for every other.
+
+The same measurement corrects the reading of OQ-DES-CW43's bias. A refit that lies inside the true
+surface puts the interior deeper, so it makes the modeled wall thicker, not thinner.
 
 ### OQ-DES-CW38 — A tail wall's volume moves while every operand the instrument can see is identical — OPEN
 
@@ -5676,9 +5789,12 @@ detector must show before it is used". IP-FC-169 in
 
 Each cowl's interior surface is built station by station along the part's axis, at a constant wall
 thickness `t` (0.6 mm on the shipped parts) inside the outer mold line. At each station the slice of
-the outer surface comes back from OpenCASCADE as a chain of up to 64 short edges, some under
-0.05 mm, and the kernel's 2-D offset refuses such a chain outright (19 of 81 stations, measured
-2026-09-02). So the construction replaces the chain with one smooth curve — the *refit* — and
+the outer surface comes back from OpenCASCADE as a chain of B-spline edges, one per surface patch.
+On the tail that chain is up to 64 edges, some under 0.05 mm, and the kernel's 2-D offset refuses
+it or returns it in pieces (19 of 81 full sections, 2026-09-02; 20 of 49 cell arcs, 2026-11-27).
+A nose cell's arc has only 4 edges, and offsets correctly as it is at 94 % or more of stations
+(OQ-DES-CW37's alternative 4). The construction nevertheless rebuilds the arc on both kinds,
+replacing the chain with one smooth curve — the *refit* — and
 offsets that curve inward by `t` to get the interior contour. The refit stands in for the outer
 surface, so any distance between the refit and the true surface carries straight into the wall.
 
@@ -5706,12 +5822,15 @@ the tolerance the finished wall must meet — not of the samples.
 What the conflation costs, measured (see Evidence):
 
 - **Accuracy.** Interpolating the same samples tracks the arc 2.9 to 28 times more closely.
-- **A one-sided error.** A smoother cuts inside every convex bend, so its error always points
-  toward the part's axis and always thins the wall; an interpolant errs both ways and averages to
-  zero. The smoother's bias was inward at every one of 135 stations on three parts. It is small on
-  average — at most 0.000233 mm mean per part — but reaches 0.003534 mm locally on the tail at
-  `U` = 1, 35 % of `WALL_TOL`. Whether those points coincide with where the wall is measured thin
-  has not been checked.
+- **A one-sided error.** A smoother cuts inside every convex bend, so its error points toward the
+  part's axis. The interior is offset from the refit, so it sits correspondingly deeper, and the
+  modeled wall comes out thicker than `t` by that amount. An interpolant errs both ways and
+  averages to zero. The smoother's bias was inward at every one of 135 stations on three parts. It
+  is small on average, at most 0.000233 mm mean per part, but reaches 0.003534 mm locally on the
+  tail at `U` = 1, 35 % of `WALL_TOL`. Because the wall check measures the modeled wall, that
+  error makes the wall read thicker than the construction otherwise would, so it could hide a real
+  thin spot by up to that much. Whether those points coincide with thin readings has not been
+  checked.
 - **No separate control.** The sample count cannot be raised without adding degrees of freedom,
   nor lowered without removing them, so no density study can tell an observation effect from a
   parameterization effect.
@@ -5722,6 +5841,10 @@ OQ-DES-CW37 — is the same under both constructions (46 and 47 of 50 attempts s
 Affected: the wall of every `nose_cowl_shell` and `tail_shell`, and every recorded wall figure,
 since changing the construction moves all of them. Not affected: any other part, or the printed
 blank, which is exported without the interior.
+
+*Re-posed 2026-11-27: the reason for the refit corrected per kind (the short-edge chain is the
+tail's), the bias's effect corrected from thinning the wall to thickening it, and alternative 5
+restated from a measurement of offsetting the raw nose arc.*
 
 **Alternatives**
 
@@ -5767,12 +5890,14 @@ blank, which is exported without the interior.
    *Prerequisites.* OQ-DES-CW37 decided, and the share of stations a tighter tolerance would force
    up, per kind.
 
-5. **Stop building a curve.** Offset the arc or a polyline of it directly — OQ-DES-CW37's
-   alternative 4, which would answer this question too.
-   *Benefits.* No refit, so no refit error of either kind.
-   *Drawbacks.* The kernel refuses the raw fragment chain, which is why the refit exists; this is a
-   redesign of the construction and moves every figure.
-   *Prerequisites.* Establishing what `makeOffset2D` will accept directly.
+5. **Stop building a curve where it is not needed.** Offset the raw arc directly on the nose and
+   keep a refit only as a fallback and on the tail. This is OQ-DES-CW37's alternative 4, which
+   would settle this question for the nose.
+   *Benefits.* No refit at almost every nose station, so no refit error of either kind there.
+   Measured 2026-11-27, the raw nose offset is within 0.00016 mm of the exact wall.
+   *Drawbacks.* Does not help the tail, where the raw arc offsets in pieces at 20 of 49 stations,
+   so the tail still needs one of alternatives 1 to 4. Moves every nose figure.
+   *Prerequisites.* OQ-DES-CW37's decision on its alternative 4.
 
 **Recommendation**
 
@@ -5786,7 +5911,8 @@ recorded wall figure, and it has not yet been measured on a real section. The wa
 questions — OQ-DES-CW28, OQ-DES-CW29, OQ-DES-CW31 and OQ-DES-CW33 — will force a full re-measurement
 of the corpus anyway; folding this change into that pass re-states the figures once instead of
 twice. Alternative 2 is the fallback if alternative 3's measurement disappoints, with its
-fragment-junction behavior checked first.
+fragment-junction behavior checked first. If OQ-DES-CW37's alternative 4 is chosen, the nose has
+no refit except as a fallback, and this question narrows to the tail and that fallback.
 
 **Evidence**
 
@@ -5808,7 +5934,8 @@ samples offset in 0.261 s.
 
 *2026-11-26.* Signed deviation of each construction from the arc, every 2 mm along three cell
 bodies at the shipped count `n₀`, measured at 398 interior points per station; positive means the
-curve lies inside the arc, toward the part's axis, which thins the wall:
+curve lies inside the arc, toward the part's axis, which puts the interior deeper and so thickens
+the modeled wall:
 
 | part | stations | samples as poles: worst inward / worst outward / mean | stations biased inward | `interpolate`: worst inward / worst outward / mean | stations biased inward |
 | --- | --- | --- | --- | --- | --- |

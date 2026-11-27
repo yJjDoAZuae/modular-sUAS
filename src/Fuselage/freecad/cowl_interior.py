@@ -765,9 +765,14 @@ def smoothed(wire, n, tol_m=REFIT_TOL_M):
     how many degrees of freedom the fit gets -- which is OQ-DES-CW43's subject.
 
     **This is what makes the erosion possible at all, and it is not a nudge.** Sectioning the
-    conditioned blank returns the section as one edge per surface patch -- 64 of them on the
-    tail -- and on the smaller forward sections the shortest of those is under 0.05 mm. OCC's
-    2-D offset refuses that input: measured 2026-09-02 over 81 stations, 19 returned
+    conditioned blank returns the section as one edge per surface patch: each edge is a
+    `BSplineCurve` approximating that patch's plane intersection. **The figures that follow are
+    the tail's full section and do not carry to the nose.** Measured 2026-11-27: a full tail
+    section has 64 such edges, the shortest 0.046 mm at z = -10; a tail cell's arc (what
+    `eroded_arc` offsets) has 32. A full nose section has 32, the shortest 0.40 mm at `U` = 3,
+    and a nose cell's arc only 4, none under 0.42 mm on any measured `U`. On the tail, the smaller
+    forward sections bring the shortest under 0.05 mm, and OCC's 2-D offset refuses that input:
+    measured 2026-09-02 on the tail over 81 stations, 19 returned
     `makeOffset2D: result of offsetting is null!`, every one of them forward of z = -42.5 where
     the section has shrunk enough to bring the fragments below a tenth of a millimeter. Neither
     join style, nor `intersection`, nor `removeSplitter`, nor a 1600-point polygon changed any
